@@ -41,8 +41,9 @@ impl GameMod {
 }
 
 async fn load_module(path: String) -> Result<Module> {
-    let module = Module::parse_from_file(&path).await?;
-    Ok(module)
+    todo!()
+    // let module = Module::parse_from_file(&path).await?;
+    // Ok(module)
 }
 
 #[cfg(test)]

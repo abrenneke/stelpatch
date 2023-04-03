@@ -3,8 +3,12 @@ use std::{collections::HashMap, fmt::Debug, str::FromStr};
 use anyhow::anyhow;
 use indent::indent_all_by;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub struct Entity {
+    /// Array items in the entity, like { a b c }
+    pub items: Vec<Value>,
+
+    /// Key value pairs in the entity, like { a = b } or { a > b }
     pub properties: HashMap<String, Vec<PropertyInfo>>,
 }
 
@@ -22,6 +26,11 @@ impl Debug for Entity {
 impl ToString for Entity {
     fn to_string(&self) -> String {
         let mut buf = String::from("{\n");
+        for value in &self.items {
+            let stringified = indent_all_by(4, format!("{}\n", value.to_string()));
+            buf.push_str(&stringified);
+        }
+
         for (key, value) in &self.properties {
             for item in value {
                 let stringified = indent_all_by(4, format!("{} {}\n", key, item.to_string()));
@@ -33,7 +42,45 @@ impl ToString for Entity {
     }
 }
 
-#[derive(PartialEq)]
+impl Entity {
+    pub fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            properties: HashMap::new(),
+        }
+    }
+
+    pub fn with_property(mut self, key: &str, value: Value) -> Self {
+        self.properties
+            .entry(key.to_string())
+            .or_insert_with(Vec::new)
+            .push(PropertyInfo {
+                operator: Operator::Equals,
+                value,
+            });
+        self
+    }
+
+    pub fn with_property_with_operator(
+        mut self,
+        key: &str,
+        operator: Operator,
+        value: Value,
+    ) -> Self {
+        self.properties
+            .entry(key.to_string())
+            .or_insert_with(Vec::new)
+            .push(PropertyInfo { operator, value });
+        self
+    }
+
+    pub fn with_item(mut self, value: Value) -> Self {
+        self.items.push(value);
+        self
+    }
+}
+
+#[derive(PartialEq, Clone)]
 pub struct PropertyInfo {
     pub operator: Operator,
     pub value: Value,
@@ -51,7 +98,7 @@ impl Debug for PropertyInfo {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Operator {
     GreaterThan,
     GreaterThanOrEqual,
@@ -96,43 +143,27 @@ impl FromStr for Operator {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Value {
     String(String),
-    Integer(i32),
-    Float(f32),
+    Number(f32),
     Boolean(bool),
     Entity(Entity),
-    StringArray(Vec<String>),
     Define(String),
-    RGB(i32, i32, i32, Option<i32>),
-    HSV(f32, f32, f32, Option<f32>),
+    Color((String, f32, f32, f32, Option<f32>)),
 }
 
 impl ToString for Value {
     fn to_string(&self) -> String {
         match self {
             Self::String(v) => v.to_string(),
-            Self::Integer(v) => v.to_string(),
-            Self::Float(v) => v.to_string(),
+            Self::Number(v) => v.to_string(),
             Self::Boolean(v) => v.to_string(),
             Self::Entity(v) => v.to_string(),
-            Self::StringArray(v) => {
-                let mut buf = String::from("{\n");
-                for item in v {
-                    buf.push_str(&format!("\"{}\"\n", item));
-                }
-                buf.push_str("}\n");
-                buf
-            }
             Self::Define(v) => v.to_string(),
-            Self::RGB(r, g, b, a) => match a {
-                Some(a) => format!("rgb {{ {} {} {} {} }}", r, g, b, a),
-                None => format!("rgb {{ {} {} {} }}", r, g, b),
-            },
-            Self::HSV(h, s, v, a) => match a {
-                Some(a) => format!("hsv {{ {} {} {} {} }}", h, s, v, a),
-                None => format!("hsv {{ {} {} {} }}", h, s, v),
+            Self::Color((color_type, a, b, c, d)) => match d {
+                Some(d) => format!("{} {{ {} {} {} {} }}", color_type, a, b, c, d),
+                None => format!("{} {{ {} {} {} }}", color_type, a, b, c),
             },
         }
     }
@@ -141,6 +172,30 @@ impl ToString for Value {
 impl Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_string())
+    }
+}
+
+impl From<bool> for Value {
+    fn from(v: bool) -> Self {
+        Self::Boolean(v)
+    }
+}
+
+impl From<f32> for Value {
+    fn from(v: f32) -> Self {
+        Self::Number(v)
+    }
+}
+
+impl From<i32> for Value {
+    fn from(v: i32) -> Self {
+        Self::Number(v as f32)
+    }
+}
+
+impl From<Entity> for Value {
+    fn from(v: Entity) -> Self {
+        Self::Entity(v)
     }
 }
 
@@ -161,19 +216,11 @@ impl Value {
         }
     }
 
-    pub fn integer(&self) -> &i32 {
-        if let Value::Integer(i) = self {
+    pub fn number(&self) -> &f32 {
+        if let Value::Number(i) = self {
             i
         } else {
-            panic!("Expected integer")
-        }
-    }
-
-    pub fn float(&self) -> &f32 {
-        if let Value::Float(f) = self {
-            f
-        } else {
-            panic!("Expected float")
+            panic!("Expected number")
         }
     }
 
@@ -185,14 +232,6 @@ impl Value {
         }
     }
 
-    pub fn string_array(&self) -> &Vec<String> {
-        if let Value::StringArray(s) = self {
-            s
-        } else {
-            panic!("Expected string array")
-        }
-    }
-
     pub fn define(&self) -> &String {
         if let Value::Define(d) = self {
             d
@@ -201,17 +240,9 @@ impl Value {
         }
     }
 
-    pub fn rgb(&self) -> (i32, i32, i32, Option<i32>) {
-        if let Value::RGB(r, g, b, a) = self {
-            (*r, *g, *b, *a)
-        } else {
-            panic!("Expected rgb")
-        }
-    }
-
-    pub fn hsv(&self) -> (f32, f32, f32, Option<f32>) {
-        if let Value::HSV(h, s, v, a) = self {
-            (*h, *s, *v, *a)
+    pub fn color(&self) -> (String, f32, f32, f32, Option<f32>) {
+        if let Value::Color((color_type, h, s, v, a)) = self {
+            (color_type.to_owned(), *h, *s, *v, *a)
         } else {
             panic!("Expected hsv")
         }
@@ -225,32 +256,20 @@ impl Value {
         matches!(self, Value::String(_))
     }
 
-    pub fn is_integer(&self) -> bool {
-        matches!(self, Value::Integer(_))
-    }
-
-    pub fn is_float(&self) -> bool {
-        matches!(self, Value::Float(_))
+    pub fn is_number(&self) -> bool {
+        matches!(self, Value::Number(_))
     }
 
     pub fn is_boolean(&self) -> bool {
         matches!(self, Value::Boolean(_))
     }
 
-    pub fn is_string_array(&self) -> bool {
-        matches!(self, Value::StringArray(_))
-    }
-
     pub fn is_define(&self) -> bool {
         matches!(self, Value::Define(_))
     }
 
-    pub fn is_rgb(&self) -> bool {
-        matches!(self, Value::RGB(_, _, _, _))
-    }
-
-    pub fn is_hsv(&self) -> bool {
-        matches!(self, Value::HSV(_, _, _, _))
+    pub fn is_color(&self) -> bool {
+        matches!(self, Value::Color((_, _, _, _, _)))
     }
 }
 
