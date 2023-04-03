@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::Debug, str::FromStr};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 use anyhow::anyhow;
 use indent::indent_all_by;
@@ -9,7 +13,7 @@ pub struct Entity {
     pub items: Vec<Value>,
 
     /// Key value pairs in the entity, like { a = b } or { a > b }
-    pub properties: HashMap<String, Vec<PropertyInfo>>,
+    pub properties: HashMap<String, PropertyInfoList>,
 }
 
 impl Debug for Entity {
@@ -23,8 +27,8 @@ impl Debug for Entity {
     }
 }
 
-impl ToString for Entity {
-    fn to_string(&self) -> String {
+impl Display for Entity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut buf = String::from("{\n");
         for value in &self.items {
             let stringified = indent_all_by(4, format!("{}\n", value.to_string()));
@@ -32,13 +36,13 @@ impl ToString for Entity {
         }
 
         for (key, value) in &self.properties {
-            for item in value {
+            for item in value.clone().into_iter() {
                 let stringified = indent_all_by(4, format!("{} {}\n", key, item.to_string()));
                 buf.push_str(&stringified);
             }
         }
         buf.push_str("}\n");
-        buf
+        write!(f, "{}", buf)
     }
 }
 
@@ -53,11 +57,30 @@ impl Entity {
     pub fn with_property(mut self, key: &str, value: Value) -> Self {
         self.properties
             .entry(key.to_string())
-            .or_insert_with(Vec::new)
+            .or_insert_with(PropertyInfoList::new)
+            .0
             .push(PropertyInfo {
                 operator: Operator::Equals,
                 value,
             });
+        self
+    }
+
+    pub fn with_property_values<I: IntoIterator<Item = Value>>(
+        mut self,
+        key: &str,
+        values: I,
+    ) -> Self {
+        let items = self
+            .properties
+            .entry(key.to_string())
+            .or_insert_with(PropertyInfoList::new);
+        for value in values {
+            items.push(PropertyInfo {
+                operator: Operator::Equals,
+                value,
+            });
+        }
         self
     }
 
@@ -69,7 +92,8 @@ impl Entity {
     ) -> Self {
         self.properties
             .entry(key.to_string())
-            .or_insert_with(Vec::new)
+            .or_insert_with(PropertyInfoList::new)
+            .0
             .push(PropertyInfo { operator, value });
         self
     }
@@ -86,9 +110,54 @@ pub struct PropertyInfo {
     pub value: Value,
 }
 
-impl ToString for PropertyInfo {
-    fn to_string(&self) -> String {
-        format!("{} {}", self.operator.to_string(), self.value.to_string())
+impl Display for PropertyInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.operator, self.value)
+    }
+}
+
+#[derive(PartialEq, Clone)]
+pub struct PropertyInfoList(Vec<PropertyInfo>);
+
+impl PropertyInfoList {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn with_property(mut self, operator: Operator, value: Value) -> Self {
+        self.push(PropertyInfo { operator, value });
+        self
+    }
+
+    pub fn push(&mut self, property: PropertyInfo) {
+        self.0.push(property);
+    }
+}
+
+impl Display for PropertyInfoList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for item in self.clone().into_iter() {
+            write!(f, "{}\n", item)?;
+        }
+        Ok(())
+    }
+}
+
+impl IntoIterator for PropertyInfoList {
+    type Item = PropertyInfo;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl Debug for PropertyInfoList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for item in self.clone().into_iter() {
+            write!(f, "{:?}\n", item)?;
+        }
+        Ok(())
     }
 }
 
@@ -106,18 +175,25 @@ pub enum Operator {
     LessThanOrEqual,
     Equals,
     NotEqual,
+    MinusEquals,
+    PlusEquals,
+    MultiplyEquals,
 }
 
-impl ToString for Operator {
-    fn to_string(&self) -> String {
-        match self {
+impl Display for Operator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
             Self::GreaterThan => ">".to_string(),
             Self::GreaterThanOrEqual => ">=".to_string(),
             Self::LessThan => "<".to_string(),
             Self::LessThanOrEqual => "<=".to_string(),
             Self::Equals => "=".to_string(),
             Self::NotEqual => "!=".to_string(),
-        }
+            Self::MinusEquals => "-=".to_string(),
+            Self::PlusEquals => "+=".to_string(),
+            Self::MultiplyEquals => "*=".to_string(),
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -138,6 +214,9 @@ impl FromStr for Operator {
             "<=" => Ok(Operator::LessThanOrEqual),
             "=" => Ok(Operator::Equals),
             "!=" => Ok(Operator::NotEqual),
+            "-=" => Ok(Operator::MinusEquals),
+            "+=" => Ok(Operator::PlusEquals),
+            "*=" => Ok(Operator::MultiplyEquals),
             _ => Err(anyhow!("Invalid operator: {}", s)),
         }
     }
@@ -153,9 +232,9 @@ pub enum Value {
     Color((String, f32, f32, f32, Option<f32>)),
 }
 
-impl ToString for Value {
-    fn to_string(&self) -> String {
-        match self {
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
             Self::String(v) => v.to_string(),
             Self::Number(v) => v.to_string(),
             Self::Boolean(v) => v.to_string(),
@@ -165,7 +244,8 @@ impl ToString for Value {
                 Some(d) => format!("{} {{ {} {} {} {} }}", color_type, a, b, c, d),
                 None => format!("{} {{ {} {} {} }}", color_type, a, b, c),
             },
-        }
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -273,22 +353,30 @@ impl Value {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Module {
     pub filename: String,
     pub type_path: String,
     pub entities: HashMap<String, Value>,
     pub defines: HashMap<String, Value>,
-    pub properties: HashMap<String, Vec<PropertyInfo>>,
+    pub properties: HashMap<String, PropertyInfoList>,
 }
 
-impl ToString for Module {
-    fn to_string(&self) -> String {
+impl Display for Module {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut buf = String::from("");
-        for (key, value) in &self.entities {
-            let value = format!("{} {}\n", key, value.to_string());
+        for (key, value) in &self.defines {
+            let value = format!("{} = {}\n", key, value);
             buf.push_str(&value);
         }
-        buf
+        for (key, value) in &self.properties {
+            let value = format!("{} = {}\n", key, value);
+            buf.push_str(&value);
+        }
+        for (key, value) in &self.entities {
+            let value = format!("{} = {}\n", key, value);
+            buf.push_str(&value);
+        }
+        write!(f, "{}", buf)
     }
 }

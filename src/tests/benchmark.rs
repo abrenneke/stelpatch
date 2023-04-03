@@ -5,11 +5,12 @@ use std::io::Read;
 use std::panic;
 use std::path::PathBuf;
 use std::time::Instant;
-use stelpatch::cw_parser::parse_module;
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use walkdir::WalkDir;
+
+use crate::cw_model::Module;
 
 #[test]
 fn benchmark_serial() {
@@ -36,7 +37,7 @@ fn benchmark_serial() {
             .read_to_string(&mut contents)
             .expect("Failed to read file");
 
-        let result = panic::catch_unwind(|| parse_module(&contents, "test", "test"));
+        let result = panic::catch_unwind(|| Module::parse(contents, "test", "test"));
         match result {
             Ok(parse_result) => {
                 if parse_result.is_ok() {
@@ -70,7 +71,7 @@ async fn read_file_async(path: PathBuf, tx: UnboundedSender<()>) {
         .read_to_string(&mut contents)
         .expect(format!("Failed to read file {}", path.display()).as_str());
 
-    let parse_result = parse_module(&contents, "test", "test");
+    let parse_result = Module::parse(contents, "test", "test");
 
     tx.send(()).unwrap();
 }

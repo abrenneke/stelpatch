@@ -1,9 +1,9 @@
 use glob::glob;
 use std::fs::{self, File};
-use std::io::Read;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
-use stelpatch::cw_parser::parse_module;
+
+use crate::cw_model::Module;
 
 fn create_dir_if_not_exists(path: &PathBuf) {
     if let Some(parent) = path.parent() {
@@ -36,14 +36,14 @@ fn snapshot_tests() {
             .read_to_string(&mut contents)
             .expect("Failed to read file");
 
-        let parse_result = parse_module(&contents, "test", "test");
+        let parse_result = Module::parse(contents, "test", "test");
 
         if parse_result.is_err() {
             println!("{} - parse FAILED", original_path.display());
             continue;
         }
 
-        let str_result = parse_result.unwrap().1.to_string();
+        let str_result = parse_result.unwrap().to_string();
 
         let relative_path = original_path.strip_prefix(search_dir).unwrap();
         let mut actual_path = snapshot_tests_dir.clone();

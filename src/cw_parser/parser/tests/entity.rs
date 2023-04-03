@@ -348,21 +348,8 @@ mod tests {
                     "my_var5",
                     cw_model::Value::Entity(
                         Entity::new()
-                            .with_item(cw_model::Value::Entity(
-                                Entity::new()
-                                    .with_item(cw_model::Value::String(
-                                        "nested_entity1".to_string()
-                                    ))
-                                    .into()
-                            ))
-                            .with_item(cw_model::Value::Entity(
-                                Entity::new()
-                                    .with_item(cw_model::Value::String(
-                                        "nested_entity2".to_string()
-                                    ))
-                                    .into()
-                            ))
-                            .into()
+                            .with_item(cw_model::Value::String("nested_entity1".to_string()))
+                            .with_item(cw_model::Value::String("nested_entity2".to_string()))
                     )
                 )
                 .with_property("my_var6", cw_model::Value::String("value6".to_string()))
@@ -379,6 +366,29 @@ mod tests {
                     )
                 )
                 .with_property("my_var9", cw_model::Value::String("value9".to_string()))
+                .into()
+        );
+    }
+
+    #[test]
+    fn entity_with_duplicate_properties_adds_to_array_at_key() {
+        let input = r#"{
+        my_var = value1
+        my_var = value2
+        my_var = value3
+    }"#;
+        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        assert_eq!(
+            result,
+            Entity::new()
+                .with_property_values(
+                    "my_var",
+                    vec![
+                        cw_model::Value::String("value1".to_string()),
+                        cw_model::Value::String("value2".to_string()),
+                        cw_model::Value::String("value3".to_string()),
+                    ]
+                )
                 .into()
         );
     }
