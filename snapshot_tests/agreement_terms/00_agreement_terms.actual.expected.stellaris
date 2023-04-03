@@ -1,0 +1,67 @@
+resource_subsidies {
+    term_type = resource
+}
+
+subject_integration {
+    term_type = discrete
+}
+
+joins_overlord_wars {
+    term_type = discrete
+}
+
+naval_capacity {
+    term_type = discrete
+    hidden = yes
+}
+
+subject_sensors {
+    term_type = discrete
+}
+
+subject_xenophobe {
+    term_type = discrete
+    hidden = yes
+}
+
+protectorate {
+    hidden = yes
+    term_type = discrete
+}
+
+subject_pompous {
+    hidden = yes
+    term_type = discrete
+}
+
+subject_diplomacy {
+    term_type = discrete
+}
+
+subject_loyalty {
+    hidden = yes
+    term_type = discrete
+}
+
+joins_subject_wars {
+    term_type = discrete
+}
+
+subject_holdings_limit {
+    term_type = discrete_number
+}
+
+subject_expand {
+    term_type = discrete
+}
+
+specialist_type {
+    term_type = specialist_type
+    hidden = yes
+}
+
+has_access {
+    term_type = discrete
+    hidden = yes
+}
+

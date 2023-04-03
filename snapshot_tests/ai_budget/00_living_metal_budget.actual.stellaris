@@ -1,0 +1,103 @@
+living_metal_expenditure_ships {
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        modifier = {
+            is_dragon_breeder_country = yes
+            factor = 5
+        }
+
+        weight = 0.1
+    }
+
+    type = expenditure
+    resource = sr_living_metal
+    category = ships
+}
+
+living_metal_expenditure_trade {
+    type = expenditure
+    weight = {
+        weight = 0.1
+    }
+
+    resource = sr_living_metal
+    category = trade
+    potential = {
+        always = yes
+    }
+
+}
+
+living_metal_upkeep_planets {
+    type = upkeep
+    weight = {
+        weight = 0.9
+    }
+
+    resource = sr_living_metal
+    category = planets
+    potential = {
+        always = yes
+    }
+
+}
+
+living_metal_expenditure_planets {
+    potential = {
+        always = yes
+    }
+
+    category = planets
+    weight = {
+        weight = 0.2
+    }
+
+    resource = sr_living_metal
+    type = expenditure
+}
+
+living_metal_upkeep_ships {
+    resource = sr_living_metal
+    type = upkeep
+    weight = {
+        weight = 0.1
+    }
+
+    potential = {
+        always = yes
+    }
+
+    category = ships
+}
+
+living_metal_expenditure_upgrade {
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        base = 0.1
+    }
+
+    type = expenditure
+    category = ship_upgrades
+    resource = sr_living_metal
+}
+
+living_metal_upkeep_edicts {
+    type = upkeep
+    category = edicts
+    weight = {
+        base = 0.25
+    }
+
+    potential = {
+        always = yes
+    }
+
+    resource = sr_living_metal
+}
+

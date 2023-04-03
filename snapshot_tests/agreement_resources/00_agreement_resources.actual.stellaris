@@ -1,0 +1,11 @@
+specialist_subject_conversion {
+    resources = {
+        upkeep = {
+            influence = 3
+        }
+
+        category = specialist_subject_conversion
+    }
+
+}
+

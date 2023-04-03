@@ -1,0 +1,56 @@
+nanites_upkeep_edicts {
+    type = expenditure
+    resource = nanites
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.15
+    }
+
+    category = edicts
+}
+
+nanites_expenditure_buildings {
+    potential = {
+        has_technology = tech_nanite_transmutation
+    }
+
+    weight = {
+        weight = 0.5
+    }
+
+    type = expenditure
+    resource = nanites
+    category = planets
+}
+
+nanites_expenditure_ship_upgrades {
+    weight = {
+        weight = 0.5
+    }
+
+    potential = {
+        has_technology = tech_nanite_repair_system
+    }
+
+    type = expenditure
+    category = ship_upgrades
+    resource = nanites
+}
+
+nanites_expenditure_ships {
+    category = ships
+    potential = {
+        has_technology = tech_nanite_repair_system
+    }
+
+    weight = {
+        weight = 1
+    }
+
+    type = expenditure
+    resource = nanites
+}
+

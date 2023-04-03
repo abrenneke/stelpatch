@@ -1,0 +1,2004 @@
+gov_military_dictatorship {
+    possible = {
+        has_authority = auth_dictatorial
+        OR = {
+            has_ethic = ethic_militarist
+            has_ethic = ethic_fanatic_militarist
+        }
+
+    }
+
+    ruler_title_female = RT_GRAND_MARSHAL_FEMALE
+    election_candidates = {
+        modifier = {
+            leader_class = ruler
+            add = 100
+        }
+
+        modifier = {
+            add = 10
+            OR = {
+                leader_class = admiral
+                leader_class = general
+            }
+
+        }
+
+    }
+
+    weight = {
+        modifier = {
+            has_ethic = ethic_fanatic_militarist
+            factor = 2
+        }
+
+        modifier = {
+            OR = {
+                has_valid_civic = civic_distinguished_admiralty
+                has_valid_civic = civic_nationalistic_zeal
+            }
+
+            factor = 1.1
+        }
+
+        base = 5
+    }
+
+    ruler_title = RT_GRAND_MARSHAL
+}
+
+gov_representative_democracy {
+    possible = {
+        has_authority = auth_democratic
+    }
+
+    ruler_title_female = RT_PRESIDENT_FEMALE
+    weight = {
+        base = 1
+    }
+
+    ruler_title = RT_PRESIDENT
+}
+
+gov_machine_industrial {
+    possible = {
+        has_authority = auth_machine_intelligence
+    }
+
+    should_force_rename = yes
+    ruler_title = RT_HUB
+    weight = {
+        modifier = {
+            has_valid_civic = civic_machine_rockbreakers
+            factor = 10
+            NOT = {
+                OR = {
+                    has_valid_civic = civic_machine_introspective
+                    has_valid_civic = civic_machine_delegated_functions
+                    has_valid_civic = civic_machine_predictive_analysis
+                }
+
+            }
+
+        }
+
+        modifier = {
+            factor = 10
+            has_valid_civic = civic_machine_builder
+            NOT = {
+                OR = {
+                    has_valid_civic = civic_machine_introspective
+                    has_valid_civic = civic_machine_delegated_functions
+                    has_valid_civic = civic_machine_predictive_analysis
+                }
+
+            }
+
+        }
+
+        modifier = {
+            factor = 10
+            has_valid_civic = civic_machine_replication
+            NOT = {
+                OR = {
+                    has_valid_civic = civic_machine_introspective
+                    has_valid_civic = civic_machine_delegated_functions
+                    has_valid_civic = civic_machine_predictive_analysis
+                }
+
+            }
+
+        }
+
+        base = 2
+    }
+
+}
+
+gov_technocratic_dictatorship {
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            add = 10
+            leader_class = scientist
+        }
+
+    }
+
+    weight = {
+        base = 900
+    }
+
+    should_force_rename = yes
+    possible = {
+        has_authority = auth_dictatorial
+        has_valid_civic = civic_technocracy
+    }
+
+    ruler_title = RT_OVERSEER
+    leader_class = scientist
+    ruler_title_female = RT_OVERSEER_FEMALE
+}
+
+gov_assembly_of_clans {
+    should_force_rename = yes
+    weight = {
+        base = 800
+    }
+
+    ruler_title = RT_CLAN_SPEAKER
+    leader_class = admiral
+    possible = {
+        has_authority = auth_democratic
+        has_valid_civic = civic_warrior_culture
+    }
+
+    ruler_title_female = RT_CLAN_SPEAKER_FEMALE
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            OR = {
+                leader_class = admiral
+                leader_class = general
+            }
+
+            add = 10
+        }
+
+    }
+
+}
+
+gov_citizen_republic {
+    ruler_title = RT_CONSUL
+    ruler_title_female = RT_CONSUL_FEMALE
+    weight = {
+        base = 900
+    }
+
+    should_force_rename = yes
+    possible = {
+        has_authority = auth_democratic
+        has_valid_civic = civic_citizen_service
+    }
+
+    election_candidates = {
+        modifier = {
+            leader_class = ruler
+            add = 100
+        }
+
+        modifier = {
+            add = 10
+            OR = {
+                leader_class = admiral
+                leader_class = general
+                leader_class = governor
+            }
+
+        }
+
+        modifier = {
+            factor = 0
+            leader_class = scientist
+        }
+
+    }
+
+}
+
+gov_machine_terminator {
+    possible = {
+        has_civic = civic_machine_terminator
+        has_authority = auth_machine_intelligence
+    }
+
+    ruler_title = RT_CORE
+    should_force_rename = yes
+    weight = {
+        base = 2000
+    }
+
+}
+
+gov_artist_enclave {
+    weight = {
+        base = 100000
+    }
+
+    possible = {
+        has_valid_civic = civic_artist_collective
+    }
+
+    should_force_rename = yes
+    ruler_title = RT_HIGH_ARTIST
+}
+
+gov_martial_dictatorship {
+    ruler_title_female = RT_IMPERATRIX
+    possible = {
+        has_valid_civic = civic_warrior_culture
+        has_authority = auth_dictatorial
+    }
+
+    weight = {
+        base = 800
+    }
+
+    ruler_title = RT_IMPERATOR
+    leader_class = admiral
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            add = 10
+            OR = {
+                leader_class = admiral
+                leader_class = general
+            }
+
+        }
+
+    }
+
+    should_force_rename = yes
+}
+
+gov_mortal_empire {
+    possible = {
+        has_authority = auth_imperial
+        has_valid_civic = civic_death_cult
+    }
+
+    should_force_rename = yes
+    ruler_title_female = RT_DEATH_MONARCH_FEMALE
+    weight = {
+        base = 10000
+    }
+
+    ruler_title = RT_DEATH_MONARCH
+}
+
+gov_trader_enclave {
+    should_force_rename = yes
+    possible = {
+        has_valid_civic = civic_trading_conglomerate
+    }
+
+    weight = {
+        base = 100000
+    }
+
+    ruler_title = RT_HIGH_TRADER
+}
+
+gov_despotic_hegemony {
+    weight = {
+        base = 5
+        modifier = {
+            has_ethic = ethic_fanatic_materialist
+            factor = 2
+        }
+
+        modifier = {
+            factor = 1.5
+            has_origin = origin_mechanists
+        }
+
+    }
+
+    dynastic_last_names = yes
+    ruler_title_female = RT_OVERLORD_FEMALE
+    heir_title = HT_DEPUTY_OVERLORD
+    ruler_title = RT_OVERLORD
+    heir_title_female = HT_DEPUTY_OVERLORD_FEMALE
+    use_regnal_names = yes
+    possible = {
+        has_authority = auth_imperial
+        OR = {
+            has_ethic = ethic_materialist
+            has_ethic = ethic_fanatic_materialist
+        }
+
+    }
+
+}
+
+gov_purity_order {
+    possible = {
+        has_valid_civic = civic_fanatic_purifiers
+        has_authority = auth_dictatorial
+    }
+
+    ruler_title = RT_LORD_PURIFIER
+    should_force_rename = yes
+    ruler_title_female = RT_LADY_PURIFIER
+    weight = {
+        base = 2000
+    }
+
+}
+
+gov_awakened_ascendancy {
+    possible = {
+        has_valid_civic = civic_revanchist_fervor
+        has_valid_civic = civic_ancient_caches_of_technology
+    }
+
+    weight = {
+        base = 100000
+    }
+
+    ruler_title = RT_EMPEROR
+    should_force_rename = yes
+    ruler_title_female = RT_EMPRESS
+}
+
+gov_irenic_dictatorship {
+    ruler_title_female = RT_SERENE_PROTECTOR_FEMALE
+    weight = {
+        base = 5
+        modifier = {
+            factor = 2
+            has_ethic = ethic_fanatic_pacifist
+        }
+
+        modifier = {
+            has_valid_civic = civic_agrarian_idyll
+            factor = 1.5
+        }
+
+    }
+
+    possible = {
+        OR = {
+            has_ethic = ethic_pacifist
+            has_ethic = ethic_fanatic_pacifist
+        }
+
+        has_authority = auth_dictatorial
+    }
+
+    election_candidates = {
+        modifier = {
+            leader_class = ruler
+            add = 100
+        }
+
+        modifier = {
+            add = 10
+            OR = {
+                leader_class = scientist
+                leader_class = governor
+            }
+
+        }
+
+        modifier = {
+            factor = 0
+            leader_class = admiral
+            leader_class = general
+        }
+
+    }
+
+    ruler_title = RT_SERENE_PROTECTOR
+}
+
+gov_communal_parity {
+    should_force_rename = yes
+    ruler_title = RT_PRESIDING_SPEAKING
+    possible = {
+        has_valid_civic = civic_shared_burden
+    }
+
+    weight = {
+        base = 10000
+    }
+
+}
+
+gov_devouring_swarm {
+    ruler_title_female = RT_HIVE_MIND_FEMALE
+    ruler_title = RT_HIVE_MIND
+    should_force_rename = yes
+    possible = {
+        has_authority = auth_hive_mind
+        has_valid_civic = civic_hive_devouring_swarm
+    }
+
+    weight = {
+        base = 100000
+    }
+
+}
+
+gov_irenic_monarchy {
+    dynastic_last_names = yes
+    ruler_title_female = RT_QUEEN
+    heir_title = HT_CROWN_PRINCE
+    use_regnal_names = yes
+    possible = {
+        OR = {
+            has_ethic = ethic_pacifist
+            has_ethic = ethic_fanatic_pacifist
+        }
+
+        has_authority = auth_imperial
+    }
+
+    ruler_title = RT_KING
+    heir_title_female = HT_CROWN_PRINCESS
+    weight = {
+        modifier = {
+            has_ethic = ethic_fanatic_pacifist
+            factor = 2
+        }
+
+        modifier = {
+            factor = 1.5
+            has_valid_civic = civic_agrarian_idyll
+        }
+
+        base = 5
+    }
+
+}
+
+gov_parasitic_overmind {
+    should_force_rename = yes
+    weight = {
+        base = 100000
+    }
+
+    ruler_title = RT_PAR
+    possible = {
+        has_origin = origin_necrophage
+        has_valid_civic = civic_hive_cordyceptic_drones
+    }
+
+}
+
+gov_science_directorate {
+    weight = {
+        base = 900
+    }
+
+    should_force_rename = yes
+    ruler_title = RT_DIRECTOR_GENERAL
+    possible = {
+        has_authority = auth_oligarchic
+        has_valid_civic = civic_technocracy
+    }
+
+    ruler_title_female = RT_DIRECTOR_GENERAL_FEMALE
+    leader_class = scientist
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            add = 10
+            leader_class = scientist
+        }
+
+    }
+
+}
+
+gov_shroudwalker_enclave {
+    should_force_rename = yes
+    possible = {
+        has_valid_civic = civic_shroudwalker_enclave
+    }
+
+    ruler_title = RT_ELDER
+    weight = {
+        base = 100000
+    }
+
+}
+
+gov_divine_empire {
+    heir_title = HT_SAINT
+    heir_title_female = HT_SAINT_FEMALE
+    ruler_title = RT_GOD_EMPEROR
+    ruler_title_female = RT_GOD_EMPRESS
+    use_regnal_names = yes
+    dynastic_last_names = yes
+    should_force_rename = yes
+    weight = {
+        base = 1000
+    }
+
+    possible = {
+        has_authority = auth_imperial
+        has_valid_civic = civic_imperial_cult
+    }
+
+}
+
+gov_enlightened_monarchy {
+    dynastic_last_names = yes
+    heir_title_female = HT_CROWN_PRINCESS
+    ruler_title = RT_HIGH_KING
+    heir_title = HT_CROWN_PRINCE
+    should_force_rename = yes
+    ruler_title_female = RT_HIGH_QUEEN
+    possible = {
+        has_authority = auth_imperial
+        has_valid_civic = civic_philosopher_king
+    }
+
+    use_regnal_names = yes
+    weight = {
+        base = 800
+    }
+
+}
+
+gov_berserker_machine {
+    should_force_rename = yes
+    ruler_title = RT_CUSTODIAN
+    weight = {
+        base = 100000
+    }
+
+    ruler_title_female = RT_CUSTODIAN
+    possible = {
+        has_valid_civic = civic_awakened_machine
+        has_valid_civic = civic_malfunctioning_custodian
+    }
+
+}
+
+gov_military_commissariat {
+    weight = {
+        modifier = {
+            has_ethic = ethic_fanatic_militarist
+            factor = 2
+        }
+
+        modifier = {
+            factor = 1.1
+            OR = {
+                has_valid_civic = civic_distinguished_admiralty
+                has_valid_civic = civic_nationalistic_zeal
+            }
+
+        }
+
+        base = 5
+    }
+
+    possible = {
+        has_authority = auth_democratic
+        OR = {
+            has_ethic = ethic_militarist
+            has_ethic = ethic_fanatic_militarist
+        }
+
+    }
+
+    ruler_title_female = RT_COMMISSARY_GENERAL_FEMALE
+    ruler_title = RT_COMMISSARY_GENERAL
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            add = 10
+            OR = {
+                leader_class = admiral
+                leader_class = general
+                leader_class = governor
+            }
+
+        }
+
+        modifier = {
+            leader_class = scientist
+            factor = 0
+        }
+
+    }
+
+}
+
+gov_direct_democracy {
+    ruler_title = RT_CHANCELLOR
+    ruler_title_female = RT_CHANCELLOR_FEMALE
+    possible = {
+        OR = {
+            has_ethic = ethic_materialist
+            has_ethic = ethic_fanatic_materialist
+        }
+
+        has_authority = auth_democratic
+    }
+
+    weight = {
+        base = 5
+        modifier = {
+            factor = 2
+            has_ethic = ethic_fanatic_materialist
+        }
+
+        modifier = {
+            has_origin = origin_mechanists
+            factor = 1.5
+        }
+
+    }
+
+}
+
+gov_illuminated_autocracy {
+    should_force_rename = yes
+    weight = {
+        base = 900
+    }
+
+    dynastic_last_names = yes
+    ruler_title_female = RT_PRIMUS_FEMALE
+    heir_title = HT_SECUNDUS
+    ruler_title = RT_PRIMUS
+    heir_title_female = HT_SECUNDUS_FEMALE
+    use_regnal_names = yes
+    possible = {
+        has_authority = auth_imperial
+        has_valid_civic = civic_technocracy
+    }
+
+}
+
+gov_imperial_domain_machines {
+    ruler_title = RT_GALACTIC_INTELLIGENCE
+    should_force_rename = yes
+    possible = {
+        has_civic = civic_galactic_sovereign
+        is_machine_empire = yes
+    }
+
+    weight = {
+        base = 100000
+    }
+
+}
+
+gov_marauder_khanate {
+    ruler_title = RT_GREAT_KHAN
+    should_force_rename = yes
+    weight = {
+        base = 100000
+    }
+
+    possible = {
+        has_civic = civic_great_khans_vision
+    }
+
+}
+
+gov_imperial_domain {
+    ruler_title_female = RT_GAL_EMPRESS
+    heir_title = HT_CROWN_PRINCE
+    should_force_rename = yes
+    possible = {
+        has_civic = civic_galactic_sovereign
+        is_gestalt = no
+    }
+
+    ruler_title = RT_GAL_EMPEROR
+    weight = {
+        base = 100000
+    }
+
+    use_regnal_names = yes
+    heir_title_female = HT_CROWN_PRINCESS
+    dynastic_last_names = yes
+}
+
+gov_bandit_commune {
+    weight = {
+        base = 10000
+    }
+
+    ruler_title = RT_WARLORD
+    should_force_rename = yes
+    possible = {
+        has_valid_civic = civic_barbaric_despoilers
+        OR = {
+            has_authority = auth_oligarchic
+            has_authority = auth_democratic
+        }
+
+    }
+
+}
+
+gov_machine_research {
+    possible = {
+        has_authority = auth_machine_intelligence
+    }
+
+    ruler_title = RT_LINK
+    weight = {
+        modifier = {
+            factor = 10
+            NOT = {
+                OR = {
+                    has_valid_civic = civic_machine_rockbreakers
+                    has_valid_civic = civic_machine_builder
+                    has_valid_civic = civic_machine_replication
+                }
+
+            }
+
+            has_valid_civic = civic_machine_introspective
+        }
+
+        modifier = {
+            NOT = {
+                OR = {
+                    has_valid_civic = civic_machine_rockbreakers
+                    has_valid_civic = civic_machine_builder
+                    has_valid_civic = civic_machine_replication
+                }
+
+            }
+
+            has_valid_civic = civic_machine_delegated_functions
+            factor = 10
+        }
+
+        modifier = {
+            has_valid_civic = civic_machine_predictive_analysis
+            factor = 10
+            NOT = {
+                OR = {
+                    has_valid_civic = civic_machine_rockbreakers
+                    has_valid_civic = civic_machine_builder
+                    has_valid_civic = civic_machine_replication
+                }
+
+            }
+
+        }
+
+        base = 2
+    }
+
+    should_force_rename = yes
+}
+
+gov_hive_mind {
+    should_force_rename = yes
+    ruler_title_female = RT_HIVE_MIND_FEMALE
+    ruler_title = RT_HIVE_MIND
+    possible = {
+        NOR = {
+            has_valid_civic = civic_hive_devouring_swarm
+            AND = {
+                has_valid_civic = civic_hive_cordyceptic_drones
+                has_origin = origin_necrophage
+            }
+
+        }
+
+        has_authority = auth_hive_mind
+    }
+
+    weight = {
+        base = 100000
+    }
+
+}
+
+gov_purification_committee {
+    possible = {
+        has_valid_civic = civic_fanatic_purifiers
+        has_authority = auth_oligarchic
+    }
+
+    ruler_title_female = RT_GRAND_ARBITER_FEMALE
+    should_force_rename = yes
+    ruler_title = RT_GRAND_ARBITER
+    weight = {
+        base = 2000
+    }
+
+}
+
+gov_blood_court {
+    heir_title = HT_SENIOR_EXECUTIONER
+    should_force_rename = yes
+    use_regnal_names = yes
+    ruler_title_female = RT_HIGH_EXECUTIONER_FEMALE
+    heir_title_female = HT_SENIOR_EXECUTIONER_FEMALE
+    possible = {
+        has_authority = auth_imperial
+        has_valid_civic = civic_fanatic_purifiers
+    }
+
+    dynastic_last_names = yes
+    ruler_title = RT_HIGH_EXECUTIONER
+    weight = {
+        base = 2000
+    }
+
+}
+
+gov_machine_empire {
+    should_force_rename = yes
+    possible = {
+        has_authority = auth_machine_intelligence
+    }
+
+    weight = {
+        base = 5
+    }
+
+    ruler_title = RT_CPU
+}
+
+gov_salvager_enclave {
+    possible = {
+        has_valid_civic = civic_salvager_enclave
+    }
+
+    ruler_title = RT_PRINCIPAL_ENGINEER
+    weight = {
+        base = 100000
+    }
+
+    should_force_rename = yes
+}
+
+gov_stagnant_ascendancy {
+    should_force_rename = yes
+    weight = {
+        base = 100000
+    }
+
+    possible = {
+        has_valid_civic = civic_lethargic_leadership
+        has_valid_civic = civic_empire_in_decline
+    }
+
+    ruler_title = RT_EMPEROR
+    ruler_title_female = RT_EMPRESS
+}
+
+gov_celestial_empire {
+    should_force_rename = yes
+    use_regnal_names = yes
+    possible = {
+        has_ethic = ethic_spiritualist
+        has_authority = auth_imperial
+        has_valid_civic = civic_inwards_perfection
+    }
+
+    dynastic_last_names = yes
+    ruler_title = RT_CELESTIAL_EMPEROR
+    heir_title_female = HT_CROWN_PRINCESS
+    ruler_title_female = RT_CELESTIAL_EMPRESS
+    heir_title = HT_CROWN_PRINCE
+    weight = {
+        base = 1000
+    }
+
+}
+
+gov_rational_consensus {
+    leader_class = scientist
+    ruler_title_female = RT_FIRST_SPEAKER_FEMALE
+    ruler_title = RT_FIRST_SPEAKER
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            add = 10
+            leader_class = scientist
+        }
+
+    }
+
+    should_force_rename = yes
+    possible = {
+        has_authority = auth_democratic
+        has_valid_civic = civic_technocracy
+    }
+
+    weight = {
+        base = 900
+    }
+
+}
+
+gov_megacorporation {
+    should_force_rename = yes
+    election_candidates = {
+        modifier = {
+            leader_class = ruler
+            add = 100
+        }
+
+        modifier = {
+            leader_class = governor
+            add = 10
+        }
+
+    }
+
+    possible = {
+        OR = {
+            has_authority = auth_corporate
+            AND = {
+                OR = {
+                    has_ethic = ethic_authoritarian
+                    has_ethic = ethic_fanatic_authoritarian
+                    NOR = {
+                        has_ethic = ethic_egalitarian
+                        has_ethic = ethic_fanatic_egalitarian
+                        has_ethic = ethic_pacifist
+                        has_ethic = ethic_fanatic_pacifist
+                    }
+
+                }
+
+                has_valid_civic = civic_corporate_dominion
+                has_authority = auth_oligarchic
+            }
+
+        }
+
+    }
+
+    ruler_title = RT_CEO
+    weight = {
+        base = 700
+    }
+
+    ruler_title_female = RT_CEO_FEMALE
+}
+
+gov_tribal_society {
+    ruler_title = RT_KING
+    ruler_title_female = RT_QUEEN
+    weight = {
+        base = 100000
+    }
+
+    should_force_rename = yes
+    possible = {
+        has_valid_civic = civic_secret_of_fire
+        has_valid_civic = civic_the_wheel
+    }
+
+}
+
+gov_military_junta {
+    weight = {
+        base = 5
+        modifier = {
+            has_ethic = ethic_fanatic_militarist
+            factor = 2
+        }
+
+        modifier = {
+            factor = 1.1
+            OR = {
+                has_valid_civic = civic_distinguished_admiralty
+                has_valid_civic = civic_nationalistic_zeal
+            }
+
+        }
+
+    }
+
+    election_candidates = {
+        modifier = {
+            leader_class = ruler
+            add = 100
+        }
+
+        modifier = {
+            add = 10
+            OR = {
+                leader_class = admiral
+                leader_class = general
+            }
+
+        }
+
+    }
+
+    ruler_title = RT_ARCHON
+    possible = {
+        has_authority = auth_oligarchic
+        OR = {
+            has_ethic = ethic_militarist
+            has_ethic = ethic_fanatic_militarist
+        }
+
+    }
+
+    ruler_title_female = RT_ARCHON_FEMALE
+}
+
+gov_successor_khanate {
+    possible = {
+        has_civic = civic_great_khans_legacy
+    }
+
+    weight = {
+        base = 100000
+    }
+
+    ruler_title = RT_KHAN
+    should_force_rename = yes
+}
+
+gov_irenic_bureaucracy {
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            OR = {
+                leader_class = scientist
+                leader_class = governor
+            }
+
+            add = 10
+        }
+
+        modifier = {
+            leader_class = admiral
+            leader_class = general
+            factor = 0
+        }
+
+    }
+
+    weight = {
+        modifier = {
+            factor = 2
+            has_ethic = ethic_fanatic_pacifist
+        }
+
+        modifier = {
+            factor = 1.5
+            has_valid_civic = civic_agrarian_idyll
+        }
+
+        base = 5
+    }
+
+    ruler_title = RT_COORDINATOR
+    possible = {
+        has_authority = auth_oligarchic
+        OR = {
+            has_ethic = ethic_pacifist
+            has_ethic = ethic_fanatic_pacifist
+        }
+
+    }
+
+    ruler_title_female = RT_COORDINATOR_FEMALE
+}
+
+gov_criminal_syndicate {
+    should_force_rename = yes
+    possible = {
+        has_authority = auth_corporate
+        has_valid_civic = civic_criminal_heritage
+    }
+
+    election_candidates = {
+        modifier = {
+            leader_class = ruler
+            add = 100
+        }
+
+        modifier = {
+            leader_class = governor
+            add = 10
+        }
+
+    }
+
+    ruler_title = RT_OLIGARCH
+    weight = {
+        base = 1700
+    }
+
+}
+
+gov_theocratic_republic {
+    possible = {
+        has_authority = auth_democratic
+        OR = {
+            has_ethic = ethic_spiritualist
+            has_ethic = ethic_fanatic_spiritualist
+        }
+
+    }
+
+    ruler_title_female = RT_REVERED_ELDER_FEMALE
+    ruler_title = RT_REVERED_ELDER
+    weight = {
+        base = 5
+    }
+
+}
+
+gov_imperial_domain_hives {
+    should_force_rename = yes
+    weight = {
+        base = 900000
+    }
+
+    ruler_title = RT_GALACTIC_OVERMIND
+    possible = {
+        has_civic = civic_galactic_sovereign
+        is_hive_empire = yes
+    }
+
+}
+
+gov_constitutional_dictatorship {
+    ruler_title = RT_EXECUTOR
+    weight = {
+        base = 1
+    }
+
+    ruler_title_female = RT_EXECUTOR_FEMALE
+    possible = {
+        has_authority = auth_dictatorial
+    }
+
+}
+
+gov_trade_league {
+    ruler_title_female = RT_CHAIRWOMAN
+    should_force_rename = yes
+    possible = {
+        OR = {
+            AND = {
+                has_valid_civic = civic_corporate_dominion
+                NOR = {
+                    has_ethic = ethic_authoritarian
+                    has_ethic = ethic_fanatic_authoritarian
+                }
+
+                OR = {
+                    has_ethic = ethic_egalitarian
+                    has_ethic = ethic_fanatic_egalitarian
+                    has_ethic = ethic_pacifist
+                    has_ethic = ethic_fanatic_pacifist
+                }
+
+                has_authority = auth_oligarchic
+            }
+
+            AND = {
+                OR = {
+                    has_valid_civic = civic_free_traders
+                    has_valid_civic = civic_trading_posts
+                }
+
+                has_authority = auth_corporate
+            }
+
+        }
+
+    }
+
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            add = 10
+            leader_class = governor
+        }
+
+    }
+
+    weight = {
+        base = 1200
+    }
+
+    ruler_title = RT_CHAIRMAN
+}
+
+gov_machine_servitor {
+    possible = {
+        has_civic = civic_machine_servitor
+        has_authority = auth_machine_intelligence
+    }
+
+    should_force_rename = yes
+    weight = {
+        base = 2000
+    }
+
+    ruler_title = RT_SUPERVISORY
+}
+
+gov_sacrificial_megachurch {
+    should_force_rename = yes
+    ruler_title = RT_GRAVE_ADMINISTRATOR
+    possible = {
+        has_valid_civic = civic_death_cult_corporate
+        has_valid_civic = civic_gospel_of_the_masses
+    }
+
+    weight = {
+        base = 10000
+    }
+
+}
+
+gov_theocratic_monarchy {
+    ruler_title_female = RT_ARCHPROPHETESS
+    ruler_title = RT_ARCHPROPHET
+    use_regnal_names = yes
+    weight = {
+        base = 5
+    }
+
+    dynastic_last_names = yes
+    heir_title_female = HT_PRIESTESS
+    possible = {
+        OR = {
+            has_ethic = ethic_spiritualist
+            has_ethic = ethic_fanatic_spiritualist
+        }
+
+        has_authority = auth_imperial
+    }
+
+    heir_title = HT_PRIEST
+}
+
+gov_feudal_realms {
+    ruler_title_female = RT_QUEEN
+    possible = {
+        has_valid_civic = civic_landed_nobility
+        has_valid_civic = civic_flat_world_theory
+    }
+
+    weight = {
+        base = 100000
+    }
+
+    ruler_title = RT_KING
+    should_force_rename = yes
+}
+
+gov_purity_assembly {
+    ruler_title = RT_PRIME_JUSTICIAR
+    should_force_rename = yes
+    ruler_title_female = RT_PRIME_JUSTICIAR_FEMALE
+    possible = {
+        has_valid_civic = civic_fanatic_purifiers
+        has_authority = auth_democratic
+    }
+
+    weight = {
+        base = 2000
+    }
+
+}
+
+gov_curator_enclave {
+    should_force_rename = yes
+    weight = {
+        base = 100000
+    }
+
+    ruler_title = RT_HIGH_CURATOR
+    possible = {
+        has_valid_civic = civic_ancient_preservers
+    }
+
+}
+
+gov_despotic_empire {
+    use_regnal_names = yes
+    weight = {
+        base = 1
+    }
+
+    dynastic_last_names = yes
+    heir_title = HT_CROWN_PRINCE
+    ruler_title = RT_EMPEROR
+    possible = {
+        has_authority = auth_imperial
+    }
+
+    heir_title_female = HT_CROWN_PRINCESS
+    ruler_title_female = RT_EMPRESS
+}
+
+gov_marauder_clans {
+    ruler_title = RT_RELUCTANT_EMISSARY
+    should_force_rename = yes
+    weight = {
+        base = 100000
+    }
+
+    possible = {
+        has_civic = civic_anarcho_tribalism
+    }
+
+}
+
+gov_diadochi {
+    weight = {
+        base = 100000
+    }
+
+    ruler_title = RT_KHAN
+    should_force_rename = yes
+    possible = {
+        has_civic = civic_diadochi
+    }
+
+}
+
+gov_machine_assimilator {
+    ruler_title = RT_CONDUIT
+    possible = {
+        has_authority = auth_machine_intelligence
+        has_civic = civic_machine_assimilator
+    }
+
+    should_force_rename = yes
+    weight = {
+        base = 2000
+    }
+
+}
+
+gov_military_order {
+    ruler_title = RT_GRAND_MASTER
+    weight = {
+        base = 100000
+    }
+
+    possible = {
+        has_valid_civic = civic_military_order
+    }
+
+    should_force_rename = yes
+}
+
+gov_fallback {
+    should_force_rename = yes
+    ruler_title = RT_KING
+    weight = {
+        base = 1
+    }
+
+    possible = {
+        always = yes
+    }
+
+}
+
+gov_theocratic_dictatorship {
+    election_candidates = {
+        modifier = {
+            leader_class = ruler
+            add = 100
+        }
+
+        modifier = {
+            leader_class = governor
+            add = 10
+        }
+
+    }
+
+    possible = {
+        has_authority = auth_dictatorial
+        OR = {
+            has_ethic = ethic_spiritualist
+            has_ethic = ethic_fanatic_spiritualist
+        }
+
+    }
+
+    weight = {
+        base = 5
+    }
+
+    ruler_title_female = RT_MATRIARCH
+    ruler_title = RT_PATRIARCH
+}
+
+gov_theocratic_oligarchy {
+    ruler_title_female = RT_CHIEF_PRECENTOR_FEMALE
+    weight = {
+        base = 5
+    }
+
+    ruler_title = RT_CHIEF_PRECENTOR
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            add = 10
+            leader_class = governor
+        }
+
+    }
+
+    possible = {
+        has_authority = auth_oligarchic
+        OR = {
+            has_ethic = ethic_spiritualist
+            has_ethic = ethic_fanatic_spiritualist
+        }
+
+    }
+
+}
+
+gov_fragmented_nation_states {
+    ruler_title = RT_SECRETARY
+    possible = {
+        has_valid_civic = civic_increasing_urbanization
+        has_valid_civic = civic_atmospheric_pollution
+    }
+
+    ruler_title_female = RT_SECRETARY_FEMALE
+    weight = {
+        base = 100000
+    }
+
+    should_force_rename = yes
+}
+
+gov_war_council {
+    weight = {
+        base = 800
+    }
+
+    ruler_title = RT_WARLORD
+    leader_class = admiral
+    possible = {
+        has_authority = auth_oligarchic
+        has_valid_civic = civic_warrior_culture
+    }
+
+    ruler_title_female = RT_WARLORD_FEMALE
+    should_force_rename = yes
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            OR = {
+                leader_class = admiral
+                leader_class = general
+            }
+
+            add = 10
+        }
+
+    }
+
+}
+
+gov_ancient_machine_intelligence {
+    weight = {
+        base = 100000
+    }
+
+    ruler_title = RT_CORE_DIRECTIVE
+    possible = {
+        has_civic = civic_ancient_machine_intelligence
+    }
+
+    should_force_rename = yes
+}
+
+gov_bandit_kingdom {
+    should_force_rename = yes
+    possible = {
+        OR = {
+            has_authority = auth_imperial
+            has_authority = auth_dictatorial
+        }
+
+        has_valid_civic = civic_barbaric_despoilers
+    }
+
+    ruler_title = RT_WARLORD
+    weight = {
+        base = 10000
+    }
+
+}
+
+gov_executive_committee {
+    possible = {
+        OR = {
+            has_ethic = ethic_materialist
+            has_ethic = ethic_fanatic_materialist
+        }
+
+        has_authority = auth_oligarchic
+    }
+
+    ruler_title_female = RT_CHAIRWOMAN
+    weight = {
+        modifier = {
+            factor = 2
+            has_ethic = ethic_fanatic_materialist
+        }
+
+        modifier = {
+            factor = 1.5
+            has_origin = origin_mechanists
+        }
+
+        base = 5
+    }
+
+    ruler_title = RT_CHAIRMAN
+}
+
+gov_band_blood {
+    ruler_title = RT_BLOODLORD
+    weight = {
+        base = 20000
+    }
+
+    should_force_rename = yes
+    possible = {
+        has_valid_civic = civic_barbaric_despoilers
+        has_valid_civic = civic_death_cult
+    }
+
+}
+
+gov_holy_tribunal {
+    should_force_rename = yes
+    election_candidates = {
+        modifier = {
+            leader_class = ruler
+            add = 100
+        }
+
+        modifier = {
+            add = 10
+            leader_class = governor
+        }
+
+    }
+
+    possible = {
+        has_authority = auth_oligarchic
+        has_valid_civic = civic_exalted_priesthood
+        NOR = {
+            has_valid_civic = civic_corporate_dominion
+            has_valid_civic = civic_death_cult
+        }
+
+    }
+
+    ruler_title_female = RT_HIGH_INQUISITOR_FEMALE
+    weight = {
+        base = 1000
+    }
+
+    ruler_title = RT_HIGH_INQUISITOR
+}
+
+gov_plutocratic_oligarchy {
+    ruler_title_female = RT_HIGH_COMMISSIONER_FEMALE
+    ruler_title = RT_HIGH_COMMISSIONER
+    weight = {
+        base = 1
+    }
+
+    possible = {
+        has_authority = auth_oligarchic
+    }
+
+}
+
+gov_star_empire {
+    use_regnal_names = yes
+    heir_title = HT_CROWN_PRINCE
+    dynastic_last_names = yes
+    ruler_title = RT_EMPEROR
+    heir_title_female = HT_CROWN_PRINCESS
+    weight = {
+        base = 5
+        modifier = {
+            factor = 2
+            has_ethic = ethic_fanatic_militarist
+        }
+
+        modifier = {
+            factor = 1.1
+            OR = {
+                has_valid_civic = civic_distinguished_admiralty
+                has_valid_civic = civic_nationalistic_zeal
+            }
+
+        }
+
+    }
+
+    possible = {
+        has_authority = auth_imperial
+        OR = {
+            has_ethic = ethic_militarist
+            has_ethic = ethic_fanatic_militarist
+        }
+
+    }
+
+    ruler_title_female = RT_EMPRESS
+}
+
+gov_elective_monarchy {
+    possible = {
+        has_authority = auth_dictatorial
+        has_valid_civic = civic_philosopher_king
+    }
+
+    should_force_rename = yes
+    ruler_title_female = RT_HIGH_QUEEN
+    ruler_title = RT_HIGH_KING
+    weight = {
+        base = 800
+    }
+
+}
+
+gov_imperial_domain_megacorp {
+    possible = {
+        is_gestalt = no
+        has_civic = civic_galactic_sovereign_megacorp
+    }
+
+    ruler_title = RT_IMP_EXECUTIVE
+    weight = {
+        base = 100000
+    }
+
+    use_regnal_names = yes
+    heir_title = HT_IMP_VICE_EXECUTIVE
+    dynastic_last_names = yes
+    should_force_rename = yes
+}
+
+gov_martial_empire {
+    should_force_rename = yes
+    ruler_title = RT_EMPEROR
+    possible = {
+        has_authority = auth_imperial
+        has_valid_civic = civic_warrior_culture
+    }
+
+    weight = {
+        base = 800
+    }
+
+    heir_title = HT_CROWN_PRINCE
+    use_regnal_names = yes
+    ruler_title_female = RT_EMPRESS
+    heir_title_female = HT_CROWN_PRINCESS
+    dynastic_last_names = yes
+}
+
+gov_totalitarian_regime {
+    ruler_title_female = RT_PRIMARCH_FEMALE
+    possible = {
+        OR = {
+            has_ethic = ethic_materialist
+            has_ethic = ethic_fanatic_materialist
+        }
+
+        has_authority = auth_dictatorial
+    }
+
+    ruler_title = RT_PRIMARCH
+    weight = {
+        base = 5
+        modifier = {
+            factor = 2
+            has_ethic = ethic_fanatic_materialist
+        }
+
+        modifier = {
+            has_origin = origin_mechanists
+            factor = 1.5
+        }
+
+    }
+
+}
+
+gov_megachurch {
+    election_candidates = {
+        modifier = {
+            leader_class = ruler
+            add = 100
+        }
+
+        modifier = {
+            leader_class = governor
+            add = 10
+        }
+
+    }
+
+    ruler_title_female = RT_HALLOWED_COMPTROLLER_FEMALE
+    should_force_rename = yes
+    ruler_title = RT_HALLOWED_COMPTROLLER
+    possible = {
+        OR = {
+            AND = {
+                has_valid_civic = civic_corporate_dominion
+                has_valid_civic = civic_exalted_priesthood
+            }
+
+            AND = {
+                has_valid_civic = civic_gospel_of_the_masses
+                has_authority = auth_corporate
+            }
+
+        }
+
+    }
+
+    weight = {
+        base = 1000
+    }
+
+}
+
+gov_subversive_cult {
+    possible = {
+        has_valid_civic = civic_criminal_heritage
+        has_valid_civic = civic_gospel_of_the_masses
+        has_authority = auth_corporate
+    }
+
+    should_force_rename = yes
+    ruler_title = RT_ORACLE
+    weight = {
+        base = 3000
+    }
+
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            add = 10
+            leader_class = governor
+        }
+
+    }
+
+}
+
+gov_mercenary_enclave {
+    ruler_title = RT_HIGH_ADMIRAL
+    should_force_rename = yes
+    weight = {
+        base = 100000
+    }
+
+    possible = {
+        has_valid_civic = civic_mercenary_enclave
+    }
+
+}
+
+gov_grim_council {
+    should_force_rename = yes
+    possible = {
+        has_authority = auth_oligarchic
+        has_valid_civic = civic_death_cult
+    }
+
+    ruler_title = RT_DREAD_CARDINAL
+    weight = {
+        base = 10000
+    }
+
+}
+
+gov_moral_democracy {
+    ruler_title = RT_PRIME_MINISTER
+    weight = {
+        modifier = {
+            factor = 2
+            has_ethic = ethic_fanatic_pacifist
+        }
+
+        modifier = {
+            factor = 1.5
+            has_valid_civic = civic_agrarian_idyll
+        }
+
+        base = 5
+    }
+
+    election_candidates = {
+        modifier = {
+            add = 100
+            leader_class = ruler
+        }
+
+        modifier = {
+            OR = {
+                leader_class = scientist
+                leader_class = governor
+            }
+
+            add = 10
+        }
+
+        modifier = {
+            leader_class = admiral
+            leader_class = general
+            factor = 0
+        }
+
+    }
+
+    ruler_title_female = RT_PRIME_MINISTER_FEMALE
+    possible = {
+        OR = {
+            has_ethic = ethic_pacifist
+            has_ethic = ethic_fanatic_pacifist
+        }
+
+        has_authority = auth_democratic
+    }
+
+}
+
+gov_feudal_empire {
+    ruler_title = RT_EMPEROR
+    heir_title = HT_CROWN_PRINCE
+    dynastic_last_names = yes
+    weight = {
+        base = 700
+    }
+
+    ruler_title_female = RT_EMPRESS
+    use_regnal_names = yes
+    should_force_rename = yes
+    heir_title_female = HT_CROWN_PRINCESS
+    possible = {
+        has_valid_civic = civic_feudal_realm
+        has_authority = auth_imperial
+    }
+
+}
+
+gov_citizen_stratocracy {
+    ruler_title_female = RT_STRATEGOS_FEMALE
+    ruler_title = RT_STRATEGOS
+    possible = {
+        has_valid_civic = civic_citizen_service
+        has_authority = auth_oligarchic
+    }
+
+    weight = {
+        base = 900
+    }
+
+    election_candidates = {
+        modifier = {
+            leader_class = ruler
+            add = 100
+        }
+
+        modifier = {
+            add = 10
+            OR = {
+                leader_class = admiral
+                leader_class = general
+            }
+
+        }
+
+    }
+
+    leader_class = admiral
+    should_force_rename = yes
+}
+
+gov_galactic_defense_unit {
+    ruler_title = RT_ERROR
+    should_force_rename = yes
+    ruler_title_female = RT_ERROR
+    possible = {
+        has_valid_civic = civic_awakened_machine
+        has_valid_civic = civic_final_defense_protocols
+    }
+
+    weight = {
+        base = 100000
+    }
+
+}
+
+gov_custodian_matrix {
+    ruler_title_female = RT_CUSTODIAN
+    should_force_rename = yes
+    ruler_title = RT_CUSTODIAN
+    possible = {
+        has_valid_civic = civic_machine_remnants
+        has_valid_civic = civic_custodian_directives
+    }
+
+    weight = {
+        base = 100000
+    }
+
+}
+

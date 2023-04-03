@@ -1,0 +1,7 @@
+starbase_level_juggernaut {
+    potential_home_base = yes
+    collects_trade = no
+    ship_size = juggernaut
+    show_in_outliner = no
+}
+

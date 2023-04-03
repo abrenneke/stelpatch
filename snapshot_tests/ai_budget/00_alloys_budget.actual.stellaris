@@ -1,0 +1,542 @@
+alloys_expenditure_planets {
+    category = planets
+    type = expenditure
+    desired_max = {
+        base = 450
+    }
+
+    resource = alloys
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.1
+    }
+
+}
+
+alloys_upkeep_ships {
+    category = ships
+    type = upkeep
+    resource = alloys
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        modifier = {
+            factor = 1.5
+            OR = {
+                is_at_war = yes
+                resource_income_compare = {
+                    resource = alloys
+                    value > 800
+                }
+
+            }
+
+        }
+
+        weight = 0.5
+    }
+
+}
+
+alloys_expenditure_megastructures {
+    potential = {
+        can_build_megastructures = yes
+        OR = {
+            used_naval_capacity_percent > 0.95
+            is_at_war = no
+        }
+
+        is_country_type = default
+    }
+
+    desired_max = {
+        base = 20000
+    }
+
+    category = megastructures
+    type = expenditure
+    weight = {
+        weight = 0.4
+        modifier = {
+            any_owned_megastructure = {
+                can_be_upgraded = yes
+            }
+
+            used_naval_capacity_percent > 0.8
+            factor = 3
+        }
+
+    }
+
+    resource = alloys
+}
+
+alloys_expenditure_ship_upgrades {
+    weight = {
+        modifier = {
+            factor = 2.5
+            used_naval_capacity_percent >= 1
+        }
+
+        weight = 0.2
+    }
+
+    category = ship_upgrades
+    potential = {
+        is_at_war = no
+        any_owned_fleet = {
+            can_be_upgraded = yes
+            controller = {
+                is_same_value = root
+            }
+
+        }
+
+    }
+
+    resource = alloys
+    type = expenditure
+}
+
+alloys_expenditure_colonies_expand {
+    resource = alloys
+    desired_min = {
+        base = 200
+    }
+
+    weight = {
+        weight = 0.5
+    }
+
+    desired_max = {
+        base = 250
+    }
+
+    type = expenditure
+    category = colonies
+    potential = {
+        OR = {
+            is_at_war = no
+            mid_game_years_passed > 0
+        }
+
+        OR = {
+            AND = {
+                is_lithoid_empire = no
+                has_resource = {
+                    amount > 400
+                    type = food
+                }
+
+                has_monthly_income = {
+                    resource = food
+                    value > 0
+                }
+
+            }
+
+            AND = {
+                has_monthly_income = {
+                    resource = minerals
+                    value > 0
+                }
+
+                is_lithoid_empire = yes
+                has_resource = {
+                    type = minerals
+                    amount > 400
+                }
+
+            }
+
+        }
+
+        is_machine_empire = no
+        ai_colonize_plans > 0
+    }
+
+}
+
+alloys_expenditure_starbases_fallen_empires {
+    weight = {
+        weight = 0.2
+    }
+
+    resource = alloys
+    type = expenditure
+    category = starbases
+    potential = {
+        is_country_type = fallen_empire
+    }
+
+}
+
+alloys_expenditure_starbases_expand {
+    potential = {
+        has_resource = {
+            amount > 75
+            type = influence
+        }
+
+        highest_threat < 50
+        has_ai_expansion_plan = yes
+        NOT = {
+            is_country_type = fallen_empire
+            is_country_type = awakened_fallen_empire
+            ai_colonize_plans > 0
+        }
+
+    }
+
+    type = expenditure
+    resource = alloys
+    category = starbases
+    weight = {
+        weight = 0.2
+    }
+
+    desired_min = {
+        base = 150
+    }
+
+}
+
+alloys_expenditure_habitats {
+    desired_min = {
+        base = 1000
+    }
+
+    category = megastructures_habitat
+    type = expenditure
+    potential = {
+        ai_should_build_habitats = yes
+    }
+
+    desired_max = {
+        base = 1500
+    }
+
+    weight = {
+        weight = 0.2
+        modifier = {
+            factor = 2.5
+            has_origin = origin_void_dwellers
+        }
+
+        modifier = {
+            has_origin = origin_void_dwellers
+            factor = 2
+            count_owned_planet = {
+                limit = {
+                    is_planet_class = pc_habitat
+                }
+
+                count < 4
+            }
+
+        }
+
+        modifier = {
+            has_origin = origin_void_dwellers
+            factor = 2
+            count_owned_planet = {
+                limit = {
+                    is_planet_class = pc_habitat
+                }
+
+                count < 6
+            }
+
+        }
+
+        modifier = {
+            mid_game_years_passed > 0
+            factor = 5
+            num_owned_planets < 12
+        }
+
+        modifier = {
+            factor = 0.5
+            has_trait = trait_aquatic
+        }
+
+        modifier = {
+            factor = 2
+            used_starbase_capacity_percent >= 1
+            used_naval_capacity_percent > 0.95
+        }
+
+        modifier = {
+            factor = 0.5
+            is_at_war = yes
+        }
+
+    }
+
+    resource = alloys
+}
+
+alloys_expenditure_buffer {
+    category = buffer
+    resource = alloys
+    type = expenditure
+    potential = {
+        always = no
+    }
+
+    weight = {
+        weight = 0
+    }
+
+}
+
+alloys_expenditure_decisions {
+    desired_max = {
+        modifier = {
+            has_technology = tech_habitat_3
+            any_owned_planet = {
+                has_planet_flag = advanced_habitat
+                NOT = {
+                    has_planet_flag = advanced_habitat_2
+                }
+
+            }
+
+            add = 1000
+        }
+
+        modifier = {
+            any_owned_planet = {
+                num_uncleared_blockers < 1
+                is_planet_class = pc_shattered_ring_habitable
+            }
+
+            add = 8000
+            has_technology = tech_mega_engineering
+        }
+
+        base = 2000
+    }
+
+    type = expenditure
+    potential = {
+        any_owned_planet = {
+            OR = {
+                AND = {
+                    is_planet_class = pc_habitat
+                    NOT = {
+                        has_planet_flag = advanced_habitat_2
+                    }
+
+                    root = {
+                        has_technology = tech_habitat_2
+                    }
+
+                }
+
+                AND = {
+                    is_planet_class = pc_shattered_ring_habitable
+                    num_uncleared_blockers < 1
+                    root = {
+                        has_technology = tech_mega_engineering
+                    }
+
+                }
+
+            }
+
+        }
+
+        OR = {
+            has_technology = tech_habitat_2
+            has_technology = tech_mega_engineering
+        }
+
+        has_resource = {
+            amount > 5000
+            type = alloys
+        }
+
+    }
+
+    category = decisions
+    weight = {
+        weight = 0.2
+    }
+
+    resource = alloys
+}
+
+alloys_expenditure_starbases {
+    type = expenditure
+    category = starbases
+    resource = alloys
+    potential = {
+        NOT = {
+            is_country_type = fallen_empire
+        }
+
+    }
+
+    weight = {
+        modifier = {
+            factor = 2
+            used_naval_capacity_percent >= 1
+        }
+
+        modifier = {
+            ai_colonize_plans > 0
+            factor = 0.25
+        }
+
+        modifier = {
+            any_owned_starbase = {
+                can_be_upgraded = yes
+            }
+
+            factor = 1.5
+            used_starbase_capacity_percent < 1
+        }
+
+        modifier = {
+            factor = 1.5
+            OR = {
+                any_owned_starbase = {
+                    NOT = {
+                        has_starbase_size = starbase_outpost
+                    }
+
+                    can_be_upgraded = yes
+                }
+
+                any_owned_nonprimary_starbase = {
+                    can_be_upgraded = yes
+                }
+
+            }
+
+        }
+
+        weight = 0.3
+    }
+
+    desired_max = {
+        base = 12000
+    }
+
+}
+
+alloys_expenditure_colonies_expand_machine {
+    potential = {
+        ai_colonize_plans > 0
+        OR = {
+            is_at_war = no
+            mid_game_years_passed > 0
+        }
+
+        is_machine_empire = yes
+    }
+
+    desired_max = {
+        base = 450
+    }
+
+    type = expenditure
+    desired_min = {
+        base = 400
+    }
+
+    resource = alloys
+    category = colonies
+    weight = {
+        weight = 0.5
+    }
+
+}
+
+alloys_upkeep_buffer {
+    type = upkeep
+    resource = alloys
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.3
+    }
+
+    category = buffer
+}
+
+alloys_expenditure_ships {
+    potential = {
+        always = yes
+    }
+
+    resource = alloys
+    category = ships
+    type = expenditure
+    weight = {
+        weight = 0.6
+        modifier = {
+            OR = {
+                recently_lost_war = yes
+                is_at_war = yes
+            }
+
+            factor = 2
+        }
+
+        modifier = {
+            factor = 0.25
+            AND = {
+                is_at_war = no
+                ai_colonize_plans > 0
+            }
+
+        }
+
+        modifier = {
+            factor = 0.5
+            used_naval_capacity_percent >= 1
+        }
+
+        modifier = {
+            factor = 5
+            used_naval_capacity_percent < 1
+            OR = {
+                any_neighbor_country = {
+                    has_ascension_perk = ap_become_the_crisis
+                }
+
+                any_country = {
+                    is_crisis_faction = yes
+                }
+
+            }
+
+        }
+
+    }
+
+}
+
+alloys_upkeep_planets {
+    category = planets
+    type = upkeep
+    potential = {
+        always = yes
+    }
+
+    resource = alloys
+    weight = {
+        weight = 0.2
+    }
+
+}
+

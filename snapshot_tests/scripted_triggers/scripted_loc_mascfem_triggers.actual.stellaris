@@ -1,0 +1,23 @@
+loc_leader_nogenders {
+    loc_leader_genders = no
+}
+
+loc_leader_fem {
+    gender = female
+}
+
+loc_leader_genders {
+    OR = {
+        gender = female
+        gender = male
+    }
+
+}
+
+loc_leader_masc {
+    NOT = {
+        gender = female
+    }
+
+}
+

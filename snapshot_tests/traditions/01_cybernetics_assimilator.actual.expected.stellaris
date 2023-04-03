@@ -1,0 +1,131 @@
+tr_cybernetics_assimilator_metabolic_reprocessing {
+    modifier = {
+        planet_pops_cyborgs_upkeep_mult = -0.1
+    }
+
+    possible = {
+        has_tradition = tr_cybernetics_assimilator_inevitable_assimilation
+    }
+
+}
+
+tr_cybernetics_assimilator_modular_cybernetics {
+    possible = {
+        has_tradition = tr_cybernetics_assimilator_integrated_anatomy
+    }
+
+    modifier = {
+        modify_species_cost_mult = -0.5
+    }
+
+    custom_tooltip_with_modifiers = tr_cybernetics_assimilator_modular_cybernetics_tt
+    tradition_swap = {
+        inherit_name = yes
+        inherit_icon = yes
+        weight = {
+            factor = 1
+        }
+
+        name = tr_cybernetics_modular_cybernetics_1
+        custom_tooltip = tr_cybernetics_assimilator_modular_cybernetics_tt_2
+        trigger = {
+            has_technology = tech_robomodding_m
+        }
+
+        modifier = {
+            modify_species_cost_mult = -0.5
+            BIOLOGICAL_species_trait_points_add = 1
+        }
+
+    }
+
+    tradition_swap = {
+        trigger = {
+            has_technology = tech_robomodding_m
+            has_technology = tech_binary_motivators
+        }
+
+        custom_tooltip = tr_cybernetics_assimilator_modular_cybernetics_tt_2
+        inherit_name = yes
+        inherit_icon = yes
+        name = tr_cybernetics_modular_cybernetics_2
+        modifier = {
+            modify_species_cost_mult = -0.5
+            BIOLOGICAL_species_trait_points_add = 2
+        }
+
+        weight = {
+            factor = 2
+        }
+
+    }
+
+    tradition_swap = {
+        custom_tooltip = tr_cybernetics_assimilator_modular_cybernetics_tt_2
+        name = tr_cybernetics_modular_cybernetics_3
+        inherit_icon = yes
+        trigger = {
+            has_technology = tech_robomodding_m
+            has_technology = tech_binary_motivators
+            has_technology = tech_nanite_assemblers
+        }
+
+        modifier = {
+            BIOLOGICAL_species_trait_points_add = 3
+            modify_species_cost_mult = -0.5
+        }
+
+        weight = {
+            factor = 3
+        }
+
+        inherit_name = yes
+    }
+
+}
+
+tr_cybernetics_assimilator_inevitable_assimilation {
+    custom_tooltip = tr_cybernetics_assimilator_inevitable_assimilation_desc
+    possible = {
+        has_tradition = tr_cybernetics_assimilator_adopt
+    }
+
+}
+
+tr_cybernetics_assimilator_finish {
+    modifier = {
+        BIOLOGICAL_species_trait_picks_add = 1
+        ascension_perks_add = 1
+        planet_cyborg_jobs_produces_mult = 0.1
+    }
+
+}
+
+tr_cybernetics_assimilator_integrated_anatomy {
+    custom_tooltip_with_modifiers = tr_cybernetics_assimilator_integrated_anatomy_desc
+    modifier = {
+        BIOLOGICAL_species_trait_picks_add = 1
+    }
+
+    possible = {
+        has_tradition = tr_cybernetics_assimilator_inevitable_assimilation
+    }
+
+}
+
+tr_cybernetics_assimilator_crucible {
+    possible = {
+        has_tradition = tr_cybernetics_assimilator_metabolic_reprocessing
+    }
+
+    custom_tooltip = tr_cybernetics_assimilator_crucible_desc
+}
+
+tr_cybernetics_assimilator_adopt {
+    custom_tooltip = tr_cybernetics_assimilator_adopt_desc
+    possible = {
+        has_ascension_perk = ap_organo_machine_interfacing_assimilator
+    }
+
+}
+

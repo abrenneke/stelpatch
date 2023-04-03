@@ -1,0 +1,250 @@
+tr_prosperity_public_works {
+    tradition_swap = {
+        custom_tooltip = tr_prosperity_extended_hives_desc
+        name = tr_prosperity_extended_hives
+        inherit_icon = yes
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    tradition_swap = {
+        weight = {
+            factor = 1
+        }
+
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        name = tr_prosperity_optimized_nexus
+        custom_tooltip = tr_prosperity_optimized_nexus_desc
+    }
+
+    tradition_swap = {
+        trigger = {
+            has_origin = origin_void_dwellers
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+        name = tr_prosperity_void_works
+        custom_tooltip = tr_prosperity_void_works_desc
+    }
+
+    possible = {
+        has_tradition = tr_prosperity_sct
+    }
+
+    ai_weight = {
+        factor = 5000
+    }
+
+    custom_tooltip = tr_prosperity_public_works_desc
+}
+
+tr_prosperity_interstellar_franchising {
+    modifier = {
+        planet_jobs_upkeep_mult = -0.05
+    }
+
+    tradition_swap = {
+        modifier = {
+            planet_jobs_upkeep_mult = -0.05
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        name = tr_prosperity_efficiency_algorithms
+    }
+
+    tradition_swap = {
+        modifier = {
+            planet_jobs_upkeep_mult = -0.05
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        name = tr_prosperity_efficiency_instincts
+        trigger = {
+            is_hive_empire = yes
+        }
+
+    }
+
+    possible = {
+        has_tradition = tr_prosperity_administrative_operations
+    }
+
+    ai_weight = {
+        factor = 1000
+    }
+
+}
+
+tr_prosperity_pursuit_of_profit {
+    ai_weight = {
+        factor = 5000
+    }
+
+    possible = {
+        has_tradition = tr_prosperity_administrative_operations
+    }
+
+    modifier = {
+        planet_jobs_specialist_produces_mult = 0.05
+    }
+
+    tradition_swap = {
+        inherit_effects = yes
+        weight = {
+            factor = 1
+        }
+
+        name = tr_prosperity_creative_collectives
+        trigger = {
+            is_egalitarian = yes
+        }
+
+        inherit_icon = yes
+    }
+
+    tradition_swap = {
+        name = tr_prosperity_hive_neural_signal_boosters
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        modifier = {
+            planet_jobs_complex_drone_produces_mult = 0.05
+        }
+
+        inherit_icon = yes
+    }
+
+    tradition_swap = {
+        name = tr_prosperity_peak_performance
+        modifier = {
+            planet_jobs_complex_drone_produces_mult = 0.05
+        }
+
+        inherit_icon = yes
+        weight = {
+            factor = 1
+        }
+
+        trigger = {
+            is_machine_empire = yes
+        }
+
+    }
+
+}
+
+tr_prosperity_adopt {
+    modifier = {
+        station_gatherers_produces_mult = 0.2
+    }
+
+}
+
+tr_prosperity_sct {
+    tradition_swap = {
+        name = tr_prosperity_sct_machine
+        weight = {
+            factor = 1
+        }
+
+        trigger = {
+            OR = {
+                is_machine_empire = yes
+                is_hive_empire = yes
+            }
+
+        }
+
+        inherit_icon = yes
+        inherit_effects = yes
+    }
+
+    ai_weight = {
+        factor = 1000
+    }
+
+    modifier = {
+        planet_structures_cost_mult = -0.1
+        planet_building_build_speed_mult = 0.25
+    }
+
+    custom_tooltip = tr_prosperity_sct_desc
+}
+
+tr_prosperity_administrative_operations {
+    ai_weight = {
+        factor = 5000
+    }
+
+    modifier = {
+        planet_districts_upkeep_mult = -0.1
+        planet_buildings_upkeep_mult = -0.1
+    }
+
+    tradition_swap = {
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+        inherit_effects = yes
+        name = tr_prosperity_administrative_operations_hive
+    }
+
+    tradition_swap = {
+        name = tr_prosperity_administrative_operations_machine
+        inherit_name = no
+        weight = {
+            factor = 1
+        }
+
+        inherit_effects = yes
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        inherit_icon = yes
+    }
+
+}
+
+tr_prosperity_finish {
+    modifier = {
+        planet_jobs_produces_mult = 0.05
+        ascension_perks_add = 1
+    }
+
+}
+

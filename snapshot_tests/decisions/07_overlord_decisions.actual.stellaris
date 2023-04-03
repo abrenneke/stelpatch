@@ -1,0 +1,114 @@
+decision_strip_mining {
+    ai_weight = {
+        weight = 1
+    }
+
+    owned_planets_only = yes
+    icon = decision_strip_mining
+    potential = {
+        owner = {
+            is_specialist_subject_tier = {
+                TIER = 3
+                TYPE = prospectorium
+            }
+
+        }
+
+        any_deposit = {
+            has_deposit_category = deposit_cat_food
+        }
+
+    }
+
+    resources = {
+        category = decisions
+        cost = {
+            influence = 15
+        }
+
+    }
+
+    effect = {
+        add_deposit = d_prospectorium_strip_mine
+        custom_tooltip = decision_strip_mining_tt
+        hidden_effect = {
+            random_deposit = {
+                remove_deposit = yes
+                limit = {
+                    has_deposit_category = deposit_cat_food
+                }
+
+            }
+
+        }
+
+    }
+
+    sound = event_administrative_work
+    enactment_time = 180
+}
+
+decision_grow_progenitor {
+    potential = {
+        owner = {
+            has_origin = origin_progenitor_hive
+        }
+
+        has_deposit = d_progenitor_empty
+        exists = owner
+    }
+
+    owned_planets_only = yes
+    enactment_time = 800
+    resources = {
+        cost = {
+            trigger = {
+                owner = {
+                    is_lithoid_empire = no
+                }
+
+            }
+
+            food = 400
+        }
+
+        cost = {
+            minerals = 400
+            trigger = {
+                owner = {
+                    is_lithoid_empire = yes
+                }
+
+            }
+
+        }
+
+        category = decisions
+    }
+
+    effect = {
+        add_deposit = d_progenitor
+        remove_deposit = d_progenitor_empty
+        hidden_effect = {
+            owner = {
+                if = {
+                    limit = {
+                        has_modifier = missing_progenitor_modifier
+                    }
+
+                    remove_modifier = missing_progenitor_modifier
+                }
+
+            }
+
+        }
+
+    }
+
+    ai_weight = {
+        weight = 100
+    }
+
+    icon = descision_progenitor_empty
+}
+

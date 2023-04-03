@@ -1,0 +1,10 @@
+meaningful_origin {
+    pop_happiness = 0.15
+    planet_jobs_unity_produces_mult = 0.2
+}
+
+debated_origin {
+    pop_happiness = -0.05
+    planet_jobs_unity_produces_mult = -0.2
+}
+

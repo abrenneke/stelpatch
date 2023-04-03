@@ -1,0 +1,192 @@
+food_expenditure_decisions {
+    desired_max = {
+        base = 550
+    }
+
+    category = decisions
+    resource = food
+    desired_min = {
+        base = 550
+    }
+
+    potential = {
+        has_origin = origin_tree_of_life
+        any_owned_planet = {
+            has_modifier = no_lifetree
+        }
+
+    }
+
+    type = expenditure
+    weight = {
+        weight = 0.5
+    }
+
+}
+
+food_expenditure_colonies_expand_tree {
+    weight = {
+        weight = 2
+    }
+
+    potential = {
+        is_lithoid_empire = no
+        ai_colonize_plans > 0
+        has_resource = {
+            amount > 400
+            type = food
+        }
+
+        has_origin = origin_tree_of_life
+        is_machine_empire = no
+        has_monthly_income = {
+            value > 0
+            resource = food
+        }
+
+    }
+
+    category = colonies
+    type = expenditure
+    resource = food
+    desired_max = {
+        base = 1100
+    }
+
+}
+
+food_expenditure_buildings {
+    potential = {
+        country_uses_food = yes
+    }
+
+    type = expenditure
+    desired_max = {
+        base = 500
+    }
+
+    desired_min = {
+        base = 0
+        modifier = {
+            add = 450
+            has_ascension_perk = ap_engineered_evolution
+        }
+
+    }
+
+    resource = food
+    weight = {
+        weight = 0.2
+    }
+
+    category = planets
+}
+
+food_expenditure_colonies_expand_rock_tree {
+    resource = food
+    type = expenditure
+    category = colonies
+    potential = {
+        has_monthly_income = {
+            resource = food
+            value > 0
+        }
+
+        has_origin = origin_tree_of_life
+        is_machine_empire = no
+        is_lithoid_empire = yes
+        ai_colonize_plans > 0
+        has_resource = {
+            amount > 400
+            type = food
+        }
+
+    }
+
+    desired_max = {
+        base = 600
+    }
+
+    weight = {
+        weight = 2
+    }
+
+}
+
+food_upkeep_ships {
+    weight = {
+        weight = 0.5
+    }
+
+    resource = food
+    category = ships
+    type = upkeep
+    potential = {
+        is_dragon_breeder_country = yes
+        has_origin = origin_here_be_dragons
+    }
+
+}
+
+food_expenditure_buffer {
+    category = buffer
+    resource = food
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.3
+    }
+
+    type = expenditure
+}
+
+food_upkeep_country {
+    category = country
+    resource = food
+    type = upkeep
+    weight = {
+        weight = 0.5
+    }
+
+    potential = {
+        always = yes
+    }
+
+}
+
+food_expenditure_colonies_expand {
+    category = colonies
+    potential = {
+        is_lithoid_empire = no
+        has_monthly_income = {
+            resource = food
+            value > 0
+        }
+
+        has_resource = {
+            amount > 400
+            type = food
+        }
+
+        is_machine_empire = no
+        ai_colonize_plans > 0
+        NOT = {
+            has_origin = origin_tree_of_life
+        }
+
+    }
+
+    weight = {
+        weight = 2
+    }
+
+    resource = food
+    desired_max = {
+        base = 550
+    }
+
+    type = expenditure
+}
+

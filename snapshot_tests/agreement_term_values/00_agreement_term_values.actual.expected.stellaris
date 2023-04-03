@@ -1,0 +1,164 @@
+specialist_prospectorium {
+    potential = {
+        agreement_preset = preset_prospectorium
+    }
+
+    triggered_loyalty_change = {
+        trigger = {
+            target = {
+                is_pacifist = yes
+            }
+
+        }
+
+        loyalty_change = 5
+        ai_acceptance = {
+            subject = 25
+        }
+
+    }
+
+    triggered_loyalty_change = {
+        trigger = {
+            target = {
+                is_militarist = yes
+            }
+
+        }
+
+        ai_acceptance = {
+            subject = -100
+        }
+
+        loyalty_change = -20
+    }
+
+    activate_effect = {
+        convert_to_specialist = specialist_prospectorium
+    }
+
+    term = specialist_type
+}
+
+specialist_none {
+    term = specialist_type
+    activate_effect = {
+        convert_to_specialist = none
+    }
+
+}
+
+specialist_bulwark {
+    term = specialist_type
+    triggered_loyalty_change = {
+        ai_acceptance = {
+            subject = 25
+        }
+
+        trigger = {
+            target = {
+                is_militarist = yes
+            }
+
+        }
+
+        loyalty_change = 5
+    }
+
+    triggered_loyalty_change = {
+        ai_acceptance = {
+            subject = -100
+        }
+
+        trigger = {
+            target = {
+                is_pacifist = yes
+            }
+
+        }
+
+        loyalty_change = -20
+    }
+
+    deactivate_effect = {
+        target = {
+            if = {
+                remove_modifier = resolution_galcom_bulwark_modifier
+                limit = {
+                    has_modifier = resolution_galcom_bulwark_modifier
+                }
+
+            }
+
+        }
+
+    }
+
+    potential = {
+        agreement_preset = preset_bulwark
+    }
+
+    activate_effect = {
+        target = {
+            if = {
+                limit = {
+                    is_active_resolution = resolution_intergalacticdirective_a_voice_for_all
+                    is_galactic_community_member = yes
+                }
+
+                add_modifier = {
+                    days = -1
+                    modifier = resolution_galcom_bulwark_modifier
+                }
+
+            }
+
+        }
+
+        convert_to_specialist = specialist_bulwark
+    }
+
+}
+
+specialist_scholarium {
+    triggered_loyalty_change = {
+        ai_acceptance = {
+            subject = 25
+        }
+
+        trigger = {
+            target = {
+                is_materialist = yes
+            }
+
+        }
+
+        loyalty_change = 5
+    }
+
+    triggered_loyalty_change = {
+        ai_acceptance = {
+            subject = -100
+        }
+
+        loyalty_change = -20
+        trigger = {
+            target = {
+                is_spiritualist = yes
+            }
+
+        }
+
+    }
+
+    term = specialist_type
+    activate_effect = {
+        convert_to_specialist = specialist_scholarium
+    }
+
+    potential = {
+        agreement_preset = preset_scholarium
+    }
+
+}
+

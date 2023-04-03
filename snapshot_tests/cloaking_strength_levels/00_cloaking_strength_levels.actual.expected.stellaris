@@ -1,0 +1,91 @@
+strength_4 {
+    cloaking_strength = 4
+    modifier = {
+        ship_base_speed_mult = -0.2
+        ship_windup_mult = 0.5
+    }
+
+    can_cloak = yes
+    icon = GFX_cloaking_level_4
+}
+
+strength_9 {
+    cloaking_strength = 9
+    icon = GFX_cloaking_level_9
+    can_cloak = yes
+}
+
+strength_1 {
+    icon = GFX_cloaking_level_1
+    cloaking_strength = 1
+    modifier = {
+        ship_base_speed_mult = -0.5
+        ship_windup_mult = 1.25
+    }
+
+    can_cloak = yes
+}
+
+strength_5 {
+    icon = GFX_cloaking_level_5
+    can_cloak = yes
+    modifier = {
+        ship_base_speed_mult = -0.1
+        ship_windup_mult = 0.25
+    }
+
+    cloaking_strength = 5
+}
+
+strength_0 {
+    icon = GFX_cloaking_level_0
+    cloaking_strength = 0
+    can_cloak = no
+}
+
+strength_2 {
+    can_cloak = yes
+    icon = GFX_cloaking_level_2
+    modifier = {
+        ship_windup_mult = 1
+        ship_base_speed_mult = -0.4
+    }
+
+    cloaking_strength = 2
+}
+
+strength_3 {
+    cloaking_strength = 3
+    modifier = {
+        ship_base_speed_mult = -0.3
+        ship_windup_mult = 0.75
+    }
+
+    icon = GFX_cloaking_level_3
+    can_cloak = yes
+}
+
+strength_7 {
+    cloaking_strength = 7
+    icon = GFX_cloaking_level_7
+    can_cloak = yes
+}
+
+strength_6 {
+    icon = GFX_cloaking_level_6
+    can_cloak = yes
+    cloaking_strength = 6
+}
+
+strength_8 {
+    icon = GFX_cloaking_level_8
+    cloaking_strength = 8
+    can_cloak = yes
+}
+
+strength_10 {
+    cloaking_strength = 10
+    icon = GFX_cloaking_level_10
+    can_cloak = yes
+}
+

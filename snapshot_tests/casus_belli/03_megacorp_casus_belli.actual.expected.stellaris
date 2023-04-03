@@ -1,0 +1,120 @@
+cb_hostile_takeover {
+    show_in_diplomacy = yes
+    potential = {
+        has_authority = auth_corporate
+        is_country_type = default
+        NOT = {
+            has_valid_civic = civic_criminal_heritage
+        }
+
+    }
+
+    show_notification = yes
+    is_valid = {
+        from = {
+            has_authority = auth_corporate
+        }
+
+        NOT = {
+            is_in_federation_with = from
+        }
+
+        NOT = {
+            from = {
+                is_overlord_to = root
+            }
+
+        }
+
+        any_country = {
+            OR = {
+                has_commercial_pact = root
+                is_in_federation_with = root
+            }
+
+            any_owned_planet = {
+                has_branch_office = from
+            }
+
+        }
+
+    }
+
+}
+
+cb_megacorp_subjugate {
+    show_notification = no
+    potential = {
+        is_country_type = default
+        is_subject = no
+        has_authority = auth_corporate
+    }
+
+    is_valid = {
+        NOT = {
+            is_overlord_to = FROM
+        }
+
+        from = {
+            is_subject = no
+        }
+
+        relative_power = {
+            who = FROM
+            category = all
+            value > equivalent
+        }
+
+    }
+
+    destroy_if = {
+        relative_power = {
+            value < superior
+            category = all
+            who = FROM
+        }
+
+    }
+
+    show_in_diplomacy = yes
+}
+
+cb_galatron {
+    potential = {
+        is_country_type = default
+        NOR = {
+            is_berserk_fallen_machine_empire = yes
+            has_valid_civic = civic_fanatic_purifiers
+            has_valid_civic = civic_machine_terminator
+            has_valid_civic = civic_hive_devouring_swarm
+            has_valid_civic = civic_machine_assimilator
+        }
+
+        has_global_flag = galatron_activated_first_time
+    }
+
+    show_notification = yes
+    is_valid = {
+        from = {
+            has_closed_borders = prev
+            OR = {
+                has_relic = r_galatron
+                has_modifier = galatron_modifier
+            }
+
+        }
+
+        NOR = {
+            is_overlord_to = from
+            from = {
+                is_overlord_to = root
+            }
+
+        }
+
+        has_total_war_cb = no
+    }
+
+    show_in_diplomacy = yes
+}
+

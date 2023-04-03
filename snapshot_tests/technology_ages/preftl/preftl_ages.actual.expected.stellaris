@@ -1,0 +1,39 @@
+iron_age {
+    next_age = late_medieval_age
+}
+
+late_medieval_age {
+    next_age = renaissance_age
+}
+
+machine_age {
+    next_age = atomic_age
+}
+
+steam_age {
+    next_age = industrial_age
+}
+
+bronze_age {
+    next_age = iron_age
+}
+
+early_space_age {
+}
+
+renaissance_age {
+    next_age = steam_age
+}
+
+industrial_age {
+    next_age = machine_age
+}
+
+atomic_age {
+    next_age = early_space_age
+}
+
+stone_age {
+    next_age = bronze_age
+}
+

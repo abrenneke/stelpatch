@@ -1,0 +1,90 @@
+contact_with_MSI_02 {
+    opinion = {
+        base = -100
+    }
+
+}
+
+fotd_antagonized {
+    decay = {
+        base = 1
+    }
+
+    opinion = {
+        base = -300
+    }
+
+}
+
+fotd_insulted_migration {
+    decay = {
+        base = 1
+    }
+
+    opinion = {
+        base = -50
+    }
+
+}
+
+opinion_former_slaves {
+    opinion = {
+        base = -1000
+    }
+
+}
+
+contact_with_MSI_01 {
+    opinion = {
+        base = -200
+    }
+
+}
+
+fotd_insulted_migration_no_apology {
+    opinion = {
+        base = -200
+    }
+
+    decay = {
+        base = 1
+    }
+
+}
+
+fotd_apoligized {
+    decay = {
+        base = 1
+    }
+
+    opinion = {
+        base = -100
+    }
+
+}
+
+fotd_destroyed_starbase {
+    decay = {
+        base = 1
+    }
+
+    opinion = {
+        base = -200
+    }
+
+}
+
+opinion_slavers {
+    opinion = {
+        base = -1000
+    }
+
+}
+
+opinion_fellow_slaves {
+    opinion = {
+        base = 50
+    }
+
+}
+

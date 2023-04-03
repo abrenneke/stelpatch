@@ -1,0 +1,31 @@
+[package]
+name = "stelpatch"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.70"
+dirs = "5.0.0"
+fn-fixture = "1.0.2"
+futures = "0.3.28"
+glob = "0.3.1"
+indent = "0.1.1"
+nom = "7.1.3"
+nom-supreme = "0.8.0"
+normpath = "1.1.1"
+path-slash = "0.2.1"
+serde = { version = "1.0.159", features = ["derive"] }
+serde_json = "1.0.95"
+tokio = { version = "1.27.0", features = ["full"] }
+tokio-stream = { version = "0.1.12", features = ["fs", "io-util"] }
+walkdir = "2.3.3"
+
+[lib]
+name = "stelpatch"
+path = "src/lib.rs"
+
+[[bin]]
+name = "stelpatch"
+path = "bin/main.rs"

@@ -1,0 +1,20 @@
+defined_text {
+    text = {
+        trigger = {
+            has_ancrel = no
+        }
+
+        localization_key = BLANK_STRING
+    }
+
+    text = {
+        localization_key = RemnantAncientRelicEffect
+        trigger = {
+            has_ancrel = yes
+        }
+
+    }
+
+    name = GetRemnantAncientRelicEffect
+}
+

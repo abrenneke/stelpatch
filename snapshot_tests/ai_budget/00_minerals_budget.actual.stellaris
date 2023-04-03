@@ -1,0 +1,452 @@
+minerals_expenditure_colonies_lithoid_expand {
+    potential = {
+        ai_colonize_plans > 0
+        is_lithoid_empire = yes
+        is_machine_empire = no
+        has_monthly_income = {
+            value > 0
+            resource = minerals
+        }
+
+    }
+
+    weight = {
+        weight = 0.8
+    }
+
+    desired_max = {
+        base = 550
+    }
+
+    resource = minerals
+    desired_min = {
+        base = 200
+    }
+
+    category = colonies
+    type = expenditure
+}
+
+minerals_expenditure_buffer {
+    category = buffer
+    type = expenditure
+    weight = {
+        weight = 0.05
+    }
+
+    resource = minerals
+    potential = {
+        always = yes
+    }
+
+}
+
+minerals_expenditure_planets_low {
+    weight = {
+        weight = 1
+    }
+
+    resource = minerals
+    category = planets
+    potential = {
+        resource_stockpile_compare = {
+            value < 1000
+            resource = minerals
+        }
+
+    }
+
+    type = expenditure
+}
+
+minerals_expenditure_decisions {
+    resource = minerals
+    desired_min = {
+        base = 20000
+    }
+
+    desired_max = {
+        base = 20000
+    }
+
+    type = expenditure
+    potential = {
+        has_resource = {
+            type = minerals
+            amount > 25000
+        }
+
+        OR = {
+            AND = {
+                any_owned_planet = {
+                    is_planet_class = pc_relic
+                    num_uncleared_blockers < 1
+                }
+
+                has_technology = tech_housing_2
+            }
+
+            AND = {
+                has_ascension_perk = ap_arcology_project
+                any_owned_planet = {
+                    OR = {
+                        is_capital = yes
+                        num_pops >= 70
+                    }
+
+                    is_artificial = no
+                    NOR = {
+                        is_planet_class = pc_city
+                        is_planet_class = pc_relic
+                        has_modifier = resort_colony
+                        has_modifier = penal_colony
+                        has_modifier = slave_colony
+                        has_modifier = pm_wenkwort_custodian
+                    }
+
+                    num_uncleared_blockers < 1
+                    free_district_slots < 1
+                }
+
+            }
+
+        }
+
+    }
+
+    weight = {
+        weight = 0.2
+    }
+
+    category = decisions
+}
+
+minerals_expenditure_stations_high {
+    category = stations
+    resource = minerals
+    type = expenditure
+    potential = {
+        always = yes
+        resource_stockpile_compare = {
+            value >= 2000
+            resource = minerals
+        }
+
+    }
+
+    weight = {
+        weight = 0.05
+    }
+
+}
+
+minerals_upkeep_ships {
+    potential = {
+        has_ascension_perk = ap_become_the_crisis
+        has_crisis_level = crisis_level_2
+    }
+
+    weight = {
+        weight = 0.3
+    }
+
+    type = upkeep
+    resource = minerals
+    category = ships
+}
+
+minerals_expenditure_planets_high {
+    resource = minerals
+    type = expenditure
+    weight = {
+        weight = 0.6
+    }
+
+    potential = {
+        resource_stockpile_compare = {
+            resource = minerals
+            value >= 2000
+        }
+
+    }
+
+    category = planets
+}
+
+minerals_upkeep_planets {
+    resource = minerals
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.7
+    }
+
+    type = upkeep
+    category = planets
+}
+
+minerals_upkeep_buffer {
+    resource = minerals
+    type = upkeep
+    category = buffer
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.3
+    }
+
+}
+
+minerals_expenditure_armies_threatened {
+    potential = {
+        highest_threat > 20
+    }
+
+    category = armies
+    resource = minerals
+    weight = {
+        weight = 0.1
+    }
+
+    type = expenditure
+}
+
+minerals_expenditure_ships {
+    weight = {
+        weight = 0.4
+        modifier = {
+            factor = 2
+            is_at_war = yes
+        }
+
+        modifier = {
+            factor = 0.5
+            used_naval_capacity_percent >= 1
+        }
+
+    }
+
+    resource = minerals
+    type = expenditure
+    category = ships
+    potential = {
+        has_crisis_level = crisis_level_2
+        has_ascension_perk = ap_become_the_crisis
+    }
+
+}
+
+minerals_expenditure_stations_low {
+    resource = minerals
+    potential = {
+        always = yes
+        resource_stockpile_compare = {
+            resource = minerals
+            value < 1000
+        }
+
+    }
+
+    weight = {
+        weight = 0.2
+    }
+
+    category = stations
+    type = expenditure
+}
+
+minerals_expenditure_stations_expand {
+    potential = {
+        exploitable_planets >= 1
+    }
+
+    desired_min = {
+        base = 100
+    }
+
+    weight = {
+        weight = 0.05
+    }
+
+    category = stations
+    resource = minerals
+    type = expenditure
+}
+
+minerals_expenditure_armies {
+    weight = {
+        modifier = {
+            factor = 2
+            OR = {
+                any_country = {
+                    is_crisis_faction = yes
+                }
+
+                any_neighbor_country = {
+                    has_ascension_perk = ap_become_the_crisis
+                }
+
+            }
+
+        }
+
+        weight = 0.1
+    }
+
+    resource = minerals
+    potential = {
+        always = yes
+    }
+
+    type = expenditure
+    category = armies
+}
+
+minerals_upkeep_country {
+    type = upkeep
+    weight = {
+        weight = 0.1
+    }
+
+    category = country
+    potential = {
+        always = yes
+    }
+
+    resource = minerals
+}
+
+minerals_expenditure_planets_med {
+    potential = {
+        resource_stockpile_compare = {
+            resource = minerals
+            value >= 1000
+        }
+
+        resource_stockpile_compare = {
+            value < 2000
+            resource = minerals
+        }
+
+    }
+
+    weight = {
+        weight = 0.8
+    }
+
+    resource = minerals
+    category = planets
+    type = expenditure
+}
+
+minerals_expenditure_stations_med {
+    type = expenditure
+    resource = minerals
+    category = stations
+    potential = {
+        always = yes
+        resource_stockpile_compare = {
+            resource = minerals
+            value >= 1000
+        }
+
+        resource_stockpile_compare = {
+            resource = minerals
+            value < 2000
+        }
+
+    }
+
+    weight = {
+        weight = 0.1
+    }
+
+}
+
+minerals_expenditure_ship_upgrades {
+    resource = minerals
+    type = expenditure
+    category = ship_upgrades
+    potential = {
+        has_crisis_level = crisis_level_2
+        has_ascension_perk = ap_become_the_crisis
+    }
+
+    weight = {
+        weight = 0.2
+        modifier = {
+            factor = 4
+            used_naval_capacity_percent >= 1
+        }
+
+    }
+
+}
+
+minerals_expenditure_deposit_blockers {
+    resource = minerals
+    potential = {
+        any_owned_planet = {
+            OR = {
+                AND = {
+                    OR = {
+                        has_deposit = d_buried_lithoids
+                        has_deposit = d_hibernating_lithoids
+                    }
+
+                    is_homeworld = yes
+                }
+
+                has_deposit = d_ruined_arcology
+                has_deposit = d_resource_consolidation_1
+            }
+
+        }
+
+    }
+
+    weight = {
+        modifier = {
+            any_owned_planet = {
+                num_free_districts = {
+                    value < 1
+                    type = any
+                }
+
+                OR = {
+                    AND = {
+                        OR = {
+                            has_deposit = d_buried_lithoids
+                            has_deposit = d_hibernating_lithoids
+                        }
+
+                        is_homeworld = yes
+                    }
+
+                    has_deposit = d_ruined_arcology
+                }
+
+            }
+
+            factor = 5
+        }
+
+        weight = 0.3
+    }
+
+    category = deposit_blockers
+    type = expenditure
+    desired_min = {
+        base = 250
+    }
+
+    desired_max = {
+        base = 1000
+    }
+
+}
+

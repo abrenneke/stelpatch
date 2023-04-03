@@ -1,0 +1,14 @@
+opinion_common_ground {
+    opinion = {
+        base = 200
+    }
+
+}
+
+opinion_scion {
+    opinion = {
+        base = 200
+    }
+
+}
+

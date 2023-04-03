@@ -1,0 +1,5 @@
+buffer {
+    use_for_ai_budget = yes
+    hidden = yes
+}
+

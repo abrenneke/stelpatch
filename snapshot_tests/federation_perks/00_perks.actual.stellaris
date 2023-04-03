@@ -1,0 +1,149 @@
+federation_fleet_size_1 {
+    members_modifier = {
+        description = federation_fleet_size_effect
+        federation_naval_cap_contribution_mult = 0.25
+    }
+
+}
+
+hegemony_federation_passive {
+    on_deactivate = {
+        set_diplomacy_action_setting = {
+            action = action_ask_to_leave_federation
+            settings = {
+                acceptance_type = default
+            }
+
+        }
+
+    }
+
+    members_modifier = {
+        description = hegemony_federation_passive_effect
+    }
+
+    on_activate = {
+        set_diplomacy_action_setting = {
+            settings = {
+                acceptance_type = leader
+            }
+
+            action = action_ask_to_leave_federation
+        }
+
+    }
+
+}
+
+federation_fleet_size_2 {
+    members_modifier = {
+        federation_naval_cap_contribution_mult = 0.25
+        description = federation_fleet_size_effect
+    }
+
+}
+
+research_federation_passive {
+    on_activate = {
+        set_federation_settings = {
+            research_sharing = yes
+        }
+
+    }
+
+    on_deactivate = {
+        set_federation_settings = {
+            research_sharing = no
+        }
+
+    }
+
+    federation_modifier = {
+        description = research_federation_passive_effect
+        federation_research_sharing_mult = 0.25
+    }
+
+}
+
+federation_fire_rate_1 {
+    members_modifier = {
+        ship_fire_rate_mult = 0.1
+    }
+
+}
+
+default_federation_passive {
+    federation_modifier = {
+        description = default_federation_passive_effect
+        cohesion_ethics_penalty_mult = -0.5
+    }
+
+}
+
+federation_fleet_size_3 {
+    members_modifier = {
+        description = federation_fleet_size_effect
+        federation_naval_cap_contribution_mult = 0.25
+    }
+
+}
+
+military_federation_passive {
+    members_modifier = {
+        ship_starting_experience_add = 100
+        starbase_shipyard_build_speed_mult = 0.25
+        army_starting_experience_add = 100
+    }
+
+}
+
+federation_fleet_speed_1 {
+    members_modifier = {
+        description = federation_fleet_speed_effect
+        ship_federation_territory_speed_mult = 0.1
+    }
+
+}
+
+trade_federation_passive {
+    members_modifier = {
+        description = trade_federation_passive_effect
+    }
+
+}
+
+temp_remove {
+    members_modifier = {
+        country_trust_growth = 0.05
+    }
+
+}
+
+neutral {
+    members_modifier = {
+        country_naval_cap_add = 20
+    }
+
+}
+
+hostile {
+    members_modifier = {
+        country_starbase_capacity_add = 1
+    }
+
+}
+
+claim_cost_1 {
+    leader_modifier = {
+        country_claim_influence_cost_mult = -0.1
+    }
+
+}
+
+admiral_level_cap_1 {
+    members_modifier = {
+        admiral_skill_levels = 1
+    }
+
+}
+

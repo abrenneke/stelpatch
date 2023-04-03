@@ -1,0 +1,141 @@
+decision_caravaneer_bunkbeds {
+    icon = decision_resources
+    owned_planets_only = yes
+    effect = {
+        hidden_effect = {
+            owner = {
+                remove_country_flag = bunkbeds_ready
+            }
+
+        }
+
+        add_modifier = {
+            modifier = bunkbeds_deployed
+            days = 28800
+        }
+
+    }
+
+    ai_weight = {
+        weight = 1
+    }
+
+    allow = {
+        NOT = {
+            has_modifier = bunkbeds_deployed
+        }
+
+    }
+
+    sound = event_administrative_work
+    resources = {
+        cost = {
+        }
+
+        category = decisions
+    }
+
+    potential = {
+        owner = {
+            has_country_flag = bunkbeds_ready
+            is_regular_empire = yes
+        }
+
+    }
+
+}
+
+decision_caravaneer_atmospheric_deodorizer {
+    icon = decision_resources
+    effect = {
+        add_modifier = {
+            modifier = atmospheric_deodorizer_deployed
+            days = 28800
+        }
+
+        hidden_effect = {
+            owner = {
+                remove_country_flag = atmospheric_deodorizer_ready
+            }
+
+        }
+
+    }
+
+    allow = {
+        NOT = {
+            has_modifier = atmospheric_deodorizer_deployed
+        }
+
+    }
+
+    potential = {
+        owner = {
+            has_country_flag = atmospheric_deodorizer_ready
+            is_regular_empire = yes
+        }
+
+    }
+
+    resources = {
+        cost = {
+        }
+
+        category = decisions
+    }
+
+    sound = event_administrative_work
+    ai_weight = {
+        weight = 1
+    }
+
+    owned_planets_only = yes
+}
+
+decision_caravaneer_tupperware {
+    allow = {
+        NOT = {
+            has_modifier = tupperware_deployed
+        }
+
+    }
+
+    ai_weight = {
+        weight = 1
+    }
+
+    icon = decision_resources
+    owned_planets_only = yes
+    resources = {
+        cost = {
+        }
+
+        category = decisions
+    }
+
+    sound = event_administrative_work
+    potential = {
+        owner = {
+            has_country_flag = tupperware_ready
+            is_regular_empire = yes
+        }
+
+    }
+
+    effect = {
+        hidden_effect = {
+            owner = {
+                remove_country_flag = tupperware_ready
+            }
+
+        }
+
+        add_modifier = {
+            modifier = tupperware_deployed
+            days = 28800
+        }
+
+    }
+
+}
+

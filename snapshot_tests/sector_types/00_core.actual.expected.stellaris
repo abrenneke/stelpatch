@@ -1,0 +1,26 @@
+core_sector {
+    local_capital_scores = {
+        base = -1
+        modifier = {
+            is_capital = yes
+            factor = -100
+        }
+
+    }
+
+    system_scores = {
+        base = 100
+    }
+
+    resource_conversion_table = {
+        energy = 1
+        minerals = 1
+    }
+
+    resources = {
+        category = sector
+    }
+
+    max_jumps = 4
+}
+

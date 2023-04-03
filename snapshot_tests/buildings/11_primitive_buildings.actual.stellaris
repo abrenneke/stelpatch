@@ -1,0 +1,83 @@
+building_primitive_dwellings {
+    can_demolish = yes
+    potential = {
+        exists = owner
+        owner = {
+            is_hive_empire = no
+            is_primitive = yes
+            OR = {
+                has_country_flag = bronze_age
+                has_country_flag = iron_age
+                has_country_flag = late_medieval_age
+                has_country_flag = renaissance_age
+                has_country_flag = steam_age
+            }
+
+        }
+
+    }
+
+    can_build = no
+    can_be_ruined = no
+    category = amenity
+    destroy_trigger = {
+        exists = owner
+        owner = {
+            OR = {
+                is_hive_empire = yes
+                is_primitive = no
+            }
+
+        }
+
+    }
+
+    planet_modifier = {
+        planet_housing_add = 6
+    }
+
+    upgrades = {
+    }
+
+}
+
+building_crude_huts {
+    planet_modifier = {
+        planet_amenities_add = 5
+        planet_crime_add = -10
+        planet_housing_add = 4
+    }
+
+    can_build = no
+    potential = {
+        owner = {
+            is_primitive = yes
+            is_hive_empire = no
+            has_country_flag = stone_age
+        }
+
+        exists = owner
+    }
+
+    position_priority = 0
+    can_be_ruined = no
+    capital = yes
+    can_demolish = yes
+    destroy_trigger = {
+        exists = owner
+        owner = {
+            OR = {
+                is_hive_empire = yes
+                is_primitive = no
+            }
+
+        }
+
+    }
+
+    upgrades = {
+    }
+
+    category = amenity
+}
+

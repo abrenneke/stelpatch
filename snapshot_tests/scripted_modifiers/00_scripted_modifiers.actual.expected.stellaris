@@ -1,0 +1,46 @@
+pop_non_noxious_happiness {
+    icon = mod_pop_happiness
+    category = pop
+    good = no
+}
+
+shroud_delve_cooldown {
+    icon = mod_shroud_unavailable
+    good = no
+    category = country
+    percentage = yes
+}
+
+pop_job_amenities_mult {
+    icon = mod_planet_amenities_mult
+    percentage = yes
+    category = pop
+    good = yes
+}
+
+job_soldier_stability_add {
+    icon = mod_planet_stability_add
+    good = yes
+    category = planet
+}
+
+habitat_stability_add {
+    good = yes
+    category = planet
+    icon = mod_planet_stability_add
+}
+
+pop_lifestyle_trade_mult {
+    icon = mod_trade_value_mult
+    percentage = yes
+    category = pop
+    good = yes
+}
+
+pop_job_trade_mult {
+    category = pop
+    percentage = yes
+    good = yes
+    icon = mod_trade_value_mult
+}
+

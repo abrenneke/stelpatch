@@ -1,0 +1,153 @@
+tr_subterfuge_nda {
+    possible = {
+        has_tradition = tr_subterfuge_information_security
+    }
+
+    modifier = {
+        espionage_hostile_operation_difficulty_add = 1
+        espionage_hostile_operation_cost_mult = 0.2
+    }
+
+    tradition_swap = {
+        name = tr_subterfuge_nda_hive
+        inherit_effects = yes
+        inherit_icon = yes
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    tradition_swap = {
+        inherit_icon = yes
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        name = tr_subterfuge_nda_machine
+        inherit_effects = yes
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    ai_weight = {
+        factor = 5000
+    }
+
+}
+
+tr_subterfuge_operational_security {
+    ai_weight = {
+        factor = 5000
+    }
+
+    tradition_swap = {
+        inherit_icon = yes
+        trigger = {
+            is_gestalt = yes
+        }
+
+        name = tr_subterfuge_operational_security_gestalt
+        inherit_effects = yes
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    modifier = {
+        ship_tracking_add = 10
+        espionage_operation_skill_add = 2
+        intel_decryption_add = 1
+    }
+
+}
+
+tr_subterfuge_adopt {
+    modifier = {
+        intel_decryption_add = 1
+    }
+
+    custom_tooltip_with_modifiers = tr_subterfuge_adopt_desc
+}
+
+tr_subterfuge_double_agents {
+    ai_weight = {
+        factor = 5000
+    }
+
+    modifier = {
+        spy_network_levels_add = 10
+        show_only_custom_tooltip = no
+        envoys_add = 1
+        custom_tooltip = tr_subterfuge_double_agents_effect
+    }
+
+    possible = {
+        has_tradition = tr_subterfuge_information_security
+        has_tradition = tr_subterfuge_operational_security
+    }
+
+}
+
+tr_subterfuge_shadow_recruits {
+    modifier = {
+        spy_network_daily_value_mult = 0.5
+    }
+
+    ai_weight = {
+        factor = 5000
+    }
+
+    possible = {
+        has_tradition = tr_subterfuge_operational_security
+    }
+
+}
+
+tr_subterfuge_information_security {
+    modifier = {
+        intel_encryption_add = 1
+        ship_evasion_add = 5
+    }
+
+    ai_weight = {
+        factor = 5000
+    }
+
+}
+
+tr_subterfuge_finish {
+    modifier = {
+        ascension_perks_add = 1
+    }
+
+    custom_tooltip = tr_subterfuge_finish_desc
+    tradition_swap = {
+        name = tr_subterfuge_cloaking_finish
+        trigger = {
+            has_first_contact_dlc = yes
+        }
+
+        modifier = {
+            ship_cloaking_strength_add = 1
+            ascension_perks_add = 1
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+        inherit_effects = no
+        custom_tooltip = tr_subterfuge_cloaking_finish_desc
+    }
+
+}
+

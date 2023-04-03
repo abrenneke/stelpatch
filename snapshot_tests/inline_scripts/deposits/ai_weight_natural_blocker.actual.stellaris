@@ -1,0 +1,12 @@
+ai_weight {
+    modifier = {
+        factor = 0
+        owner = {
+            has_valid_civic = civic_environmentalist
+        }
+
+    }
+
+    weight = 1
+}
+

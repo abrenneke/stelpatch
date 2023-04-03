@@ -1,0 +1,519 @@
+agenda_public_debates {
+    modifier = {
+        pop_ethics_shift_speed_mult = 0.5
+    }
+
+    weight_modifier = {
+        weight = 100
+        modifier = {
+            from = {
+                has_ethic = ethic_fanatic_egalitarian
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            factor = 2
+            exists = pop_faction
+            pop_faction = {
+                is_pop_faction_type = progressive
+            }
+
+        }
+
+        modifier = {
+            factor = 0
+            mid_game_years_passed < 0
+        }
+
+    }
+
+}
+
+agenda_selective_nostalgia {
+    weight_modifier = {
+        weight = 100
+        modifier = {
+            factor = 1.5
+            from = {
+                has_ethic = ethic_fanatic_spiritualist
+            }
+
+        }
+
+        modifier = {
+            exists = pop_faction
+            pop_faction = {
+                is_pop_faction_type = traditionalist
+            }
+
+            factor = 2
+        }
+
+    }
+
+    modifier = {
+        planet_jobs_unity_produces_mult = 0.1
+    }
+
+}
+
+agenda_science {
+    weight_modifier = {
+        modifier = {
+            factor = 1.5
+            from = {
+                has_ethic = ethic_materialist
+            }
+
+        }
+
+        modifier = {
+            factor = 2
+            from = {
+                has_ethic = ethic_fanatic_materialist
+            }
+
+        }
+
+        modifier = {
+            leader_class = scientist
+            factor = 1.5
+        }
+
+        weight = 100
+    }
+
+    modifier = {
+        all_technology_research_speed = 0.1
+    }
+
+}
+
+agenda_import_export {
+    modifier = {
+        country_trade_fee = -0.05
+        trade_value_mult = 0.05
+    }
+
+    weight_modifier = {
+        modifier = {
+            factor = 1.5
+            from = {
+                has_ethic = ethic_fanatic_pacifist
+            }
+
+        }
+
+        modifier = {
+            factor = 2
+            exists = pop_faction
+            pop_faction = {
+                is_pop_faction_type = prosperity
+            }
+
+        }
+
+        weight = 100
+    }
+
+}
+
+agenda_expansionist_overtures {
+    weight_modifier = {
+        weight = 100
+        modifier = {
+            from = {
+                has_ethic = ethic_fanatic_militarist
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            exists = pop_faction
+            factor = 2
+            pop_faction = {
+                is_pop_faction_type = imperialist
+            }
+
+        }
+
+        modifier = {
+            from = {
+                num_communications < 1
+            }
+
+            factor = 0
+        }
+
+    }
+
+    modifier = {
+        country_claim_influence_cost_mult = -0.1
+    }
+
+}
+
+agenda_naval_focus {
+    weight_modifier = {
+        modifier = {
+            factor = 1.5
+            from = {
+                has_ethic = ethic_militarist
+            }
+
+        }
+
+        modifier = {
+            from = {
+                has_ethic = ethic_fanatic_militarist
+            }
+
+            factor = 2
+        }
+
+        modifier = {
+            factor = 1.5
+            leader_class = admiral
+        }
+
+        weight = 100
+    }
+
+    modifier = {
+        ships_upkeep_mult = -0.05
+        starbase_shipyard_build_cost_mult = -0.1
+        starbase_shipyard_build_speed_mult = 0.2
+    }
+
+}
+
+agenda_industrial {
+    modifier = {
+        planet_jobs_minerals_produces_mult = 0.1
+    }
+
+    weight_modifier = {
+        weight = 100
+    }
+
+}
+
+agenda_xeno_outreach {
+    weight_modifier = {
+        modifier = {
+            factor = 1.5
+            from = {
+                OR = {
+                    has_ethic = ethic_fanatic_xenophile
+                    has_ethic = ethic_xenophile
+                }
+
+            }
+
+        }
+
+        modifier = {
+            exists = pop_faction
+            factor = 2
+            pop_faction = {
+                is_pop_faction_type = xenoist
+            }
+
+        }
+
+        modifier = {
+            from = {
+                OR = {
+                    has_ethic = ethic_xenophobe
+                    has_ethic = ethic_fanatic_xenophobe
+                }
+
+            }
+
+            factor = 0.5
+        }
+
+        modifier = {
+            factor = 0
+            from = {
+                num_communications < 3
+            }
+
+        }
+
+        weight = 100
+    }
+
+    modifier = {
+        pop_ethic_xenophile_attraction_mult = 0.1
+    }
+
+}
+
+agenda_welfare {
+    weight_modifier = {
+        weight = 100
+        modifier = {
+            from = {
+                has_ethic = ethic_pacifist
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            from = {
+                has_ethic = ethic_fanatic_pacifist
+            }
+
+            factor = 2
+        }
+
+    }
+
+    modifier = {
+        pop_growth_speed = 0.1
+        pop_happiness = 0.05
+    }
+
+}
+
+agenda_native_privilege {
+    modifier = {
+        pop_ethic_xenophobe_attraction_mult = 0.2
+        pop_citizen_happiness = 0.05
+    }
+
+    weight_modifier = {
+        weight = 100
+        modifier = {
+            from = {
+                OR = {
+                    has_ethic = ethic_fanatic_pacifist
+                    has_ethic = ethic_pacifist
+                }
+
+                OR = {
+                    has_ethic = ethic_fanatic_xenophobe
+                    has_ethic = ethic_xenophobe
+                }
+
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            exists = pop_faction
+            pop_faction = {
+                is_pop_faction_type = supremacist
+            }
+
+            factor = 2
+        }
+
+        modifier = {
+            factor = 0
+            from = {
+                OR = {
+                    has_ethic = ethic_xenophile
+                    has_ethic = ethic_fanatic_xenophile
+                    has_origin = origin_broken_shackles
+                }
+
+            }
+
+        }
+
+    }
+
+}
+
+agenda_national_purity {
+    weight_modifier = {
+        modifier = {
+            from = {
+                has_ethic = ethic_fanatic_xenophobe
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            exists = pop_faction
+            pop_faction = {
+                is_pop_faction_type = isolationist
+            }
+
+            factor = 2
+        }
+
+        modifier = {
+            from = {
+                OR = {
+                    has_ethic = ethic_xenophile
+                    has_ethic = ethic_fanatic_xenophile
+                }
+
+            }
+
+            factor = 0
+        }
+
+        weight = 100
+    }
+
+    modifier = {
+        pop_ethic_xenophobe_attraction_mult = 0.2
+        country_influence_produces_mult = 0.1
+    }
+
+}
+
+agenda_skill_development {
+    weight_modifier = {
+        modifier = {
+            from = {
+                has_ethic = ethic_fanatic_materialist
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            factor = 2
+            exists = pop_faction
+            pop_faction = {
+                is_pop_faction_type = technologist
+            }
+
+        }
+
+        weight = 100
+    }
+
+    modifier = {
+        species_leader_exp_gain = 0.25
+    }
+
+}
+
+agenda_defensive_focus {
+    weight_modifier = {
+        modifier = {
+            factor = 1.5
+            from = {
+                has_ethic = ethic_militarist
+            }
+
+        }
+
+        modifier = {
+            from = {
+                has_ethic = ethic_fanatic_militarist
+            }
+
+            factor = 2
+        }
+
+        modifier = {
+            leader_class = admiral
+            factor = 1.5
+        }
+
+        modifier = {
+            leader_class = general
+            factor = 2
+        }
+
+        weight = 100
+    }
+
+    modifier = {
+        shipclass_military_station_damage_mult = 0.25
+        shipclass_military_station_build_cost_mult = -0.15
+        shipclass_military_station_hull_mult = 0.25
+    }
+
+}
+
+agenda_slave_optimization {
+    modifier = {
+        planet_jobs_slave_produces_mult = 0.1
+    }
+
+    weight_modifier = {
+        modifier = {
+            factor = 1.5
+            from = {
+                has_ethic = ethic_fanatic_authoritarian
+            }
+
+        }
+
+        modifier = {
+            pop_faction = {
+                is_pop_faction_type = totalitarian
+            }
+
+            factor = 2
+            exists = pop_faction
+        }
+
+        modifier = {
+            from = {
+                OR = {
+                    AND = {
+                        check_modifier_value = {
+                            value = 0
+                            modifier = country_pop_enslaved_mult
+                        }
+
+                        count_enslaved_species = {
+                            count = 0
+                        }
+
+                    }
+
+                    has_policy_flag = slavery_not_allowed
+                }
+
+            }
+
+            factor = 0
+        }
+
+        weight = 100
+    }
+
+}
+
+agenda_finanical {
+    modifier = {
+        planet_jobs_energy_produces_mult = 0.1
+    }
+
+    weight_modifier = {
+        modifier = {
+            leader_class = governor
+            factor = 1.5
+        }
+
+        weight = 100
+    }
+
+}
+
+agenda_null {
+    modifier = {
+    }
+
+    weight_modifier = {
+        weight = 0
+    }
+
+}
+

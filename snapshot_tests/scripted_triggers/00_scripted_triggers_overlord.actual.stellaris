@@ -1,0 +1,8 @@
+has_specialist_subject {
+    any_agreement = {
+        has_active_specialization = any
+    }
+
+    is_overlord = yes
+}
+

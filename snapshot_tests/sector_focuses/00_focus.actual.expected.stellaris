@@ -1,0 +1,19 @@
+unity {
+}
+
+production {
+}
+
+research {
+}
+
+balanced {
+}
+
+basic {
+    hidden = yes
+}
+
+manufacturing {
+}
+

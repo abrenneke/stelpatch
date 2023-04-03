@@ -1,0 +1,178 @@
+volatile_motes_expenditure_upgrade {
+    type = expenditure
+    weight = {
+        base = 0.1
+    }
+
+    resource = volatile_motes
+    category = ship_upgrades
+    potential = {
+        always = yes
+    }
+
+}
+
+volatile_motes_expenditure_planets {
+    category = planets
+    potential = {
+        always = yes
+    }
+
+    type = expenditure
+    weight = {
+        weight = 0.2
+    }
+
+    resource = volatile_motes
+}
+
+volatile_motes_expenditure_trade {
+    weight = {
+        weight = 0.1
+    }
+
+    type = expenditure
+    potential = {
+        always = yes
+    }
+
+    category = trade
+    resource = volatile_motes
+}
+
+volatile_motes_upkeep_starbases {
+    resource = volatile_motes
+    category = starbases
+    type = upkeep
+    potential = {
+        any_owned_nonprimary_starbase = {
+            has_starbase_size >= orbital_ring_tier_2
+            exists = planet
+        }
+
+    }
+
+    weight = {
+        weight = 0.1
+    }
+
+}
+
+volatile_motes_upkeep_hyper_relays {
+    potential = {
+        has_technology = tech_hyper_relays
+    }
+
+    category = megastructures_hyper_relay
+    resource = volatile_motes
+    weight = {
+        weight = 0.1
+    }
+
+    type = upkeep
+}
+
+volatile_motes_expenditure_ships {
+    type = expenditure
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.1
+    }
+
+    category = ships
+    resource = volatile_motes
+}
+
+volatile_motes_upkeep_ships {
+    resource = volatile_motes
+    type = upkeep
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.1
+    }
+
+    category = ships
+}
+
+volatile_motes_expenditure_starbases {
+    category = starbases
+    potential = {
+        any_owned_nonprimary_starbase = {
+            exists = planet
+            has_starbase_size >= orbital_ring_tier_2
+        }
+
+    }
+
+    resource = volatile_motes
+    type = expenditure
+    weight = {
+        modifier = {
+            factor = 0
+            NOT = {
+                any_owned_nonprimary_starbase = {
+                    exists = planet
+                    OR = {
+                        AND = {
+                            count_starbase_buildings = {
+                                count = 0
+                            }
+
+                            has_starbase_size = orbital_ring_tier_2
+                        }
+
+                        AND = {
+                            has_starbase_size = orbital_ring_tier_3
+                            count_starbase_buildings = {
+                                count < 2
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        }
+
+        weight = 0.2
+    }
+
+}
+
+volatile_motes_upkeep_planets {
+    category = planets
+    resource = volatile_motes
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.9
+    }
+
+    type = upkeep
+}
+
+volatile_motes_upkeep_edicts {
+    potential = {
+        always = yes
+    }
+
+    type = upkeep
+    resource = volatile_motes
+    weight = {
+        base = 0.25
+    }
+
+    category = edicts
+}
+

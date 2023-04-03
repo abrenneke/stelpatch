@@ -1,0 +1,272 @@
+tr_domination_grand_council {
+    ai_weight = {
+        factor = 10
+    }
+
+    tradition_swap = {
+        inherit_icon = yes
+        weight = {
+            factor = 1
+        }
+
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        name = tr_domination_multi_thread
+        inherit_effects = yes
+    }
+
+    tradition_swap = {
+        inherit_effects = yes
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+        name = tr_domination_synaptic_network
+    }
+
+    modifier = {
+        ruler_skill_levels = 2
+        country_edict_fund_add = 50
+    }
+
+    possible = {
+        has_tradition = tr_domination_imperious_architecture
+        has_tradition = tr_domination_colonial_viceroys
+    }
+
+}
+
+tr_domination_finish {
+    tradition_swap = {
+        custom_tooltip = tr_domination_federations_finish_desc
+        trigger = {
+            has_federations_dlc = yes
+        }
+
+        name = tr_domination_federations_finish
+        inherit_name = yes
+        modifier = {
+            ascension_perks_add = 1
+            empire_size_pops_mult = -0.1
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+    }
+
+    modifier = {
+        empire_size_pops_mult = -0.1
+        ascension_perks_add = 1
+    }
+
+}
+
+tr_domination_imperious_architecture {
+    ai_weight = {
+        factor = 10
+    }
+
+    tradition_swap = {
+        custom_tooltip = tr_domination_synaptic_extensions_desc
+        name = tr_domination_synaptic_extensions
+        inherit_icon = yes
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    tradition_swap = {
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        inherit_icon = yes
+        name = tr_domination_modular_depot
+        modifier = {
+            empire_size_districts_mult = -0.25
+        }
+
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    custom_tooltip = tr_domination_imperious_architecture_desc
+}
+
+tr_domination_judgment_corps {
+    ai_weight = {
+        factor = 10
+    }
+
+    tradition_swap = {
+        custom_tooltip = tr_domination_trust_officers_desc
+        inherit_effects = yes
+        weight = {
+            factor = 1
+        }
+
+        trigger = {
+            is_regular_empire = yes
+            OR = {
+                is_egalitarian = yes
+                AND = {
+                    is_authoritarian = no
+                    is_xenophobe = no
+                }
+
+            }
+
+        }
+
+        inherit_icon = yes
+        name = tr_domination_trust_officers
+    }
+
+    tradition_swap = {
+        weight = {
+            factor = 1
+        }
+
+        modifier = {
+            planet_crime_no_happiness_add = -10
+        }
+
+        name = tr_domination_deviancy_protocols
+        trigger = {
+            is_machine_empire = yes
+        }
+
+    }
+
+    tradition_swap = {
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        name = tr_domination_divergence_supression
+        modifier = {
+            planet_crime_no_happiness_add = -10
+        }
+
+    }
+
+    custom_tooltip = tr_domination_judgment_corps_desc
+}
+
+tr_domination_workplace_motivators {
+    tradition_swap = {
+        modifier = {
+            planet_jobs_simple_drone_produces_mult = 0.05
+        }
+
+        trigger = {
+            is_gestalt = yes
+        }
+
+        custom_tooltip_with_modifiers = tr_domination_drone_network_desc
+        weight = {
+            factor = 1
+        }
+
+        name = tr_domination_drone_network
+    }
+
+    possible = {
+        has_tradition = tr_domination_judgment_corps
+    }
+
+    ai_weight = {
+        factor = 10
+    }
+
+    modifier = {
+        planet_jobs_slave_produces_mult = 0.05
+        planet_jobs_worker_produces_mult = 0.05
+    }
+
+    custom_tooltip_with_modifiers = tr_domination_workplace_motivators_desc
+}
+
+tr_domination_adopt {
+    modifier = {
+        deposit_blockers_cost_mult = -0.33
+    }
+
+    tradition_swap = {
+        custom_tooltip = tr_domination_adopt_void_desc
+        trigger = {
+            has_origin = origin_void_dwellers
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        name = tr_domination_adopt_void
+        inherit_name = yes
+        inherit_icon = yes
+    }
+
+}
+
+tr_domination_colonial_viceroys {
+    ai_weight = {
+        factor = 1000
+    }
+
+    tradition_swap = {
+        inherit_effects = yes
+        weight = {
+            factor = 1
+        }
+
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        name = tr_domination_colonial_viceroys_machine
+        inherit_icon = yes
+    }
+
+    tradition_swap = {
+        inherit_effects = yes
+        inherit_icon = yes
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        name = tr_domination_colonial_viceroys_hive
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    modifier = {
+        governor_skill_levels = 2
+        country_traditions_influence_produces_add = 0.5
+    }
+
+}
+

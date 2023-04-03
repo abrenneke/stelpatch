@@ -1,0 +1,453 @@
+buildings_difficulty {
+    is_difficulty > 2
+    has_resource = {
+        amount > 1000
+        type = energy
+    }
+
+    has_resource = {
+        type = minerals
+        amount > 2000
+    }
+
+    years_passed > 20
+}
+
+districts_good_energy {
+    planet = {
+        OR = {
+            has_planet_flag = buildings_good_energy
+            has_modifier = hazardous_weather
+            has_modifier = divine_algorithm
+            has_modifier = energy_relic
+            has_modifier = gas_rich_planet_fo_realz
+        }
+
+    }
+
+}
+
+jobs_any_research {
+    planet = {
+        any_owned_pop = {
+            OR = {
+                has_job = head_researcher
+                has_job = researcher
+                has_job = brain_drone
+                has_job = calculator
+                has_job = dimensional_portal_researcher
+                has_job = dimensional_portal_researcher_gestalt
+            }
+
+        }
+
+    }
+
+}
+
+has_foundry_designation {
+    OR = {
+        has_designation = col_foundry
+        has_designation = col_ecu_foundry
+        has_designation = col_habitat_foundry
+        has_designation = col_mac_foundry
+        has_designation = col_hiv_foundry
+    }
+
+}
+
+has_industrial_designation {
+    OR = {
+        has_designation = col_industrial
+        has_designation = col_habitat_industrial
+        has_designation = col_ecu_industrial
+    }
+
+}
+
+country_uses_food {
+    else = {
+        resource_expenses_compare = {
+            resource = food
+            value > 0
+        }
+
+    }
+
+    if = {
+        limit = {
+            resource_expenses_compare = {
+                resource = food
+                value = 0
+            }
+
+            resource_expenses_compare = {
+                resource = minerals
+                value = 0
+            }
+
+            resource_expenses_compare = {
+                value = 0
+                resource = energy
+            }
+
+        }
+
+    }
+
+}
+
+country_uses_consumer_goods {
+    if = {
+        limit = {
+            resource_expenses_compare = {
+                value = 0
+                resource = food
+            }
+
+            resource_expenses_compare = {
+                value = 0
+                resource = minerals
+            }
+
+            resource_expenses_compare = {
+                resource = energy
+                value = 0
+            }
+
+        }
+
+    }
+
+    else = {
+        resource_expenses_compare = {
+            resource = consumer_goods
+            value > 0
+        }
+
+    }
+
+}
+
+jobs_work_minerals_goods {
+    owner = {
+        has_monthly_income = {
+            resource = minerals
+            value < 50
+        }
+
+        is_ai = yes
+        OR = {
+            AND = {
+                has_resource = {
+                    type = minerals
+                    amount < 5000
+                }
+
+                has_resource = {
+                    type = consumer_goods
+                    amount > 1500
+                }
+
+            }
+
+            AND = {
+                has_resource = {
+                    type = minerals
+                    amount < 3000
+                }
+
+                has_resource = {
+                    amount > 750
+                    type = consumer_goods
+                }
+
+            }
+
+            AND = {
+                has_resource = {
+                    type = minerals
+                    amount < 501
+                }
+
+                has_resource = {
+                    amount > 500
+                    type = consumer_goods
+                }
+
+            }
+
+        }
+
+    }
+
+    exists = owner
+}
+
+has_generator_designation {
+    OR = {
+        has_designation = col_generator
+        has_designation = col_habitat_energy
+        has_designation = col_ring_generator
+    }
+
+}
+
+has_mining_designation {
+    OR = {
+        has_designation = col_habitat_mining
+        has_designation = col_mining
+    }
+
+}
+
+has_refinery_designation {
+    OR = {
+        has_designation = col_refinery
+        has_designation = col_habitat_refinery
+    }
+
+}
+
+has_research_designation {
+    OR = {
+        has_designation = col_research
+        has_designation = col_ring_research
+        has_designation = col_habitat_research
+        has_designation = col_ecu_research
+    }
+
+}
+
+has_unity_designation {
+    OR = {
+        has_designation = col_bureau
+        has_designation = col_habitat_bureau
+        has_designation = col_bureau_machine
+        has_designation = col_trophy_machine
+        has_designation = col_habitat_bureau_machine
+        has_designation = col_bureau_hive
+        has_designation = col_habitat_bureau_hive
+        has_designation = col_bureau_spiritualist
+        has_designation = col_habitat_bureau_spiritualist
+    }
+
+}
+
+has_rural_designation {
+    OR = {
+        has_designation = col_rural
+        has_designation = col_rural_gestalt
+        has_designation = col_hiv
+        has_designation = col_mac
+    }
+
+}
+
+districts_good_minerals {
+    planet = {
+        OR = {
+            has_planet_flag = buildings_good_minerals
+            has_modifier = extensive_moon_system
+            has_modifier = carbon_world
+            has_modifier = mineral_rich
+            has_modifier = ultra_rich
+            has_modifier = asteroid_belt
+            has_modifier = minerals_relic
+        }
+
+    }
+
+}
+
+has_trade_designation {
+    OR = {
+        has_designation = col_city
+        has_designation = col_habitat_trade
+        has_designation = col_ring_trade
+        has_designation = col_ecu_mix
+    }
+
+}
+
+buildings_stop_pop {
+    free_housing < -4
+    free_district_slots = 0
+    exists = owner
+}
+
+has_fortress_designation {
+    or = {
+        has_designation = col_fortress
+        has_designation = col_habitat_fortress
+    }
+
+}
+
+buildings_unemployed {
+    planet = {
+        any_owned_pop = {
+            OR = {
+                has_job = servant
+                is_unemployed = yes
+            }
+
+            NOT = {
+                has_citizenship_type = {
+                    type = citizenship_organic_trophy
+                    country = owner
+                }
+
+            }
+
+            NOR = {
+                is_pop_category = specialist
+                is_pop_category = ruler
+            }
+
+        }
+
+    }
+
+}
+
+buildings_build_building {
+    OR = {
+        has_modifier = planet_population_control
+        has_modifier = planet_population_control_gestalt
+        has_modifier = planet_robot_assembly_control
+        has_modifier = planet_growth_discouraged
+        free_district_slots = 0
+    }
+
+    planet_devastation < 10
+    NAND = {
+        owner = {
+            is_lithoid_devouring_swarm = yes
+        }
+
+        exists = owner
+        is_lithoid_devouring_swarm_consumption_world = yes
+    }
+
+    NOT = {
+        planet = {
+            has_current_purge = yes
+        }
+
+    }
+
+}
+
+has_farming_designation {
+    OR = {
+        has_designation = col_farming
+        has_designation = col_ring_farming
+        has_designation = col_habitat_farming
+        has_designation = col_habitat_gestalt_farming
+    }
+
+}
+
+buildings_has_motes {
+    exists = owner
+    OR = {
+        owner = {
+            has_monthly_income = {
+                value >= 3
+                resource = volatile_motes
+            }
+
+        }
+
+        AND = {
+            owner = {
+                has_monthly_income = {
+                    value > 0
+                    resource = volatile_motes
+                }
+
+            }
+
+            free_building_slots > 1
+        }
+
+    }
+
+}
+
+has_factory_designation {
+    OR = {
+        has_designation = col_factory
+        has_designation = col_mac_factory
+        has_designation = col_ecu_factory
+        has_designation = col_habitat_factory
+    }
+
+}
+
+buildings_has_exotic_gases {
+    exists = owner
+    OR = {
+        owner = {
+            has_monthly_income = {
+                value >= 3
+                resource = exotic_gases
+            }
+
+        }
+
+        AND = {
+            owner = {
+                has_monthly_income = {
+                    value > 0
+                    resource = exotic_gases
+                }
+
+            }
+
+            free_building_slots > 1
+        }
+
+    }
+
+}
+
+buildings_has_crystals {
+    OR = {
+        AND = {
+            free_building_slots > 1
+            owner = {
+                has_monthly_income = {
+                    value > 0
+                    resource = rare_crystals
+                }
+
+            }
+
+        }
+
+        owner = {
+            has_monthly_income = {
+                resource = rare_crystals
+                value >= 3
+            }
+
+        }
+
+    }
+
+    exists = owner
+}
+
+districts_good_food {
+    planet = {
+        OR = {
+            has_modifier = lush_planet
+            has_planet_flag = buildings_good_food
+        }
+
+    }
+
+}
+

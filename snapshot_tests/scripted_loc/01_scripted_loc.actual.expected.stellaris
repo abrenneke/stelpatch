@@ -1,0 +1,84 @@
+defined_text {
+    name = GetInstrumentCravingIconAndName
+    text = {
+        localization_key = r_consumer_goods
+        trigger = {
+            has_country_flag = instrument_craving_consumer_goods
+        }
+
+    }
+
+    text = {
+        trigger = {
+            has_country_flag = instrument_craving_alloys
+        }
+
+        localization_key = r_alloys
+    }
+
+    text = {
+        localization_key = r_unity
+        trigger = {
+            has_country_flag = instrument_craving_unity
+        }
+
+    }
+
+    text = {
+        localization_key = r_exotic_gases
+        trigger = {
+            has_country_flag = instrument_craving_gas
+        }
+
+    }
+
+    text = {
+        localization_key = r_rare_crystals
+        trigger = {
+            has_country_flag = instrument_craving_crystal
+        }
+
+    }
+
+    text = {
+        localization_key = r_volatile_motes
+        trigger = {
+            has_country_flag = instrument_craving_motes
+        }
+
+    }
+
+    text = {
+        localization_key = r_zro
+        trigger = {
+            has_country_flag = instrument_craving_zro
+        }
+
+    }
+
+    text = {
+        localization_key = r_dark_matter
+        trigger = {
+            has_country_flag = instrument_craving_dark_matter
+        }
+
+    }
+
+    text = {
+        trigger = {
+            has_country_flag = instrument_craving_living_metal
+        }
+
+        localization_key = r_living_metal
+    }
+
+    text = {
+        localization_key = r_nanites
+        trigger = {
+            has_country_flag = instrument_craving_nanites
+        }
+
+    }
+
+}
+

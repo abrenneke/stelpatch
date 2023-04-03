@@ -1,0 +1,70 @@
+unity_expenditure_edicts {
+    category = edicts
+    type = expenditure
+    potential = {
+        has_technology = tech_ascension_theory
+    }
+
+    weight = {
+        weight = 0.2
+    }
+
+    resource = unity
+}
+
+unity_expenditure_traditions {
+    category = traditions
+    weight = {
+        weight = 0.8
+    }
+
+    resource = unity
+    potential = {
+        has_unlocked_all_traditions = no
+    }
+
+    type = expenditure
+}
+
+unity_expenditure_megastructures {
+    resource = unity
+    type = expenditure
+    desired_max = {
+        base = 7500
+    }
+
+    potential = {
+        can_build_unity_megastructures = yes
+        has_resource = {
+            type = unity
+            amount > 7500
+        }
+
+        is_at_war = no
+    }
+
+    category = megastructures
+    weight = {
+        weight = 0.1
+    }
+
+}
+
+unity_expenditure_decisions {
+    potential = {
+        always = yes
+    }
+
+    resource = unity
+    category = decisions
+    weight = {
+        weight = 0.2
+    }
+
+    desired_max = {
+        base = 1000
+    }
+
+    type = expenditure
+}
+

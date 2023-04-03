@@ -1,0 +1,196 @@
+tr_supremacy_overwhelming_force {
+    modifier = {
+        ship_orbital_bombardment_mult = 0.2
+        ship_fire_rate_mult = 0.1
+    }
+
+    ai_weight = {
+        factor = 1000
+    }
+
+}
+
+tr_supremacy_master_shipwrights {
+    modifier = {
+        starbase_shipyard_build_speed_mult = 0.25
+        starbase_shipyard_build_cost_mult = -0.1
+    }
+
+    ai_weight = {
+        factor = 1000
+    }
+
+    tradition_swap = {
+        inherit_effects = yes
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+        name = tr_supremacy_master_shipwrights_machine
+    }
+
+    tradition_swap = {
+        weight = {
+            factor = 1
+        }
+
+        inherit_effects = yes
+        name = tr_supremacy_master_shipwrights_hive
+        inherit_icon = yes
+        trigger = {
+            is_hive_empire = yes
+        }
+
+    }
+
+}
+
+tr_supremacy_great_game {
+    possible = {
+        has_tradition = tr_supremacy_overwhelming_force
+    }
+
+    modifier = {
+        ship_damage_against_starbases_mult = 0.2
+    }
+
+    ai_weight = {
+        factor = 1000
+    }
+
+    tradition_swap = {
+        name = tr_supremacy_great_game_hive
+        trigger = {
+            has_valid_civic = civic_hive_devouring_swarm
+        }
+
+        inherit_icon = yes
+        weight = {
+            factor = 1
+        }
+
+        inherit_effects = yes
+    }
+
+    tradition_swap = {
+        trigger = {
+            has_valid_civic = civic_machine_terminator
+        }
+
+        name = tr_supremacy_great_game_machine
+        inherit_icon = yes
+        inherit_effects = yes
+        weight = {
+            factor = 1
+        }
+
+    }
+
+}
+
+tr_supremacy_adopt {
+    modifier = {
+        army_damage_mult = 0.2
+        country_naval_cap_add = 20
+    }
+
+}
+
+tr_supremacy_fleet_logistical_corps {
+    modifier = {
+        ships_upkeep_mult = -0.1
+        country_naval_cap_mult = 0.2
+    }
+
+    tradition_swap = {
+        inherit_effects = yes
+        inherit_icon = yes
+        name = tr_supremacy_fleet_logistical_corps_machine
+        weight = {
+            factor = 1
+        }
+
+        trigger = {
+            is_machine_empire = yes
+        }
+
+    }
+
+    tradition_swap = {
+        name = tr_supremacy_fleet_logistical_corps_hive
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        inherit_effects = yes
+        inherit_icon = yes
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    ai_weight = {
+        factor = 1000
+    }
+
+}
+
+tr_supremacy_finish {
+    modifier = {
+        ascension_perks_add = 1
+    }
+
+    custom_tooltip = tr_supremacy_finish_desc
+}
+
+tr_supremacy_war_games {
+    possible = {
+        has_tradition = tr_supremacy_master_shipwrights
+        has_tradition = tr_supremacy_fleet_logistical_corps
+    }
+
+    ai_weight = {
+        factor = 1000
+    }
+
+    modifier = {
+        admiral_skill_levels = 2
+        country_command_limit_add = 20
+    }
+
+    tradition_swap = {
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        inherit_effects = yes
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+        name = tr_supremacy_war_games_machine
+    }
+
+    tradition_swap = {
+        inherit_icon = yes
+        inherit_effects = yes
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        name = tr_supremacy_war_games_hive
+        weight = {
+            factor = 1
+        }
+
+    }
+
+}
+

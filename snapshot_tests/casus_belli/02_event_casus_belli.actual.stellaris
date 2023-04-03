@@ -1,0 +1,13 @@
+cb_event {
+    show_in_diplomacy = no
+    potential = {
+        always = no
+    }
+
+    show_notification = no
+    is_valid = {
+        always = no
+    }
+
+}
+

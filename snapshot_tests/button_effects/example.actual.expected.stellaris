@@ -1,0 +1,21 @@
+example_button_effect {
+    potential = {
+        always = no
+    }
+
+    allow = {
+        always = no
+    }
+
+    effect = {
+        add_monthly_resource_mult = {
+            min = 5
+            resource = minerals
+            max = 500
+            value = 5
+        }
+
+    }
+
+}
+

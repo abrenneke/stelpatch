@@ -1,0 +1,301 @@
+tr_unyielding_fortress_doctrine {
+    possible = {
+        has_tradition = tr_unyielding_defensive_zeal
+    }
+
+    modifier = {
+        country_starbase_capacity_add = 2
+        starbase_upgrade_cost_mult = -0.5
+    }
+
+    tradition_swap = {
+        inherit_icon = yes
+        name = tr_unyielding_fortress_doctrine_nemesis
+        trigger = {
+            is_gestalt = no
+            has_nemesis = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        modifier = {
+            hostile_operation_sabotage_starbase_difficulty_add = 4
+            starbase_upgrade_cost_mult = -0.5
+            country_starbase_capacity_add = 2
+        }
+
+        inherit_name = yes
+    }
+
+    tradition_swap = {
+        name = tr_unyielding_fortress_doctrine_hive
+        trigger = {
+            is_hive_empire = yes
+            has_nemesis = no
+        }
+
+        inherit_icon = yes
+        modifier = {
+            starbase_upgrade_cost_mult = -0.5
+            country_starbase_capacity_add = 2
+        }
+
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    tradition_swap = {
+        inherit_icon = yes
+        modifier = {
+            starbase_upgrade_cost_mult = -0.5
+            country_starbase_capacity_add = 2
+            hostile_operation_sabotage_starbase_difficulty_add = 4
+        }
+
+        name = tr_unyielding_fortress_doctrine_hive_nemesis
+        trigger = {
+            is_hive_empire = yes
+            has_nemesis = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    tradition_swap = {
+        modifier = {
+            starbase_upgrade_cost_mult = -0.5
+            country_starbase_capacity_add = 2
+        }
+
+        inherit_icon = yes
+        trigger = {
+            has_nemesis = no
+            is_machine_empire = yes
+        }
+
+        name = tr_unyielding_fortress_doctrine_machine
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    tradition_swap = {
+        trigger = {
+            has_nemesis = yes
+            is_machine_empire = yes
+        }
+
+        modifier = {
+            country_starbase_capacity_add = 2
+            hostile_operation_sabotage_starbase_difficulty_add = 4
+            starbase_upgrade_cost_mult = -0.5
+        }
+
+        name = tr_unyielding_fortress_doctrine_machine_nemesis
+        inherit_icon = yes
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    ai_weight = {
+        factor = 5000
+    }
+
+}
+
+tr_unyielding_resistance_is_frugal {
+    modifier = {
+        army_defense_health_mult = 0.25
+    }
+
+    custom_tooltip = tr_unyielding_resistance_is_frugal_desc
+    tradition_swap = {
+        inherit_effects = yes
+        name = tr_unyielding_resistance_is_frugal_hive
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+        trigger = {
+            is_hive_empire = yes
+        }
+
+    }
+
+    tradition_swap = {
+        inherit_icon = yes
+        name = tr_unyielding_resistance_is_frugal_machine
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        inherit_effects = yes
+    }
+
+    ai_weight = {
+        factor = 1000
+    }
+
+}
+
+tr_unyielding_adopt {
+    modifier = {
+        country_starbase_capacity_add = 2
+        starbase_upgrade_speed_mult = 0.5
+    }
+
+}
+
+tr_unyielding_bulwark_of_harmony {
+    ai_weight = {
+        modifier = {
+            any_neighbor_country = {
+                opinion_level = {
+                    who = prev
+                    level <= poor
+                }
+
+                relative_power = {
+                    who = prev
+                    value >= superior
+                }
+
+            }
+
+            factor = 3
+        }
+
+        factor = 5000
+    }
+
+    modifier = {
+        ship_home_territory_fire_rate_mult = 0.15
+        starbase_defensive_war_ship_build_speed_mult = 0.33
+    }
+
+    possible = {
+        has_tradition = tr_unyielding_never_surrender
+    }
+
+    tradition_swap = {
+        name = tr_unyielding_bulwark_of_harmony_hive
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        inherit_effects = yes
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+    }
+
+    tradition_swap = {
+        inherit_icon = yes
+        inherit_effects = yes
+        weight = {
+            factor = 1
+        }
+
+        name = tr_unyielding_bulwark_of_harmony_machine
+        trigger = {
+            is_machine_empire = yes
+        }
+
+    }
+
+    custom_tooltip = tr_unyielding_bulwark_of_harmony_desc
+}
+
+tr_unyielding_never_surrender {
+    ai_weight = {
+        factor = 5000
+    }
+
+    possible = {
+        has_tradition = tr_unyielding_resistance_is_frugal
+    }
+
+    tradition_swap = {
+        name = tr_unyielding_never_surrender_gestalt
+        trigger = {
+            is_gestalt = yes
+        }
+
+        inherit_icon = yes
+        weight = {
+            factor = 1
+        }
+
+        inherit_effects = yes
+    }
+
+    modifier = {
+        planet_orbital_bombardment_damage = -0.25
+        country_war_exhaustion_mult = -0.25
+        country_hostile_claim_influence_cost_mult = 0.25
+    }
+
+}
+
+tr_unyielding_finish {
+    tradition_swap = {
+        inherit_icon = yes
+        custom_tooltip = tr_unyielding_federations_finish_desc
+        inherit_name = yes
+        name = tr_unyielding_federations_finish
+        modifier = {
+            starbases_upkeep_mult = -0.2
+            starbase_defense_platform_capacity_mult = 0.5
+            ascension_perks_add = 1
+        }
+
+        trigger = {
+            has_federations_dlc = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    modifier = {
+        starbases_upkeep_mult = -0.2
+        starbase_defense_platform_capacity_mult = 0.5
+        ascension_perks_add = 1
+    }
+
+}
+
+tr_unyielding_defensive_zeal {
+    ai_weight = {
+        factor = 1000
+    }
+
+    custom_tooltip = tr_unyielding_defensive_zeal_desc
+    modifier = {
+        shipclass_starbase_hull_mult = 0.33
+        shipclass_starbase_damage_mult = 0.33
+        shipclass_military_station_hull_mult = 0.33
+        shipclass_military_station_damage_mult = 0.33
+    }
+
+}
+

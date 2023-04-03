@@ -1,0 +1,362 @@
+guardian_dreadnought {
+    blocks_piracy = yes
+    destroys_starbases = yes
+    observable = no
+    faction = {
+        needs_border_access = no
+        needs_colony = no
+        generate_borders = no
+        hostile = yes
+    }
+
+    government = no
+    modules = {
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+        basic_technology_module = {
+        }
+
+        standard_event_module = {
+        }
+
+    }
+
+    is_space_critter = yes
+    scaled_difficulty_bonuses = 0.5
+    ai = {
+        enabled = no
+    }
+
+}
+
+guardian_toxic_god {
+    is_space_critter = yes
+    observable = no
+    government = no
+    scaled_difficulty_bonuses = 0.5
+    modules = {
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+        basic_technology_module = {
+        }
+
+        standard_event_module = {
+        }
+
+    }
+
+    ai = {
+        enabled = no
+    }
+
+    faction = {
+        generate_borders = no
+        needs_colony = no
+        hostile = yes
+        needs_border_access = no
+    }
+
+    blocks_piracy = yes
+    destroys_starbases = yes
+}
+
+guardian_sphere {
+    government = no
+    observable = no
+    is_space_critter = yes
+    destroys_starbases = yes
+    faction = {
+        generate_borders = no
+        neutral = yes
+        needs_colony = no
+        needs_border_access = no
+    }
+
+    ai = {
+        enabled = no
+    }
+
+    blocks_piracy = yes
+    blocks_piracy = yes
+    scaled_difficulty_bonuses = 0.5
+    modules = {
+        basic_technology_module = {
+        }
+
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+    }
+
+}
+
+guardian_warden {
+    blocks_piracy = yes
+    scaled_difficulty_bonuses = 0.5
+    ai = {
+        enabled = no
+    }
+
+    modules = {
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+        basic_technology_module = {
+        }
+
+        standard_event_module = {
+        }
+
+    }
+
+    government = no
+    destroys_starbases = yes
+    observable = no
+    faction = {
+        neutral = yes
+        needs_border_access = no
+        needs_colony = no
+        generate_borders = no
+    }
+
+    is_space_critter = yes
+}
+
+guardian_horror {
+    destroys_starbases = yes
+    blocks_piracy = yes
+    scaled_difficulty_bonuses = 0.5
+    faction = {
+        generate_borders = no
+        hostile = yes
+        needs_colony = no
+        needs_border_access = no
+    }
+
+    ai = {
+        enabled = no
+    }
+
+    government = no
+    modules = {
+        standard_event_module = {
+        }
+
+        basic_technology_module = {
+        }
+
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+    }
+
+    observable = no
+    is_space_critter = yes
+}
+
+guardian_hiver {
+    destroys_starbases = yes
+    faction = {
+        needs_border_access = no
+        hostile = yes
+        generate_borders = no
+        needs_colony = no
+    }
+
+    observable = no
+    is_space_critter = yes
+    government = no
+    scaled_difficulty_bonuses = 0.5
+    attack_unarmed_orbital_stations = yes
+    blocks_piracy = yes
+    modules = {
+        basic_technology_module = {
+        }
+
+        standard_event_module = {
+        }
+
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+    }
+
+    ai = {
+        enabled = no
+    }
+
+}
+
+guardian_fortress {
+    destroys_starbases = yes
+    modules = {
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+        basic_technology_module = {
+        }
+
+        standard_event_module = {
+        }
+
+    }
+
+    ai = {
+        enabled = no
+    }
+
+    observable = no
+    government = no
+    scaled_difficulty_bonuses = 0.5
+    is_space_critter = yes
+    blocks_piracy = yes
+    faction = {
+        hostile = yes
+        needs_colony = no
+        generate_borders = no
+        needs_border_access = no
+    }
+
+}
+
+guardian_stellarite {
+    faction = {
+        hostile = yes
+        generate_borders = no
+        needs_border_access = no
+        needs_colony = no
+    }
+
+    is_space_critter = yes
+    scaled_difficulty_bonuses = 0.5
+    observable = no
+    government = no
+    modules = {
+        basic_technology_module = {
+        }
+
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+        standard_event_module = {
+        }
+
+    }
+
+    destroys_starbases = yes
+    blocks_piracy = yes
+    ai = {
+        enabled = no
+    }
+
+}
+
+guardian_wraith {
+    scaled_difficulty_bonuses = 0.5
+    destroys_starbases = yes
+    ai = {
+        enabled = no
+    }
+
+    blocks_piracy = yes
+    faction = {
+        hostile = yes
+        needs_border_access = no
+        generate_borders = no
+        needs_colony = no
+    }
+
+    observable = no
+    modules = {
+        basic_technology_module = {
+        }
+
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+        standard_event_module = {
+        }
+
+    }
+
+    government = no
+    is_space_critter = yes
+}
+
+guardian {
+    government = no
+    destroys_starbases = yes
+    scaled_difficulty_bonuses = 0.5
+    is_space_critter = yes
+    observable = no
+    faction = {
+        needs_colony = no
+        needs_border_access = no
+        generate_borders = no
+        hostile = yes
+    }
+
+    blocks_piracy = yes
+    modules = {
+        basic_technology_module = {
+        }
+
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+        standard_event_module = {
+        }
+
+    }
+
+    ai = {
+        enabled = no
+    }
+
+}
+
+guardian_dragon {
+    blocks_piracy = yes
+    observable = no
+    faction = {
+        hostile = yes
+        generate_borders = no
+        needs_colony = no
+        needs_border_access = no
+    }
+
+    ai = {
+        enabled = no
+    }
+
+    scaled_difficulty_bonuses = 0.5
+    government = no
+    destroys_starbases = yes
+    modules = {
+        standard_event_module = {
+        }
+
+        exclusive_diplomacy_module = {
+            contact_rule = on_action_only
+        }
+
+        basic_technology_module = {
+        }
+
+    }
+
+    is_space_critter = yes
+}
+

@@ -1,0 +1,120 @@
+hunted_pre_sapient {
+    icon = livestock
+    clothes_texture_index = 2
+    is_capped_by_modifier = no
+    resources = {
+        category = planet_livestock
+        produces = {
+            trigger = {
+                is_pre_sapient = yes
+                is_pre_sapient_lithoid = no
+            }
+
+            food = 4
+        }
+
+        produces = {
+            trigger = {
+                planet = {
+                    has_active_building = building_food_processing_facility
+                }
+
+                is_pre_sapient_lithoid = no
+                is_pre_sapient = yes
+            }
+
+            food = 1
+        }
+
+        produces = {
+            trigger = {
+                is_pre_sapient_lithoid = no
+                planet = {
+                    has_active_building = building_food_processing_center
+                }
+
+                is_pre_sapient = yes
+            }
+
+            food = 2
+        }
+
+        produces = {
+            trigger = {
+                is_pre_sapient_lithoid = yes
+            }
+
+            minerals = 2
+        }
+
+        produces = {
+            trigger = {
+                is_pre_sapient_lithoid = yes
+                planet = {
+                    has_active_building = building_mineral_purification_plant
+                }
+
+            }
+
+            minerals = 1
+        }
+
+        produces = {
+            minerals = 2
+            trigger = {
+                planet = {
+                    has_active_building = building_mineral_purification_hub
+                }
+
+                is_pre_sapient_lithoid = yes
+            }
+
+        }
+
+    }
+
+    possible_pre_triggers = {
+        is_sapient = no
+    }
+
+    possible = {
+        planet = {
+            exists = owner
+            owner = {
+                has_policy_flag = pre_sapients_eat
+            }
+
+        }
+
+    }
+
+    category = pre_sapients
+    contributes_to_diplo_weight = no
+    weight = {
+        weight = 5500
+    }
+
+}
+
+pre_sapient {
+    contributes_to_diplo_weight = no
+    weight = {
+        weight = 1000
+    }
+
+    possible_pre_triggers = {
+        is_sapient = no
+    }
+
+    planet_modifier = {
+    }
+
+    resources = {
+        category = pop_category_pre_sapients
+    }
+
+    is_capped_by_modifier = no
+    clothes_texture_index = 2
+    category = pre_sapients
+}
+

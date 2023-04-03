@@ -1,0 +1,68 @@
+defined_text {
+    name = fotdGetTechPrice
+    text = {
+        trigger = {
+            has_country_flag = slowed_science_ships
+        }
+
+        localization_key = fotd_slowed_science_ships_loc
+    }
+
+    text = {
+        trigger = {
+            has_country_flag = slowed_first_contact
+        }
+
+        localization_key = fotd_slowed_first_contact_loc
+    }
+
+    text = {
+        trigger = {
+            has_country_flag = break_defensive_pact
+        }
+
+        localization_key = fotd_break_defensive_pact_loc
+    }
+
+    text = {
+        localization_key = fotd_break_migration_pact_loc
+        trigger = {
+            has_country_flag = break_migration_pact
+        }
+
+    }
+
+    text = {
+        trigger = {
+            has_country_flag = support_speratists
+        }
+
+        localization_key = fotd_support_seperatists_loc
+    }
+
+    text = {
+        localization_key = fotd_stop_communicating_with_shroud_loc
+        trigger = {
+            has_country_flag = stop_communing_with_shroud
+        }
+
+    }
+
+    text = {
+        localization_key = fotd_leave_federation_loc
+        trigger = {
+            has_country_flag = leave_federation
+        }
+
+    }
+
+    text = {
+        localization_key = fotd_have_no_voice_loc
+        trigger = {
+            has_country_flag = have_no_voice
+        }
+
+    }
+
+}
+

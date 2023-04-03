@@ -1,0 +1,361 @@
+sanchorage {
+    ai_design = {
+        min = {
+            base = 0
+        }
+
+        modules = {
+            anchorage = {
+                base = 1
+            }
+
+        }
+
+        ratio = {
+            modifier = {
+                owner = {
+                    has_ethic = ethic_militarist
+                }
+
+                add = 0.05
+                exists = owner
+            }
+
+            modifier = {
+                exists = owner
+                owner = {
+                    has_ethic = ethic_fanatic_militarist
+                }
+
+                add = 0.02
+            }
+
+            base = 0.65
+        }
+
+        buildings = {
+            naval_logistics_office = {
+                base = 1
+            }
+
+            curator_think_tank = {
+                base = 2
+            }
+
+            defense_grid = {
+                base = 0.05
+            }
+
+            art_college = {
+                base = 2
+            }
+
+            ice_mining_station = {
+                base = 2
+            }
+
+            nebula_refinery = {
+                base = 2
+            }
+
+            dragon_hatchery = {
+                base = 2
+            }
+
+            communications_jammer = {
+                base = 0.05
+            }
+
+            hydroponics_bay = {
+                base = 2
+            }
+
+        }
+
+    }
+
+    potential = {
+        has_starbase_size > starbase_outpost
+    }
+
+    weight_modifier = {
+        complex_trigger_modifier = {
+            parameters = {
+                type = anchorage
+            }
+
+            mult = 100
+            trigger = count_starbase_modules
+            mode = add
+        }
+
+        base = 0
+    }
+
+}
+
+strading_hub {
+    weight_modifier = {
+        base = 0
+        complex_trigger_modifier = {
+            mode = add
+            trigger = count_starbase_modules
+            parameters = {
+                type = trading_hub
+            }
+
+            mult = 100
+        }
+
+    }
+
+    ai_design = {
+        modules = {
+            trading_hub = {
+                base = 1
+            }
+
+        }
+
+        ratio = {
+            modifier = {
+                add = 0.05
+                owner = {
+                    OR = {
+                        is_megacorp = yes
+                        has_ethic = ethic_xenophile
+                    }
+
+                }
+
+                exists = owner
+            }
+
+            modifier = {
+                owner = {
+                    OR = {
+                        has_ethic = ethic_fanatic_xenophile
+                        is_megacorp = yes
+                    }
+
+                }
+
+                exists = owner
+                add = 0.1
+            }
+
+            base = 0.1
+        }
+
+        buildings = {
+            offworld_trading_company = {
+                base = 1
+            }
+
+            communications_jammer = {
+                base = 0.05
+            }
+
+            art_college = {
+                base = 1
+            }
+
+            nebula_refinery = {
+                base = 1
+            }
+
+            curator_think_tank = {
+                base = 1
+            }
+
+            ice_mining_station = {
+                base = 1
+            }
+
+            yuht_detection_array = {
+                base = 1.25
+                modifier = {
+                    owner = {
+                        OR = {
+                            has_megastructure = spy_orb_1
+                            has_megastructure = spy_orb_2
+                            has_megastructure = spy_orb_3
+                            has_megastructure = spy_orb_4
+                        }
+
+                    }
+
+                    factor = 0
+                    exists = owner
+                }
+
+                modifier = {
+                    factor = 0.1
+                    owner = {
+                        any_owned_starbase = {
+                            count_starbase_buildings = {
+                                type = yuht_detection_array
+                                count > 0
+                            }
+
+                        }
+
+                    }
+
+                    exists = owner
+                }
+
+            }
+
+            hydroponics_bay = {
+                base = 1
+            }
+
+            dragon_hatchery = {
+                base = 1
+            }
+
+            defense_grid = {
+                base = 0.05
+            }
+
+            resource_silo = {
+                base = 0.25
+            }
+
+        }
+
+        min = {
+            base = 0
+        }
+
+    }
+
+    potential = {
+        owner = {
+            NOT = {
+                has_ethic = ethic_gestalt_consciousness
+            }
+
+        }
+
+        has_starbase_size > starbase_outpost
+        exists = owner
+    }
+
+}
+
+sshipyard {
+    ai_design = {
+        min = {
+            base = 1
+        }
+
+        ratio = {
+            base = 0.2
+            modifier = {
+                owner = {
+                    has_ethic = ethic_militarist
+                }
+
+                add = 0.1
+                exists = owner
+            }
+
+            modifier = {
+                owner = {
+                    has_ethic = ethic_fanatic_militarist
+                }
+
+                add = 0.05
+                exists = owner
+            }
+
+        }
+
+        buildings = {
+            colossus_yards = {
+                base = 1
+            }
+
+            irassian_naval_yards = {
+                base = 3
+            }
+
+            dragon_hatchery = {
+                base = 1
+            }
+
+            hydroponics_bay = {
+                base = 1
+            }
+
+            ice_mining_station = {
+                base = 1
+            }
+
+            fleet_academy = {
+                base = 1
+            }
+
+            crew_quarters = {
+                base = 1
+            }
+
+            titan_yards = {
+                base = 1
+            }
+
+        }
+
+        modules = {
+            shipyard = {
+                base = 1
+            }
+
+            anchorage = {
+                base = 0.5
+            }
+
+            hangar_bay = {
+                base = 0.45
+            }
+
+        }
+
+    }
+
+    potential = {
+        has_starbase_size > starbase_outpost
+    }
+
+    weight_modifier = {
+        base = 0
+        complex_trigger_modifier = {
+            mode = add
+            trigger = count_starbase_modules
+            parameters = {
+                type = shipyard
+            }
+
+            mult = 100
+        }
+
+        modifier = {
+            add = 1000
+            owner = {
+                NOT = {
+                    any_owned_starbase = {
+                        has_starbase_module = shipyard
+                    }
+
+                }
+
+            }
+
+        }
+
+    }
+
+}
+

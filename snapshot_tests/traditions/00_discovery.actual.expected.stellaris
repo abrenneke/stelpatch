@@ -1,0 +1,222 @@
+tr_discovery_polytechnic_education {
+    possible = {
+        has_tradition = tr_discovery_science_division
+    }
+
+    tradition_swap = {
+        inherit_icon = yes
+        inherit_effects = yes
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        name = tr_discovery_polytechnic_education_machine
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    tradition_swap = {
+        name = tr_discovery_polytechnic_education_hive
+        inherit_effects = yes
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+    }
+
+    ai_weight = {
+        factor = 5000
+    }
+
+    modifier = {
+        leader_skill_levels = 1
+        species_leader_exp_gain = 0.25
+    }
+
+}
+
+tr_discovery_finish {
+    tradition_swap = {
+        modifier = {
+            ascension_perks_add = 1
+            all_technology_research_speed = 0.1
+        }
+
+        inherit_icon = yes
+        inherit_name = yes
+        weight = {
+            factor = 1
+        }
+
+        custom_tooltip = tr_discovery_federations_finish_desc
+        trigger = {
+            has_federations_dlc = yes
+        }
+
+        name = tr_discovery_federations_finish
+    }
+
+    modifier = {
+        all_technology_research_speed = 0.1
+        ascension_perks_add = 1
+    }
+
+}
+
+tr_discovery_adopt {
+    modifier = {
+        ship_anomaly_research_speed_mult = 0.2
+    }
+
+    custom_tooltip = tr_discovery_adopt_desc
+}
+
+tr_discovery_databank_uplinks {
+    possible = {
+        has_tradition = tr_discovery_to_boldly_go
+    }
+
+    custom_tooltip = tr_discovery_databank_uplinks_desc
+    ai_weight = {
+        factor = 5000
+    }
+
+    modifier = {
+        starbase_constructions_society_research_produces_mult = 0.2
+        station_researchers_produces_mult = 0.2
+        starbase_constructions_physics_research_produces_mult = 0.2
+        starbase_constructions_engineering_research_produces_mult = 0.2
+    }
+
+}
+
+tr_discovery_to_boldly_go {
+    tradition_swap = {
+        weight = {
+            factor = 1
+        }
+
+        name = tr_discovery_to_boldly_go_machine
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        inherit_effects = yes
+        inherit_icon = yes
+    }
+
+    tradition_swap = {
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        inherit_icon = yes
+        inherit_effects = yes
+        name = tr_discovery_to_boldly_go_hive
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    ai_weight = {
+        factor = 5000
+    }
+
+    modifier = {
+        shipclass_science_ship_disengage_mult = 0.5
+        science_ship_survey_speed = 0.35
+    }
+
+}
+
+tr_discovery_science_division {
+    ai_weight = {
+        factor = 1000
+    }
+
+    modifier = {
+        num_tech_alternatives_add = 1
+        scientist_skill_levels = 2
+    }
+
+    tradition_swap = {
+        weight = {
+            factor = 1
+        }
+
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        inherit_effects = yes
+        inherit_icon = yes
+        name = tr_discovery_science_division_machine
+    }
+
+    tradition_swap = {
+        inherit_effects = yes
+        name = tr_discovery_science_division_hive
+        trigger = {
+            is_hive_empire = yes
+        }
+
+        inherit_icon = yes
+        weight = {
+            factor = 1
+        }
+
+    }
+
+}
+
+tr_discovery_faith_in_science {
+    possible = {
+        has_tradition = tr_discovery_polytechnic_education
+    }
+
+    ai_weight = {
+        factor = 5000
+    }
+
+    modifier = {
+        planet_researchers_upkeep_mult = -0.2
+    }
+
+    tradition_swap = {
+        inherit_effects = yes
+        inherit_icon = yes
+        trigger = {
+            is_machine_empire = yes
+        }
+
+        name = tr_discovery_faith_in_science_machine
+        weight = {
+            factor = 1
+        }
+
+    }
+
+    tradition_swap = {
+        inherit_effects = yes
+        name = tr_discovery_faith_in_science_hive
+        weight = {
+            factor = 1
+        }
+
+        inherit_icon = yes
+        trigger = {
+            is_hive_empire = yes
+        }
+
+    }
+
+}
+

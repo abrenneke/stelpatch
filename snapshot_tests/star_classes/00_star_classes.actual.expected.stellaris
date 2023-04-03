@@ -1,0 +1,976 @@
+sc_t {
+    pc_tropical = {
+        spawn_odds = 0.4
+    }
+
+    pc_continental = {
+        spawn_odds = 0.4
+    }
+
+    num_planets = {
+        min = 4
+        max = 10
+    }
+
+    pc_ocean = {
+        spawn_odds = 0.4
+    }
+
+    spawn_odds = 10
+    pc_arid = {
+        spawn_odds = 0.4
+    }
+
+    class = t_star
+    pc_alpine = {
+        spawn_odds = 0.4
+    }
+
+    pc_savannah = {
+        spawn_odds = 0.4
+    }
+
+    planet = {
+        key = pc_t_star
+    }
+
+    pc_arctic = {
+        spawn_odds = 0.4
+    }
+
+    pc_tundra = {
+        spawn_odds = 0.4
+    }
+
+    pc_desert = {
+        spawn_odds = 0.4
+    }
+
+}
+
+sc_binary_9 {
+    class = a_star
+    planet = {
+        class = a_star
+        key = pc_a_star
+    }
+
+    planet = {
+        class = f_star
+        key = pc_f_star
+    }
+
+    spawn_odds = 5
+    num_planets = {
+        min = 4
+        max = 10
+    }
+
+    icon = a_binary_star
+}
+
+sc_binary_4 {
+    pc_tropical = {
+        spawn_odds = 0
+    }
+
+    pc_alpine = {
+        spawn_odds = 0
+    }
+
+    pc_arctic = {
+        spawn_odds = 0
+    }
+
+    class = m_star
+    pc_gaia = {
+        spawn_odds = 0
+    }
+
+    pc_arid = {
+        spawn_odds = 0
+    }
+
+    pc_ocean = {
+        spawn_odds = 0
+    }
+
+    pc_continental = {
+        spawn_odds = 0
+    }
+
+    num_planets = {
+        min = 4
+        max = 10
+    }
+
+    pc_savannah = {
+        spawn_odds = 0
+    }
+
+    pc_desert = {
+        spawn_odds = 0
+    }
+
+    spawn_odds = 5
+    icon = c_binary_star
+    pc_tundra = {
+        spawn_odds = 0
+    }
+
+    planet = {
+        class = m_star
+        key = pc_m_giant_star
+    }
+
+    planet = {
+        key = pc_f_star
+        class = f_star
+    }
+
+}
+
+sc_binary_7 {
+    num_planets = {
+        min = 4
+        max = 10
+    }
+
+    planet = {
+        class = k_star
+        key = pc_k_star
+    }
+
+    planet = {
+        class = f_star
+        key = pc_f_star
+    }
+
+    class = k_star
+    icon = d_binary_star
+    spawn_odds = 5
+}
+
+sc_binary_1 {
+    pc_arid = {
+        spawn_odds = 0
+    }
+
+    pc_arctic = {
+        spawn_odds = 0
+    }
+
+    pc_gaia = {
+        spawn_odds = 0
+    }
+
+    spawn_odds = 5
+    class = a_star
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+    pc_ocean = {
+        spawn_odds = 0
+    }
+
+    pc_continental = {
+        spawn_odds = 0
+    }
+
+    is_environmental_hazard = yes
+    pc_savannah = {
+        spawn_odds = 0
+    }
+
+    pc_desert = {
+        spawn_odds = 0
+    }
+
+    pc_tundra = {
+        spawn_odds = 0
+    }
+
+    planet = {
+        class = a_star
+        key = pc_a_star
+    }
+
+    planet = {
+        class = pulsar
+        key = pc_pulsar
+    }
+
+    pc_tropical = {
+        spawn_odds = 0
+    }
+
+    modifier = {
+        ship_shield_reduction = 1
+    }
+
+    pc_alpine = {
+        spawn_odds = 0
+    }
+
+    icon = e_binary_star
+}
+
+sc_g {
+    planet = {
+        key = pc_g_star
+    }
+
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+    spawn_odds = 30
+    class = g_star
+}
+
+sc_binary_10 {
+    class = a_star
+    planet = {
+        key = pc_a_star
+        class = a_star
+    }
+
+    planet = {
+        key = pc_t_star
+        class = t_star
+    }
+
+    spawn_odds = 5
+    icon = a_binary_star
+    num_planets = {
+        min = 4
+        max = 10
+    }
+
+}
+
+sc_trinary_4 {
+    icon = a_trinary_star
+    class = b_star
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+    spawn_odds = 30
+    planet = {
+        class = b_star
+        key = pc_b_star
+    }
+
+    planet = {
+        key = pc_k_star
+        class = k_star
+    }
+
+    planet = {
+        key = pc_t_star
+        class = t_star
+    }
+
+}
+
+sc_k {
+    num_planets = {
+        min = 4
+        max = 10
+    }
+
+    planet = {
+        key = pc_k_star
+    }
+
+    class = k_star
+    spawn_odds = 20
+}
+
+sc_m {
+    pc_continental = {
+        spawn_odds = 0.4
+    }
+
+    pc_tropical = {
+        spawn_odds = 0.4
+    }
+
+    num_planets = {
+        min = 4
+        max = 10
+    }
+
+    pc_arid = {
+        spawn_odds = 0.4
+    }
+
+    pc_ocean = {
+        spawn_odds = 0.4
+    }
+
+    pc_tundra = {
+        spawn_odds = 0.4
+    }
+
+    pc_arctic = {
+        spawn_odds = 0.4
+    }
+
+    spawn_odds = 20
+    class = m_star
+    pc_desert = {
+        spawn_odds = 0.4
+    }
+
+    planet = {
+        key = pc_m_star
+    }
+
+    pc_alpine = {
+        spawn_odds = 0.4
+    }
+
+    pc_savannah = {
+        spawn_odds = 0.4
+    }
+
+}
+
+sc_f {
+    planet = {
+        key = pc_f_star
+    }
+
+    spawn_odds = 15
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+    class = f_star
+}
+
+sc_b {
+    pc_ocean = {
+        spawn_odds = 0.6
+    }
+
+    pc_continental = {
+        spawn_odds = 0.6
+    }
+
+    spawn_odds = 10
+    pc_arid = {
+        spawn_odds = 0.6
+    }
+
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+    pc_savannah = {
+        spawn_odds = 0.6
+    }
+
+    planet = {
+        key = pc_b_star
+    }
+
+    pc_tropical = {
+        spawn_odds = 0.6
+    }
+
+    pc_arctic = {
+        spawn_odds = 0.6
+    }
+
+    pc_tundra = {
+        spawn_odds = 0.6
+    }
+
+    class = b_star
+    pc_desert = {
+        spawn_odds = 0.6
+    }
+
+    pc_alpine = {
+        spawn_odds = 0.6
+    }
+
+}
+
+sc_black_hole {
+    pc_alpine = {
+        spawn_odds = 0
+    }
+
+    pc_gaia = {
+        spawn_odds = 0
+    }
+
+    spawn_odds = 0.8
+    pc_arctic = {
+        spawn_odds = 0
+    }
+
+    num_planets = {
+        max = 4
+        min = 1
+    }
+
+    pc_continental = {
+        spawn_odds = 0
+    }
+
+    is_environmental_hazard = yes
+    pc_gas_giant = {
+        spawn_odds = 0
+    }
+
+    planet = {
+        key = pc_black_hole
+    }
+
+    pc_arid = {
+        spawn_odds = 0
+    }
+
+    class = black_hole
+    pc_ocean = {
+        spawn_odds = 0
+    }
+
+    icon_scale = 2
+    pc_tropical = {
+        spawn_odds = 0
+    }
+
+    pc_savannah = {
+        spawn_odds = 0
+    }
+
+    modifier = {
+        ship_emergency_ftl_min_days_mult = 0.5
+        ship_disengage_chance_reduction = 0.5
+    }
+
+    pc_tundra = {
+        spawn_odds = 0
+    }
+
+    pc_desert = {
+        spawn_odds = 0
+    }
+
+}
+
+sc_trinary_2 {
+    icon = a_trinary_star
+    planet = {
+        key = pc_b_star
+        class = b_star
+    }
+
+    planet = {
+        key = pc_a_star
+        class = a_star
+    }
+
+    planet = {
+        key = pc_f_star
+        class = f_star
+    }
+
+    class = b_star
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+    spawn_odds = 30
+}
+
+sc_binary_2 {
+    planet = {
+        key = pc_b_star
+        class = b_star
+    }
+
+    planet = {
+        key = pc_neutron_star
+        class = neutron_star
+    }
+
+    pc_alpine = {
+        spawn_odds = 0
+    }
+
+    pc_desert = {
+        spawn_odds = 0
+    }
+
+    is_environmental_hazard = yes
+    pc_arctic = {
+        spawn_odds = 0
+    }
+
+    icon = e_binary_star
+    pc_ocean = {
+        spawn_odds = 0
+    }
+
+    pc_tropical = {
+        spawn_odds = 0
+    }
+
+    spawn_odds = 5
+    class = b_star
+    pc_continental = {
+        spawn_odds = 0
+    }
+
+    pc_gaia = {
+        spawn_odds = 0
+    }
+
+    pc_arid = {
+        spawn_odds = 0
+    }
+
+    pc_savannah = {
+        spawn_odds = 0
+    }
+
+    pc_tundra = {
+        spawn_odds = 0
+    }
+
+    num_planets = {
+        min = 4
+        max = 10
+    }
+
+    modifier = {
+        ship_speed_reduction = 0.5
+    }
+
+}
+
+sc_binary_8 {
+    class = g_star
+    planet = {
+        key = pc_g_star
+        class = g_star
+    }
+
+    planet = {
+        class = f_star
+        key = pc_f_star
+    }
+
+    spawn_odds = 5
+    icon = d_binary_star
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+}
+
+sc_trinary_3 {
+    class = k_star
+    icon = a_trinary_star
+    planet = {
+        key = pc_k_star
+        class = k_star
+    }
+
+    planet = {
+        key = pc_f_star
+        class = f_star
+    }
+
+    planet = {
+        key = pc_g_star
+        class = g_star
+    }
+
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+    spawn_odds = 30
+}
+
+sc_m_giant {
+    pc_tundra = {
+        spawn_odds = 0.1
+    }
+
+    pc_continental = {
+        spawn_odds = 0.1
+    }
+
+    pc_desert = {
+        spawn_odds = 0.1
+    }
+
+    pc_arid = {
+        spawn_odds = 0.1
+    }
+
+    pc_ocean = {
+        spawn_odds = 0.1
+    }
+
+    pc_arctic = {
+        spawn_odds = 0.1
+    }
+
+    pc_tropical = {
+        spawn_odds = 0.1
+    }
+
+    pc_savannah = {
+        spawn_odds = 0.1
+    }
+
+    class = m_star
+    spawn_odds = 20
+    pc_alpine = {
+        spawn_odds = 0.1
+    }
+
+    planet = {
+        key = pc_m_giant_star
+    }
+
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+}
+
+sc_pulsar {
+    icon_scale = 2.25
+    pc_arid = {
+        spawn_odds = 0
+    }
+
+    planet = {
+        key = pc_pulsar
+    }
+
+    pc_ocean = {
+        spawn_odds = 0
+    }
+
+    pc_tundra = {
+        spawn_odds = 0
+    }
+
+    pc_desert = {
+        spawn_odds = 0
+    }
+
+    modifier = {
+        ship_shield_reduction = 1
+    }
+
+    pc_gaia = {
+        spawn_odds = 0
+    }
+
+    is_environmental_hazard = yes
+    class = pulsar
+    pc_arctic = {
+        spawn_odds = 0
+    }
+
+    pc_savannah = {
+        spawn_odds = 0
+    }
+
+    pc_alpine = {
+        spawn_odds = 0
+    }
+
+    spawn_odds = 0.4
+    num_planets = {
+        max = 4
+        min = 1
+    }
+
+    pc_continental = {
+        spawn_odds = 0
+    }
+
+    pc_tropical = {
+        spawn_odds = 0
+    }
+
+}
+
+sc_toxoid_star {
+    spawn_odds = 0
+    planet = {
+        key = pc_toxoid_star
+    }
+
+    class = toxoid_star
+    is_environmental_hazard = yes
+    modifier = {
+        ship_armor_reduction = 1
+    }
+
+    icon = x_star
+}
+
+sc_binary_5 {
+    planet = {
+        key = pc_b_star
+        class = b_star
+    }
+
+    planet = {
+        key = pc_b_star
+        class = b_star
+    }
+
+    spawn_odds = 5
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+    icon = a_binary_star
+    class = b_star
+}
+
+sc_a {
+    pc_tropical = {
+        spawn_odds = 0.6
+    }
+
+    pc_tundra = {
+        spawn_odds = 0.6
+    }
+
+    num_planets = {
+        min = 4
+        max = 10
+    }
+
+    pc_arctic = {
+        spawn_odds = 0.6
+    }
+
+    pc_alpine = {
+        spawn_odds = 0.6
+    }
+
+    planet = {
+        key = pc_a_star
+    }
+
+    pc_ocean = {
+        spawn_odds = 0.6
+    }
+
+    pc_desert = {
+        spawn_odds = 0.6
+    }
+
+    pc_savannah = {
+        spawn_odds = 0.6
+    }
+
+    spawn_odds = 10
+    class = a_star
+    pc_continental = {
+        spawn_odds = 0.6
+    }
+
+    pc_arid = {
+        spawn_odds = 0.6
+    }
+
+}
+
+sc_binary_3 {
+    pc_desert = {
+        spawn_odds = 0
+    }
+
+    pc_alpine = {
+        spawn_odds = 0
+    }
+
+    pc_arctic = {
+        spawn_odds = 0
+    }
+
+    pc_savannah = {
+        spawn_odds = 0
+    }
+
+    pc_continental = {
+        spawn_odds = 0
+    }
+
+    class = m_star
+    pc_arid = {
+        spawn_odds = 0
+    }
+
+    pc_ocean = {
+        spawn_odds = 0
+    }
+
+    pc_gaia = {
+        spawn_odds = 0
+    }
+
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+    pc_tropical = {
+        spawn_odds = 0
+    }
+
+    pc_tundra = {
+        spawn_odds = 0
+    }
+
+    planet = {
+        class = m_star
+        key = pc_m_giant_star
+    }
+
+    planet = {
+        class = b_star
+        key = pc_b_star
+    }
+
+    icon = c_binary_star
+    spawn_odds = 5
+}
+
+sc_trinary_1 {
+    planet = {
+        class = g_star
+        key = pc_g_star
+    }
+
+    planet = {
+        class = m_star
+        key = pc_m_star
+    }
+
+    planet = {
+        class = k_star
+        key = pc_k_star
+    }
+
+    icon = a_trinary_star
+    class = g_star
+    spawn_odds = 30
+    num_planets = {
+        min = 4
+        max = 10
+    }
+
+}
+
+sc_binary_6 {
+    planet = {
+        key = pc_m_star
+        class = m_star
+    }
+
+    planet = {
+        key = pc_g_star
+        class = g_star
+    }
+
+    class = m_star
+    icon = d_binary_star
+    spawn_odds = 5
+    num_planets = {
+        max = 10
+        min = 4
+    }
+
+}
+
+sc_neutron_star {
+    pc_continental = {
+        spawn_odds = 0
+    }
+
+    icon_scale = 1.5
+    pc_arid = {
+        spawn_odds = 0
+    }
+
+    pc_tropical = {
+        spawn_odds = 0
+    }
+
+    num_planets = {
+        min = 1
+        max = 4
+    }
+
+    class = neutron_star
+    spawn_odds = 0.4
+    is_environmental_hazard = yes
+    pc_gaia = {
+        spawn_odds = 0
+    }
+
+    pc_desert = {
+        spawn_odds = 0
+    }
+
+    planet = {
+        key = pc_neutron_star
+    }
+
+    pc_ocean = {
+        spawn_odds = 0
+    }
+
+    pc_arctic = {
+        spawn_odds = 0
+    }
+
+    modifier = {
+        ship_speed_reduction = 0.5
+    }
+
+    pc_tundra = {
+        spawn_odds = 0
+    }
+
+    pc_alpine = {
+        spawn_odds = 0
+    }
+
+    pc_savannah = {
+        spawn_odds = 0
+    }
+
+}
+

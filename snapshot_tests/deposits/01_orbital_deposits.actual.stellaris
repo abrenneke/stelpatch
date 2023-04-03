@@ -1,0 +1,1835 @@
+d_minerals_1 {
+    resources = {
+        produces = {
+            minerals = 1
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    station = shipclass_mining_station
+    is_for_colonizable = no
+    potential = {
+        can_have_mineral_deposits = yes
+    }
+
+}
+
+d_society_1 {
+    drop_weight = {
+        weight = 0
+    }
+
+    resources = {
+        produces = {
+            society_research = 1
+        }
+
+        category = orbital_research_deposits
+    }
+
+    is_for_colonizable = no
+    station = shipclass_research_station
+    potential = {
+        can_have_society_deposits = yes
+    }
+
+}
+
+d_minerals_2 {
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            minerals = 2
+        }
+
+    }
+
+    is_for_colonizable = no
+    potential = {
+        can_have_mineral_deposits = yes
+    }
+
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 5
+        modifier = {
+            factor = 0.5
+            OR = {
+                is_planet_class = pc_molten
+                is_planet_class = pc_toxic
+                is_planet_class = pc_frozen
+            }
+
+        }
+
+        modifier = {
+            factor = 2
+            is_asteroid = yes
+        }
+
+    }
+
+}
+
+d_society_7 {
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            society_research = 7
+        }
+
+    }
+
+    potential = {
+        always = no
+    }
+
+    station = shipclass_research_station
+}
+
+d_alloys_1 {
+    drop_weight = {
+        modifier = {
+            is_inside_nebula = yes
+            factor = 1.5
+        }
+
+        weight = 2
+    }
+
+    is_for_colonizable = no
+    station = shipclass_mining_station
+    resources = {
+        produces = {
+            alloys = 1
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    potential = {
+        OR = {
+            is_planet_class = pc_asteroid
+            is_planet_class = pc_molten
+        }
+
+    }
+
+}
+
+d_alloys_3 {
+    resources = {
+        produces = {
+            alloys = 3
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+}
+
+d_alloys_5 {
+    drop_weight = {
+        weight = 0
+    }
+
+    potential = {
+        always = no
+    }
+
+    station = shipclass_mining_station
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            alloys = 5
+        }
+
+    }
+
+    is_for_colonizable = no
+}
+
+d_society_2 {
+    station = shipclass_research_station
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            society_research = 2
+        }
+
+    }
+
+    drop_weight = {
+        weight = 5
+    }
+
+    is_for_colonizable = no
+    potential = {
+        can_have_society_deposits = yes
+    }
+
+}
+
+d_trade_value_6 {
+    is_for_colonizable = no
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 0
+    }
+
+    potential = {
+        always = no
+    }
+
+    planet_modifier = {
+        trade_value_add = 6
+    }
+
+}
+
+d_energy_9 {
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 0
+    }
+
+    potential = {
+        always = no
+    }
+
+    is_for_colonizable = no
+    resources = {
+        produces = {
+            energy = 9
+        }
+
+        category = orbital_mining_deposits
+    }
+
+}
+
+d_society_4 {
+    potential = {
+        can_have_society_deposits = yes
+    }
+
+    resources = {
+        produces = {
+            society_research = 4
+        }
+
+        category = orbital_research_deposits
+    }
+
+    drop_weight = {
+        weight = 0.5
+    }
+
+    station = shipclass_research_station
+    is_for_colonizable = no
+}
+
+d_engineering_1 {
+    station = shipclass_research_station
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+    resources = {
+        produces = {
+            engineering_research = 1
+        }
+
+        category = orbital_research_deposits
+    }
+
+    potential = {
+        can_have_minor_engineering_deposits = yes
+    }
+
+}
+
+d_alloys_2 {
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            alloys = 2
+        }
+
+    }
+
+    potential = {
+        is_planet_class = pc_asteroid
+    }
+
+    station = shipclass_mining_station
+    drop_weight = {
+        modifier = {
+            is_inside_nebula = yes
+            factor = 1.5
+        }
+
+        weight = 0.5
+    }
+
+    is_for_colonizable = no
+}
+
+d_trade_value_1 {
+    drop_weight = {
+        weight = 0
+    }
+
+    station = shipclass_mining_station
+    planet_modifier = {
+        trade_value_add = 1
+    }
+
+    potential = {
+        can_have_trade_deposits = yes
+    }
+
+    is_for_colonizable = no
+}
+
+d_physics_3 {
+    station = shipclass_research_station
+    potential = {
+        can_have_physics_deposits = yes
+    }
+
+    drop_weight = {
+        weight = 0.5
+        modifier = {
+            OR = {
+                is_planet_class = pc_neutron_star
+                is_planet_class = pc_pulsar
+                is_planet_class = pc_black_hole
+            }
+
+            factor = 5
+        }
+
+        modifier = {
+            factor = 1.5
+            OR = {
+                is_planet_class = pc_k_star
+                is_planet_class = pc_m_star
+                is_planet_class = pc_m_giant_star
+                is_planet_class = pc_t_star
+            }
+
+        }
+
+        modifier = {
+            factor = 2
+            OR = {
+                is_planet_class = pc_f_star
+                is_planet_class = pc_g_star
+            }
+
+        }
+
+        modifier = {
+            factor = 3
+            OR = {
+                is_planet_class = pc_a_star
+                is_planet_class = pc_b_star
+            }
+
+        }
+
+    }
+
+    resources = {
+        produces = {
+            physics_research = 3
+        }
+
+        category = orbital_research_deposits
+    }
+
+    is_for_colonizable = no
+}
+
+d_energy_10 {
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            energy = 10
+        }
+
+    }
+
+    potential = {
+        always = no
+    }
+
+    station = shipclass_mining_station
+    is_for_colonizable = no
+    drop_weight = {
+        weight = 0
+    }
+
+}
+
+d_minerals_6 {
+    station = shipclass_mining_station
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            minerals = 6
+        }
+
+    }
+
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+}
+
+d_trade_value_9 {
+    potential = {
+        always = no
+    }
+
+    is_for_colonizable = no
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 0
+    }
+
+    planet_modifier = {
+        trade_value_add = 9
+    }
+
+}
+
+d_engineering_3 {
+    potential = {
+        can_have_engineering_deposits = yes
+    }
+
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            engineering_research = 3
+        }
+
+    }
+
+    station = shipclass_research_station
+    is_for_colonizable = no
+    drop_weight = {
+        weight = 1
+        modifier = {
+            factor = 5
+            OR = {
+                is_planet_class = pc_neutron_star
+                is_planet_class = pc_pulsar
+                is_planet_class = pc_black_hole
+            }
+
+        }
+
+    }
+
+}
+
+d_physics_2 {
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            physics_research = 2
+        }
+
+    }
+
+    potential = {
+        can_have_minor_physics_deposits = yes
+    }
+
+    station = shipclass_research_station
+    is_for_colonizable = no
+    drop_weight = {
+        modifier = {
+            OR = {
+                is_planet_class = pc_k_star
+                is_planet_class = pc_m_star
+                is_planet_class = pc_m_giant_star
+                is_planet_class = pc_t_star
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            factor = 2
+            OR = {
+                is_planet_class = pc_f_star
+                is_planet_class = pc_g_star
+            }
+
+        }
+
+        modifier = {
+            factor = 3
+            OR = {
+                is_planet_class = pc_a_star
+                is_planet_class = pc_b_star
+            }
+
+        }
+
+        weight = 1
+    }
+
+}
+
+d_society_6 {
+    potential = {
+        always = no
+    }
+
+    is_for_colonizable = no
+    resources = {
+        produces = {
+            society_research = 6
+        }
+
+        category = orbital_research_deposits
+    }
+
+    station = shipclass_research_station
+    drop_weight = {
+        weight = 0
+    }
+
+}
+
+d_food_10 {
+    is_for_colonizable = no
+    resources = {
+        produces = {
+            food = 10
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    station = shipclass_mining_station
+    potential = {
+        always = no
+    }
+
+}
+
+d_energy_6 {
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            energy = 6
+        }
+
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    station = shipclass_mining_station
+}
+
+d_alloys_10 {
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 0
+    }
+
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            alloys = 10
+        }
+
+    }
+
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+}
+
+d_society_3 {
+    resources = {
+        produces = {
+            society_research = 3
+        }
+
+        category = orbital_research_deposits
+    }
+
+    is_for_colonizable = no
+    potential = {
+        can_have_society_deposits = yes
+    }
+
+    drop_weight = {
+        weight = 2.5
+    }
+
+    station = shipclass_research_station
+}
+
+d_engineering_10 {
+    drop_weight = {
+        weight = 0
+    }
+
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            engineering_research = 10
+        }
+
+    }
+
+    station = shipclass_research_station
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+}
+
+d_energy_8 {
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            energy = 8
+        }
+
+    }
+
+    station = shipclass_mining_station
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+}
+
+d_alloys_4 {
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    station = shipclass_mining_station
+    is_for_colonizable = no
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            alloys = 4
+        }
+
+    }
+
+}
+
+d_trade_value_4 {
+    potential = {
+        can_have_trade_deposits = yes
+    }
+
+    drop_weight = {
+        weight = 1
+        modifier = {
+            factor = 0.5
+            is_planet_class = pc_molten
+        }
+
+        modifier = {
+            factor = 2
+            is_asteroid = yes
+        }
+
+    }
+
+    is_for_colonizable = no
+    planet_modifier = {
+        trade_value_add = 4
+    }
+
+    station = shipclass_mining_station
+}
+
+d_minerals_10 {
+    resources = {
+        produces = {
+            minerals = 10
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    station = shipclass_mining_station
+}
+
+d_society_5 {
+    potential = {
+        can_have_society_deposits = yes
+    }
+
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            society_research = 5
+        }
+
+    }
+
+    drop_weight = {
+        weight = 0.1
+    }
+
+    station = shipclass_research_station
+    is_for_colonizable = no
+}
+
+d_energy_4 {
+    resources = {
+        produces = {
+            energy = 4
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    is_for_colonizable = no
+    potential = {
+        can_have_energy_deposits = yes
+    }
+
+    drop_weight = {
+        weight = 1
+        modifier = {
+            OR = {
+                is_planet_class = pc_k_star
+                is_planet_class = pc_m_star
+                is_planet_class = pc_m_giant_star
+                is_planet_class = pc_t_star
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            OR = {
+                is_planet_class = pc_f_star
+                is_planet_class = pc_g_star
+            }
+
+            factor = 1.25
+        }
+
+        modifier = {
+            OR = {
+                is_planet_class = pc_a_star
+                is_planet_class = pc_b_star
+            }
+
+            factor = 0.5
+        }
+
+        modifier = {
+            is_planet_class = pc_gas_giant
+            factor = 2
+        }
+
+    }
+
+    station = shipclass_mining_station
+}
+
+d_alloys_25 {
+    station = shipclass_mining_station
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            alloys = 25
+        }
+
+    }
+
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+}
+
+d_society_9 {
+    drop_weight = {
+        weight = 0
+    }
+
+    station = shipclass_research_station
+    is_for_colonizable = no
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            society_research = 9
+        }
+
+    }
+
+    potential = {
+        always = no
+    }
+
+}
+
+d_engineering_4 {
+    is_for_colonizable = no
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            engineering_research = 4
+        }
+
+    }
+
+    station = shipclass_research_station
+    potential = {
+        can_have_engineering_deposits = yes
+    }
+
+    drop_weight = {
+        modifier = {
+            OR = {
+                is_planet_class = pc_neutron_star
+                is_planet_class = pc_pulsar
+                is_planet_class = pc_black_hole
+            }
+
+            factor = 5
+        }
+
+        weight = 0.2
+    }
+
+}
+
+d_energy_2 {
+    station = shipclass_mining_station
+    is_for_colonizable = no
+    potential = {
+        can_have_energy_deposits = yes
+    }
+
+    drop_weight = {
+        modifier = {
+            OR = {
+                is_planet_class = pc_k_star
+                is_planet_class = pc_m_star
+                is_planet_class = pc_m_giant_star
+                is_planet_class = pc_t_star
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            factor = 1.25
+            OR = {
+                is_planet_class = pc_f_star
+                is_planet_class = pc_g_star
+            }
+
+        }
+
+        modifier = {
+            factor = 0.5
+            OR = {
+                is_planet_class = pc_a_star
+                is_planet_class = pc_b_star
+            }
+
+        }
+
+        modifier = {
+            factor = 2
+            is_planet_class = pc_gas_giant
+        }
+
+        weight = 5
+    }
+
+    resources = {
+        produces = {
+            energy = 2
+        }
+
+        category = orbital_mining_deposits
+    }
+
+}
+
+d_engineering_9 {
+    resources = {
+        produces = {
+            engineering_research = 9
+        }
+
+        category = orbital_research_deposits
+    }
+
+    station = shipclass_research_station
+    drop_weight = {
+        weight = 0
+    }
+
+    potential = {
+        always = no
+    }
+
+    is_for_colonizable = no
+}
+
+d_trade_value_5 {
+    station = shipclass_mining_station
+    planet_modifier = {
+        trade_value_add = 5
+    }
+
+    potential = {
+        can_have_trade_deposits = yes
+    }
+
+    drop_weight = {
+        modifier = {
+            is_planet_class = pc_molten
+            factor = 0.5
+        }
+
+        modifier = {
+            factor = 2
+            is_asteroid = yes
+        }
+
+        weight = 0.1
+    }
+
+    is_for_colonizable = no
+}
+
+d_physics_9 {
+    station = shipclass_research_station
+    potential = {
+        always = no
+    }
+
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            physics_research = 9
+        }
+
+    }
+
+    is_for_colonizable = no
+    drop_weight = {
+        weight = 0
+    }
+
+}
+
+d_food_3 {
+    drop_weight = {
+        weight = 0
+    }
+
+    resources = {
+        produces = {
+            food = 3
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    potential = {
+        always = no
+    }
+
+    station = shipclass_mining_station
+    is_for_colonizable = no
+}
+
+d_energy_3 {
+    drop_weight = {
+        weight = 2.5
+        modifier = {
+            factor = 1.5
+            OR = {
+                is_planet_class = pc_k_star
+                is_planet_class = pc_m_star
+                is_planet_class = pc_m_giant_star
+                is_planet_class = pc_t_star
+            }
+
+        }
+
+        modifier = {
+            factor = 1.25
+            OR = {
+                is_planet_class = pc_f_star
+                is_planet_class = pc_g_star
+            }
+
+        }
+
+        modifier = {
+            OR = {
+                is_planet_class = pc_a_star
+                is_planet_class = pc_b_star
+            }
+
+            factor = 0.5
+        }
+
+        modifier = {
+            is_planet_class = pc_gas_giant
+            factor = 2
+        }
+
+    }
+
+    resources = {
+        produces = {
+            energy = 3
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    is_for_colonizable = no
+    station = shipclass_mining_station
+    potential = {
+        can_have_energy_deposits = yes
+    }
+
+}
+
+d_physics_8 {
+    station = shipclass_research_station
+    resources = {
+        produces = {
+            physics_research = 8
+        }
+
+        category = orbital_research_deposits
+    }
+
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+}
+
+d_engineering_7 {
+    is_for_colonizable = no
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            engineering_research = 7
+        }
+
+    }
+
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    station = shipclass_research_station
+}
+
+d_minerals_4 {
+    resources = {
+        produces = {
+            minerals = 4
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    drop_weight = {
+        weight = 1
+        modifier = {
+            factor = 0.5
+            OR = {
+                is_planet_class = pc_molten
+                is_planet_class = pc_toxic
+                is_planet_class = pc_frozen
+            }
+
+        }
+
+        modifier = {
+            is_asteroid = yes
+            factor = 2
+        }
+
+    }
+
+    potential = {
+        can_have_mineral_deposits = yes
+    }
+
+    station = shipclass_mining_station
+    is_for_colonizable = no
+}
+
+d_physics_4 {
+    resources = {
+        produces = {
+            physics_research = 4
+        }
+
+        category = orbital_research_deposits
+    }
+
+    drop_weight = {
+        modifier = {
+            OR = {
+                is_planet_class = pc_neutron_star
+                is_planet_class = pc_pulsar
+                is_planet_class = pc_black_hole
+            }
+
+            factor = 5
+        }
+
+        modifier = {
+            factor = 1.5
+            OR = {
+                is_planet_class = pc_k_star
+                is_planet_class = pc_m_star
+                is_planet_class = pc_m_giant_star
+                is_planet_class = pc_t_star
+            }
+
+        }
+
+        modifier = {
+            factor = 2
+            OR = {
+                is_planet_class = pc_f_star
+                is_planet_class = pc_g_star
+            }
+
+        }
+
+        modifier = {
+            OR = {
+                is_planet_class = pc_a_star
+                is_planet_class = pc_b_star
+            }
+
+            factor = 3
+        }
+
+        weight = 0.05
+    }
+
+    station = shipclass_research_station
+    is_for_colonizable = no
+    potential = {
+        can_have_physics_deposits = yes
+    }
+
+}
+
+d_energy_7 {
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            energy = 7
+        }
+
+    }
+
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 0
+    }
+
+}
+
+d_physics_1 {
+    is_for_colonizable = no
+    potential = {
+        can_have_minor_physics_deposits = yes
+    }
+
+    station = shipclass_research_station
+    resources = {
+        produces = {
+            physics_research = 1
+        }
+
+        category = orbital_research_deposits
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+}
+
+d_engineering_8 {
+    station = shipclass_research_station
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            engineering_research = 8
+        }
+
+    }
+
+    potential = {
+        always = no
+    }
+
+    is_for_colonizable = no
+    drop_weight = {
+        weight = 0
+    }
+
+}
+
+d_trade_value_7 {
+    station = shipclass_mining_station
+    planet_modifier = {
+        trade_value_add = 7
+    }
+
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+}
+
+d_trade_value_8 {
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    planet_modifier = {
+        trade_value_add = 8
+    }
+
+    station = shipclass_mining_station
+    is_for_colonizable = no
+}
+
+d_minerals_9 {
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 0
+    }
+
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            minerals = 9
+        }
+
+    }
+
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+}
+
+d_physics_5 {
+    drop_weight = {
+        weight = 0.01
+        modifier = {
+            factor = 5
+            OR = {
+                is_planet_class = pc_neutron_star
+                is_planet_class = pc_pulsar
+                is_planet_class = pc_black_hole
+            }
+
+        }
+
+        modifier = {
+            OR = {
+                is_planet_class = pc_k_star
+                is_planet_class = pc_m_star
+                is_planet_class = pc_m_giant_star
+                is_planet_class = pc_t_star
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            OR = {
+                is_planet_class = pc_f_star
+                is_planet_class = pc_g_star
+            }
+
+            factor = 2
+        }
+
+        modifier = {
+            factor = 3
+            OR = {
+                is_planet_class = pc_a_star
+                is_planet_class = pc_b_star
+            }
+
+        }
+
+    }
+
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            physics_research = 5
+        }
+
+    }
+
+    potential = {
+        can_have_physics_deposits = yes
+    }
+
+    is_for_colonizable = no
+    station = shipclass_research_station
+}
+
+d_minerals_3 {
+    potential = {
+        can_have_mineral_deposits = yes
+    }
+
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 2.5
+        modifier = {
+            factor = 0.5
+            OR = {
+                is_planet_class = pc_molten
+                is_planet_class = pc_toxic
+                is_planet_class = pc_frozen
+            }
+
+        }
+
+        modifier = {
+            is_asteroid = yes
+            factor = 2
+        }
+
+    }
+
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            minerals = 3
+        }
+
+    }
+
+    is_for_colonizable = no
+}
+
+d_energy_1 {
+    potential = {
+        can_have_energy_deposits = yes
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            energy = 1
+        }
+
+    }
+
+    station = shipclass_mining_station
+}
+
+d_trade_value_10 {
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+    station = shipclass_mining_station
+    planet_modifier = {
+        trade_value_add = 10
+    }
+
+}
+
+d_society_10 {
+    is_for_colonizable = no
+    drop_weight = {
+        weight = 0
+    }
+
+    station = shipclass_research_station
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            society_research = 10
+        }
+
+    }
+
+    potential = {
+        always = no
+    }
+
+}
+
+d_society_8 {
+    station = shipclass_research_station
+    drop_weight = {
+        weight = 0
+    }
+
+    potential = {
+        always = no
+    }
+
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            society_research = 8
+        }
+
+    }
+
+    is_for_colonizable = no
+}
+
+d_trade_value_3 {
+    potential = {
+        can_have_trade_deposits = yes
+    }
+
+    drop_weight = {
+        weight = 2.5
+        modifier = {
+            is_planet_class = pc_molten
+            factor = 0.5
+        }
+
+        modifier = {
+            factor = 2
+            is_asteroid = yes
+        }
+
+    }
+
+    station = shipclass_mining_station
+    planet_modifier = {
+        trade_value_add = 3
+    }
+
+    is_for_colonizable = no
+}
+
+d_minerals_5 {
+    potential = {
+        can_have_mineral_deposits = yes
+    }
+
+    resources = {
+        produces = {
+            minerals = 5
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    drop_weight = {
+        weight = 0.1
+        modifier = {
+            factor = 0.5
+            OR = {
+                is_planet_class = pc_molten
+                is_planet_class = pc_toxic
+                is_planet_class = pc_frozen
+            }
+
+        }
+
+        modifier = {
+            is_asteroid = yes
+            factor = 2
+        }
+
+    }
+
+    station = shipclass_mining_station
+    is_for_colonizable = no
+}
+
+d_physics_10 {
+    resources = {
+        produces = {
+            physics_research = 10
+        }
+
+        category = orbital_research_deposits
+    }
+
+    station = shipclass_research_station
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+}
+
+d_physics_6 {
+    potential = {
+        always = no
+    }
+
+    station = shipclass_research_station
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            physics_research = 6
+        }
+
+    }
+
+}
+
+d_minerals_7 {
+    station = shipclass_mining_station
+    potential = {
+        always = no
+    }
+
+    drop_weight = {
+        weight = 0
+    }
+
+    resources = {
+        produces = {
+            minerals = 7
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    is_for_colonizable = no
+}
+
+d_energy_5 {
+    resources = {
+        category = orbital_mining_deposits
+        produces = {
+            energy = 5
+        }
+
+    }
+
+    station = shipclass_mining_station
+    potential = {
+        can_have_energy_deposits = yes
+    }
+
+    is_for_colonizable = no
+    drop_weight = {
+        weight = 0.1
+        modifier = {
+            OR = {
+                is_planet_class = pc_k_star
+                is_planet_class = pc_m_star
+                is_planet_class = pc_m_giant_star
+                is_planet_class = pc_t_star
+            }
+
+            factor = 1.5
+        }
+
+        modifier = {
+            factor = 1.25
+            OR = {
+                is_planet_class = pc_f_star
+                is_planet_class = pc_g_star
+            }
+
+        }
+
+        modifier = {
+            factor = 0.5
+            OR = {
+                is_planet_class = pc_a_star
+                is_planet_class = pc_b_star
+            }
+
+        }
+
+        modifier = {
+            factor = 2
+            is_planet_class = pc_gas_giant
+        }
+
+    }
+
+}
+
+d_engineering_2 {
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            engineering_research = 2
+        }
+
+    }
+
+    drop_weight = {
+        weight = 2
+    }
+
+    potential = {
+        can_have_minor_engineering_deposits = yes
+    }
+
+    is_for_colonizable = no
+    station = shipclass_research_station
+}
+
+d_engineering_5 {
+    potential = {
+        can_have_engineering_deposits = yes
+    }
+
+    station = shipclass_research_station
+    is_for_colonizable = no
+    resources = {
+        produces = {
+            engineering_research = 5
+        }
+
+        category = orbital_research_deposits
+    }
+
+    drop_weight = {
+        weight = 0.05
+        modifier = {
+            OR = {
+                is_planet_class = pc_neutron_star
+                is_planet_class = pc_pulsar
+                is_planet_class = pc_black_hole
+            }
+
+            factor = 5
+        }
+
+    }
+
+}
+
+d_engineering_6 {
+    drop_weight = {
+        weight = 0
+    }
+
+    station = shipclass_research_station
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            engineering_research = 6
+        }
+
+    }
+
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+}
+
+d_physics_7 {
+    resources = {
+        category = orbital_research_deposits
+        produces = {
+            physics_research = 7
+        }
+
+    }
+
+    is_for_colonizable = no
+    potential = {
+        always = no
+    }
+
+    station = shipclass_research_station
+    drop_weight = {
+        weight = 0
+    }
+
+}
+
+d_trade_value_2 {
+    planet_modifier = {
+        trade_value_add = 2
+    }
+
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 5
+        modifier = {
+            is_planet_class = pc_molten
+            factor = 0.5
+        }
+
+        modifier = {
+            factor = 2
+            is_asteroid = yes
+        }
+
+    }
+
+    is_for_colonizable = no
+    potential = {
+        can_have_trade_deposits = yes
+    }
+
+}
+
+d_minerals_8 {
+    resources = {
+        produces = {
+            minerals = 8
+        }
+
+        category = orbital_mining_deposits
+    }
+
+    potential = {
+        always = no
+    }
+
+    station = shipclass_mining_station
+    drop_weight = {
+        weight = 0
+    }
+
+    is_for_colonizable = no
+}
+

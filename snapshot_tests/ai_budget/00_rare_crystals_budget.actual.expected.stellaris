@@ -1,0 +1,225 @@
+rare_crystals_expenditure_upgrade {
+    category = ship_upgrades
+    type = expenditure
+    weight = {
+        base = 0.1
+    }
+
+    resource = rare_crystals
+    potential = {
+        always = yes
+    }
+
+}
+
+rare_crystals_expenditure_trade {
+    type = expenditure
+    category = trade
+    potential = {
+        always = yes
+    }
+
+    resource = rare_crystals
+    weight = {
+        weight = 0.1
+    }
+
+}
+
+rare_crystals_upkeep_ships {
+    type = upkeep
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.1
+    }
+
+    resource = rare_crystals
+    category = ships
+}
+
+rare_crystals_upkeep_hyper_relays {
+    type = upkeep
+    category = megastructures_hyper_relay
+    potential = {
+        has_technology = tech_hyper_relays
+    }
+
+    resource = rare_crystals
+    weight = {
+        weight = 0.1
+    }
+
+}
+
+rare_crystals_upkeep_starbases {
+    type = upkeep
+    category = starbases
+    resource = rare_crystals
+    weight = {
+        weight = 0.1
+    }
+
+    potential = {
+        any_owned_nonprimary_starbase = {
+            has_starbase_size >= orbital_ring_tier_2
+            exists = planet
+        }
+
+    }
+
+}
+
+rare_crystals_upkeep_planets {
+    category = planets
+    potential = {
+        always = yes
+    }
+
+    type = upkeep
+    resource = rare_crystals
+    weight = {
+        weight = 0.9
+    }
+
+}
+
+rare_crystals_upkeep_edicts {
+    weight = {
+        base = 0.25
+    }
+
+    category = edicts
+    potential = {
+        always = yes
+    }
+
+    resource = rare_crystals
+    type = upkeep
+}
+
+rare_crystals_expenditure_ships {
+    resource = rare_crystals
+    category = ships
+    type = expenditure
+    weight = {
+        modifier = {
+            is_dragon_breeder_country = yes
+            factor = 5
+        }
+
+        weight = 0.1
+    }
+
+    potential = {
+        always = yes
+    }
+
+}
+
+rare_crystals_expenditure_starbases {
+    potential = {
+        any_owned_nonprimary_starbase = {
+            has_starbase_size >= orbital_ring_tier_2
+            exists = planet
+        }
+
+    }
+
+    category = starbases
+    type = expenditure
+    weight = {
+        weight = 0.2
+        modifier = {
+            NOT = {
+                any_owned_nonprimary_starbase = {
+                    OR = {
+                        AND = {
+                            count_starbase_buildings = {
+                                count = 0
+                            }
+
+                            has_starbase_size = orbital_ring_tier_2
+                        }
+
+                        AND = {
+                            has_starbase_size = orbital_ring_tier_3
+                            count_starbase_buildings = {
+                                count < 2
+                            }
+
+                        }
+
+                    }
+
+                    exists = planet
+                }
+
+            }
+
+            factor = 0
+        }
+
+    }
+
+    resource = rare_crystals
+}
+
+rare_crystals_expenditure_planets {
+    type = expenditure
+    potential = {
+        always = yes
+    }
+
+    resource = rare_crystals
+    weight = {
+        weight = 0.2
+    }
+
+    category = planets
+}
+
+rare_crystals_expenditure_hyper_relays {
+    category = megastructures_hyper_relay
+    resource = rare_crystals
+    desired_min = {
+        base = 100
+    }
+
+    desired_max = {
+        base = 100
+    }
+
+    weight = {
+        weight = 0.5
+    }
+
+    potential = {
+        any_system_within_border = {
+            NOR = {
+                has_megastructure = hyper_relay
+                has_megastructure = hyper_relay_restored
+            }
+
+            OR = {
+                is_capital_system = yes
+                any_neighbor_system = {
+                    OR = {
+                        has_megastructure = hyper_relay
+                        has_megastructure = hyper_relay_restored
+                    }
+
+                }
+
+            }
+
+        }
+
+        has_technology = tech_hyper_relays
+    }
+
+    type = expenditure
+}
+

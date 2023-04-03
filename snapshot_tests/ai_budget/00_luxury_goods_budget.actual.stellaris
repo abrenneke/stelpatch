@@ -1,0 +1,110 @@
+consumer_goods_upkeep_country {
+    type = upkeep
+    category = country
+    resource = consumer_goods
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.9
+    }
+
+}
+
+consumer_goods_expenditure_buffer {
+    resource = consumer_goods
+    weight = {
+        weight = 0.4
+    }
+
+    category = buffer
+    potential = {
+        always = yes
+    }
+
+    type = expenditure
+}
+
+consumer_goods_expenditure_decisions {
+    potential = {
+        always = yes
+    }
+
+    category = decisions
+    weight = {
+        weight = 0.2
+    }
+
+    type = expenditure
+    resource = consumer_goods
+}
+
+consumer_goods_expenditure_colonies_expand {
+    weight = {
+        weight = 0.5
+    }
+
+    category = colonies
+    type = expenditure
+    potential = {
+        is_regular_empire = yes
+        ai_colonize_plans > 0
+        OR = {
+            AND = {
+                is_lithoid_empire = no
+                has_resource = {
+                    amount > 400
+                    type = food
+                }
+
+                has_monthly_income = {
+                    value > 0
+                    resource = food
+                }
+
+            }
+
+            AND = {
+                has_resource = {
+                    type = minerals
+                    amount > 400
+                }
+
+                is_lithoid_empire = yes
+                has_monthly_income = {
+                    value > 0
+                    resource = minerals
+                }
+
+            }
+
+        }
+
+    }
+
+    resource = consumer_goods
+    desired_max = {
+        base = 250
+    }
+
+    desired_min = {
+        base = 200
+    }
+
+}
+
+consumer_goods_upkeep_buffer {
+    potential = {
+        always = yes
+    }
+
+    weight = {
+        weight = 0.1
+    }
+
+    resource = consumer_goods
+    category = buffer
+    type = upkeep
+}
+

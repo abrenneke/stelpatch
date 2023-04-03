@@ -1,0 +1,430 @@
+defined_text {
+    random = no
+    name = GetLeviathanParadeName
+    text = {
+        trigger = {
+            owner = {
+                has_ethic = ethic_fanatic_xenophobe
+            }
+
+        }
+
+        localization_key = xenophobe_parade
+    }
+
+    text = {
+        trigger = {
+            is_situation_leviathan_biological = yes
+            owner = {
+                has_ethic = ethic_fanatic_xenophile
+            }
+
+        }
+
+        localization_key = xenophile_biological_parade
+    }
+
+    text = {
+        localization_key = xenophile_mechanical_parade
+        trigger = {
+            is_situation_leviathan_biological = no
+            owner = {
+                has_ethic = ethic_fanatic_xenophile
+            }
+
+        }
+
+    }
+
+    text = {
+        trigger = {
+            is_situation_leviathan_biological = yes
+            owner = {
+                has_ethic = ethic_fanatic_materialist
+                has_country_flag = materialist_science
+            }
+
+        }
+
+        localization_key = materialist_biological_parade_science
+    }
+
+    text = {
+        localization_key = materialist_biological_parade_trophy
+        trigger = {
+            owner = {
+                has_country_flag = materialist_trophy
+                has_ethic = ethic_fanatic_materialist
+            }
+
+            is_situation_leviathan_biological = yes
+        }
+
+    }
+
+    text = {
+        localization_key = materialist_mechanical_parade
+        trigger = {
+            owner = {
+                has_ethic = ethic_fanatic_materialist
+            }
+
+            is_situation_leviathan_biological = no
+        }
+
+    }
+
+    text = {
+        trigger = {
+            is_situation_leviathan_biological = yes
+            owner = {
+                has_ethic = ethic_fanatic_spiritualist
+                has_country_flag = spiritualist_reject
+            }
+
+        }
+
+        localization_key = spiritualist_biological_parade_reject
+    }
+
+    text = {
+        localization_key = spiritualist_biological_parade_accept
+        trigger = {
+            owner = {
+                has_country_flag = spiritualist_accept
+                has_ethic = ethic_fanatic_spiritualist
+            }
+
+            is_situation_leviathan_biological = yes
+        }
+
+    }
+
+    text = {
+        trigger = {
+            owner = {
+                has_ethic = ethic_fanatic_spiritualist
+            }
+
+            is_situation_leviathan_biological = no
+        }
+
+        localization_key = spiritualist_mechanical_parade
+    }
+
+    text = {
+        localization_key = authoritarian_parade
+        trigger = {
+            owner = {
+                has_ethic = ethic_fanatic_authoritarian
+            }
+
+        }
+
+    }
+
+    text = {
+        trigger = {
+            is_situation_leviathan_biological = yes
+            owner = {
+                has_ethic = ethic_fanatic_egalitarian
+            }
+
+        }
+
+        localization_key = egalitarian_biological_parade
+    }
+
+    text = {
+        localization_key = egalitarian_mechanical_parade
+        trigger = {
+            is_situation_leviathan_biological = no
+            owner = {
+                has_ethic = ethic_fanatic_egalitarian
+            }
+
+        }
+
+    }
+
+    text = {
+        trigger = {
+            owner = {
+                has_ethic = ethic_fanatic_militarist
+            }
+
+        }
+
+        localization_key = militarist_parade
+    }
+
+    text = {
+        localization_key = pacifist_biological_parade
+        trigger = {
+            owner = {
+                has_ethic = ethic_fanatic_pacifist
+            }
+
+            is_situation_leviathan_biological = yes
+        }
+
+    }
+
+    text = {
+        localization_key = pacifist_mechanical_parade
+        trigger = {
+            is_situation_leviathan_biological = no
+            owner = {
+                has_ethic = ethic_fanatic_pacifist
+            }
+
+        }
+
+    }
+
+    text = {
+        localization_key = xenophobe_parade
+        trigger = {
+            owner = {
+                is_fanatical = no
+                has_ethic = ethic_xenophobe
+            }
+
+        }
+
+    }
+
+    text = {
+        localization_key = xenophile_biological_parade
+        trigger = {
+            owner = {
+                has_ethic = ethic_xenophile
+                is_fanatical = no
+            }
+
+            is_situation_leviathan_biological = yes
+        }
+
+    }
+
+    text = {
+        trigger = {
+            owner = {
+                is_fanatical = no
+                has_ethic = ethic_xenophile
+            }
+
+            is_situation_leviathan_biological = no
+        }
+
+        localization_key = xenophile_mechanical_parade
+    }
+
+    text = {
+        trigger = {
+            is_situation_leviathan_biological = yes
+            owner = {
+                is_fanatical = no
+                has_ethic = ethic_materialist
+                has_country_flag = materialist_science
+            }
+
+        }
+
+        localization_key = materialist_biological_parade_science
+    }
+
+    text = {
+        trigger = {
+            owner = {
+                has_country_flag = materialist_trophy
+                has_ethic = ethic_materialist
+                is_fanatical = no
+            }
+
+            is_situation_leviathan_biological = yes
+        }
+
+        localization_key = materialist_biological_parade_trophy
+    }
+
+    text = {
+        trigger = {
+            is_situation_leviathan_biological = no
+            owner = {
+                is_fanatical = no
+                has_ethic = ethic_materialist
+            }
+
+        }
+
+        localization_key = materialist_mechanical_parade
+    }
+
+    text = {
+        localization_key = spiritualist_biological_parade_reject
+        trigger = {
+            owner = {
+                is_fanatical = no
+                has_ethic = ethic_spiritualist
+                has_country_flag = spiritualist_reject
+            }
+
+            is_situation_leviathan_biological = yes
+        }
+
+    }
+
+    text = {
+        localization_key = spiritualist_biological_parade_accept
+        trigger = {
+            owner = {
+                has_country_flag = spiritualist_accept
+                has_ethic = ethic_spiritualist
+                is_fanatical = no
+            }
+
+            is_situation_leviathan_biological = yes
+        }
+
+    }
+
+    text = {
+        trigger = {
+            owner = {
+                is_fanatical = no
+                has_ethic = ethic_spiritualist
+            }
+
+            is_situation_leviathan_biological = no
+        }
+
+        localization_key = spiritualist_mechanical_parade
+    }
+
+    text = {
+        localization_key = authoritarian_parade
+        trigger = {
+            owner = {
+                has_ethic = ethic_authoritarian
+                is_fanatical = no
+            }
+
+        }
+
+    }
+
+    text = {
+        localization_key = egalitarian_biological_parade
+        trigger = {
+            is_situation_leviathan_biological = yes
+            owner = {
+                is_fanatical = no
+                has_ethic = ethic_egalitarian
+            }
+
+        }
+
+    }
+
+    text = {
+        localization_key = egalitarian_mechanical_parade
+        trigger = {
+            owner = {
+                has_ethic = ethic_egalitarian
+                is_fanatical = no
+            }
+
+            is_situation_leviathan_biological = no
+        }
+
+    }
+
+    text = {
+        localization_key = militarist_parade
+        trigger = {
+            owner = {
+                has_ethic = ethic_militarist
+                is_fanatical = no
+            }
+
+        }
+
+    }
+
+    text = {
+        localization_key = pacifist_biological_parade
+        trigger = {
+            is_situation_leviathan_biological = yes
+            owner = {
+                has_ethic = ethic_pacifist
+                is_fanatical = no
+            }
+
+        }
+
+    }
+
+    text = {
+        localization_key = pacifist_mechanical_parade
+        trigger = {
+            is_situation_leviathan_biological = no
+            owner = {
+                has_ethic = ethic_pacifist
+                is_fanatical = no
+            }
+
+        }
+
+    }
+
+    text = {
+        localization_key = hive_biological_parade
+        trigger = {
+            is_situation_leviathan_biological = yes
+            owner = {
+                is_hive_empire = yes
+            }
+
+        }
+
+    }
+
+    text = {
+        localization_key = hive_mechanical_parade
+        trigger = {
+            owner = {
+                is_hive_empire = yes
+            }
+
+            is_situation_leviathan_biological = no
+        }
+
+    }
+
+    text = {
+        trigger = {
+            is_situation_leviathan_biological = yes
+            owner = {
+                is_machine_empire = yes
+            }
+
+        }
+
+        localization_key = machine_biological_parade
+    }
+
+    text = {
+        localization_key = machine_mechanical_parade
+        trigger = {
+            owner = {
+                is_machine_empire = yes
+            }
+
+            is_situation_leviathan_biological = no
+        }
+
+    }
+
+}
+

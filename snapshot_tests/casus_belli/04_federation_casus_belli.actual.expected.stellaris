@@ -1,0 +1,87 @@
+cb_hegemon {
+    potential = {
+        has_federation = yes
+        is_federation_leader = yes
+        federation = {
+            has_federation_perk = president_hegemony_cb_1
+            has_federation_type = hegemony_federation
+        }
+
+    }
+
+    is_valid = {
+        has_total_war_cb = no
+        from = {
+            is_country_type = default
+            NOT = {
+                is_in_federation_with = from
+            }
+
+        }
+
+    }
+
+    show_notification = yes
+    show_in_diplomacy = yes
+}
+
+cb_secession {
+    potential = {
+        NOT = {
+            has_country_flag = failed_hegemony_rebellion
+        }
+
+        has_country_flag = asked_to_leave_hegemony
+        federation = {
+            has_federation_type = hegemony_federation
+        }
+
+        has_federation = yes
+    }
+
+    is_valid = {
+        has_total_war_cb = no
+        from = {
+            is_in_federation_with = prev
+            is_federation_leader = yes
+        }
+
+    }
+
+    show_in_diplomacy = yes
+    show_notification = yes
+}
+
+cb_scion {
+    show_in_diplomacy = yes
+    show_notification = yes
+    potential = {
+        is_country_type = default
+        any_agreement = {
+            agreement_preset = preset_scion
+        }
+
+        is_subject = yes
+    }
+
+    is_valid = {
+        NOT = {
+            is_overlord_to = FROM
+        }
+
+        from = {
+            is_country_type = default
+            NOT = {
+                any_agreement = {
+                    agreement_preset = preset_scion
+                }
+
+            }
+
+        }
+
+        has_total_war_cb = no
+    }
+
+}
+

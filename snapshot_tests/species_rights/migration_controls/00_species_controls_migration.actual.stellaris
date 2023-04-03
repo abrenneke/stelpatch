@@ -1,0 +1,88 @@
+migration_control_yes {
+    ai_will_do = {
+        modifier = {
+            factor = 0.1
+            from = {
+                OR = {
+                    NOT = {
+                        has_authority = auth_machine_intelligence
+                    }
+
+                    has_valid_civic = civic_machine_servitor
+                }
+
+            }
+
+        }
+
+        factor = 2
+    }
+
+    can_migrate = no
+}
+
+migration_control_no {
+    ai_will_do = {
+        factor = 1
+    }
+
+    allow = {
+        hidden_trigger = {
+            exists = from
+        }
+
+        custom_tooltip = {
+            fail_text = is_undesirables_tooltip
+            NOR = {
+                has_citizenship_type = {
+                    country = from
+                    type = citizenship_purge_machine
+                }
+
+                has_citizenship_type = {
+                    country = from
+                    type = citizenship_purge
+                }
+
+            }
+
+        }
+
+        custom_tooltip = {
+            fail_text = cant_be_livestock_or_matrix
+            NAND = {
+                OR = {
+                    has_slavery_type = {
+                        country = from
+                        type = slavery_livestock
+                    }
+
+                    has_slavery_type = {
+                        type = slavery_matrix
+                        country = from
+                    }
+
+                }
+
+                has_citizenship_type = {
+                    type = citizenship_slavery
+                    country = from
+                }
+
+            }
+
+        }
+
+    }
+
+    potential = {
+        NOR = {
+            has_trait = trait_machine_unit
+            has_trait = trait_mechanical
+        }
+
+        exists = from
+    }
+
+}
+

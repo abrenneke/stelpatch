@@ -1,0 +1,12 @@
+ai_weight {
+    modifier = {
+        from = {
+            num_unemployed = 0
+        }
+
+        factor = 2
+    }
+
+    weight = 1
+}
+

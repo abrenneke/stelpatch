@@ -1,0 +1,202 @@
+cordial {
+    type = cordial
+    behaviour = {
+        coexist = yes
+        trade = yes
+    }
+
+}
+
+arrogant {
+    behaviour = {
+    }
+
+    type = arrogant
+}
+
+imperious {
+    behaviour = {
+        vassalize = yes
+    }
+
+    type = imperious
+}
+
+custodial {
+    behaviour = {
+        alliance = yes
+        trade = yes
+        coexist = yes
+    }
+
+    type = custodial
+}
+
+protective {
+    behaviour = {
+        coexist = yes
+        vassalize = yes
+        trade = yes
+    }
+
+    type = protective
+}
+
+dismissive {
+    behaviour = {
+    }
+
+    type = dismissive
+}
+
+neutral {
+    behaviour = {
+        trade = yes
+    }
+
+    type = neutral
+}
+
+enigmatic {
+    type = enigmatic
+    behaviour = {
+        trade = yes
+    }
+
+}
+
+hostile {
+    behaviour = {
+        attack = yes
+    }
+
+    type = hostile
+}
+
+null {
+    type = null
+    behaviour = {
+    }
+
+}
+
+domineering {
+    type = domineering
+    behaviour = {
+        attack = yes
+        vassalize = yes
+    }
+
+}
+
+wary {
+    type = wary
+    behaviour = {
+        trade = yes
+    }
+
+}
+
+belligerent {
+    behaviour = {
+        attack = yes
+    }
+
+    type = belligerent
+}
+
+rival {
+    type = rival
+    behaviour = {
+        weaken = yes
+    }
+
+}
+
+berserker {
+    type = berserker
+    behaviour = {
+        attack = yes
+    }
+
+}
+
+unfriendly {
+    behaviour = {
+        weaken = yes
+    }
+
+    type = unfriendly
+}
+
+loyal {
+    behaviour = {
+        trade = yes
+        alliance = yes
+        coexist = yes
+    }
+
+    type = loyal
+}
+
+overlord {
+    type = overlord
+    behaviour = {
+        trade = yes
+    }
+
+}
+
+threatened {
+    type = threatened
+    behaviour = {
+        weaken = yes
+        attack = yes
+    }
+
+}
+
+patronizing {
+    type = patronizing
+    behaviour = {
+        trade = yes
+    }
+
+}
+
+friendly {
+    type = friendly
+    behaviour = {
+        trade = yes
+        alliance = yes
+        vassalize = yes
+        coexist = yes
+    }
+
+}
+
+receptive {
+    type = receptive
+    behaviour = {
+        trade = yes
+        coexist = yes
+    }
+
+}
+
+angry {
+    type = angry
+    behaviour = {
+        attack = yes
+    }
+
+}
+
+disloyal {
+    behaviour = {
+        attack = yes
+    }
+
+    type = disloyal
+}
+
