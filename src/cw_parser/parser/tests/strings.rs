@@ -80,4 +80,16 @@ mod strings_test {
         let result = quoted_or_unquoted_string::<ErrorTree<_>>("invalid*identifier");
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_quoted_empty_string() {
+        let result = quoted_string::<ErrorTree<_>>("\"\"").unwrap();
+        assert_eq!(result, ("", ""));
+    }
+
+    #[test]
+    fn dynamic_script_value() {
+        let result = unquoted_string::<ErrorTree<_>>("$FLAG$").unwrap();
+        assert_eq!(result, ("", "$FLAG$"));
+    }
 }

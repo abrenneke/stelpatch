@@ -14,6 +14,9 @@ pub struct Entity {
 
     /// Key value pairs in the entity, like { a = b } or { a > b }
     pub properties: HashMap<String, PropertyInfoList>,
+
+    /// Conditional blocks in the entity, like [[CONDITION] { a b c }]
+    pub conditional_blocks: Vec<ConditionalBlock>,
 }
 
 impl Debug for Entity {
@@ -41,6 +44,12 @@ impl Display for Entity {
                 buf.push_str(&stringified);
             }
         }
+
+        for conditional_block in &self.conditional_blocks {
+            let stringified = indent_all_by(4, format!("{}\n", conditional_block.to_string()));
+            buf.push_str(&stringified);
+        }
+
         buf.push_str("}\n");
         write!(f, "{}", buf)
     }
@@ -51,6 +60,7 @@ impl Entity {
         Self {
             items: Vec::new(),
             properties: HashMap::new(),
+            conditional_blocks: Vec::new(),
         }
     }
 
@@ -100,6 +110,11 @@ impl Entity {
 
     pub fn with_item(mut self, value: Value) -> Self {
         self.items.push(value);
+        self
+    }
+
+    pub fn with_conditional(mut self, value: ConditionalBlock) -> Self {
+        self.conditional_blocks.push(value);
         self
     }
 }
@@ -230,6 +245,7 @@ pub enum Value {
     Entity(Entity),
     Define(String),
     Color((String, f32, f32, f32, Option<f32>)),
+    Maths(String),
 }
 
 impl Display for Value {
@@ -244,6 +260,7 @@ impl Display for Value {
                 Some(d) => format!("{} {{ {} {} {} {} }}", color_type, a, b, c, d),
                 None => format!("{} {{ {} {} {} }}", color_type, a, b, c),
             },
+            Self::Maths(v) => v.to_string(),
         };
         write!(f, "{}", s)
     }
@@ -328,6 +345,14 @@ impl Value {
         }
     }
 
+    pub fn maths(&self) -> &String {
+        if let Value::Maths(m) = self {
+            m
+        } else {
+            panic!("Expected maths")
+        }
+    }
+
     pub fn is_entity(&self) -> bool {
         matches!(self, Value::Entity(_))
     }
@@ -351,6 +376,10 @@ impl Value {
     pub fn is_color(&self) -> bool {
         matches!(self, Value::Color((_, _, _, _, _)))
     }
+
+    pub fn is_maths(&self) -> bool {
+        matches!(self, Value::Maths(_))
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -360,11 +389,16 @@ pub struct Module {
     pub entities: HashMap<String, Value>,
     pub defines: HashMap<String, Value>,
     pub properties: HashMap<String, PropertyInfoList>,
+    pub values: Vec<Value>,
 }
 
 impl Display for Module {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut buf = String::from("");
+        for value in &self.values {
+            let value = format!("{}\n", value);
+            buf.push_str(&value);
+        }
         for (key, value) in &self.defines {
             let value = format!("{} = {}\n", key, value);
             buf.push_str(&value);
@@ -377,6 +411,80 @@ impl Display for Module {
             let value = format!("{} = {}\n", key, value);
             buf.push_str(&value);
         }
+        write!(f, "{}", buf)
+    }
+}
+
+impl Module {
+    pub fn new(filename: String, type_path: String) -> Self {
+        Self {
+            filename,
+            type_path,
+            entities: HashMap::new(),
+            defines: HashMap::new(),
+            properties: HashMap::new(),
+            values: Vec::new(),
+        }
+    }
+
+    pub fn add_define(&mut self, key: String, value: Value) {
+        self.defines.insert(key, value);
+    }
+
+    pub fn add_property(&mut self, key: String, value: PropertyInfoList) {
+        self.properties.insert(key, value);
+    }
+
+    pub fn add_entity(&mut self, key: String, value: Value) {
+        self.entities.insert(key, value);
+    }
+
+    pub fn add_value(&mut self, value: Value) {
+        self.values.push(value);
+    }
+
+    pub fn get_define(&self, key: &str) -> Option<&Value> {
+        self.defines.get(key)
+    }
+
+    pub fn get_property(&self, key: &str) -> Option<&PropertyInfoList> {
+        self.properties.get(key)
+    }
+
+    pub fn get_entity(&self, key: &str) -> Option<&Value> {
+        self.entities.get(key)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConditionalBlock {
+    pub is_not: bool,
+    pub key: String,
+    pub items: Vec<Value>,
+    pub properties: HashMap<String, PropertyInfoList>,
+}
+
+impl Display for ConditionalBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut buf = String::from("[[");
+        if self.is_not {
+            buf.push_str("!");
+        }
+
+        buf.push_str(&self.key);
+        buf.push_str("]\n");
+
+        for value in &self.items {
+            let value = format!("{}\n", value);
+            buf.push_str(&value);
+        }
+        for (key, value) in &self.properties {
+            let value = format!("{} {}\n", key, value);
+            buf.push_str(&value);
+        }
+
+        buf.push_str("]\n");
+
         write!(f, "{}", buf)
     }
 }

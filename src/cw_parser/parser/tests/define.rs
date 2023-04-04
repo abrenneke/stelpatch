@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn test_define_invalid_input_reference_value() {
-        let result = define::<ErrorTree<_>>("@my_var = @other_var");
+        let result = define::<ErrorTree<_>>("@my_var = *other_var");
         assert!(result.is_err());
     }
 }

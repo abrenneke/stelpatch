@@ -392,4 +392,163 @@ mod tests {
                 .into()
         );
     }
+
+    #[test]
+    fn entity_with_dynamic_scripting() {
+        let input = r#"{ # 0.2 for each point below 25
+            base = @stabilitylevel2
+            subtract = trigger:planet_stability
+            [[ALTERED_STABILITY]
+                subtract = $ALTERED_STABILITY$
+            ]
+            mult = 0.2
+        }"#;
+
+        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+
+        assert_eq!(
+            result,
+            Entity::new()
+                .with_property(
+                    "base",
+                    cw_model::Value::Define("@stabilitylevel2".to_string())
+                )
+                .with_property(
+                    "subtract",
+                    cw_model::Value::String("trigger:planet_stability".to_string())
+                )
+                .with_property("mult", cw_model::Value::Number(0.2))
+                .with_conditional(cw_model::ConditionalBlock {
+                    is_not: false,
+                    items: vec![],
+                    key: "ALTERED_STABILITY".to_string(),
+                    properties: vec![(
+                        "subtract".to_string(),
+                        PropertyInfoList::new().with_property(
+                            cw_model::Operator::Equals,
+                            cw_model::Value::String("$ALTERED_STABILITY$".to_string())
+                        )
+                    )]
+                    .into_iter()
+                    .collect(),
+                })
+        )
+    }
+
+    #[test]
+    fn entity_with_define_value() {
+        let input = r#"{
+            val = @stabilitylevel2
+        }"#;
+
+        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+
+        assert_eq!(
+            result,
+            Entity::new()
+                .with_property(
+                    "val",
+                    cw_model::Value::Define("@stabilitylevel2".to_string())
+                )
+                .into()
+        );
+    }
+
+    #[test]
+    fn compact_equality() {
+        let input = r#"{
+            mesh="asteroid_01_mesh"
+        }"#;
+
+        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+
+        assert_eq!(
+            result,
+            Entity::new()
+                .with_property(
+                    "mesh",
+                    cw_model::Value::String("asteroid_01_mesh".to_string())
+                )
+                .into()
+        );
+    }
+
+    #[test]
+    fn switch_statement() {
+        let input = r#"{
+            trigger = free_housing
+            -9 < { nine = yes } # 10
+            -8 < { eight = yes } # 9
+		}"#;
+
+        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+
+        assert_eq!(
+            result,
+            Entity::new()
+                .with_property(
+                    "trigger",
+                    cw_model::Value::String("free_housing".to_string())
+                )
+                .with_property_with_operator(
+                    "-9",
+                    cw_model::Operator::LessThan,
+                    cw_model::Value::Entity(
+                        Entity::new()
+                            .with_property("nine", cw_model::Value::String("yes".to_string()))
+                            .into()
+                    )
+                )
+                .with_property_with_operator(
+                    "-8",
+                    cw_model::Operator::LessThan,
+                    cw_model::Value::Entity(
+                        Entity::new()
+                            .with_property("eight", cw_model::Value::String("yes".to_string()))
+                            .into()
+                    )
+                )
+                .into()
+        );
+    }
+
+    #[test]
+    fn inline_maths() {
+        let input = r#"{
+			planet_stability < @[ stabilitylevel2 + 10 ]
+        }"#;
+
+        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+
+        assert_eq!(
+            result,
+            Entity::new()
+                .with_property_with_operator(
+                    "planet_stability",
+                    cw_model::Operator::LessThan,
+                    cw_model::Value::Maths("@[ stabilitylevel2 + 10 ]".to_string())
+                )
+                .into()
+        );
+    }
+
+    #[test]
+    fn inline_maths_alt() {
+        let input = r#"{
+			planet_stability < @\[ stabilitylevel2 + 10 ]
+        }"#;
+
+        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+
+        assert_eq!(
+            result,
+            Entity::new()
+                .with_property_with_operator(
+                    "planet_stability",
+                    cw_model::Operator::LessThan,
+                    cw_model::Value::Maths("@\\[ stabilitylevel2 + 10 ]".to_string())
+                )
+                .into()
+        );
+    }
 }

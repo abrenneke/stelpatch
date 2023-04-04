@@ -1,2 +1,2 @@
 mod benchmark;
-mod snapshot_tests;
+mod stellaris;
