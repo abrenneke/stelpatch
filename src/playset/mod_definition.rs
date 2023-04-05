@@ -25,6 +25,32 @@ pub struct ModDefinition {
     pub archive: Option<String>,
 }
 
+impl ModDefinition {
+    pub fn new() -> Self {
+        ModDefinition {
+            version: None,
+            tags: Vec::new(),
+            name: String::new(),
+            picture: None,
+            supported_version: None,
+            path: None,
+            remote_file_id: None,
+            dependencies: Vec::new(),
+            archive: None,
+        }
+    }
+
+    pub fn load(input: &str) -> Result<Self, String> {
+        let (_, mod_definition) = parse_mod_definition(input).map_err(|e| e.to_string())?;
+        Ok(mod_definition)
+    }
+
+    pub fn load_from_file(path: &str) -> Result<Self, String> {
+        let contents = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        Self::load(&contents)
+    }
+}
+
 fn string_value(input: &str) -> IResult<&str, &str> {
     delimited(
         tag("\""),

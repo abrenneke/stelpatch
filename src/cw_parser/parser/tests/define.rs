@@ -26,7 +26,7 @@ mod tests {
         let (_, result) = define::<ErrorTree<_>>("@my_var = 123").unwrap();
         assert_eq!(result.key, "@my_var");
         assert_eq!(result.operator, cw_model::Operator::Equals);
-        assert_eq!(result.value, cw_model::Value::Number(123.0));
+        assert_eq!(result.value, cw_model::Value::Number("123.0".to_owned()));
         assert_eq!(result.is_define, true);
     }
 
@@ -35,7 +35,7 @@ mod tests {
         let (_, result) = define::<ErrorTree<_>>("@my_var = 123.4").unwrap();
         assert_eq!(result.key, "@my_var");
         assert_eq!(result.operator, cw_model::Operator::Equals);
-        assert_eq!(result.value, cw_model::Value::Number(123.4));
+        assert_eq!(result.value, cw_model::Value::Number("123.4".to_owned()));
         assert_eq!(result.is_define, true);
     }
 
@@ -46,7 +46,13 @@ mod tests {
         assert_eq!(result.operator, cw_model::Operator::Equals);
         assert_eq!(
             result.value,
-            cw_model::Value::Color(("rgb".to_string(), 1.0, 2.0, 3.0, None))
+            cw_model::Value::Color((
+                "rgb".to_string(),
+                "1.0".to_string(),
+                "2.0".to_string(),
+                "3.0".to_string(),
+                None
+            ))
         );
         assert_eq!(result.is_define, true);
     }

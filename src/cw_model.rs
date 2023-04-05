@@ -7,7 +7,7 @@ use std::{
 use anyhow::anyhow;
 use indent::indent_all_by;
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Entity {
     /// Array items in the entity, like { a b c }
     pub items: Vec<Value>,
@@ -16,8 +16,11 @@ pub struct Entity {
     pub properties: HashMap<String, PropertyInfoList>,
 
     /// Conditional blocks in the entity, like [[CONDITION] { a b c }]
-    pub conditional_blocks: Vec<ConditionalBlock>,
+    pub conditional_blocks: HashMap<String, ConditionalBlock>,
 }
+
+#[derive(PartialEq, Clone)]
+pub struct NamedEntity(pub Entity, pub String);
 
 impl Debug for Entity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -45,7 +48,7 @@ impl Display for Entity {
             }
         }
 
-        for conditional_block in &self.conditional_blocks {
+        for (_, conditional_block) in &self.conditional_blocks {
             let stringified = indent_all_by(4, format!("{}\n", conditional_block.to_string()));
             buf.push_str(&stringified);
         }
@@ -60,7 +63,7 @@ impl Entity {
         Self {
             items: Vec::new(),
             properties: HashMap::new(),
-            conditional_blocks: Vec::new(),
+            conditional_blocks: HashMap::new(),
         }
     }
 
@@ -114,12 +117,13 @@ impl Entity {
     }
 
     pub fn with_conditional(mut self, value: ConditionalBlock) -> Self {
-        self.conditional_blocks.push(value);
+        self.conditional_blocks
+            .insert(value.key.1.to_owned(), value);
         self
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct PropertyInfo {
     pub operator: Operator,
     pub value: Value,
@@ -131,8 +135,8 @@ impl Display for PropertyInfo {
     }
 }
 
-#[derive(PartialEq, Clone)]
-pub struct PropertyInfoList(Vec<PropertyInfo>);
+#[derive(PartialEq, Eq, Clone)]
+pub struct PropertyInfoList(pub Vec<PropertyInfo>);
 
 impl PropertyInfoList {
     pub fn new() -> Self {
@@ -146,6 +150,32 @@ impl PropertyInfoList {
 
     pub fn push(&mut self, property: PropertyInfo) {
         self.0.push(property);
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<PropertyInfo> {
+        self.0.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn into_vec(self) -> Vec<PropertyInfo> {
+        self.0
+    }
+
+    pub fn retain(&mut self, f: impl Fn(&PropertyInfo) -> bool) {
+        self.0.retain(f);
+    }
+
+    pub fn extend(&mut self, other: Vec<PropertyInfo>) {
+        self.0.extend(other);
+    }
+}
+
+impl From<PropertyInfoList> for Vec<PropertyInfo> {
+    fn from(list: PropertyInfoList) -> Self {
+        list.0
     }
 }
 
@@ -237,14 +267,14 @@ impl FromStr for Operator {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum Value {
     String(String),
-    Number(f32),
+    Number(String),
     Boolean(bool),
     Entity(Entity),
     Define(String),
-    Color((String, f32, f32, f32, Option<f32>)),
+    Color((String, String, String, String, Option<String>)),
     Maths(String),
 }
 
@@ -278,18 +308,6 @@ impl From<bool> for Value {
     }
 }
 
-impl From<f32> for Value {
-    fn from(v: f32) -> Self {
-        Self::Number(v)
-    }
-}
-
-impl From<i32> for Value {
-    fn from(v: i32) -> Self {
-        Self::Number(v as f32)
-    }
-}
-
 impl From<Entity> for Value {
     fn from(v: Entity) -> Self {
         Self::Entity(v)
@@ -313,7 +331,7 @@ impl Value {
         }
     }
 
-    pub fn number(&self) -> &f32 {
+    pub fn number(&self) -> &String {
         if let Value::Number(i) = self {
             i
         } else {
@@ -337,9 +355,15 @@ impl Value {
         }
     }
 
-    pub fn color(&self) -> (String, f32, f32, f32, Option<f32>) {
+    pub fn color(&self) -> (String, String, String, String, Option<String>) {
         if let Value::Color((color_type, h, s, v, a)) = self {
-            (color_type.to_owned(), *h, *s, *v, *a)
+            (
+                color_type.to_owned(),
+                h.to_owned(),
+                s.to_owned(),
+                v.to_owned(),
+                a.to_owned(),
+            )
         } else {
             panic!("Expected hsv")
         }
@@ -419,7 +443,7 @@ impl Module {
     pub fn new(filename: String, type_path: String) -> Self {
         Self {
             filename,
-            type_path,
+            type_path: type_path.replace("\\", "/"),
             entities: HashMap::new(),
             defines: HashMap::new(),
             properties: HashMap::new(),
@@ -454,12 +478,22 @@ impl Module {
     pub fn get_entity(&self, key: &str) -> Option<&Value> {
         self.entities.get(key)
     }
+
+    pub fn path(&self) -> String {
+        format!("{}/{}", self.type_path, self.filename)
+    }
+
+    pub fn entities(&self) -> Vec<NamedEntity> {
+        self.entities
+            .iter()
+            .map(|(key, value)| NamedEntity(value.entity().to_owned(), key.to_owned()))
+            .collect()
+    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConditionalBlock {
-    pub is_not: bool,
-    pub key: String,
+    pub key: (bool, String),
     pub items: Vec<Value>,
     pub properties: HashMap<String, PropertyInfoList>,
 }
@@ -467,11 +501,13 @@ pub struct ConditionalBlock {
 impl Display for ConditionalBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut buf = String::from("[[");
-        if self.is_not {
+
+        let (is_not, key) = &self.key;
+        if *is_not {
             buf.push_str("!");
         }
 
-        buf.push_str(&self.key);
+        buf.push_str(key);
         buf.push_str("]\n");
 
         for value in &self.items {

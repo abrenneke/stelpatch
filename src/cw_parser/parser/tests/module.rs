@@ -55,7 +55,10 @@ mod tests {
                 entities: HashMap::new(),
                 values: vec![],
                 defines: vec![
-                    ("@MY_DEFINE".to_string(), cw_model::Value::Number(123.0)),
+                    (
+                        "@MY_DEFINE".to_string(),
+                        cw_model::Value::Number("123.0".to_owned())
+                    ),
                     (
                         "@ANOTHER_DEFINE".to_string(),
                         cw_model::Value::String("hello".to_string())
@@ -92,9 +95,12 @@ mod tests {
                 )]
                 .into_iter()
                 .collect(),
-                defines: vec![("@MY_DEFINE".to_string(), cw_model::Value::Number(123.0))]
-                    .into_iter()
-                    .collect(),
+                defines: vec![(
+                    "@MY_DEFINE".to_string(),
+                    cw_model::Value::Number("123.0".to_owned())
+                )]
+                .into_iter()
+                .collect(),
                 properties: vec![(
                     "my_var1".to_string(),
                     PropertyInfoList::new().with_property(
@@ -143,11 +149,10 @@ mod tests {
                                 "subtract",
                                 cw_model::Value::String("trigger:planet_stability".to_string())
                             )
-                            .with_property("mult", cw_model::Value::Number(0.2))
+                            .with_property("mult", cw_model::Value::Number("0.2".to_owned()))
                             .with_conditional(cw_model::ConditionalBlock {
-                                is_not: false,
                                 items: vec![],
-                                key: "ALTERED_STABILITY".to_string(),
+                                key: (false, "ALTERED_STABILITY".to_string()),
                                 properties: vec![(
                                     "subtract".to_string(),
                                     PropertyInfoList::new().with_property(

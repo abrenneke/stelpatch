@@ -1,79 +1,135 @@
 use std::path::PathBuf;
 
-use crate::cw_model::Module;
+use crate::cw_model::{Entity, Module, NamedEntity};
 
 use super::mod_definition::ModDefinition;
-use anyhow::Result;
-use tokio::task;
+use anyhow::anyhow;
+use rayon::prelude::*;
 use walkdir::WalkDir;
+
+mod tests;
 
 pub struct GameMod {
     pub definition: ModDefinition,
     pub modules: Vec<Module>,
+
+    module_lookup_by_path: std::collections::HashMap<String, usize>,
+    module_lookup_by_type_path: std::collections::HashMap<String, Vec<usize>>,
 }
 
 impl GameMod {
-    pub async fn load(definition: ModDefinition) -> Result<Self> {
-        let mut modules = Vec::new();
-        let mut tasks = Vec::new();
+    pub fn new(definition: ModDefinition) -> Self {
+        Self {
+            definition,
+            modules: vec![],
+            module_lookup_by_path: std::collections::HashMap::new(),
+            module_lookup_by_type_path: std::collections::HashMap::new(),
+        }
+    }
 
-        let dir = PathBuf::from(definition.path.as_ref().unwrap());
+    pub fn push(&mut self, module: Module) -> () {
+        let index = self.modules.len();
+
+        let path = format!("{}/{}", module.type_path.clone(), module.filename.clone());
+
+        self.module_lookup_by_path.insert(path, index);
+
+        let type_path_lookup = self
+            .module_lookup_by_type_path
+            .entry(module.type_path.clone())
+            .or_insert(vec![]);
+
+        type_path_lookup.push(index);
+
+        self.modules.push(module);
+    }
+
+    pub fn load_parallel(definition: ModDefinition) -> Result<Self, anyhow::Error> {
+        let mut dir = PathBuf::from(definition.path.as_ref().unwrap());
+        dir.push("common");
+        let mut paths = vec![];
 
         for entry in WalkDir::new(&dir).into_iter().filter_map(|e| e.ok()) {
-            if entry.file_type().is_file() && entry.path().extension().unwrap_or_default() == "txt"
+            if entry.file_type().is_file()
+                && entry.path().extension().unwrap_or_default() == "txt"
+                && entry
+                    .path()
+                    .parent()
+                    .map(|p| p.file_name().unwrap_or_default())
+                    .unwrap_or_default()
+                    != "common"
             {
                 let path = entry.path().to_string_lossy().to_string();
-                let task = task::spawn(load_module(path));
-                tasks.push(task);
+                paths.push(path);
             }
         }
 
-        for task in tasks {
-            let module = task.await??;
-            modules.push(module);
+        let modules: Vec<Result<Module, anyhow::Error>> = paths
+            .par_iter()
+            .map(|path| Module::parse_from_file(path))
+            .collect();
+
+        let mut mod_modules = vec![];
+
+        for (module, path) in modules.into_iter().zip(paths.iter()) {
+            let module = module.map_err(|e| anyhow!("Failed to load module at {}: {}", path, e))?;
+            mod_modules.push(module);
         }
 
-        Ok(Self {
-            definition,
-            modules,
-        })
+        let mut game_mod = Self::new(definition);
+        for module in mod_modules {
+            game_mod.push(module);
+        }
+
+        Ok(game_mod)
     }
-}
 
-async fn load_module(path: String) -> Result<Module> {
-    let module = Module::parse_from_file(&path).await?;
-    Ok(module)
-}
+    /// Gets a module by its path (type_path + filename), or None if it doesn't exist.
+    /// For example, "common/units/units"
+    pub fn get_by_path(&self, path: &str) -> Option<&Module> {
+        self.module_lookup_by_path
+            .get(path)
+            .map(|index| &self.modules[*index])
+    }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    /// Returns the sole entity for a type path, or None if there are none with the name.
+    pub fn get_entity(&self, type_path: &str, name: &str) -> Option<&Entity> {
+        let modules = self.module_lookup_by_type_path.get(type_path)?;
 
-    #[tokio::test]
-    async fn test_game_mod_load() {
-        // Create a ModDefinition that matches the expected_output
-        let mod_definition = ModDefinition {
-            version: Some(String::from("2.8")),
-            tags: vec![
-                String::from("Technologies"),
-                String::from("Economy"),
-                String::from("Buildings"),
-            ],
-            name: String::from("EUTAB - Ethos Unique Techs and Buildings"),
-            picture: Some(String::from("eutab.png")),
-            supported_version: Some(String::from("3.0.*")),
-            path: Some(String::from(
-                "D:/SteamLibrary/steamapps/workshop/content/281990/804732593",
-            )),
-            remote_file_id: Some(String::from("804732593")),
-            archive: None,
-            dependencies: Vec::new(),
-        };
+        for module_index in modules {
+            let module = &self.modules[*module_index];
 
-        let game_mod = GameMod::load(mod_definition).await.unwrap();
-        assert!(game_mod.modules.len() > 0);
+            if let Some(entity) = module.get_entity(name) {
+                return Some(entity.entity());
+            }
+        }
 
-        assert!(game_mod.modules[0].type_path.len() > 0);
-        // dbg!(game_mod.modules);
+        None
+    }
+
+    pub fn get_overridden_modules(&self, other: &GameMod) -> Vec<&Module> {
+        let mut overridden_modules = vec![];
+
+        for module in &self.modules {
+            if other.get_by_path(&module.path()).is_some() {
+                overridden_modules.push(module);
+            }
+        }
+
+        overridden_modules
+    }
+
+    pub fn get_overridden_entities(&self, other: &GameMod) -> Vec<NamedEntity> {
+        let mut overridden_entities = vec![];
+
+        for module in &self.modules {
+            for entity in module.entities() {
+                if other.get_entity(&module.type_path, &entity.1).is_some() {
+                    overridden_entities.push(entity);
+                }
+            }
+        }
+
+        overridden_entities
     }
 }

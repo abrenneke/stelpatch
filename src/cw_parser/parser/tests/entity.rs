@@ -50,13 +50,19 @@ mod tests {
         assert_eq!(
             result,
             Entity::new()
-                .with_property("float_val", cw_model::Value::Number(123.4))
-                .with_property("int_val", cw_model::Value::Number(12.0))
+                .with_property("float_val", cw_model::Value::Number("123.4".to_owned()))
+                .with_property("int_val", cw_model::Value::Number("12.0".to_owned()))
                 .with_property("str_val1", cw_model::Value::String("value3".to_string()))
                 .with_property("str_val2", cw_model::Value::String("value4".to_string()))
                 .with_property(
                     "color_val",
-                    cw_model::Value::Color(("rgb".to_string(), 1.0, 2.0, 3.0, None))
+                    cw_model::Value::Color((
+                        "rgb".to_string(),
+                        "1.0".to_owned(),
+                        "2.0".to_owned(),
+                        "3.0".to_owned(),
+                        None
+                    ))
                 )
                 .into()
         );
@@ -97,9 +103,9 @@ mod tests {
             Entity::new()
                 .with_item(cw_model::Value::Color((
                     "rgb".to_string(),
-                    1.0,
-                    2.0,
-                    3.0,
+                    "1.0".to_owned(),
+                    "2.0".to_owned(),
+                    "3.0".to_owned(),
                     None
                 )))
                 .into()
@@ -115,16 +121,16 @@ mod tests {
             Entity::new()
                 .with_item(cw_model::Value::Color((
                     "rgb".to_string(),
-                    1.0,
-                    2.0,
-                    3.0,
+                    "1.0".to_owned(),
+                    "2.0".to_owned(),
+                    "3.0".to_owned(),
                     None
                 )))
                 .with_item(cw_model::Value::Color((
                     "rgb".to_string(),
-                    4.0,
-                    5.0,
-                    6.0,
+                    "4.0".to_owned(),
+                    "5.0".to_owned(),
+                    "6.0".to_owned(),
                     None
                 )))
                 .into()
@@ -141,9 +147,9 @@ mod tests {
                 .with_item(cw_model::Value::String("value1".to_string()))
                 .with_item(cw_model::Value::Color((
                     "rgb".to_string(),
-                    1.0,
-                    2.0,
-                    3.0,
+                    "1.0".to_owned(),
+                    "2.0".to_owned(),
+                    "3.0".to_owned(),
                     None
                 )))
                 .with_item(cw_model::Value::String("value2".to_string()))
@@ -263,15 +269,33 @@ mod tests {
             Entity::new()
                 .with_property(
                     "color1",
-                    cw_model::Value::Color(("rgb".to_string(), 255.0, 0.0, 0.0, None))
+                    cw_model::Value::Color((
+                        "rgb".to_string(),
+                        "255.0".to_owned(),
+                        "0.0".to_owned(),
+                        "0.0".to_owned(),
+                        None
+                    ))
                 )
                 .with_property(
                     "color2",
-                    cw_model::Value::Color(("rgb".to_string(), 0.0, 255.0, 0.0, Some(0.5)))
+                    cw_model::Value::Color((
+                        "rgb".to_string(),
+                        "0.0".to_owned(),
+                        "255.0".to_owned(),
+                        "0.0".to_owned(),
+                        Some("0.5".to_owned())
+                    ))
                 )
                 .with_property(
                     "color3",
-                    cw_model::Value::Color(("hsv".to_string(), 120.0, 50.0, 100.0, None))
+                    cw_model::Value::Color((
+                        "hsv".to_string(),
+                        "120.0".to_owned(),
+                        "50.0".to_owned(),
+                        "100.0".to_owned(),
+                        None
+                    ))
                 )
                 .into()
         );
@@ -338,7 +362,13 @@ mod tests {
                 )
                 .with_property(
                     "my_var3",
-                    cw_model::Value::Color(("rgb".to_string(), 255.0, 0.0, 0.0, None))
+                    cw_model::Value::Color((
+                        "rgb".to_string(),
+                        "255.0".to_owned(),
+                        "0.0".to_owned(),
+                        "0.0".to_owned(),
+                        None
+                    ))
                 )
                 // .with_property(
                 //     "my_var4",
@@ -417,11 +447,10 @@ mod tests {
                     "subtract",
                     cw_model::Value::String("trigger:planet_stability".to_string())
                 )
-                .with_property("mult", cw_model::Value::Number(0.2))
+                .with_property("mult", cw_model::Value::Number("0.2".to_owned()))
                 .with_conditional(cw_model::ConditionalBlock {
-                    is_not: false,
                     items: vec![],
-                    key: "ALTERED_STABILITY".to_string(),
+                    key: (false, "ALTERED_STABILITY".to_string()),
                     properties: vec![(
                         "subtract".to_string(),
                         PropertyInfoList::new().with_property(

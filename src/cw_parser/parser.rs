@@ -142,8 +142,7 @@ impl cw_model::Module {
         module::<ErrorTree<&'a str>>(&input, type_path, module_name).map(|(_, module)| module)
     }
 
-    /// Parses a cw module from a file.
-    pub async fn parse_from_file(file_path: &str) -> Result<Self, anyhow::Error> {
+    fn get_module_info(file_path: &str) -> (String, String) {
         let path = PathBuf::from(file_path);
         let mut type_path = String::new();
         let mut cur_path = path.clone();
@@ -176,8 +175,22 @@ impl cw_model::Module {
             .to_string();
 
         let module_name = path.file_stem().unwrap().to_str().unwrap();
+
+        (type_path, module_name.to_string())
+    }
+
+    /// Parses a cw module from a file.
+    pub async fn parse_from_file_async(file_path: &str) -> Result<Self, anyhow::Error> {
+        let (type_path, module_name) = Self::get_module_info(file_path);
         let input = tokio::fs::read_to_string(file_path).await?;
-        cw_model::Module::parse(input, &type_path, module_name)
+        cw_model::Module::parse(input, &type_path, &module_name)
+    }
+
+    /// Parses a cw module from a file.
+    pub fn parse_from_file(file_path: &str) -> Result<Self, anyhow::Error> {
+        let (type_path, module_name) = Self::get_module_info(file_path);
+        let input = std::fs::read_to_string(file_path)?;
+        cw_model::Module::parse(input, &type_path, &module_name)
     }
 }
 
@@ -250,7 +263,7 @@ fn entity<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, cw_mo
 
     let mut items = vec![];
     let mut properties = HashMap::new();
-    let mut conditional_blocks = vec![];
+    let mut conditional_blocks = HashMap::new();
 
     for expression in expressions {
         match expression {
@@ -267,7 +280,7 @@ fn entity<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, cw_mo
                 items.push(value);
             }
             BlockItem::Conditional(conditional_block) => {
-                conditional_blocks.push(conditional_block);
+                conditional_blocks.insert(conditional_block.key.1.to_owned(), conditional_block);
             }
         }
     }
@@ -329,8 +342,7 @@ fn conditional_block<'a, E: ParserError<&'a str>>(
         cw_model::ConditionalBlock {
             properties,
             items,
-            is_not: is_not.is_some(),
-            key: key.to_string(),
+            key: (is_not.is_some(), key.to_string()),
         },
     ))
 }
@@ -346,7 +358,7 @@ struct Expression {
 /// A color is either rgb { r g b a } or hsv { h s v a }. The a component is optional.
 fn color<'a, E: ParserError<&'a str>>(
     input: &'a str,
-) -> IResult<&'a str, (String, f32, f32, f32, Option<f32>), E> {
+) -> IResult<&'a str, (String, String, String, String, Option<String>), E> {
     let (input, color_type) = with_opt_trailing_ws(alt((tag("rgb"), tag("hsv"))))
         .context("color tag")
         .parse(input)?;
@@ -369,25 +381,22 @@ fn color<'a, E: ParserError<&'a str>>(
 }
 
 /// A number is a sequence of digits, optionally preceded by a sign and optionally followed by a decimal point and more digits, followed by whitespace.
-fn number_val<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, f32, E> {
-    let (input, v) = map_res(
-        recognize(value(
-            (),
-            tuple((
-                opt(alt((char('-'), char('+')))),
-                digit1,
-                opt(pair(char('.'), digit1)),
-            )),
+fn number_val<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E> {
+    let (input, v) = recognize(value(
+        (),
+        tuple((
+            opt(alt((char('-'), char('+')))),
+            digit1,
+            opt(pair(char('.'), digit1)),
         )),
-        |v: &str| v.parse::<f32>(),
-    )
+    ))
     .context("number")
     .parse(input)?;
     // Could be followed by whitespace or comment, or could close a block like 1.23}, but can't be like 1.23/ etc.
     let (input, _) = peek(value_terminator)
         .context("number_terminator")
         .parse(input)?;
-    Ok((input, v))
+    Ok((input, v.to_string()))
 }
 
 fn script_value<'a, E: ParserError<&'a str>>(
