@@ -42,13 +42,13 @@ pub trait ParserError<I>:
 /// A module is like an entity but also supports defines. A module is a whole file.
 fn module<'a, E: ParserError<&'a str>>(
     input: &'a str,
-    type_path: &str,
+    namespace: &str,
     module_name: &str,
 ) -> IResult<&'a str, cw_model::Module, E> {
     if module_name.contains("99_README") {
         return Ok((
             "",
-            cw_model::Module::new(module_name.to_string(), type_path.to_string()),
+            cw_model::Module::new(module_name.to_string(), namespace.to_string()),
         ));
     }
 
@@ -105,7 +105,7 @@ fn module<'a, E: ParserError<&'a str>>(
     Ok((
         input,
         cw_model::Module {
-            type_path: type_path.to_string(),
+            namespace: namespace.to_string(),
             filename: module_name.to_string(),
             entities,
             defines,
@@ -117,8 +117,8 @@ fn module<'a, E: ParserError<&'a str>>(
 
 impl cw_model::Module {
     /// Parses a cw module from a string.
-    pub fn parse(input: String, type_path: &str, module_name: &str) -> Result<Self, anyhow::Error> {
-        module::<nom::error::Error<_>>(&input, type_path, module_name)
+    pub fn parse(input: String, namespace: &str, module_name: &str) -> Result<Self, anyhow::Error> {
+        module::<nom::error::Error<_>>(&input, namespace, module_name)
             .map(|(_, module)| module)
             .map_err(|e| anyhow!(e.to_string()))
     }
@@ -126,25 +126,25 @@ impl cw_model::Module {
     /// Parses a cw module from a string.
     pub fn parse_verbose<'a>(
         input: &'a String,
-        type_path: &str,
+        namespace: &str,
         module_name: &str,
     ) -> Result<Self, nom::Err<nom::error::VerboseError<&'a str>>> {
-        module::<nom::error::VerboseError<_>>(&input, type_path, module_name)
+        module::<nom::error::VerboseError<_>>(&input, namespace, module_name)
             .map(|(_, module)| module)
     }
 
     /// Parses a cw module from a string.
     pub fn parse_tree<'a>(
         input: &'a String,
-        type_path: &str,
+        namespace: &str,
         module_name: &str,
     ) -> Result<Self, nom::Err<ErrorTree<&'a str>>> {
-        module::<ErrorTree<&'a str>>(&input, type_path, module_name).map(|(_, module)| module)
+        module::<ErrorTree<&'a str>>(&input, namespace, module_name).map(|(_, module)| module)
     }
 
     fn get_module_info(file_path: &str) -> (String, String) {
         let path = PathBuf::from(file_path);
-        let mut type_path = String::new();
+        let mut namespace = String::new();
         let mut cur_path = path.clone();
 
         while let Some(common_index) = cur_path
@@ -157,7 +157,7 @@ impl cw_model::Module {
                 .collect::<PathBuf>()
                 .to_str()
             {
-                type_path = cur_path
+                namespace = cur_path
                     .strip_prefix(common_prefix)
                     .unwrap()
                     .parent()
@@ -168,7 +168,7 @@ impl cw_model::Module {
             }
         }
 
-        type_path = ["common", &type_path]
+        namespace = ["common", &namespace]
             .iter()
             .collect::<PathBuf>()
             .to_slash_lossy()
@@ -176,21 +176,21 @@ impl cw_model::Module {
 
         let module_name = path.file_stem().unwrap().to_str().unwrap();
 
-        (type_path, module_name.to_string())
+        (namespace, module_name.to_string())
     }
 
     /// Parses a cw module from a file.
     pub async fn parse_from_file_async(file_path: &str) -> Result<Self, anyhow::Error> {
-        let (type_path, module_name) = Self::get_module_info(file_path);
+        let (namespace, module_name) = Self::get_module_info(file_path);
         let input = tokio::fs::read_to_string(file_path).await?;
-        cw_model::Module::parse(input, &type_path, &module_name)
+        cw_model::Module::parse(input, &namespace, &module_name)
     }
 
     /// Parses a cw module from a file.
     pub fn parse_from_file(file_path: &str) -> Result<Self, anyhow::Error> {
-        let (type_path, module_name) = Self::get_module_info(file_path);
+        let (namespace, module_name) = Self::get_module_info(file_path);
         let input = std::fs::read_to_string(file_path)?;
-        cw_model::Module::parse(input, &type_path, &module_name)
+        cw_model::Module::parse(input, &namespace, &module_name)
     }
 }
 

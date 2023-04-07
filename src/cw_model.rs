@@ -7,6 +7,8 @@ use std::{
 use anyhow::anyhow;
 use indent::indent_all_by;
 
+/// An entity is an object with items, key value pairs, and conditional blocks. The majority of values in a module are entities.
+/// Entities are like { key = value } or { a b c } or { a > b } or
 #[derive(PartialEq, Eq, Clone)]
 pub struct Entity {
     /// Array items in the entity, like { a b c }
@@ -19,8 +21,118 @@ pub struct Entity {
     pub conditional_blocks: HashMap<String, ConditionalBlock>,
 }
 
+/// An entity with a name, like a = { key = value }
 #[derive(PartialEq, Clone)]
 pub struct NamedEntity(pub Entity, pub String);
+
+/// An operator that can appear between a key and a value in an entity, like a > b. Usually this is = but it depends on the implementation.
+/// For our purposes it doesn't really matter, we just have to remember what it is.
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum Operator {
+    GreaterThan,
+    GreaterThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
+    Equals,
+    NotEqual,
+    MinusEquals,
+    PlusEquals,
+    MultiplyEquals,
+}
+
+/// Info about the value of an entity's property. The property info contains the "= b" part of "a = b".
+#[derive(PartialEq, Eq, Clone)]
+pub struct PropertyInfo {
+    pub operator: Operator,
+    pub value: Value,
+}
+
+/// Since a property can have multiple values, we have to store them in a list.
+/// For example, for an entity { key = value1 key = value2 }, "key" would have two property info items.
+#[derive(PartialEq, Eq, Clone)]
+pub struct PropertyInfoList(pub Vec<PropertyInfo>);
+
+/// A value is anything after an =
+#[derive(PartialEq, Eq, Clone)]
+pub enum Value {
+    String(String),
+    Number(String),
+    Boolean(bool),
+    Entity(Entity),
+    Define(String),
+    Color((String, String, String, String, Option<String>)),
+    Maths(String),
+}
+
+/// A conditional block looks like [[PARAM_NAME] key = value] and is dumb
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConditionalBlock {
+    pub key: (bool, String),
+    pub items: Vec<Value>,
+    pub properties: HashMap<String, PropertyInfoList>,
+}
+
+/// A Module is a single file inside of a Namespace. Another module in the same namespace with the same name will overwrite
+/// the previous module in the game's load order. Entities in a module are unique in a namespace. An entity defined in one module
+/// and defined in another module with a different name will be overwritten by the second module in the game's load order. If two
+/// modules at the same point in the load order define the same entity, the entity will be overwritten by the second module's name alphabetically.
+/// This is why some modules start with 00_, 01_, etc. to ensure they are loaded first and get overridden first.
+#[derive(Debug, PartialEq, Clone)]
+pub struct Module {
+    pub filename: String,
+    pub namespace: String,
+    pub entities: HashMap<String, Value>,
+    pub defines: HashMap<String, Value>,
+    pub properties: HashMap<String, PropertyInfoList>,
+    pub values: Vec<Value>,
+}
+
+/// A Namespace is the path to the folder containing module files in the `common` directory. Maybe other directories too.
+/// E.g. common/armies is the namespace, and contains modules with unique names. All modules in a namespace are combined together following
+/// the rules above in Module.
+#[derive(Debug, PartialEq, Clone)]
+pub struct Namespace {
+    pub namespace: String,
+    pub entities: HashMap<String, Value>,
+    pub defines: HashMap<String, Value>,
+    pub properties: HashMap<String, PropertyInfoList>,
+    pub values: Vec<Value>,
+    pub modules: HashMap<String, Module>,
+}
+
+impl Namespace {
+    pub fn new(namespace: String) -> Self {
+        Self {
+            namespace,
+            entities: HashMap::new(),
+            defines: HashMap::new(),
+            properties: HashMap::new(),
+            values: Vec::new(),
+            modules: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, module: &Module) -> &Self {
+        let local_module = module.to_owned();
+
+        self.entities.extend(local_module.entities.clone());
+        self.defines.extend(local_module.defines.clone());
+        self.properties.extend(local_module.properties.clone());
+        self.values.extend(local_module.values.clone());
+
+        self.modules.insert(local_module.path(), local_module);
+
+        self
+    }
+
+    pub fn get_module(&self, module_name: &str) -> Option<&Module> {
+        self.modules.get(module_name)
+    }
+
+    pub fn get_entity(&self, entity_name: &str) -> Option<&Entity> {
+        self.entities.get(entity_name).map(|v| v.entity())
+    }
+}
 
 impl Debug for Entity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -123,20 +235,11 @@ impl Entity {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
-pub struct PropertyInfo {
-    pub operator: Operator,
-    pub value: Value,
-}
-
 impl Display for PropertyInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {}", self.operator, self.value)
     }
 }
-
-#[derive(PartialEq, Eq, Clone)]
-pub struct PropertyInfoList(pub Vec<PropertyInfo>);
 
 impl PropertyInfoList {
     pub fn new() -> Self {
@@ -212,19 +315,6 @@ impl Debug for PropertyInfo {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum Operator {
-    GreaterThan,
-    GreaterThanOrEqual,
-    LessThan,
-    LessThanOrEqual,
-    Equals,
-    NotEqual,
-    MinusEquals,
-    PlusEquals,
-    MultiplyEquals,
-}
-
 impl Display for Operator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -265,17 +355,6 @@ impl FromStr for Operator {
             _ => Err(anyhow!("Invalid operator: {}", s)),
         }
     }
-}
-
-#[derive(PartialEq, Eq, Clone)]
-pub enum Value {
-    String(String),
-    Number(String),
-    Boolean(bool),
-    Entity(Entity),
-    Define(String),
-    Color((String, String, String, String, Option<String>)),
-    Maths(String),
 }
 
 impl Display for Value {
@@ -406,16 +485,6 @@ impl Value {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Module {
-    pub filename: String,
-    pub type_path: String,
-    pub entities: HashMap<String, Value>,
-    pub defines: HashMap<String, Value>,
-    pub properties: HashMap<String, PropertyInfoList>,
-    pub values: Vec<Value>,
-}
-
 impl Display for Module {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut buf = String::from("");
@@ -440,10 +509,10 @@ impl Display for Module {
 }
 
 impl Module {
-    pub fn new(filename: String, type_path: String) -> Self {
+    pub fn new(filename: String, namespace: String) -> Self {
         Self {
             filename,
-            type_path: type_path.replace("\\", "/"),
+            namespace: namespace.replace("\\", "/"),
             entities: HashMap::new(),
             defines: HashMap::new(),
             properties: HashMap::new(),
@@ -480,22 +549,8 @@ impl Module {
     }
 
     pub fn path(&self) -> String {
-        format!("{}/{}", self.type_path, self.filename)
+        format!("{}/{}", self.namespace, self.filename)
     }
-
-    pub fn entities(&self) -> Vec<NamedEntity> {
-        self.entities
-            .iter()
-            .map(|(key, value)| NamedEntity(value.entity().to_owned(), key.to_owned()))
-            .collect()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConditionalBlock {
-    pub key: (bool, String),
-    pub items: Vec<Value>,
-    pub properties: HashMap<String, PropertyInfoList>,
 }
 
 impl Display for ConditionalBlock {

@@ -69,8 +69,12 @@ impl DeepKeys for PropertyInfo {
     }
 }
 
-impl Entity {
-    pub fn jaccard_index(self: &Entity, other: &Entity) -> f64 {
+pub trait JaccardIndex {
+    fn jaccard_index(&self, other: &Self) -> f64;
+}
+
+impl JaccardIndex for Entity {
+    fn jaccard_index(self: &Entity, other: &Entity) -> f64 {
         let self_keys = self.deep_keys();
         let other_keys = other.deep_keys();
 
@@ -84,8 +88,8 @@ impl Entity {
     }
 }
 
-impl Value {
-    pub fn jaccard_index(self: &Value, other: &Value) -> f64 {
+impl JaccardIndex for Value {
+    fn jaccard_index(self: &Value, other: &Value) -> f64 {
         match self {
             Value::Entity(self_entity) => match other {
                 Value::Entity(other_entity) => self_entity.jaccard_index(other_entity),
@@ -96,9 +100,30 @@ impl Value {
     }
 }
 
+impl JaccardIndex for PropertyInfo {
+    fn jaccard_index(self: &PropertyInfo, other: &PropertyInfo) -> f64 {
+        self.value.jaccard_index(&other.value)
+    }
+}
+
+impl JaccardIndex for PropertyInfoList {
+    fn jaccard_index(self: &PropertyInfoList, other: &PropertyInfoList) -> f64 {
+        let self_keys = self.deep_keys();
+        let other_keys = other.deep_keys();
+
+        let self_set: HashSet<String> = self_keys.into_iter().collect();
+        let other_set: HashSet<String> = other_keys.into_iter().collect();
+
+        let intersection = self_set.intersection(&other_set).count();
+        let union = self_set.union(&other_set).count();
+
+        intersection as f64 / union as f64
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{cw_model::Module, playset::jaccard::DeepKeys};
+    use crate::{cw_model::Module, playset::jaccard::*};
 
     #[test]
     fn deep_keys_test_1() {

@@ -15,7 +15,7 @@ mod tests {
         assert_eq!(
             result,
             cw_model::Module {
-                type_path: "my/type/path".to_string(),
+                namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
                 entities: vec![
@@ -50,7 +50,7 @@ mod tests {
         assert_eq!(
             result,
             cw_model::Module {
-                type_path: "my/type/path".to_string(),
+                namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 entities: HashMap::new(),
                 values: vec![],
@@ -84,7 +84,7 @@ mod tests {
         assert_eq!(
             result,
             cw_model::Module {
-                type_path: "my/type/path".to_string(),
+                namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
                 entities: vec![(
@@ -132,7 +132,7 @@ mod tests {
         assert_eq!(
             result,
             cw_model::Module {
-                type_path: "my/type/path".to_string(),
+                namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
                 properties: HashMap::new(),
@@ -185,7 +185,7 @@ mod tests {
         assert_eq!(
             result,
             cw_model::Module {
-                type_path: "my/type/path".to_string(),
+                namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![
                     cw_model::Value::String("weapon_type_energy".to_string()),
@@ -209,7 +209,7 @@ mod tests {
         assert_eq!(
             result,
             cw_model::Module {
-                type_path: "my/type/path".to_string(),
+                namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
                 entities: HashMap::new(),
@@ -230,7 +230,7 @@ mod tests {
         assert_eq!(
             result,
             cw_model::Module {
-                type_path: "my/type/path".to_string(),
+                namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
                 entities: HashMap::new(),
@@ -249,7 +249,7 @@ mod tests {
         assert_eq!(
             result,
             cw_model::Module {
-                type_path: "my/type/path".to_string(),
+                namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
                 entities: HashMap::new(),
@@ -268,7 +268,7 @@ mod tests {
         assert_eq!(
             result,
             cw_model::Module {
-                type_path: "my/type/path".to_string(),
+                namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
                 entities: HashMap::new(),
@@ -290,7 +290,7 @@ mod tests {
         assert_eq!(
             result,
             cw_model::Module {
-                type_path: "my/type/path".to_string(),
+                namespace: "my/type/path".to_string(),
                 filename: "99_README_ETC".to_string(),
                 values: vec![],
                 entities: HashMap::new(),

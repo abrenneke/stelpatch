@@ -1,6 +1,9 @@
 pub mod base_game;
 pub mod diff;
+pub mod flat_diff;
 pub mod game_mod;
 pub mod jaccard;
 pub mod loader;
 pub mod mod_definition;
+pub mod statics;
+pub mod to_string_one_line;

@@ -1,20 +1,22 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
-use crate::cw_model::{Entity, Module, NamedEntity};
+use crate::cw_model::{Entity, Module, Namespace, Value};
 
 use super::mod_definition::ModDefinition;
 use anyhow::anyhow;
+use colored::*;
 use rayon::prelude::*;
 use walkdir::WalkDir;
 
 mod tests;
 
+#[derive(Debug, Clone)]
 pub struct GameMod {
     pub definition: ModDefinition,
     pub modules: Vec<Module>,
+    pub namespaces: HashMap<String, Namespace>,
 
-    module_lookup_by_path: std::collections::HashMap<String, usize>,
-    module_lookup_by_type_path: std::collections::HashMap<String, Vec<usize>>,
+    module_lookup_by_path: HashMap<String, usize>,
 }
 
 impl GameMod {
@@ -22,26 +24,28 @@ impl GameMod {
         Self {
             definition,
             modules: vec![],
-            module_lookup_by_path: std::collections::HashMap::new(),
-            module_lookup_by_type_path: std::collections::HashMap::new(),
+            namespaces: HashMap::new(),
+            module_lookup_by_path: HashMap::new(),
         }
     }
 
     pub fn push(&mut self, module: Module) -> () {
         let index = self.modules.len();
 
-        let path = format!("{}/{}", module.type_path.clone(), module.filename.clone());
+        let namespace = self
+            .namespaces
+            .entry(module.namespace.clone())
+            .or_insert_with(|| Namespace::new(module.namespace.clone()));
 
-        self.module_lookup_by_path.insert(path, index);
+        namespace.insert(&module);
 
-        let type_path_lookup = self
-            .module_lookup_by_type_path
-            .entry(module.type_path.clone())
-            .or_insert(vec![]);
-
-        type_path_lookup.push(index);
+        self.module_lookup_by_path.insert(module.path(), index);
 
         self.modules.push(module);
+    }
+
+    pub fn get_namespace(&self, namespace: &str) -> Option<&Namespace> {
+        self.namespaces.get(namespace)
     }
 
     pub fn load_parallel(definition: ModDefinition) -> Result<Self, anyhow::Error> {
@@ -84,7 +88,7 @@ impl GameMod {
         Ok(game_mod)
     }
 
-    /// Gets a module by its path (type_path + filename), or None if it doesn't exist.
+    /// Gets a module by its path (namespace + filename), or None if it doesn't exist.
     /// For example, "common/units/units"
     pub fn get_by_path(&self, path: &str) -> Option<&Module> {
         self.module_lookup_by_path
@@ -93,18 +97,8 @@ impl GameMod {
     }
 
     /// Returns the sole entity for a type path, or None if there are none with the name.
-    pub fn get_entity(&self, type_path: &str, name: &str) -> Option<&Entity> {
-        let modules = self.module_lookup_by_type_path.get(type_path)?;
-
-        for module_index in modules {
-            let module = &self.modules[*module_index];
-
-            if let Some(entity) = module.get_entity(name) {
-                return Some(entity.entity());
-            }
-        }
-
-        None
+    pub fn get_entity(&self, namespace: &str, name: &str) -> Option<&Entity> {
+        self.get_namespace(namespace)?.get_entity(name)
     }
 
     pub fn get_overridden_modules(&self, other: &GameMod) -> Vec<&Module> {
@@ -119,17 +113,60 @@ impl GameMod {
         overridden_modules
     }
 
-    pub fn get_overridden_entities(&self, other: &GameMod) -> Vec<NamedEntity> {
+    pub fn get_overridden_modules_by_namespace(
+        &self,
+        other: &GameMod,
+    ) -> HashMap<String, Namespace> {
+        let mut namespaces = HashMap::new();
+
+        for module in &self.modules {
+            for other_module in &other.modules {
+                if module.path() == other_module.path() {
+                    let namespace = namespaces
+                        .entry(module.namespace.clone())
+                        .or_insert_with(|| Namespace::new(module.namespace.clone()));
+
+                    namespace.insert(module);
+                }
+            }
+        }
+        namespaces
+    }
+
+    pub fn get_overridden_entities(&self, other: &GameMod) -> Vec<(String, String, Value)> {
         let mut overridden_entities = vec![];
 
         for module in &self.modules {
-            for entity in module.entities() {
-                if other.get_entity(&module.type_path, &entity.1).is_some() {
-                    overridden_entities.push(entity);
+            for (entity_name, entity) in &module.entities {
+                if other.get_entity(&module.namespace, &entity_name).is_some() {
+                    overridden_entities.push((
+                        module.namespace.to_owned(),
+                        entity_name.to_owned(),
+                        entity.to_owned(),
+                    ));
                 }
             }
         }
 
         overridden_entities
+    }
+
+    pub fn print_contents(&self) {
+        println!("{}", "Namespaces:".bold());
+        for namespace in self.namespaces.values() {
+            println!("  {}", namespace.namespace);
+        }
+
+        println!("{}", "Modules:".bold());
+        for module in self.modules.iter() {
+            println!("  {}/{}", module.namespace, module.filename.bold());
+        }
+
+        println!("{}", "Entities:".bold());
+        for namespace in self.namespaces.values() {
+            for entity_name in namespace.entities.keys() {
+                println!("  {}", entity_name);
+            }
+        }
     }
 }

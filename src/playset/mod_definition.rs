@@ -12,7 +12,7 @@ use nom::{
 };
 
 // Define the ModDefinition struct to hold the parsed values
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ModDefinition {
     pub version: Option<String>,
     pub tags: Vec<String>,
