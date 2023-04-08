@@ -10,8 +10,7 @@ if ($versionIndex -ge 0 -and $versionIndex -lt ($args.Length - 1)) {
 # Set other variables
 $targetDir = "target/release"
 $releaseDir = ".release/$exeName"
-$zipDir = ".release"
-$zipFileName = "$exeName-$releaseVersion.zip"
+$releaseExecutable = "$exeName-$releaseVersion.exe"
 
 # Build release binaries
 cargo build --release
@@ -21,12 +20,9 @@ if (!(Test-Path $releaseDir)) {
     New-Item -ItemType Directory -Path $releaseDir | Out-Null
 }
 
-# Copy specified executable file and dependencies to release directory
-Copy-Item -Path "$targetDir/$exeName.exe" -Destination $releaseDir -Force
-Copy-Item -Path "$targetDir/*.dll" -Destination $releaseDir -Force
+# Copy specified executable file to release directory
+Copy-Item -Path "$targetDir/$exeName.exe" -Destination "$releaseDir/$releaseExecutable" -Force
 
-# Zip up release directory
-Compress-Archive -Path $releaseDir/* -DestinationPath "$zipDir/$zipFileName" -Force
 
-# Clean up release directory
-Remove-Item $releaseDir -Recurse
+# Print success message
+Write-Host "Release executable created: $releaseExecutable"
