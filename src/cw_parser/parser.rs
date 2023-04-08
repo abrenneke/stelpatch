@@ -70,7 +70,7 @@ fn module<'a, E: ParserError<&'a str>>(
     .parse(input)?;
 
     let mut defines = HashMap::new();
-    let mut entities = HashMap::new();
+    // let mut entities = HashMap::new();
     let mut properties = HashMap::new();
     let mut values = Vec::new();
 
@@ -81,17 +81,13 @@ fn module<'a, E: ParserError<&'a str>>(
                     if expression.is_define {
                         defines.insert(expression.key, expression.value);
                     } else {
-                        if expression.value.is_entity() {
-                            entities.insert(expression.key, expression.value);
-                        } else {
-                            let items = properties
-                                .entry(expression.key.clone())
-                                .or_insert(PropertyInfoList::new());
-                            items.push(cw_model::PropertyInfo {
-                                value: expression.value,
-                                operator: expression.operator,
-                            });
-                        }
+                        let items = properties
+                            .entry(expression.key.clone())
+                            .or_insert(PropertyInfoList::new());
+                        items.push(cw_model::PropertyInfo {
+                            value: expression.value,
+                            operator: expression.operator,
+                        });
                     }
                 }
             }
@@ -107,7 +103,7 @@ fn module<'a, E: ParserError<&'a str>>(
         cw_model::Module {
             namespace: namespace.to_string(),
             filename: module_name.to_string(),
-            entities,
+            // entities,
             defines,
             properties,
             values,

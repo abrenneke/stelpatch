@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 use nom::{
     branch::alt,
@@ -10,9 +10,13 @@ use nom::{
     sequence::{delimited, pair, separated_pair},
     IResult,
 };
+use serde::{Deserialize, Serialize};
+use walkdir::WalkDir;
+
+use super::loader::stellaris_documents_dir;
 
 // Define the ModDefinition struct to hold the parsed values
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct ModDefinition {
     pub version: Option<String>,
     pub tags: Vec<String>,
@@ -23,6 +27,60 @@ pub struct ModDefinition {
     pub remote_file_id: Option<String>,
     pub dependencies: Vec<String>,
     pub archive: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct ModDefinitionList {
+    /// The mods that were parsed and in the definition list
+    pub mods: Vec<ModDefinition>,
+
+    /// A list of files that failed to parse
+    pub failed_parse_files: Vec<String>,
+}
+
+impl ModDefinitionList {
+    pub fn new() -> Self {
+        ModDefinitionList {
+            mods: Vec::new(),
+            failed_parse_files: Vec::new(),
+        }
+    }
+
+    pub fn load_from_my_documents(custom_path: Option<&Path>) -> Result<Self, anyhow::Error> {
+        let mut mod_dir = stellaris_documents_dir(custom_path)?;
+        mod_dir.push("mod");
+
+        let dot_mod_files = WalkDir::new(mod_dir)
+            .max_depth(0)
+            .sort_by_file_name()
+            .into_iter()
+            .filter_map(|e| {
+                if let Ok(e) = e {
+                    if e.file_type().is_file() && e.path().extension().unwrap_or_default() == "mod"
+                    {
+                        return Some(e);
+                    }
+                }
+                None
+            });
+
+        let mut definitions = ModDefinitionList::new();
+
+        for item in dot_mod_files {
+            let mod_definition = ModDefinition::load_from_file(&item.path());
+            definitions.push(mod_definition);
+        }
+
+        Ok(definitions)
+    }
+
+    pub fn push(&mut self, definition: Result<ModDefinition, String>) -> &Self {
+        match definition {
+            Ok(definition) => self.mods.push(definition),
+            Err(e) => self.failed_parse_files.push(e),
+        }
+        self
+    }
 }
 
 impl ModDefinition {
@@ -45,7 +103,7 @@ impl ModDefinition {
         Ok(mod_definition)
     }
 
-    pub fn load_from_file(path: &str) -> Result<Self, String> {
+    pub fn load_from_file(path: &Path) -> Result<Self, String> {
         let contents = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
         Self::load(&contents)
     }

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
@@ -17,22 +17,41 @@ struct EnabledModsWrapper {
     enabled_mods: Vec<String>,
 }
 
-fn stellaris_documents_dir(custom_path: Option<&str>) -> Result<PathBuf> {
+/// Gets /Users/Username/Documents/Paradox Interactive/Stellaris
+pub fn stellaris_documents_dir(custom_path: Option<&Path>) -> Result<PathBuf> {
     match custom_path {
-        Some(path) => Ok(PathBuf::from(path.to_owned())),
-        None => Ok([
-            dirs::home_dir().unwrap().to_str().unwrap(),
-            "Documents",
-            "Paradox Interactive",
-            "Stellaris",
-        ]
-        .iter()
-        .collect::<PathBuf>()),
+        Some(path) => {
+            if path.exists() {
+                Ok(path.to_path_buf())
+            } else {
+                Err(anyhow!(
+                    "Custom path does not exist on the file system: {}",
+                    path.display()
+                ))
+            }
+        }
+        None => {
+            let home_dir = dirs::document_dir()
+                .ok_or_else(|| anyhow!("Could not find Documents directory"))?;
+            let path = vec![
+                home_dir.to_str().ok_or_else(|| {
+                    anyhow!(
+                        "Could not convert Documents directory to string: {}",
+                        home_dir.display()
+                    )
+                })?,
+                "Paradox Interactive",
+                "Stellaris",
+            ]
+            .iter()
+            .collect::<PathBuf>();
+            Ok(path.into())
+        }
     }
 }
 
 impl EnabledMod {
-    pub async fn load_definition(&self, custom_path: Option<&str>) -> Result<ModDefinition> {
+    pub async fn load_definition(&self, custom_path: Option<&Path>) -> Result<ModDefinition> {
         let mut mod_definition_path = stellaris_documents_dir(custom_path)?;
         mod_definition_path.push(&self.path);
 
@@ -66,7 +85,7 @@ impl EnabledMod {
     }
 }
 
-pub async fn load_playset(custom_path: Option<&str>) -> Result<Vec<EnabledMod>> {
+pub async fn load_playset(custom_path: Option<&Path>) -> Result<Vec<EnabledMod>> {
     let mut json_file_path = stellaris_documents_dir(custom_path)?;
     json_file_path.push("dlc_load.json");
 

@@ -7,7 +7,7 @@ use super::{
     },
     to_string_one_line::ToStringOneLine,
 };
-use std::hash::Hash;
+use std::{collections::HashMap, hash::Hash};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct FlatDiff {
@@ -39,12 +39,9 @@ impl FlattenDiff for ModuleDiff {
     fn flatten_diff(&self, path: &str) -> Vec<FlatDiff> {
         let mut changes = Vec::new();
 
-        changes.extend(self.entities.flatten_diff(&format!("{}/entities", path)));
-        changes.extend(self.defines.flatten_diff(&format!("{}/items", path)));
-        changes.extend(
-            self.properties
-                .flatten_diff(&format!("{}/properties", path)),
-        );
+        // changes.extend(self.entities.flatten_diff(&format!("{}/entities", path)));
+        changes.extend(self.defines.flatten_diff(&format!("{}", path)));
+        changes.extend(self.properties.flatten_diff(&format!("{}", path)));
 
         changes
     }
@@ -323,17 +320,13 @@ impl ToStringOneLine for FlatDiff {
         match &self.operation {
             FlatDiffOperation::Add => {
                 format!(
-                    "{}: {}",
+                    "+{}: {}",
                     self.path,
                     self.new_value.as_ref().unwrap().to_string_one_line()
                 )
             }
             FlatDiffOperation::Remove => {
-                format!(
-                    "{}: {}",
-                    self.path,
-                    self.old_value.as_ref().unwrap().to_string_one_line()
-                )
+                format!("-{}", self.path)
             }
             FlatDiffOperation::Modify => format!(
                 "{}: {} -> {}",
@@ -343,4 +336,61 @@ impl ToStringOneLine for FlatDiff {
             ),
         }
     }
+}
+
+impl super::diff::ModDiff {
+    pub fn short_changes_string(&self) -> String {
+        let mut s = String::new();
+        for (namespace_name, namespace) in sorted_key_value_iter(&self.namespaces) {
+            match &namespace.properties {
+                HashMapDiff::Modified(properties) => {
+                    if properties.len() > 0 {
+                        s.push_str(&format!("{}\n", namespace_name));
+
+                        let mut entries = vec![];
+                        for (changed_entity_name, entity_diff) in sorted_key_value_iter(properties)
+                        {
+                            match entity_diff {
+                                Diff::Added(_) => {
+                                    entries.push(format!("  +{}", changed_entity_name))
+                                }
+                                Diff::Removed(_) => {
+                                    entries.push(format!("  -{}", changed_entity_name))
+                                }
+                                Diff::Modified(diff) => {
+                                    let flattened = diff.flatten_diff(&changed_entity_name);
+                                    for flat_diff in flattened {
+                                        entries.push(format!(
+                                            "  {}",
+                                            super::to_string_one_line::ToStringOneLine::to_string_one_line(&flat_diff)
+                                        ))
+                                    }
+                                }
+                                Diff::Unchanged => {}
+                            }
+                        }
+                        entries.sort();
+                        s.push_str(entries.join("\n").as_str());
+                        s.push_str("\n");
+                    }
+                }
+                HashMapDiff::Unchanged => {}
+            }
+        }
+
+        s
+    }
+}
+
+fn sorted_key_value_iter<K, V>(map: &HashMap<K, V>) -> impl Iterator<Item = (K, V)> + '_
+where
+    K: Ord + Clone + Hash,
+    V: Clone,
+{
+    let mut sorted_keys = map.keys().cloned().collect::<Vec<K>>();
+    sorted_keys.sort();
+
+    sorted_keys
+        .into_iter()
+        .filter_map(move |key| map.get(&key).cloned().map(|value| (key, value)))
 }

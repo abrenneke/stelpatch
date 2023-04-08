@@ -31,9 +31,6 @@ impl ToStringOneLine for Module {
         for (key, value) in &self.properties {
             values.push(format!("{} = {}", key, value.to_string_one_line()));
         }
-        for (key, value) in &self.entities {
-            values.push(format!("{} = {}", key, value.to_string_one_line()));
-        }
         s.push_str(&values.join(" "));
         s
     }
@@ -103,7 +100,7 @@ impl ToStringOneLine for ModuleDiff {
         let mut s = String::new();
         s.push_str(&self.defines.to_string_one_line());
         s.push_str(&self.properties.to_string_one_line());
-        s.push_str(&self.entities.to_string_one_line());
+        // s.push_str(&self.entities.to_string_one_line());
         s.push_str(&self.values.to_string_one_line());
         s
     }

@@ -7,6 +7,9 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.70"
+bincode = "1.3.3"
+cached = "0.42.0"
+clap = { version = "4.2.1", features = ["derive"] }
 colored = "2.0.0"
 const_format = "0.2.30"
 dirs = "5.0.0"
@@ -33,8 +36,8 @@ name = "stelpatch"
 path = "src/lib.rs"
 
 [[bin]]
-name = "stelpatch"
-path = "bin/main.rs"
+name = "moddiff"
+path = "bin/moddiff.rs"
 
 [[bin]]
 name = "stelpatch-benchmark"

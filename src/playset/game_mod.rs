@@ -1,16 +1,17 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::cw_model::{Entity, Module, Namespace, Value};
+use crate::cw_model::{Module, Namespace};
 
 use super::mod_definition::ModDefinition;
 use anyhow::anyhow;
 use colored::*;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
 mod tests;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameMod {
     pub definition: ModDefinition,
     pub modules: Vec<Module>,
@@ -35,7 +36,7 @@ impl GameMod {
         let namespace = self
             .namespaces
             .entry(module.namespace.clone())
-            .or_insert_with(|| Namespace::new(module.namespace.clone()));
+            .or_insert_with(|| Namespace::new(&module.namespace, None));
 
         namespace.insert(&module);
 
@@ -97,9 +98,9 @@ impl GameMod {
     }
 
     /// Returns the sole entity for a type path, or None if there are none with the name.
-    pub fn get_entity(&self, namespace: &str, name: &str) -> Option<&Entity> {
-        self.get_namespace(namespace)?.get_entity(name)
-    }
+    // pub fn get_entity(&self, namespace: &str, name: &str) -> Option<&Entity> {
+    // self.get_namespace(namespace)?.get_entity(name)
+    // }
 
     pub fn get_overridden_modules(&self, other: &GameMod) -> Vec<&Module> {
         let mut overridden_modules = vec![];
@@ -113,6 +114,7 @@ impl GameMod {
         overridden_modules
     }
 
+    /// Gets the modules that are completely overridden (same file name) by another mod. Groups by namespace.
     pub fn get_overridden_modules_by_namespace(
         &self,
         other: &GameMod,
@@ -124,7 +126,7 @@ impl GameMod {
                 if module.path() == other_module.path() {
                     let namespace = namespaces
                         .entry(module.namespace.clone())
-                        .or_insert_with(|| Namespace::new(module.namespace.clone()));
+                        .or_insert_with(|| Namespace::new(&module.namespace, None));
 
                     namespace.insert(module);
                 }
@@ -133,23 +135,23 @@ impl GameMod {
         namespaces
     }
 
-    pub fn get_overridden_entities(&self, other: &GameMod) -> Vec<(String, String, Value)> {
-        let mut overridden_entities = vec![];
+    // pub fn get_overridden_entities(&self, other: &GameMod) -> Vec<(String, String, Value)> {
+    //     let mut overridden_entities = vec![];
 
-        for module in &self.modules {
-            for (entity_name, entity) in &module.entities {
-                if other.get_entity(&module.namespace, &entity_name).is_some() {
-                    overridden_entities.push((
-                        module.namespace.to_owned(),
-                        entity_name.to_owned(),
-                        entity.to_owned(),
-                    ));
-                }
-            }
-        }
+    //     for module in &self.modules {
+    //         for (entity_name, entity) in &module.entities {
+    //             if other.get_entity(&module.namespace, &entity_name).is_some() {
+    //                 overridden_entities.push((
+    //                     module.namespace.to_owned(),
+    //                     entity_name.to_owned(),
+    //                     entity.to_owned(),
+    //                 ));
+    //             }
+    //         }
+    //     }
 
-        overridden_entities
-    }
+    //     overridden_entities
+    // }
 
     pub fn print_contents(&self) {
         println!("{}", "Namespaces:".bold());
@@ -162,11 +164,11 @@ impl GameMod {
             println!("  {}/{}", module.namespace, module.filename.bold());
         }
 
-        println!("{}", "Entities:".bold());
-        for namespace in self.namespaces.values() {
-            for entity_name in namespace.entities.keys() {
-                println!("  {}", entity_name);
-            }
-        }
+        // println!("{}", "Entities:".bold());
+        // for namespace in self.namespaces.values() {
+        //     for entity_name in namespace.entities.keys() {
+        //         println!("  {}", entity_name);
+        //     }
+        // }
     }
 }

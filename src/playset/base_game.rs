@@ -4,15 +4,28 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use lazy_static::lazy_static;
 use winreg::{enums::HKEY_CURRENT_USER, RegKey};
 
 use super::{game_mod::GameMod, mod_definition::ModDefinition};
 
+lazy_static! {
+    pub static ref STELLARIS_INSTALL_PATH: Option<PathBuf> =
+        BaseGame::get_install_directory_windows();
+    pub static ref BASE_MOD: GameMod = BaseGame::load_as_mod_definition(None).unwrap();
+}
+
 pub struct BaseGame {}
 
 impl BaseGame {
-    pub fn load_as_mod_definition() -> Result<GameMod, Box<dyn std::error::Error>> {
-        let install_path = BaseGame::get_install_directory_windows();
+    pub fn load_as_mod_definition(
+        install_path: Option<PathBuf>,
+    ) -> Result<GameMod, Box<dyn std::error::Error>> {
+        let install_path = if let Some(path) = install_path {
+            Some(path)
+        } else {
+            STELLARIS_INSTALL_PATH.clone()
+        };
         match install_path {
             Some(path) => {
                 let definition = ModDefinition {
@@ -28,6 +41,7 @@ impl BaseGame {
                 };
 
                 let game_mod = GameMod::load_parallel(definition)?;
+
                 Ok(game_mod)
             }
             None => Err("Could not find Stellaris installation directory".into()),
@@ -88,7 +102,7 @@ mod tests {
 
     #[test]
     fn load_base_game_as_mod() {
-        let base_game = BaseGame::load_as_mod_definition().unwrap();
+        let base_game = BaseGame::load_as_mod_definition(None).unwrap();
 
         assert!(base_game.modules.len() > 0);
         dbg!(base_game.modules.len());

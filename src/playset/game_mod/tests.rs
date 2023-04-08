@@ -1,29 +1,41 @@
 #[cfg(test)]
 mod tests {
-    use const_format::concatcp;
+    use lazy_static::lazy_static;
 
-    use crate::playset::diff::Diff;
+    use crate::playset::base_game::BASE_MOD;
+
     use crate::playset::diff::Diffable;
     use crate::playset::diff::EntityMergeMode;
-    use crate::playset::flat_diff::*;
-    use crate::playset::to_string_one_line::*;
-    use crate::playset::{base_game::BaseGame, diff::HashMapDiff};
+
+    use crate::playset::diff::HashMapDiff;
 
     use super::super::*;
 
-    const MODS_BASE_DIR: &str = "C:\\Users\\Andy\\Documents\\Paradox Interactive\\Stellaris\\mod";
-
-    const UNIVERSAL_RESOURCE_PATCH_MOD_FILE: &str = concatcp!(MODS_BASE_DIR, "/ugc_1688887083.mod");
-    const ETHOS_UNIQUE_TECHS_BUILDINGS_MOD_FILE: &str =
-        concatcp!(MODS_BASE_DIR, "/ugc_804732593.mod");
-    const UNOFFICIAL_PATCH_MOD_FILE: &str = concatcp!(MODS_BASE_DIR, "/ugc_1995601384.mod");
-    const EXPLORATION_TWEAKS: &str = concatcp!(MODS_BASE_DIR, "/ugc_2802824108.mod");
+    lazy_static! {
+        pub static ref MODS_BASE_DIR: &'static str =
+            "C:\\Users\\Andy\\Documents\\Paradox Interactive\\Stellaris\\mod";
+        pub static ref UNIVERSAL_RESOURCE_PATCH_MOD_FILE: PathBuf =
+            vec![&MODS_BASE_DIR, "ugc_1688887083.mod"]
+                .into_iter()
+                .collect();
+        pub static ref ETHOS_UNIQUE_TECHS_BUILDINGS_MOD_FILE: PathBuf =
+            vec![&MODS_BASE_DIR, "ugc_804732593.mod"]
+                .into_iter()
+                .collect();
+        pub static ref UNOFFICIAL_PATCH_MOD_FILE: PathBuf =
+            vec![&MODS_BASE_DIR, "ugc_1995601384.mod"]
+                .into_iter()
+                .collect();
+        pub static ref EXPLORATION_TWEAKS: PathBuf = vec![&MODS_BASE_DIR, "ugc_2802824108.mod"]
+            .into_iter()
+            .collect();
+    }
 
     #[test]
     fn test_game_mod_load() {
         // Create a ModDefinition that matches the expected_output
         let mod_definition =
-            ModDefinition::load_from_file(ETHOS_UNIQUE_TECHS_BUILDINGS_MOD_FILE).unwrap();
+            ModDefinition::load_from_file(ETHOS_UNIQUE_TECHS_BUILDINGS_MOD_FILE.as_path()).unwrap();
 
         let game_mod = GameMod::load_parallel(mod_definition).unwrap();
         assert!(game_mod.modules.len() > 0);
@@ -36,7 +48,7 @@ mod tests {
     fn test_game_mod_load_2() {
         // Create a ModDefinition that matches the expected_output
         let mod_definition =
-            ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE).unwrap();
+            ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE.as_path()).unwrap();
 
         let game_mod = GameMod::load_parallel(mod_definition).unwrap();
         assert!(game_mod.modules.len() > 0);
@@ -48,12 +60,12 @@ mod tests {
 
     #[test]
     fn mod_overrides_base() {
-        let definition = ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE).unwrap();
+        let definition =
+            ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let base_game = BaseGame::load_as_mod_definition().unwrap();
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let overrides = game_mod.get_overridden_modules_by_namespace(&base_game);
+        let overrides = game_mod.get_overridden_modules_by_namespace(&BASE_MOD);
 
         println!("{}", "Overridden Modules by Namespace:".bold());
 
@@ -67,32 +79,33 @@ mod tests {
 
     #[test]
     fn mod_overrides_entities() {
-        let definition = ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE).unwrap();
+        let definition =
+            ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let base_game = BaseGame::load_as_mod_definition().unwrap();
-        let game_mod = GameMod::load_parallel(definition).unwrap();
+        // let _base_game = BASE_MOD.unwrap();
+        let _game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let overrides = game_mod.get_overridden_entities(&base_game);
+        // let overrides = game_mod.get_overridden_entities(&base_game);
 
-        println!("{}", "Overridden Entities:".bold());
+        // println!("{}", "Overridden Entities:".bold());
 
-        for (namespace, entity_name, _) in overrides {
-            println!("  {} - {}", namespace, entity_name);
-        }
+        // for (namespace, entity_name, _) in overrides {
+        //     println!("  {} - {}", namespace, entity_name);
+        // }
     }
 
     #[test]
     fn mod_patch_of_base() {
-        let definition = ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE).unwrap();
+        let definition =
+            ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let base_game = BaseGame::load_as_mod_definition().unwrap();
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let overrides = game_mod.get_overridden_modules(&base_game);
+        let overrides = game_mod.get_overridden_modules(&BASE_MOD);
 
         let first_override = overrides.first().unwrap();
         let patch = first_override.diff_to(
-            &base_game.get_by_path(&first_override.path()).unwrap(),
+            &BASE_MOD.get_by_path(&first_override.path()).unwrap(),
             EntityMergeMode::LIOS,
         );
 
@@ -102,16 +115,16 @@ mod tests {
 
     #[test]
     fn mod_patch_of_base_2() {
-        let definition = ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE).unwrap();
+        let definition =
+            ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let base_game = BaseGame::load_as_mod_definition().unwrap();
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let overrides = game_mod.get_overridden_modules(&base_game);
+        let overrides = game_mod.get_overridden_modules(&BASE_MOD);
 
         let first_override = overrides.first().unwrap();
         let patch = first_override.diff_to(
-            &base_game.get_by_path(&first_override.path()).unwrap(),
+            &BASE_MOD.get_by_path(&first_override.path()).unwrap(),
             EntityMergeMode::LIOS,
         );
 
@@ -121,15 +134,15 @@ mod tests {
 
     #[test]
     fn list_changes_by_namespace_in_mod_1() {
-        let definition = ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE).unwrap();
+        let definition =
+            ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let base_game = BaseGame::load_as_mod_definition().unwrap();
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let diff = base_game.diff_to(&game_mod, EntityMergeMode::Unknown);
+        let diff = BASE_MOD.diff_to(&game_mod, EntityMergeMode::Unknown);
 
         for (namespace_name, namespace) in diff.namespaces {
-            match namespace.entities {
+            match namespace.properties {
                 HashMapDiff::Modified(entities) => {
                     if entities.len() > 0 {
                         println!("{}", namespace_name.bold());
@@ -146,80 +159,52 @@ mod tests {
 
     #[test]
     fn list_changes_by_namespace_in_mod_2() {
-        let definition = ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE).unwrap();
+        let definition =
+            ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let base_game = BaseGame::load_as_mod_definition().unwrap();
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let diff = base_game.diff_to(&game_mod, EntityMergeMode::LIOS);
+        let diff = BASE_MOD.diff_to(&game_mod, EntityMergeMode::LIOS);
 
-        for (namespace_name, namespace) in diff.namespaces {
-            match namespace.entities {
-                HashMapDiff::Modified(entities) => {
-                    if entities.len() > 0 {
-                        println!("{}", namespace_name.bold());
-                        for (changed_entity_name, entity_diff) in entities {
-                            match entity_diff {
-                                Diff::Added(_) => {
-                                    println!("  (Added) {}", changed_entity_name)
-                                }
-                                Diff::Removed(_) => {
-                                    println!("  (Removed) {}", changed_entity_name)
-                                }
-                                Diff::Modified(diff) => {
-                                    println!(
-                                        "  {}: {}",
-                                        changed_entity_name,
-                                        diff.to_string_one_line()
-                                    )
-                                }
-                                Diff::Unchanged => {}
-                            }
-                        }
-                        println!("");
-                    }
-                }
-                HashMapDiff::Unchanged => {}
-            }
-        }
+        let diff_str = diff.short_changes_string();
+        print!("{}", diff_str);
     }
 
     #[test]
     fn flat_diff() {
-        let definition = ModDefinition::load_from_file(EXPLORATION_TWEAKS).unwrap();
+        let definition = ModDefinition::load_from_file(EXPLORATION_TWEAKS.as_path()).unwrap();
 
-        let base_game = BaseGame::load_as_mod_definition().unwrap();
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let diff = base_game.diff_to(&game_mod, EntityMergeMode::LIOS);
+        let diff = BASE_MOD.diff_to(&game_mod, EntityMergeMode::Unknown);
 
-        for (namespace_name, namespace) in diff.namespaces {
-            match namespace.entities {
-                HashMapDiff::Modified(entities) => {
-                    if entities.len() > 0 {
-                        println!("{}", namespace_name.bold());
-                        for (changed_entity_name, entity_diff) in entities {
-                            match entity_diff {
-                                Diff::Added(_) => {
-                                    println!("  (Added) {}", changed_entity_name)
-                                }
-                                Diff::Removed(_) => {
-                                    println!("  (Removed) {}", changed_entity_name)
-                                }
-                                Diff::Modified(diff) => {
-                                    let flattened = diff.flatten_diff(&changed_entity_name);
-                                    for flat_diff in flattened {
-                                        println!("  {}", flat_diff.to_string_one_line())
-                                    }
-                                }
-                                Diff::Unchanged => {}
-                            }
-                        }
-                        println!("");
-                    }
-                }
-                HashMapDiff::Unchanged => {}
-            }
-        }
+        let diff_str = diff.short_changes_string();
+        print!("{}", diff_str);
+
+        assert_eq!(
+            diff_str.trim(),
+            r#"
+common/defines
+  NGameplay/BASE_SURVEY_TIME: 20.0 -> 30.0
+  NGameplay/CONSTRUCTION_SHIP_WORK_SPEED_MULT: 1 -> 0.5
+  NGameplay/PLANET_HYPERLANE_RANGE: 2 -> 1
+  NShip/HYPERDRIVE_INTERSTELLAR_TRAVEL_SPEED: 1.0 -> 0.12
+common/on_actions
+  +on_game_start/events: gee_game_start.1
+common/technology
+  +GT_ftl_speed_1
+  +GT_ftl_speed_2
+  +GT_ftl_speed_3
+  +GT_ftl_speed_4
+  +GT_science_ship_survey_speed
+  +GT_ship_emergency_ftl_min_days_add
+  +GT_ship_interstellar_speed_mult
+  +GT_shipsize_mining_station_build_speed_mult
+  +GT_shipsize_research_station_build_speed_mult
+  +gee_science_ship_survey_speed_2
+  +gee_science_ship_survey_speed_3
+"#
+            .trim()
+        );
     }
 }

@@ -6,10 +6,13 @@ use std::{
 
 use anyhow::anyhow;
 use indent::indent_all_by;
+use serde::{Deserialize, Serialize};
+
+use crate::playset::{diff::EntityMergeMode, statics::get_merge_mode_for_namespace};
 
 /// An entity is an object with items, key value pairs, and conditional blocks. The majority of values in a module are entities.
 /// Entities are like { key = value } or { a b c } or { a > b } or
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Entity {
     /// Array items in the entity, like { a b c }
     pub items: Vec<Value>,
@@ -22,12 +25,12 @@ pub struct Entity {
 }
 
 /// An entity with a name, like a = { key = value }
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Serialize, Deserialize)]
 pub struct NamedEntity(pub Entity, pub String);
 
 /// An operator that can appear between a key and a value in an entity, like a > b. Usually this is = but it depends on the implementation.
 /// For our purposes it doesn't really matter, we just have to remember what it is.
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum Operator {
     GreaterThan,
     GreaterThanOrEqual,
@@ -41,7 +44,7 @@ pub enum Operator {
 }
 
 /// Info about the value of an entity's property. The property info contains the "= b" part of "a = b".
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct PropertyInfo {
     pub operator: Operator,
     pub value: Value,
@@ -49,11 +52,11 @@ pub struct PropertyInfo {
 
 /// Since a property can have multiple values, we have to store them in a list.
 /// For example, for an entity { key = value1 key = value2 }, "key" would have two property info items.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct PropertyInfoList(pub Vec<PropertyInfo>);
 
 /// A value is anything after an =
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum Value {
     String(String),
     Number(String),
@@ -65,7 +68,7 @@ pub enum Value {
 }
 
 /// A conditional block looks like [[PARAM_NAME] key = value] and is dumb
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConditionalBlock {
     pub key: (bool, String),
     pub items: Vec<Value>,
@@ -77,11 +80,11 @@ pub struct ConditionalBlock {
 /// and defined in another module with a different name will be overwritten by the second module in the game's load order. If two
 /// modules at the same point in the load order define the same entity, the entity will be overwritten by the second module's name alphabetically.
 /// This is why some modules start with 00_, 01_, etc. to ensure they are loaded first and get overridden first.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Module {
     pub filename: String,
     pub namespace: String,
-    pub entities: HashMap<String, Value>,
+    // pub entities: HashMap<String, Value>,
     pub defines: HashMap<String, Value>,
     pub properties: HashMap<String, PropertyInfoList>,
     pub values: Vec<Value>,
@@ -90,33 +93,42 @@ pub struct Module {
 /// A Namespace is the path to the folder containing module files in the `common` directory. Maybe other directories too.
 /// E.g. common/armies is the namespace, and contains modules with unique names. All modules in a namespace are combined together following
 /// the rules above in Module.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Namespace {
     pub namespace: String,
-    pub entities: HashMap<String, Value>,
+    // pub entities: HashMap<String, Value>,
     pub defines: HashMap<String, Value>,
     pub properties: HashMap<String, PropertyInfoList>,
     pub values: Vec<Value>,
     pub modules: HashMap<String, Module>,
+    pub merge_mode: EntityMergeMode,
 }
 
 impl Namespace {
-    pub fn new(namespace: String) -> Self {
-        Self {
-            namespace,
-            entities: HashMap::new(),
+    pub fn new(namespace: &str, merge_mode: Option<EntityMergeMode>) -> Self {
+        let ns = Self {
+            namespace: namespace.to_string(),
+            // entities: HashMap::new(),
             defines: HashMap::new(),
             properties: HashMap::new(),
             values: Vec::new(),
             modules: HashMap::new(),
-        }
+            merge_mode: merge_mode
+                .unwrap_or_else(|| get_merge_mode_for_namespace(&namespace.clone())),
+        };
+
+        ns
     }
 
     pub fn insert(&mut self, module: &Module) -> &Self {
         let local_module = module.to_owned();
 
-        self.entities.extend(local_module.entities.clone());
+        // self.entities.extend(local_module.entities.clone());
         self.defines.extend(local_module.defines.clone());
+
+        // TODO: properties should follow the merge mode, technically, but it's unlikely a single
+        // mod will define the same property twice in the same namespace, so for now we can treat it like
+        // EntityMergeMode::LIOS
         self.properties.extend(local_module.properties.clone());
         self.values.extend(local_module.values.clone());
 
@@ -129,9 +141,18 @@ impl Namespace {
         self.modules.get(module_name)
     }
 
-    pub fn get_entity(&self, entity_name: &str) -> Option<&Entity> {
-        self.entities.get(entity_name).map(|v| v.entity())
+    pub fn get_only(&self, key: &str) -> Option<&Value> {
+        if let Some(value) = self.properties.get(key) {
+            if value.0.len() == 1 {
+                return Some(&value.0[0].value);
+            }
+        }
+        None
     }
+
+    // pub fn get_entity(&self, entity_name: &str) -> Option<&Entity> {
+    // self.entities.get(entity_name).map(|v| v.entity())
+    // }
 }
 
 impl Debug for Entity {
@@ -500,10 +521,10 @@ impl Display for Module {
             let value = format!("{} = {}\n", key, value);
             buf.push_str(&value);
         }
-        for (key, value) in &self.entities {
-            let value = format!("{} = {}\n", key, value);
-            buf.push_str(&value);
-        }
+        // for (key, value) in &self.entities {
+        //     let value = format!("{} = {}\n", key, value);
+        //     buf.push_str(&value);
+        // }
         write!(f, "{}", buf)
     }
 }
@@ -513,7 +534,7 @@ impl Module {
         Self {
             filename,
             namespace: namespace.replace("\\", "/"),
-            entities: HashMap::new(),
+            // entities: HashMap::new(),
             defines: HashMap::new(),
             properties: HashMap::new(),
             values: Vec::new(),
@@ -528,9 +549,9 @@ impl Module {
         self.properties.insert(key, value);
     }
 
-    pub fn add_entity(&mut self, key: String, value: Value) {
-        self.entities.insert(key, value);
-    }
+    // pub fn add_entity(&mut self, key: String, value: Value) {
+    //     self.entities.insert(key, value);
+    // }
 
     pub fn add_value(&mut self, value: Value) {
         self.values.push(value);
@@ -544,9 +565,20 @@ impl Module {
         self.properties.get(key)
     }
 
-    pub fn get_entity(&self, key: &str) -> Option<&Value> {
-        self.entities.get(key)
+    pub fn get_only_property(&self, key: &str) -> Option<&Value> {
+        if let Some(properties) = self.properties.get(key) {
+            if properties.len() == 1 {
+                return Some(&properties.0[0].value);
+            } else {
+                panic!("Expected only one property");
+            }
+        }
+        None
     }
+
+    // pub fn get_entity(&self, key: &str) -> Option<&Value> {
+    //     self.entities.get(key)
+    // }
 
     pub fn path(&self) -> String {
         format!("{}/{}", self.namespace, self.filename)
@@ -577,5 +609,32 @@ impl Display for ConditionalBlock {
         buf.push_str("]\n");
 
         write!(f, "{}", buf)
+    }
+}
+
+impl From<Value> for PropertyInfoList {
+    fn from(v: Value) -> Self {
+        Self(vec![v.into()])
+    }
+}
+
+impl From<Value> for PropertyInfo {
+    fn from(v: Value) -> Self {
+        Self {
+            operator: Operator::Equals,
+            value: v,
+        }
+    }
+}
+
+impl From<Entity> for PropertyInfo {
+    fn from(v: Entity) -> Self {
+        Value::Entity(v).into()
+    }
+}
+
+impl From<Entity> for PropertyInfoList {
+    fn from(e: Entity) -> Self {
+        Value::Entity(e).into()
     }
 }

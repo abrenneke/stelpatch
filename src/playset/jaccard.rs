@@ -39,7 +39,6 @@ impl DeepKeys for Module {
     fn deep_keys(&self) -> Vec<String> {
         let mut keys = vec![];
         keys.extend(self.values.deep_keys());
-        keys.extend(self.entities.deep_keys());
         keys.extend(self.defines.deep_keys());
         keys.extend(self.properties.deep_keys());
         keys
@@ -225,8 +224,8 @@ mod tests {
         let module = Module::parse(input.to_string(), "", "").unwrap();
         let module2 = Module::parse(input2.to_string(), "", "").unwrap();
 
-        let entity1 = module.entities.get("entity_1").unwrap().entity();
-        let entity2 = module2.entities.get("entity_1").unwrap().entity();
+        let entity1 = module.get_only_property("entity_1").unwrap().entity();
+        let entity2 = module2.get_only_property("entity_1").unwrap().entity();
 
         let index = entity1.jaccard_index(&entity2);
 

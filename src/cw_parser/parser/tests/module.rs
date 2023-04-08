@@ -18,7 +18,7 @@ mod tests {
                 namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
-                entities: vec![
+                properties: vec![
                     (
                         "entity1".to_string(),
                         Entity::new()
@@ -35,7 +35,6 @@ mod tests {
                 .into_iter()
                 .collect(),
                 defines: HashMap::new(),
-                properties: HashMap::new(),
             }
         );
     }
@@ -52,12 +51,11 @@ mod tests {
             cw_model::Module {
                 namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
-                entities: HashMap::new(),
                 values: vec![],
                 defines: vec![
                     (
                         "@MY_DEFINE".to_string(),
-                        cw_model::Value::Number("123.0".to_owned())
+                        cw_model::Value::Number("123".to_owned())
                     ),
                     (
                         "@ANOTHER_DEFINE".to_string(),
@@ -87,29 +85,26 @@ mod tests {
                 namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
-                entities: vec![(
-                    "entity".to_string(),
-                    Entity::new()
-                        .with_property("prop1", cw_model::Value::String("value1".to_string()))
-                        .into(),
-                )]
-                .into_iter()
-                .collect(),
                 defines: vec![(
                     "@MY_DEFINE".to_string(),
-                    cw_model::Value::Number("123.0".to_owned())
+                    cw_model::Value::Number("123".to_owned())
                 )]
                 .into_iter()
                 .collect(),
-                properties: vec![(
-                    "my_var1".to_string(),
-                    PropertyInfoList::new().with_property(
-                        cw_model::Operator::Equals,
-                        cw_model::Value::String("value1".to_string())
-                    )
-                ),]
+                properties: vec![
+                    (
+                        "entity".to_string(),
+                        Entity::new()
+                            .with_property("prop1", cw_model::Value::String("value1".to_string()))
+                            .into()
+                    ),
+                    (
+                        "my_var1".to_string(),
+                        cw_model::Value::String("value1".to_string()).into()
+                    ),
+                ]
                 .into_iter()
-                .collect(),
+                .collect::<HashMap<String, PropertyInfoList>>(),
             }
         );
     }
@@ -135,35 +130,33 @@ mod tests {
                 namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
-                properties: HashMap::new(),
                 defines: HashMap::new(),
-                entities: vec![(
+                properties: vec![(
                     "revolt_situation_low_stability_factor".to_string(),
-                    cw_model::Value::Entity(
-                        Entity::new()
-                            .with_property(
-                                "base",
-                                cw_model::Value::Define("@stabilitylevel2".to_string())
-                            )
-                            .with_property(
-                                "subtract",
-                                cw_model::Value::String("trigger:planet_stability".to_string())
-                            )
-                            .with_property("mult", cw_model::Value::Number("0.2".to_owned()))
-                            .with_conditional(cw_model::ConditionalBlock {
-                                items: vec![],
-                                key: (false, "ALTERED_STABILITY".to_string()),
-                                properties: vec![(
-                                    "subtract".to_string(),
-                                    PropertyInfoList::new().with_property(
-                                        cw_model::Operator::Equals,
-                                        cw_model::Value::String("$ALTERED_STABILITY$".to_string())
-                                    )
-                                )]
-                                .into_iter()
-                                .collect(),
-                            })
-                    )
+                    Entity::new()
+                        .with_property(
+                            "base",
+                            cw_model::Value::Define("@stabilitylevel2".to_string())
+                        )
+                        .with_property(
+                            "subtract",
+                            cw_model::Value::String("trigger:planet_stability".to_string())
+                        )
+                        .with_property("mult", cw_model::Value::Number("0.2".to_owned()))
+                        .with_conditional(cw_model::ConditionalBlock {
+                            items: vec![],
+                            key: (false, "ALTERED_STABILITY".to_string()),
+                            properties: vec![(
+                                "subtract".to_string(),
+                                PropertyInfoList::new().with_property(
+                                    cw_model::Operator::Equals,
+                                    cw_model::Value::String("$ALTERED_STABILITY$".to_string())
+                                )
+                            )]
+                            .into_iter()
+                            .collect(),
+                        })
+                        .into()
                 ),]
                 .into_iter()
                 .collect(),
@@ -193,7 +186,6 @@ mod tests {
                     cw_model::Value::String("weapon_type_explosive".to_string()),
                     cw_model::Value::String("weapon_type_strike_craft".to_string()),
                 ],
-                entities: HashMap::new(),
                 defines: HashMap::new(),
                 properties: HashMap::new(),
             }
@@ -212,7 +204,6 @@ mod tests {
                 namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
-                entities: HashMap::new(),
                 defines: HashMap::new(),
                 properties: HashMap::new(),
             }
@@ -233,7 +224,6 @@ mod tests {
                 namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
-                entities: HashMap::new(),
                 defines: HashMap::new(),
                 properties: HashMap::new(),
             }
@@ -252,7 +242,6 @@ mod tests {
                 namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
-                entities: HashMap::new(),
                 defines: HashMap::new(),
                 properties: HashMap::new(),
             }
@@ -271,7 +260,6 @@ mod tests {
                 namespace: "my/type/path".to_string(),
                 filename: "my_module".to_string(),
                 values: vec![],
-                entities: HashMap::new(),
                 defines: HashMap::new(),
                 properties: HashMap::new(),
             }
@@ -293,7 +281,6 @@ mod tests {
                 namespace: "my/type/path".to_string(),
                 filename: "99_README_ETC".to_string(),
                 values: vec![],
-                entities: HashMap::new(),
                 defines: HashMap::new(),
                 properties: HashMap::new(),
             }

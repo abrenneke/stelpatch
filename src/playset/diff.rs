@@ -1,4 +1,5 @@
 use indent_write::indentable::Indentable;
+use serde::{Deserialize, Serialize};
 
 use crate::cw_model::{
     ConditionalBlock, Entity, Module, Namespace, Operator, PropertyInfo, PropertyInfoList, Value,
@@ -12,7 +13,7 @@ use super::jaccard::JaccardIndex;
 
 /// Different namespaces in stellaris have different merge mechanics when it comes to entities with the same name
 /// in different files. This defines the merge mode to use for entities with the same name.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum EntityMergeMode {
     /// Last-in-only-served - the last entity in the list will be the one that is used
     LIOS,
@@ -22,6 +23,9 @@ pub enum EntityMergeMode {
 
     /// Entities with the same name will be merged
     Merge,
+
+    /// Like LIOS, but for the properties of the entities instead of the entities themselves.
+    MergeShallow,
 
     /// Entities with the same name act like a PropertyInfoList, and there are multiple for the one key
     Duplicate,
@@ -33,35 +37,35 @@ pub enum EntityMergeMode {
     Unknown,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Changed<T> {
     pub old: T,
     pub new: T,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ModuleDiff {
     pub filename: Option<Changed<String>>,
     pub namespace: Option<Changed<String>>,
-    pub entities: HashMapDiff<String, Value, ValueDiff>,
+    // pub entities: HashMapDiff<String, Value, ValueDiff>,
     pub defines: HashMapDiff<String, Value, ValueDiff>,
     pub properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
     pub values: VecDiff<Value, ValueDiff>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum HashMapDiff<K: Eq + Hash, V, VModified> {
     Unchanged,
     Modified(HashMap<K, Diff<V, VModified>>),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum VecDiff<T, TModified> {
     Unchanged,
     Changed(Vec<Diff<T, TModified>>),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Diff<T, TModified> {
     Unchanged,
     Added(T),
@@ -69,39 +73,39 @@ pub enum Diff<T, TModified> {
     Modified(TModified),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct EntityDiff {
     pub items: VecDiff<Value, ValueDiff>,
     pub properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
     pub conditional_blocks: HashMapDiff<String, ConditionalBlock, ConditionalBlockDiff>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct NamedEntityDiff(pub EntityDiff, pub Option<(String, String)>);
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct PropertyInfoDiff {
     pub operator: Option<(Operator, Operator)>,
     pub value: ValueDiff,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct PropertyInfoListDiff(pub VecDiff<PropertyInfo, PropertyInfoDiff>);
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ConditionalBlockDiff {
     pub key: Option<((bool, String), (bool, String))>,
     pub items: VecDiff<Value, ValueDiff>,
     pub properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum OperatorDiff {
     Unchanged,
     Modified(Operator, Operator),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum ValueDiff {
     String(Option<(String, String)>),
     Number(Option<(String, String)>),
@@ -118,15 +122,18 @@ pub enum ValueDiff {
     TypeChanged(Value, Value),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct NamespaceDiff {
-    pub entities: HashMapDiff<String, Value, ValueDiff>,
+    // TODO to support Duplicate, an entity name actually should be working like a PropertyInfoList,
+    // should probably just remove entities and use properties
+    // pub entities: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
+    // pub entities: HashMapDiff<String, Value, ValueDiff>,
     pub defines: HashMapDiff<String, Value, ValueDiff>,
     pub properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
     pub values: VecDiff<Value, ValueDiff>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ModDiff {
     pub namespaces: HashMap<String, NamespaceDiff>,
 }
@@ -175,7 +182,7 @@ impl Diffable<ValueDiff> for Value {
 }
 
 impl Diffable<ModDiff> for GameMod {
-    fn diff_to(&self, other: &Self, merge_mode: EntityMergeMode) -> ModDiff {
+    fn diff_to(&self, other: &Self, _merge_mode: EntityMergeMode) -> ModDiff {
         let mut namespaces = HashMap::new();
 
         // For each namespace in a (base), find the corresponding namespace in b, if exists, and get patch from that
@@ -184,14 +191,14 @@ impl Diffable<ModDiff> for GameMod {
             let b_namespace = other.namespaces.get(&namespace.namespace);
             match b_namespace {
                 Some(b_namespace) => {
-                    let diff = namespace.diff_to(b_namespace, merge_mode.clone());
+                    let diff = namespace.diff_to(b_namespace, namespace.merge_mode.clone());
                     namespaces.insert(namespace.namespace.to_string(), diff);
                 }
                 None => {
+                    let fake_ns = Namespace::new(&namespace.namespace, None);
                     namespaces.insert(
                         namespace.namespace.to_string(),
-                        namespace
-                            .diff_to(&Namespace::new(namespace.namespace.to_owned()), merge_mode),
+                        namespace.diff_to(&fake_ns, fake_ns.merge_mode),
                     );
                 }
             }
@@ -202,19 +209,24 @@ impl Diffable<ModDiff> for GameMod {
 }
 
 impl NamespaceDiff {
-    fn merge_entities_in(&mut self, entities: HashMapDiff<String, Value, ValueDiff>) -> &mut Self {
-        if let HashMapDiff::Modified(entities) = entities {
-            match self.entities {
-                HashMapDiff::Unchanged => self.entities = HashMapDiff::Modified(entities),
-                HashMapDiff::Modified(ref mut self_entities) => {
-                    for (name, diff) in &entities {
-                        self_entities.insert(name.clone(), diff.clone());
-                    }
-                }
-            }
-        }
-        self
-    }
+    // fn merge_entities_in(
+    //     &mut self,
+    //     entities: HashMapDiff<String, Value, ValueDiff>,
+    //     merge_mode: EntityMergeMode,
+    // ) -> &mut Self {
+
+    //     if let HashMapDiff::Modified(entities) = entities {
+    //         match self.entities {
+    //             HashMapDiff::Unchanged => self.entities = HashMapDiff::Modified(entities),
+    //             HashMapDiff::Modified(ref mut self_entities) => {
+    //                 for (name, diff) in &entities {
+    //                     self_entities.insert(name.clone(), diff.clone());
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     self
+    // }
 
     fn merge_defines_in(&mut self, defines: HashMapDiff<String, Value, ValueDiff>) -> &mut Self {
         if let HashMapDiff::Modified(defines) = defines {
@@ -233,6 +245,7 @@ impl NamespaceDiff {
     fn merge_properties_in(
         &mut self,
         properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
+        merge_mode: EntityMergeMode,
     ) -> &mut Self {
         if let HashMapDiff::Modified(properties) = properties {
             match self.properties {
@@ -265,7 +278,7 @@ impl NamespaceDiff {
 impl Diffable<NamespaceDiff> for Namespace {
     fn diff_to(&self, other: &Namespace, merge_mode: EntityMergeMode) -> NamespaceDiff {
         let mut namespace_diff = NamespaceDiff {
-            entities: HashMapDiff::Unchanged,
+            // entities: HashMapDiff::Unchanged,
             defines: HashMapDiff::Unchanged,
             properties: HashMapDiff::Unchanged,
             values: VecDiff::Unchanged,
@@ -277,39 +290,47 @@ impl Diffable<NamespaceDiff> for Namespace {
             // so diff them to get some of the changes (including removals), the merge all those changes into the namespace's changes.
             if let Some(module_b) = module_b {
                 let diff = module_a.diff_to(module_b, merge_mode);
-                namespace_diff.merge_entities_in(diff.entities);
+                // namespace_diff.merge_entities_in(diff.entities);
                 namespace_diff.merge_defines_in(diff.defines);
-                namespace_diff.merge_properties_in(diff.properties);
+                namespace_diff.merge_properties_in(diff.properties, merge_mode);
                 namespace_diff.merge_values_in(diff.values);
             }
         }
 
         // For the rest of the entities in namespace B, if they don't exist in namespace A, they're new entities.
-        // If they do exist in namespace A, diff them to get the changes. TODO: Will do some of them twice
-        let mut entities_changed: HashMap<String, Diff<Value, ValueDiff>> = HashMap::new();
-        for (entity_name, entity_b) in &other.entities {
-            let entity_a = self.entities.get(entity_name);
-            if let Some(entity_a) = entity_a {
-                if entity_a == entity_b {
+        // If they do exist in namespace A, it depends on the merge mode:
+        // - Merge: diff them to get the changes, then merge those changes into the namespace's changes
+        // - Duplicate: Add the value to the property list of the namespace as a new value
+        // - LIOS: The entity overwrites the entity in A
+        // - No / FIOS: Do nothing (TODO nuance)
+        //diff them to get the changes. TODO: Will do some of them twice
+        let mut properties_changed: HashMap<String, Diff<PropertyInfoList, PropertyInfoListDiff>> =
+            HashMap::new();
+        for (property_name, property_b) in &other.properties {
+            let property_a = self.properties.get(property_name);
+            if let Some(property_a) = property_a {
+                if property_a == property_b {
                     continue;
                 }
 
                 // The entity exists in both A and B, so diff them to get the changes
                 // then merge those changes into the namespace's changes
-                let diff = entity_a.diff_to(entity_b, merge_mode);
-                match diff {
-                    ValueDiff::Entity(_) => {
-                        entities_changed.insert(entity_name.clone(), Diff::Modified(diff));
+                let diff = property_a.diff_to(property_b, merge_mode);
+                match merge_mode {
+                    EntityMergeMode::No => {}
+                    _ => {
+                        // Merge is handled in the diff, so we can just set the changes here as well
+                        properties_changed.insert(property_name.clone(), Diff::Modified(diff));
                     }
-                    _ => {}
                 }
             } else {
-                // It's new in B, so add it to the list of changed entities
-                let new_value: Diff<Value, ValueDiff> = Diff::Added(entity_b.to_owned());
-                entities_changed.insert(entity_name.clone(), new_value);
+                // It's new in B, so take the values of B and insert that for the property name
+                properties_changed
+                    .insert(property_name.clone(), Diff::Added(property_b.to_owned()));
             }
         }
-        namespace_diff.merge_entities_in(HashMapDiff::Modified(entities_changed));
+
+        namespace_diff.merge_properties_in(HashMapDiff::Modified(properties_changed), merge_mode);
 
         namespace_diff
     }
@@ -337,7 +358,7 @@ impl ApplyPatch<ModDiff> for GameMod {
 
 impl ApplyPatch<NamespaceDiff> for Namespace {
     fn apply_patch(&self, diff: &NamespaceDiff) -> Self {
-        let entities = self.entities.apply_patch(&diff.entities);
+        // let entities = self.entities.apply_patch(&diff.entities);
         let defines = self.defines.apply_patch(&diff.defines);
         let properties = self.properties.apply_patch(&diff.properties);
         let values = self.values.apply_patch(&diff.values);
@@ -345,10 +366,11 @@ impl ApplyPatch<NamespaceDiff> for Namespace {
         Namespace {
             namespace: self.namespace.clone(),
             modules: HashMap::new(), // An applied patch doesn't have modules, it's all in the namespace only
-            entities,
+            // entities,
             defines,
             properties,
             values,
+            merge_mode: self.merge_mode,
         }
     }
 }
@@ -367,7 +389,7 @@ impl Diffable<ModuleDiff> for Module {
             None
         };
 
-        let entities = self.entities.diff_to(&other.entities, merge_mode);
+        // let entities = self.entities.diff_to(&other.entities, merge_mode);
         let defines = self.defines.diff_to(&other.defines, merge_mode);
         let properties = self.properties.diff_to(&other.properties, merge_mode);
         let values = self.values.diff_to(&other.values, merge_mode);
@@ -375,7 +397,7 @@ impl Diffable<ModuleDiff> for Module {
         ModuleDiff {
             filename,
             namespace,
-            entities,
+            // entities,
             defines,
             properties,
             values,
@@ -393,16 +415,28 @@ impl<K: Eq + Hash + Clone, V: PartialEq + Eq + Clone + Diffable<VModified>, VMod
     ) -> HashMapDiff<K, V, VModified> {
         let mut modified = HashMap::new();
 
+        let next_merge_mode = if merge_mode == EntityMergeMode::MergeShallow {
+            EntityMergeMode::LIOS
+        } else {
+            merge_mode
+        };
+
         for (key, value_a) in self {
             match other.get(key) {
                 Some(value_b) if value_a != value_b => {
                     modified.insert(
                         key.clone(),
-                        Diff::Modified(value_a.diff_to(value_b, merge_mode)),
+                        Diff::Modified(value_a.diff_to(value_b, next_merge_mode)),
                     );
                 }
                 None => {
-                    modified.insert(key.clone(), Diff::Removed(value_a.clone()));
+                    if merge_mode != EntityMergeMode::MergeShallow
+                        && next_merge_mode != EntityMergeMode::Merge
+                    {
+                        // In a merge type merge mode, we don't want to remove anything that's missing,
+                        // only add new key/value pairs and modify existing ones
+                        modified.insert(key.clone(), Diff::Removed(value_a.clone()));
+                    }
                 }
                 _ => {}
             }
@@ -422,57 +456,93 @@ impl<K: Eq + Hash + Clone, V: PartialEq + Eq + Clone + Diffable<VModified>, VMod
     }
 }
 
-impl<T: PartialEq + Clone + Debug + JaccardIndex + Diffable<VModified>, VModified>
+impl<T: PartialEq + Clone + Debug + JaccardIndex + Diffable<VModified>, VModified: Debug>
     Diffable<VecDiff<T, VModified>> for Vec<T>
 {
     fn diff_to(&self, other: &Self, merge_mode: EntityMergeMode) -> VecDiff<T, VModified> {
+        let next_merge_mode = if merge_mode == EntityMergeMode::MergeShallow {
+            EntityMergeMode::LIOS
+        } else {
+            merge_mode
+        };
+
         let mut diffs = Vec::new();
 
         // Keep track of claimed items so that find_map doesn't return the same item twice
         let mut claimed = HashSet::new();
 
-        for value_a in self {
-            let threshold = 0.4;
-            let mut max_found: Option<(usize, f64, &T)> = None;
+        // List merging depends highly on the merge mode, in LIOS mode we want to merge the lists as much as possible
+        // and in merge mode we want to only append to the list.
+        if merge_mode == EntityMergeMode::LIOS
+            || merge_mode == EntityMergeMode::FIOS
+            || merge_mode == EntityMergeMode::Unknown
+        {
+            // We're in a "replace" merge mode, so find the best matches for each item in the other vec in order
+            // to generate a small diff
+            for value_a in self {
+                let threshold = 0.4;
+                let mut max_found: Option<(usize, f64, &T)> = None;
 
-            for (i, value_b) in other.iter().enumerate() {
-                if claimed.contains(&i) == false {
-                    let jaccard_index = value_a.jaccard_index(value_b);
-                    if jaccard_index > threshold {
-                        if let Some((_, max_jaccard_index, _)) = max_found {
-                            if jaccard_index > max_jaccard_index {
+                for (i, value_b) in other.iter().enumerate() {
+                    if claimed.contains(&i) == false {
+                        let jaccard_index = value_a.jaccard_index(value_b);
+                        if jaccard_index > threshold {
+                            if let Some((_, max_jaccard_index, _)) = max_found {
+                                if jaccard_index > max_jaccard_index {
+                                    max_found = Some((i, jaccard_index, value_b));
+                                }
+                            } else {
                                 max_found = Some((i, jaccard_index, value_b));
                             }
-                        } else {
-                            max_found = Some((i, jaccard_index, value_b));
                         }
                     }
                 }
-            }
 
-            if let Some(max_found) = max_found {
-                let (i, _, value_b) = max_found;
-                claimed.insert(i);
-                if *value_a == *value_b {
-                    diffs.push(Diff::Unchanged);
+                if let Some(max_found) = max_found {
+                    let (i, _, value_b) = max_found;
+                    claimed.insert(i);
+                    if *value_a == *value_b {
+                        diffs.push(Diff::Unchanged);
+                    } else {
+                        diffs.push(Diff::Modified(value_a.diff_to(&value_b, next_merge_mode)));
+                    }
                 } else {
-                    diffs.push(Diff::Modified(value_a.diff_to(&value_b, merge_mode)));
+                    diffs.push(Diff::Removed(value_a.clone()));
                 }
-            } else {
-                diffs.push(Diff::Removed(value_a.clone()));
             }
-        }
 
-        for value_b in other {
-            if !self.contains(value_b) {
+            for value_b in other {
+                if !self.contains(value_b) {
+                    diffs.push(Diff::Added(value_b.clone()));
+                }
+            }
+
+            if diffs.is_empty() {
+                VecDiff::Unchanged
+            } else {
+                VecDiff::Changed(diffs)
+            }
+        } else if merge_mode == EntityMergeMode::MergeShallow
+            || merge_mode == EntityMergeMode::Merge
+            || merge_mode == EntityMergeMode::Duplicate
+        {
+            // In a merge type mod for a list, we can only append to the list. No such thing as matching (can only match on keys)
+            // for _ in self {
+            //     diffs.push(Diff::Unchanged);
+            // }
+
+            for value_b in other {
                 diffs.push(Diff::Added(value_b.clone()));
             }
-        }
 
-        if diffs.is_empty() {
-            VecDiff::Unchanged
+            if diffs.is_empty() {
+                VecDiff::Unchanged
+            } else {
+                VecDiff::Changed(diffs)
+            }
         } else {
-            VecDiff::Changed(diffs)
+            // We're in No merge mode, so can't merge the lists at all
+            VecDiff::Unchanged
         }
     }
 }
@@ -579,7 +649,7 @@ impl Display for NamespaceDiff {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.defines)?;
         write!(f, "{}", self.properties)?;
-        write!(f, "{}", &self.entities)?;
+        // write!(f, "{}", &self.entities)?;
         write!(f, "{}", self.values)?;
         Ok(())
     }
@@ -589,7 +659,7 @@ impl Display for ModuleDiff {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.defines)?;
         write!(f, "{}", self.properties)?;
-        write!(f, "{}", &self.entities)?;
+        // write!(f, "{}", &self.entities)?;
         write!(f, "{}", self.values)?;
         Ok(())
     }
@@ -787,7 +857,7 @@ impl ApplyPatch<ModuleDiff> for Module {
             .as_ref()
             .map(|c| c.new.clone())
             .unwrap_or_else(|| self.namespace.clone());
-        let entities = self.entities.apply_patch(&diff.entities);
+        // let entities = self.entities.apply_patch(&diff.entities);
         let defines = self.defines.apply_patch(&diff.defines);
         let properties = self.properties.apply_patch(&diff.properties);
         let values = self.values.apply_patch(&diff.values);
@@ -795,7 +865,7 @@ impl ApplyPatch<ModuleDiff> for Module {
         Module {
             filename,
             namespace,
-            entities,
+            // entities,
             defines,
             properties,
             values,
