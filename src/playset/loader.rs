@@ -147,7 +147,7 @@ mod tests {
             }
 
             if let Some(path) = mod_definition.path {
-                assert!(path.len() > 0);
+                assert!(path.exists());
             }
 
             if let Some(remote_file_id) = mod_definition.remote_file_id {

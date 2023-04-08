@@ -2,8 +2,10 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
+    sync::OnceLock,
 };
 
+use anyhow::anyhow;
 use lazy_static::lazy_static;
 use winreg::{enums::HKEY_CURRENT_USER, RegKey};
 
@@ -12,25 +14,30 @@ use super::{game_mod::GameMod, mod_definition::ModDefinition};
 lazy_static! {
     pub static ref STELLARIS_INSTALL_PATH: Option<PathBuf> =
         BaseGame::get_install_directory_windows();
-    pub static ref BASE_MOD: GameMod = BaseGame::load_as_mod_definition(None).unwrap();
 }
 
 pub struct BaseGame {}
 
+static BASE_MOD: OnceLock<GameMod> = OnceLock::new();
+
 impl BaseGame {
     pub fn load_as_mod_definition(
-        install_path: Option<PathBuf>,
-    ) -> Result<GameMod, Box<dyn std::error::Error>> {
+        install_path: Option<&Path>,
+    ) -> Result<&'static GameMod, anyhow::Error> {
+        if let Some(base_mod) = BASE_MOD.get() {
+            return Ok(base_mod);
+        }
+
         let install_path = if let Some(path) = install_path {
             Some(path)
         } else {
-            STELLARIS_INSTALL_PATH.clone()
+            STELLARIS_INSTALL_PATH.as_ref().map(|path| path.as_path())
         };
         match install_path {
             Some(path) => {
                 let definition = ModDefinition {
                     name: "Stellaris".to_string(),
-                    path: Some(path.to_string_lossy().to_string()),
+                    path: Some(path.to_path_buf()),
                     version: None,
                     tags: vec![],
                     picture: None,
@@ -42,9 +49,13 @@ impl BaseGame {
 
                 let game_mod = GameMod::load_parallel(definition)?;
 
-                Ok(game_mod)
+                BASE_MOD
+                    .set(game_mod)
+                    .map_err(|_| anyhow!("Could not set base mod"))?;
+
+                Ok(BASE_MOD.get().unwrap())
             }
-            None => Err("Could not find Stellaris installation directory".into()),
+            None => Err(anyhow!("Could not find Stellaris installation directory")),
         }
     }
 

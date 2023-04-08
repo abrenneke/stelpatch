@@ -1,4 +1,7 @@
-use std::{path::Path, str::FromStr};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use nom::{
     branch::alt,
@@ -23,12 +26,13 @@ pub struct ModDefinition {
     pub name: String,
     pub picture: Option<String>,
     pub supported_version: Option<String>,
-    pub path: Option<String>,
+    pub path: Option<PathBuf>,
     pub remote_file_id: Option<String>,
     pub dependencies: Vec<String>,
     pub archive: Option<String>,
 }
 
+/// A set of mod definitions (likely loaded from Documents)
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct ModDefinitionList {
     /// The mods that were parsed and in the definition list
@@ -46,6 +50,7 @@ impl ModDefinitionList {
         }
     }
 
+    /// Loads all mod definitions from the Documents folder
     pub fn load_from_my_documents(custom_path: Option<&Path>) -> Result<Self, anyhow::Error> {
         let mut mod_dir = stellaris_documents_dir(custom_path)?;
         mod_dir.push("mod");
@@ -80,6 +85,48 @@ impl ModDefinitionList {
             Err(e) => self.failed_parse_files.push(e),
         }
         self
+    }
+
+    pub fn get_by_name(&self, name: &str) -> Option<&ModDefinition> {
+        for mod_definition in &self.mods {
+            if mod_definition.name == name {
+                return Some(mod_definition);
+            }
+        }
+
+        None
+    }
+
+    pub fn get_by_id(&self, id: &str) -> Option<&ModDefinition> {
+        for mod_definition in &self.mods {
+            if mod_definition.remote_file_id.as_deref() == Some(id) {
+                return Some(mod_definition);
+            }
+        }
+
+        None
+    }
+
+    pub fn search(&self, search: &str) -> Vec<&ModDefinition> {
+        let mut results = Vec::new();
+
+        for mod_definition in &self.mods {
+            if mod_definition.name == search {
+                results.push(mod_definition);
+            }
+        }
+
+        results
+    }
+
+    pub fn search_first(&self, search: &str) -> Result<&ModDefinition, String> {
+        for mod_definition in &self.mods {
+            if mod_definition.name == search {
+                return Ok(mod_definition);
+            }
+        }
+
+        Err(format!("Could not find mod with name {}", search))
     }
 }
 
@@ -169,7 +216,7 @@ fn parse_mod_definition<'a>(input: &'a str) -> IResult<&'a str, ModDefinition> {
             "name" => mod_info.name = value[0].clone(),
             "picture" => mod_info.picture = Some(value[0].clone()),
             "supported_version" => mod_info.supported_version = Some(value[0].clone()),
-            "path" => mod_info.path = Some(value[0].clone()),
+            "path" => mod_info.path = Some(PathBuf::from(&value[0])),
             "remote_file_id" => mod_info.remote_file_id = Some(value[0].clone()),
             "archive" => mod_info.archive = Some(value[0].clone()),
             "dependencies" => mod_info.dependencies = value.clone(),
@@ -227,7 +274,7 @@ mod tests {
             name: String::from("EUTAB - Ethos Unique Techs and Buildings"),
             picture: Some(String::from("eutab.png")),
             supported_version: Some(String::from("3.0.*")),
-            path: Some(String::from(
+            path: Some(PathBuf::from(
                 "D:/SteamLibrary/steamapps/workshop/content/281990/804732593",
             )),
             remote_file_id: Some(String::from("804732593")),

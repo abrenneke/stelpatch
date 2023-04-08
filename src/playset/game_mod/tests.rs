@@ -2,8 +2,7 @@
 mod tests {
     use lazy_static::lazy_static;
 
-    use crate::playset::base_game::BASE_MOD;
-
+    use crate::playset::base_game::BaseGame;
     use crate::playset::diff::Diffable;
     use crate::playset::diff::EntityMergeMode;
 
@@ -65,7 +64,8 @@ mod tests {
 
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let overrides = game_mod.get_overridden_modules_by_namespace(&BASE_MOD);
+        let overrides = game_mod
+            .get_overridden_modules_by_namespace(BaseGame::load_as_mod_definition(None).unwrap());
 
         println!("{}", "Overridden Modules by Namespace:".bold());
 
@@ -101,11 +101,12 @@ mod tests {
 
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let overrides = game_mod.get_overridden_modules(&BASE_MOD);
+        let base_mod = BaseGame::load_as_mod_definition(None).unwrap();
+        let overrides = game_mod.get_overridden_modules(base_mod);
 
         let first_override = overrides.first().unwrap();
         let patch = first_override.diff_to(
-            &BASE_MOD.get_by_path(&first_override.path()).unwrap(),
+            base_mod.get_by_path(&first_override.path()).unwrap(),
             EntityMergeMode::LIOS,
         );
 
@@ -118,13 +119,14 @@ mod tests {
         let definition =
             ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
+        let base_mod = BaseGame::load_as_mod_definition(None).unwrap();
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let overrides = game_mod.get_overridden_modules(&BASE_MOD);
+        let overrides = game_mod.get_overridden_modules(base_mod);
 
         let first_override = overrides.first().unwrap();
         let patch = first_override.diff_to(
-            &BASE_MOD.get_by_path(&first_override.path()).unwrap(),
+            base_mod.get_by_path(&first_override.path()).unwrap(),
             EntityMergeMode::LIOS,
         );
 
@@ -137,9 +139,10 @@ mod tests {
         let definition =
             ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE.as_path()).unwrap();
 
+        let base_mod = BaseGame::load_as_mod_definition(None).unwrap();
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let diff = BASE_MOD.diff_to(&game_mod, EntityMergeMode::Unknown);
+        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::Unknown);
 
         for (namespace_name, namespace) in diff.namespaces {
             match namespace.properties {
@@ -162,9 +165,10 @@ mod tests {
         let definition =
             ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
+        let base_mod = BaseGame::load_as_mod_definition(None).unwrap();
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let diff = BASE_MOD.diff_to(&game_mod, EntityMergeMode::LIOS);
+        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::LIOS);
 
         let diff_str = diff.short_changes_string();
         print!("{}", diff_str);
@@ -174,9 +178,10 @@ mod tests {
     fn flat_diff() {
         let definition = ModDefinition::load_from_file(EXPLORATION_TWEAKS.as_path()).unwrap();
 
+        let base_mod = BaseGame::load_as_mod_definition(None).unwrap();
         let game_mod = GameMod::load_parallel(definition).unwrap();
 
-        let diff = BASE_MOD.diff_to(&game_mod, EntityMergeMode::Unknown);
+        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::Unknown);
 
         let diff_str = diff.short_changes_string();
         print!("{}", diff_str);

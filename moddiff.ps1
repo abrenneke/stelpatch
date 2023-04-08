@@ -1,0 +1,1 @@
+& "cargo.exe" run -q --bin moddiff --release -- $args

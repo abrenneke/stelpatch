@@ -245,7 +245,7 @@ impl NamespaceDiff {
     fn merge_properties_in(
         &mut self,
         properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
-        merge_mode: EntityMergeMode,
+        _merge_mode: EntityMergeMode,
     ) -> &mut Self {
         if let HashMapDiff::Modified(properties) = properties {
             match self.properties {
