@@ -1,81 +1,93 @@
 use std::collections::{HashMap, HashSet};
 
+use lasso::{Spur, ThreadedRodeo};
+
 use crate::cw_model::{Entity, Module, PropertyInfo, PropertyInfoList, Value};
 
 trait DeepKeys {
-    fn deep_keys(&self) -> Vec<String>;
+    fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String>;
 }
 
-impl<T: DeepKeys> DeepKeys for HashMap<String, T> {
-    fn deep_keys(&self) -> Vec<String> {
+impl<T: DeepKeys> DeepKeys for HashMap<Spur, T> {
+    fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String> {
         let mut keys = vec![];
         for (key, value) in self {
-            keys.push(key.clone());
-            keys.extend(value.deep_keys().iter().map(|k| format!("{}/{}", key, k)));
+            keys.push(interner.resolve(key).to_owned());
+            keys.extend(
+                value
+                    .deep_keys(interner)
+                    .iter()
+                    .map(|k| format!("{}/{}", interner.resolve(key), k)),
+            );
         }
         keys
     }
 }
 
 impl DeepKeys for Value {
-    fn deep_keys(&self) -> Vec<String> {
+    fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String> {
         match self {
-            Value::Entity(entity) => entity.deep_keys(),
+            Value::Entity(entity) => entity.deep_keys(interner),
             _ => vec![],
         }
     }
 }
 
 impl DeepKeys for Entity {
-    fn deep_keys(&self) -> Vec<String> {
+    fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String> {
         let mut keys = vec![];
-        keys.extend(self.properties.deep_keys());
-        keys.extend(self.items.deep_keys());
+        keys.extend(self.properties.deep_keys(interner));
+        keys.extend(self.items.deep_keys(interner));
         keys
     }
 }
 
 impl DeepKeys for Module {
-    fn deep_keys(&self) -> Vec<String> {
+    fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String> {
         let mut keys = vec![];
-        keys.extend(self.values.deep_keys());
-        keys.extend(self.defines.deep_keys());
-        keys.extend(self.properties.deep_keys());
+        keys.extend(self.values.deep_keys(interner));
+        keys.extend(self.defines.deep_keys(interner));
+        keys.extend(self.properties.deep_keys(interner));
         keys
     }
 }
 
 impl<T: DeepKeys> DeepKeys for Vec<T> {
-    fn deep_keys(&self) -> Vec<String> {
+    fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String> {
         let mut keys = vec![];
         for (i, value) in self.iter().enumerate() {
             keys.push(i.to_string());
-            keys.extend(value.deep_keys().iter().map(|k| format!("{}/{}", i, k)));
+            keys.extend(
+                value
+                    .deep_keys(interner)
+                    .iter()
+                    .map(|k| format!("{}/{}", i, k)),
+            );
         }
         keys
     }
 }
 
 impl DeepKeys for PropertyInfoList {
-    fn deep_keys(&self) -> Vec<String> {
-        self.0.deep_keys()
+    fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String> {
+        self.0.deep_keys(interner)
     }
 }
 
 impl DeepKeys for PropertyInfo {
-    fn deep_keys(&self) -> Vec<String> {
-        self.value.deep_keys()
+    fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String> {
+        self.value.deep_keys(interner)
     }
 }
 
 pub trait JaccardIndex {
-    fn jaccard_index(&self, other: &Self) -> f64;
+    fn jaccard_index(&self, other: &Self, interner: &ThreadedRodeo) -> f64;
 }
 
 impl JaccardIndex for Entity {
-    fn jaccard_index(self: &Entity, other: &Entity) -> f64 {
-        let self_keys = self.deep_keys();
-        let other_keys = other.deep_keys();
+    fn jaccard_index(self: &Entity, other: &Entity, interner: &ThreadedRodeo) -> f64 {
+        let self_keys = self.deep_keys(interner);
+        let other_keys = other.deep_keys(interner);
 
         let self_set: HashSet<String> = self_keys.into_iter().collect();
         let other_set: HashSet<String> = other_keys.into_iter().collect();
@@ -88,10 +100,10 @@ impl JaccardIndex for Entity {
 }
 
 impl JaccardIndex for Value {
-    fn jaccard_index(self: &Value, other: &Value) -> f64 {
+    fn jaccard_index(self: &Value, other: &Value, interner: &ThreadedRodeo) -> f64 {
         match self {
             Value::Entity(self_entity) => match other {
-                Value::Entity(other_entity) => self_entity.jaccard_index(other_entity),
+                Value::Entity(other_entity) => self_entity.jaccard_index(other_entity, interner),
                 _ => 0.0,
             },
             _ => 0.0,
@@ -100,15 +112,19 @@ impl JaccardIndex for Value {
 }
 
 impl JaccardIndex for PropertyInfo {
-    fn jaccard_index(self: &PropertyInfo, other: &PropertyInfo) -> f64 {
-        self.value.jaccard_index(&other.value)
+    fn jaccard_index(self: &PropertyInfo, other: &PropertyInfo, interner: &ThreadedRodeo) -> f64 {
+        self.value.jaccard_index(&other.value, interner)
     }
 }
 
 impl JaccardIndex for PropertyInfoList {
-    fn jaccard_index(self: &PropertyInfoList, other: &PropertyInfoList) -> f64 {
-        let self_keys = self.deep_keys();
-        let other_keys = other.deep_keys();
+    fn jaccard_index(
+        self: &PropertyInfoList,
+        other: &PropertyInfoList,
+        interner: &ThreadedRodeo,
+    ) -> f64 {
+        let self_keys = self.deep_keys(interner);
+        let other_keys = other.deep_keys(interner);
 
         let self_set: HashSet<String> = self_keys.into_iter().collect();
         let other_set: HashSet<String> = other_keys.into_iter().collect();
@@ -122,7 +138,12 @@ impl JaccardIndex for PropertyInfoList {
 
 #[cfg(test)]
 mod tests {
-    use crate::{cw_model::Module, playset::jaccard::*};
+    use lasso::ThreadedRodeo;
+
+    use crate::{
+        cw_model::Module,
+        playset::jaccard::{DeepKeys, JaccardIndex},
+    };
 
     #[test]
     fn deep_keys_test_1() {
@@ -161,9 +182,10 @@ mod tests {
         entity_unchanged = {}
     "#;
 
-        let module = Module::parse(input.to_string(), "", "").unwrap();
+        let interner = &ThreadedRodeo::default();
+        let module = Module::parse(input, "", "", interner).unwrap();
 
-        let keys = module.deep_keys();
+        let keys = module.deep_keys(interner);
         assert_eq!(
             keys,
             vec![
@@ -221,13 +243,20 @@ mod tests {
         }
     "#;
 
-        let module = Module::parse(input.to_string(), "", "").unwrap();
-        let module2 = Module::parse(input2.to_string(), "", "").unwrap();
+        let interner = &ThreadedRodeo::default();
+        let module = Module::parse(input, "", "", interner).unwrap();
+        let module2 = Module::parse(input2, "", "", interner).unwrap();
 
-        let entity1 = module.get_only_property("entity_1").unwrap().entity();
-        let entity2 = module2.get_only_property("entity_1").unwrap().entity();
+        let entity1 = module
+            .get_only_property(&interner.get_or_intern("entity_1"))
+            .unwrap()
+            .entity();
+        let entity2 = module2
+            .get_only_property(&interner.get_or_intern("entity_1"))
+            .unwrap()
+            .entity();
 
-        let index = entity1.jaccard_index(&entity2);
+        let index = entity1.jaccard_index(&entity2, interner);
 
         assert_eq!(index, 0.8);
     }

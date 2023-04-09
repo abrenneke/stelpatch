@@ -1,10 +1,11 @@
 use anyhow::anyhow;
 use clap::*;
-use std::path::PathBuf;
+use lasso::ThreadedRodeo;
+use std::{path::PathBuf, sync::Arc};
 use stelpatch::playset::{
     base_game::BaseGame,
     diff::{Diffable, EntityMergeMode},
-    game_mod::GameMod,
+    game_mod::{GameMod, LoadMode},
     loader::stellaris_documents_dir,
     mod_definition::ModDefinition,
 };
@@ -58,9 +59,12 @@ fn moddiff(cli: Cli) -> Result<(), anyhow::Error> {
         }
     };
 
+    let interner = Arc::new(ThreadedRodeo::default());
+
     let base_game_start_time = std::time::Instant::now();
-    let base_game = BaseGame::load_as_mod_definition(stellaris_path)
-        .map_err(|e| anyhow!("Could not load base Stellaris game: {}", e))?;
+    let base_game =
+        BaseGame::load_as_mod_definition(stellaris_path, LoadMode::Parallel, interner.clone())
+            .map_err(|e| anyhow!("Could not load base Stellaris game: {}", e))?;
     let base_game_elapsed = base_game_start_time.elapsed();
 
     let mod_definition_start_time = std::time::Instant::now();
@@ -69,12 +73,12 @@ fn moddiff(cli: Cli) -> Result<(), anyhow::Error> {
     let mod_definition_elapsed = mod_definition_start_time.elapsed();
 
     let game_mod_start_time = std::time::Instant::now();
-    let game_mod =
-        GameMod::load_parallel(mod_definition).map_err(|e| anyhow!("Could not load mod: {}", e))?;
+    let game_mod = GameMod::load(mod_definition, LoadMode::Parallel, interner.clone())
+        .map_err(|e| anyhow!("Could not load mod: {}", e))?;
     let game_mod_elapsed = game_mod_start_time.elapsed();
 
     let diff_start_time = std::time::Instant::now();
-    let diff = base_game.diff_to(&game_mod, EntityMergeMode::Unknown);
+    let diff = base_game.diff_to(&game_mod, EntityMergeMode::Unknown, &interner);
     let diff_elapsed = diff_start_time.elapsed();
 
     if cfg!(debug_assertions) {
@@ -84,7 +88,7 @@ fn moddiff(cli: Cli) -> Result<(), anyhow::Error> {
         println!("Computed game data diff in {:?}", diff_elapsed);
     }
 
-    let diff_str = diff.short_changes_string();
+    let diff_str = diff.short_changes_string(&interner);
 
     println!("{}", diff_str);
 

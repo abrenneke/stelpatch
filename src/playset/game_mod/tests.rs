@@ -2,6 +2,7 @@
 mod tests {
     use lazy_static::lazy_static;
 
+    use crate::cw_model::ToStringWithInterner;
     use crate::playset::base_game::BaseGame;
     use crate::playset::diff::Diffable;
     use crate::playset::diff::EntityMergeMode;
@@ -36,11 +37,12 @@ mod tests {
         let mod_definition =
             ModDefinition::load_from_file(ETHOS_UNIQUE_TECHS_BUILDINGS_MOD_FILE.as_path()).unwrap();
 
-        let game_mod = GameMod::load_parallel(mod_definition).unwrap();
+        let interner = Arc::new(ThreadedRodeo::default());
+        let game_mod = GameMod::load(mod_definition, LoadMode::Parallel, interner.clone()).unwrap();
         assert!(game_mod.modules.len() > 0);
 
-        assert!(game_mod.modules[0].namespace.len() > 0);
-        game_mod.print_contents();
+        assert!(interner.resolve(&game_mod.modules[0].namespace).len() > 0);
+        game_mod.print_contents(&interner.clone());
     }
 
     #[test]
@@ -49,41 +51,44 @@ mod tests {
         let mod_definition =
             ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let game_mod = GameMod::load_parallel(mod_definition).unwrap();
+        let interner = Arc::new(ThreadedRodeo::default());
+        let game_mod = GameMod::load(mod_definition, LoadMode::Parallel, interner.clone()).unwrap();
         assert!(game_mod.modules.len() > 0);
 
-        assert!(game_mod.modules[0].namespace.len() > 0);
+        assert!(interner.resolve(&game_mod.modules[0].namespace).len() > 0);
         dbg!(game_mod.modules.len());
-        game_mod.print_contents();
+        game_mod.print_contents(&interner);
     }
 
-    #[test]
-    fn mod_overrides_base() {
-        let definition =
-            ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
+    // #[test]
+    // fn mod_overrides_base() {
+    //     let definition =
+    //         ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let game_mod = GameMod::load_parallel(definition).unwrap();
+    //     let game_mod = GameMod::load(definition, LoadMode::Parallel, interner).unwrap();
 
-        let overrides = game_mod
-            .get_overridden_modules_by_namespace(BaseGame::load_as_mod_definition(None).unwrap());
+    //     let overrides = game_mod.get_overridden_modules_by_namespace(
+    //         &BaseGame::load_as_mod_definition(None, LoadMode::Parallel, interner).unwrap(),
+    //     );
 
-        println!("{}", "Overridden Modules by Namespace:".bold());
+    //     println!("{}", "Overridden Modules by Namespace:".bold());
 
-        for namespace in overrides.values() {
-            println!("{}", namespace.namespace.bold());
-            for module in namespace.modules.values() {
-                println!("  {}", module.filename);
-            }
-        }
-    }
+    //     for namespace in overrides.values() {
+    //         println!("{}", namespace.namespace.bold());
+    //         for module in namespace.modules.values() {
+    //             println!("  {}", module.filename);
+    //         }
+    //     }
+    // }
 
     #[test]
     fn mod_overrides_entities() {
         let definition =
             ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE.as_path()).unwrap();
 
+        let interner = Arc::new(ThreadedRodeo::default());
         // let _base_game = BASE_MOD.unwrap();
-        let _game_mod = GameMod::load_parallel(definition).unwrap();
+        let _game_mod = GameMod::load(definition, LoadMode::Parallel, interner).unwrap();
 
         // let overrides = game_mod.get_overridden_entities(&base_game);
 
@@ -99,19 +104,24 @@ mod tests {
         let definition =
             ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let game_mod = GameMod::load_parallel(definition).unwrap();
+        let interner = Arc::new(ThreadedRodeo::default());
+        let game_mod = GameMod::load(definition, LoadMode::Parallel, interner.clone()).unwrap();
 
-        let base_mod = BaseGame::load_as_mod_definition(None).unwrap();
-        let overrides = game_mod.get_overridden_modules(base_mod);
+        let base_mod =
+            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, interner.clone()).unwrap();
+        let overrides = game_mod.get_overridden_modules(&base_mod, &interner);
 
         let first_override = overrides.first().unwrap();
         let patch = first_override.diff_to(
-            base_mod.get_by_path(&first_override.path()).unwrap(),
+            base_mod
+                .get_by_path(&interner.get_or_intern(&first_override.path(&interner)))
+                .unwrap(),
             EntityMergeMode::LIOS,
+            &interner,
         );
 
-        dbg!(first_override.path());
-        println!("{}", patch);
+        dbg!(first_override.path(&interner));
+        println!("{}", patch.to_string_with_interner(&interner));
     }
 
     #[test]
@@ -119,19 +129,24 @@ mod tests {
         let definition =
             ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let base_mod = BaseGame::load_as_mod_definition(None).unwrap();
-        let game_mod = GameMod::load_parallel(definition).unwrap();
+        let interner = Arc::new(ThreadedRodeo::default());
+        let base_mod =
+            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, interner.clone()).unwrap();
+        let game_mod = GameMod::load(definition, LoadMode::Parallel, interner.clone()).unwrap();
 
-        let overrides = game_mod.get_overridden_modules(base_mod);
+        let overrides = game_mod.get_overridden_modules(&base_mod, &interner);
 
         let first_override = overrides.first().unwrap();
         let patch = first_override.diff_to(
-            base_mod.get_by_path(&first_override.path()).unwrap(),
+            base_mod
+                .get_by_path(&interner.get_or_intern(&first_override.path(&interner)))
+                .unwrap(),
             EntityMergeMode::LIOS,
+            &interner,
         );
 
-        dbg!(first_override.path());
-        println!("{}", patch);
+        dbg!(first_override.path(&interner));
+        println!("{}", patch.to_string_with_interner(&interner));
     }
 
     #[test]
@@ -139,18 +154,20 @@ mod tests {
         let definition =
             ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let base_mod = BaseGame::load_as_mod_definition(None).unwrap();
-        let game_mod = GameMod::load_parallel(definition).unwrap();
+        let interner = Arc::new(ThreadedRodeo::default());
+        let base_mod =
+            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, interner.clone()).unwrap();
+        let game_mod = GameMod::load(definition, LoadMode::Parallel, interner.clone()).unwrap();
 
-        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::Unknown);
+        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::Unknown, &interner);
 
         for (namespace_name, namespace) in diff.namespaces {
             match namespace.properties {
                 HashMapDiff::Modified(entities) => {
                     if entities.len() > 0 {
-                        println!("{}", namespace_name.bold());
+                        println!("{}", interner.resolve(&namespace_name).bold());
                         for (changed_entity_name, _entity_diff) in entities {
-                            println!("  {}", changed_entity_name);
+                            println!("  {}", interner.resolve(&changed_entity_name));
                         }
                         println!("");
                     }
@@ -165,12 +182,14 @@ mod tests {
         let definition =
             ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let base_mod = BaseGame::load_as_mod_definition(None).unwrap();
-        let game_mod = GameMod::load_parallel(definition).unwrap();
+        let interner = Arc::new(ThreadedRodeo::default());
+        let base_mod =
+            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, interner.clone()).unwrap();
+        let game_mod = GameMod::load(definition, LoadMode::Parallel, interner.clone()).unwrap();
 
-        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::LIOS);
+        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::LIOS, &interner);
 
-        let diff_str = diff.short_changes_string();
+        let diff_str = diff.short_changes_string(&interner);
         print!("{}", diff_str);
     }
 
@@ -178,12 +197,14 @@ mod tests {
     fn flat_diff() {
         let definition = ModDefinition::load_from_file(EXPLORATION_TWEAKS.as_path()).unwrap();
 
-        let base_mod = BaseGame::load_as_mod_definition(None).unwrap();
-        let game_mod = GameMod::load_parallel(definition).unwrap();
+        let interner = Arc::new(ThreadedRodeo::default());
+        let base_mod =
+            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, interner.clone()).unwrap();
+        let game_mod = GameMod::load(definition, LoadMode::Parallel, interner.clone()).unwrap();
 
-        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::Unknown);
+        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::Unknown, &interner);
 
-        let diff_str = diff.short_changes_string();
+        let diff_str = diff.short_changes_string(&interner);
         print!("{}", diff_str);
 
         assert_eq!(

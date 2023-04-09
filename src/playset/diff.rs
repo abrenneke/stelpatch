@@ -1,11 +1,12 @@
 use indent_write::indentable::Indentable;
-use serde::{Deserialize, Serialize};
+use lasso::{Spur, ThreadedRodeo};
 
 use crate::cw_model::{
-    ConditionalBlock, Entity, Module, Namespace, Operator, PropertyInfo, PropertyInfoList, Value,
+    ConditionalBlock, Entity, Module, Namespace, Operator, PropertyInfo, PropertyInfoList,
+    ToStringWithInterner, Value,
 };
 use std::collections::HashSet;
-use std::fmt::{self, Debug, Display};
+use std::fmt::Debug;
 use std::{collections::HashMap, hash::Hash};
 
 use super::game_mod::GameMod;
@@ -13,7 +14,7 @@ use super::jaccard::JaccardIndex;
 
 /// Different namespaces in stellaris have different merge mechanics when it comes to entities with the same name
 /// in different files. This defines the merge mode to use for entities with the same name.
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum EntityMergeMode {
     /// Last-in-only-served - the last entity in the list will be the one that is used
     LIOS,
@@ -37,35 +38,34 @@ pub enum EntityMergeMode {
     Unknown,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Changed<T> {
     pub old: T,
     pub new: T,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ModuleDiff {
-    pub filename: Option<Changed<String>>,
-    pub namespace: Option<Changed<String>>,
-    // pub entities: HashMapDiff<String, Value, ValueDiff>,
-    pub defines: HashMapDiff<String, Value, ValueDiff>,
-    pub properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
+    pub filename: Option<Changed<Spur>>,
+    pub namespace: Option<Changed<Spur>>,
+    pub defines: HashMapDiff<Spur, Value, ValueDiff>,
+    pub properties: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
     pub values: VecDiff<Value, ValueDiff>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum HashMapDiff<K: Eq + Hash, V, VModified> {
     Unchanged,
     Modified(HashMap<K, Diff<V, VModified>>),
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum VecDiff<T, TModified> {
     Unchanged,
     Changed(Vec<Diff<T, TModified>>),
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Diff<T, TModified> {
     Unchanged,
     Added(T),
@@ -73,69 +73,69 @@ pub enum Diff<T, TModified> {
     Modified(TModified),
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct EntityDiff {
     pub items: VecDiff<Value, ValueDiff>,
-    pub properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
-    pub conditional_blocks: HashMapDiff<String, ConditionalBlock, ConditionalBlockDiff>,
+    pub properties: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
+    pub conditional_blocks: HashMapDiff<Spur, ConditionalBlock, ConditionalBlockDiff>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct NamedEntityDiff(pub EntityDiff, pub Option<(String, String)>);
+#[derive(Debug, PartialEq, Clone)]
+pub struct NamedEntityDiff(pub EntityDiff, pub Option<(Spur, Spur)>);
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct PropertyInfoDiff {
     pub operator: Option<(Operator, Operator)>,
     pub value: ValueDiff,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct PropertyInfoListDiff(pub VecDiff<PropertyInfo, PropertyInfoDiff>);
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ConditionalBlockDiff {
-    pub key: Option<((bool, String), (bool, String))>,
+    pub key: Option<((bool, Spur), (bool, Spur))>,
     pub items: VecDiff<Value, ValueDiff>,
-    pub properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
+    pub properties: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum OperatorDiff {
     Unchanged,
     Modified(Operator, Operator),
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ValueDiff {
-    String(Option<(String, String)>),
-    Number(Option<(String, String)>),
+    String(Option<(Spur, Spur)>),
+    Number(Option<(Spur, Spur)>),
     Boolean(Option<(bool, bool)>),
     Entity(EntityDiff),
-    Define(Option<(String, String)>),
+    Define(Option<(Spur, Spur)>),
     Color(
         Option<(
-            (String, String, String, String, Option<String>),
-            (String, String, String, String, Option<String>),
+            (Spur, Spur, Spur, Spur, Option<Spur>),
+            (Spur, Spur, Spur, Spur, Option<Spur>),
         )>,
     ),
-    Maths(Option<(String, String)>),
+    Maths(Option<(Spur, Spur)>),
     TypeChanged(Value, Value),
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct NamespaceDiff {
     // TODO to support Duplicate, an entity name actually should be working like a PropertyInfoList,
     // should probably just remove entities and use properties
     // pub entities: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
     // pub entities: HashMapDiff<String, Value, ValueDiff>,
-    pub defines: HashMapDiff<String, Value, ValueDiff>,
-    pub properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
+    pub defines: HashMapDiff<Spur, Value, ValueDiff>,
+    pub properties: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
     pub values: VecDiff<Value, ValueDiff>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ModDiff {
-    pub namespaces: HashMap<String, NamespaceDiff>,
+    pub namespaces: HashMap<Spur, NamespaceDiff>,
 }
 
 impl<T> Changed<T> {
@@ -155,34 +155,38 @@ impl<T> Changed<T> {
 }
 
 pub trait Diffable<T> {
-    fn diff_to(&self, other: &Self, merge_mode: EntityMergeMode) -> T;
+    fn diff_to(&self, other: &Self, merge_mode: EntityMergeMode, interner: &ThreadedRodeo) -> T;
 }
 
 impl Diffable<ValueDiff> for Value {
-    fn diff_to(&self, other: &Self, merge_mode: EntityMergeMode) -> ValueDiff {
+    fn diff_to(
+        &self,
+        other: &Self,
+        merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
+    ) -> ValueDiff {
         match (self, other) {
-            (Value::String(a), Value::String(b)) => {
-                ValueDiff::String(Some((a.to_string(), b.to_string())))
-            }
-            (Value::Number(a), Value::Number(b)) => {
-                ValueDiff::Number(Some((a.to_string(), b.to_string())))
-            }
+            (Value::String(a), Value::String(b)) => ValueDiff::String(Some((*a, *b))),
+            (Value::Number(a), Value::Number(b)) => ValueDiff::Number(Some((*a, *b))),
             (Value::Boolean(a), Value::Boolean(b)) => ValueDiff::Boolean(Some((*a, *b))),
-            (Value::Entity(a), Value::Entity(b)) => ValueDiff::Entity(a.diff_to(&b, merge_mode)),
-            (Value::Define(a), Value::Define(b)) => {
-                ValueDiff::Define(Some((a.to_string(), b.to_string())))
+            (Value::Entity(a), Value::Entity(b)) => {
+                ValueDiff::Entity(a.diff_to(&b, merge_mode, interner))
             }
+            (Value::Define(a), Value::Define(b)) => ValueDiff::Define(Some((*a, *b))),
             (Value::Color(a), Value::Color(b)) => ValueDiff::Color(Some((a.clone(), b.clone()))),
-            (Value::Maths(a), Value::Maths(b)) => {
-                ValueDiff::Maths(Some((a.to_string(), b.to_string())))
-            }
+            (Value::Maths(a), Value::Maths(b)) => ValueDiff::Maths(Some((*a, *b))),
             (a, b) => ValueDiff::TypeChanged(a.clone(), b.clone()),
         }
     }
 }
 
 impl Diffable<ModDiff> for GameMod {
-    fn diff_to(&self, other: &Self, _merge_mode: EntityMergeMode) -> ModDiff {
+    fn diff_to(
+        &self,
+        other: &Self,
+        _merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
+    ) -> ModDiff {
         let mut namespaces = HashMap::new();
 
         // For each namespace in a (base), find the corresponding namespace in b, if exists, and get patch from that
@@ -191,14 +195,16 @@ impl Diffable<ModDiff> for GameMod {
             let b_namespace = other.namespaces.get(&namespace.namespace);
             match b_namespace {
                 Some(b_namespace) => {
-                    let diff = namespace.diff_to(b_namespace, namespace.merge_mode.clone());
-                    namespaces.insert(namespace.namespace.to_string(), diff);
+                    let diff =
+                        namespace.diff_to(b_namespace, namespace.merge_mode.clone(), interner);
+                    namespaces.insert(namespace.namespace, diff);
                 }
                 None => {
-                    let fake_ns = Namespace::new(&namespace.namespace, None);
+                    let ns_spur = interner.resolve(&namespace.namespace).to_owned();
+                    let fake_ns = Namespace::new(&ns_spur, None, interner);
                     namespaces.insert(
-                        namespace.namespace.to_string(),
-                        namespace.diff_to(&fake_ns, fake_ns.merge_mode),
+                        namespace.namespace,
+                        namespace.diff_to(&fake_ns, fake_ns.merge_mode, interner),
                     );
                 }
             }
@@ -209,26 +215,7 @@ impl Diffable<ModDiff> for GameMod {
 }
 
 impl NamespaceDiff {
-    // fn merge_entities_in(
-    //     &mut self,
-    //     entities: HashMapDiff<String, Value, ValueDiff>,
-    //     merge_mode: EntityMergeMode,
-    // ) -> &mut Self {
-
-    //     if let HashMapDiff::Modified(entities) = entities {
-    //         match self.entities {
-    //             HashMapDiff::Unchanged => self.entities = HashMapDiff::Modified(entities),
-    //             HashMapDiff::Modified(ref mut self_entities) => {
-    //                 for (name, diff) in &entities {
-    //                     self_entities.insert(name.clone(), diff.clone());
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     self
-    // }
-
-    fn merge_defines_in(&mut self, defines: HashMapDiff<String, Value, ValueDiff>) -> &mut Self {
+    fn merge_defines_in(&mut self, defines: HashMapDiff<Spur, Value, ValueDiff>) -> &mut Self {
         if let HashMapDiff::Modified(defines) = defines {
             match self.defines {
                 HashMapDiff::Unchanged => self.defines = HashMapDiff::Modified(defines),
@@ -244,7 +231,7 @@ impl NamespaceDiff {
 
     fn merge_properties_in(
         &mut self,
-        properties: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
+        properties: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
         _merge_mode: EntityMergeMode,
     ) -> &mut Self {
         if let HashMapDiff::Modified(properties) = properties {
@@ -276,7 +263,12 @@ impl NamespaceDiff {
 }
 
 impl Diffable<NamespaceDiff> for Namespace {
-    fn diff_to(&self, other: &Namespace, merge_mode: EntityMergeMode) -> NamespaceDiff {
+    fn diff_to(
+        &self,
+        other: &Namespace,
+        merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
+    ) -> NamespaceDiff {
         let mut namespace_diff = NamespaceDiff {
             // entities: HashMapDiff::Unchanged,
             defines: HashMapDiff::Unchanged,
@@ -289,7 +281,7 @@ impl Diffable<NamespaceDiff> for Namespace {
             // If there's a module in B with the same name as that module in A, it overwrites the module in A,
             // so diff them to get some of the changes (including removals), the merge all those changes into the namespace's changes.
             if let Some(module_b) = module_b {
-                let diff = module_a.diff_to(module_b, merge_mode);
+                let diff = module_a.diff_to(module_b, merge_mode, interner);
                 // namespace_diff.merge_entities_in(diff.entities);
                 namespace_diff.merge_defines_in(diff.defines);
                 namespace_diff.merge_properties_in(diff.properties, merge_mode);
@@ -304,7 +296,7 @@ impl Diffable<NamespaceDiff> for Namespace {
         // - LIOS: The entity overwrites the entity in A
         // - No / FIOS: Do nothing (TODO nuance)
         //diff them to get the changes. TODO: Will do some of them twice
-        let mut properties_changed: HashMap<String, Diff<PropertyInfoList, PropertyInfoListDiff>> =
+        let mut properties_changed: HashMap<Spur, Diff<PropertyInfoList, PropertyInfoListDiff>> =
             HashMap::new();
         for (property_name, property_b) in &other.properties {
             let property_a = self.properties.get(property_name);
@@ -315,12 +307,12 @@ impl Diffable<NamespaceDiff> for Namespace {
 
                 // The entity exists in both A and B, so diff them to get the changes
                 // then merge those changes into the namespace's changes
-                let diff = property_a.diff_to(property_b, merge_mode);
+                let diff = property_a.diff_to(property_b, merge_mode, interner);
                 match merge_mode {
                     EntityMergeMode::No => {}
                     _ => {
                         // Merge is handled in the diff, so we can just set the changes here as well
-                        properties_changed.insert(property_name.clone(), Diff::Modified(diff));
+                        properties_changed.insert(property_name.to_owned(), Diff::Modified(diff));
                     }
                 }
             } else {
@@ -376,7 +368,12 @@ impl ApplyPatch<NamespaceDiff> for Namespace {
 }
 
 impl Diffable<ModuleDiff> for Module {
-    fn diff_to(&self, other: &Module, merge_mode: EntityMergeMode) -> ModuleDiff {
+    fn diff_to(
+        &self,
+        other: &Module,
+        merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
+    ) -> ModuleDiff {
         let filename = if self.filename != other.filename {
             Some(Changed::from(&self.filename, &other.filename))
         } else {
@@ -390,9 +387,11 @@ impl Diffable<ModuleDiff> for Module {
         };
 
         // let entities = self.entities.diff_to(&other.entities, merge_mode);
-        let defines = self.defines.diff_to(&other.defines, merge_mode);
-        let properties = self.properties.diff_to(&other.properties, merge_mode);
-        let values = self.values.diff_to(&other.values, merge_mode);
+        let defines = self.defines.diff_to(&other.defines, merge_mode, interner);
+        let properties = self
+            .properties
+            .diff_to(&other.properties, merge_mode, interner);
+        let values = self.values.diff_to(&other.values, merge_mode, interner);
 
         ModuleDiff {
             filename,
@@ -412,6 +411,7 @@ impl<K: Eq + Hash + Clone, V: PartialEq + Eq + Clone + Diffable<VModified>, VMod
         &self,
         other: &HashMap<K, V>,
         merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
     ) -> HashMapDiff<K, V, VModified> {
         let mut modified = HashMap::new();
 
@@ -426,7 +426,7 @@ impl<K: Eq + Hash + Clone, V: PartialEq + Eq + Clone + Diffable<VModified>, VMod
                 Some(value_b) if value_a != value_b => {
                     modified.insert(
                         key.clone(),
-                        Diff::Modified(value_a.diff_to(value_b, next_merge_mode)),
+                        Diff::Modified(value_a.diff_to(value_b, next_merge_mode, interner)),
                     );
                 }
                 None => {
@@ -459,7 +459,12 @@ impl<K: Eq + Hash + Clone, V: PartialEq + Eq + Clone + Diffable<VModified>, VMod
 impl<T: PartialEq + Clone + Debug + JaccardIndex + Diffable<VModified>, VModified: Debug>
     Diffable<VecDiff<T, VModified>> for Vec<T>
 {
-    fn diff_to(&self, other: &Self, merge_mode: EntityMergeMode) -> VecDiff<T, VModified> {
+    fn diff_to(
+        &self,
+        other: &Self,
+        merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
+    ) -> VecDiff<T, VModified> {
         let next_merge_mode = if merge_mode == EntityMergeMode::MergeShallow {
             EntityMergeMode::LIOS
         } else {
@@ -485,7 +490,7 @@ impl<T: PartialEq + Clone + Debug + JaccardIndex + Diffable<VModified>, VModifie
 
                 for (i, value_b) in other.iter().enumerate() {
                     if claimed.contains(&i) == false {
-                        let jaccard_index = value_a.jaccard_index(value_b);
+                        let jaccard_index = value_a.jaccard_index(value_b, interner);
                         if jaccard_index > threshold {
                             if let Some((_, max_jaccard_index, _)) = max_found {
                                 if jaccard_index > max_jaccard_index {
@@ -504,7 +509,11 @@ impl<T: PartialEq + Clone + Debug + JaccardIndex + Diffable<VModified>, VModifie
                     if *value_a == *value_b {
                         diffs.push(Diff::Unchanged);
                     } else {
-                        diffs.push(Diff::Modified(value_a.diff_to(&value_b, next_merge_mode)));
+                        diffs.push(Diff::Modified(value_a.diff_to(
+                            &value_b,
+                            next_merge_mode,
+                            interner,
+                        )));
                     }
                 } else {
                     diffs.push(Diff::Removed(value_a.clone()));
@@ -548,12 +557,19 @@ impl<T: PartialEq + Clone + Debug + JaccardIndex + Diffable<VModified>, VModifie
 }
 
 impl Diffable<EntityDiff> for Entity {
-    fn diff_to(&self, other: &Self, merge_mode: EntityMergeMode) -> EntityDiff {
-        let items = self.items.diff_to(&other.items, merge_mode);
-        let properties = self.properties.diff_to(&other.properties, merge_mode);
-        let conditional_blocks = self
-            .conditional_blocks
-            .diff_to(&other.conditional_blocks, merge_mode);
+    fn diff_to(
+        &self,
+        other: &Self,
+        merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
+    ) -> EntityDiff {
+        let items = self.items.diff_to(&other.items, merge_mode, interner);
+        let properties = self
+            .properties
+            .diff_to(&other.properties, merge_mode, interner);
+        let conditional_blocks =
+            self.conditional_blocks
+                .diff_to(&other.conditional_blocks, merge_mode, interner);
 
         EntityDiff {
             items,
@@ -564,7 +580,12 @@ impl Diffable<EntityDiff> for Entity {
 }
 
 impl Diffable<PropertyInfoListDiff> for PropertyInfoList {
-    fn diff_to(&self, other: &Self, merge_mode: EntityMergeMode) -> PropertyInfoListDiff {
+    fn diff_to(
+        &self,
+        other: &Self,
+        merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
+    ) -> PropertyInfoListDiff {
         if self == other {
             return PropertyInfoListDiff(VecDiff::Unchanged);
         }
@@ -574,7 +595,7 @@ impl Diffable<PropertyInfoListDiff> for PropertyInfoList {
                 let self_first = self.clone().into_vec()[0].clone();
                 let other_first = other.clone().into_vec()[0].clone();
                 return PropertyInfoListDiff(VecDiff::Changed(vec![Diff::Modified(
-                    self_first.diff_to(&other_first, merge_mode),
+                    self_first.diff_to(&other_first, merge_mode, interner),
                 )]));
             }
 
@@ -586,8 +607,8 @@ impl Diffable<PropertyInfoListDiff> for PropertyInfoList {
                 .into_iter()
                 .zip(other.clone().into_vec().into_iter())
             {
-                if a.value.jaccard_index(&b.value) > 0.8 {
-                    diff.push(Diff::Modified(a.diff_to(&b, merge_mode)));
+                if a.value.jaccard_index(&b.value, interner) > 0.8 {
+                    diff.push(Diff::Modified(a.diff_to(&b, merge_mode, interner)));
                 } else {
                     diff.push(Diff::Removed(a));
                     diff.push(Diff::Added(b));
@@ -600,218 +621,302 @@ impl Diffable<PropertyInfoListDiff> for PropertyInfoList {
         let diff = self
             .clone()
             .into_vec()
-            .diff_to(&other.clone().into_vec(), merge_mode);
+            .diff_to(&other.clone().into_vec(), merge_mode, interner);
 
         PropertyInfoListDiff(diff)
     }
 }
 
 impl Diffable<PropertyInfoDiff> for PropertyInfo {
-    fn diff_to(&self, other: &PropertyInfo, merge_mode: EntityMergeMode) -> PropertyInfoDiff {
+    fn diff_to(
+        &self,
+        other: &PropertyInfo,
+        merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
+    ) -> PropertyInfoDiff {
         let operator = if self.operator == other.operator {
             None
         } else {
             Some((self.operator, other.operator))
         };
 
-        let value = self.value.diff_to(&other.value, merge_mode);
+        let value = self.value.diff_to(&other.value, merge_mode, interner);
 
         PropertyInfoDiff { operator, value }
     }
 }
 
 impl Diffable<ConditionalBlockDiff> for ConditionalBlock {
-    fn diff_to(&self, other: &Self, merge_mode: EntityMergeMode) -> ConditionalBlockDiff {
+    fn diff_to(
+        &self,
+        other: &Self,
+        merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
+    ) -> ConditionalBlockDiff {
         let (a_is_not, a_key) = &self.key;
         let (b_is_not, b_key) = &other.key;
 
         let key = if a_is_not == b_is_not && a_key == b_key {
             None
         } else {
-            Some((
-                (a_is_not.clone(), a_key.clone()),
-                (b_is_not.clone(), b_key.clone()),
-            ))
+            Some(((*a_is_not, *a_key), (*b_is_not, *b_key)))
         };
 
-        let items = self.items.diff_to(&other.items, merge_mode);
-        let properties = self.properties.diff_to(&other.properties, merge_mode);
+        let items = self.items.diff_to(&other.items, merge_mode, interner);
+        let properties = self
+            .properties
+            .diff_to(&other.properties, merge_mode, interner);
 
         ConditionalBlockDiff {
             items,
-            key: key,
+            key,
             properties,
         }
     }
 }
 
-impl Display for NamespaceDiff {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.defines)?;
-        write!(f, "{}", self.properties)?;
-        // write!(f, "{}", &self.entities)?;
-        write!(f, "{}", self.values)?;
-        Ok(())
+impl ToStringWithInterner for NamespaceDiff {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
+        let mut buf = String::new();
+        buf.push_str(&format!(
+            "{}",
+            self.defines.to_string_with_interner(interner)
+        ));
+        buf.push_str(&format!(
+            "{}",
+            self.properties.to_string_with_interner(interner)
+        ));
+        buf.push_str(&format!(
+            "{}",
+            self.values.to_string_with_interner(interner)
+        ));
+        buf
     }
 }
 
-impl Display for ModuleDiff {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.defines)?;
-        write!(f, "{}", self.properties)?;
-        // write!(f, "{}", &self.entities)?;
-        write!(f, "{}", self.values)?;
-        Ok(())
+impl ToStringWithInterner for ModuleDiff {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
+        let mut buf = String::new();
+        buf.push_str(&format!(
+            "{}",
+            self.defines.to_string_with_interner(interner)
+        ));
+        buf.push_str(&format!(
+            "{}",
+            self.properties.to_string_with_interner(interner)
+        ));
+        buf.push_str(&format!(
+            "{}",
+            self.values.to_string_with_interner(interner)
+        ));
+        buf
     }
 }
 
-impl<V: Display, VModified: Display> Display for Diff<V, VModified> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<V: ToStringWithInterner, VModified: ToStringWithInterner> ToStringWithInterner
+    for Diff<V, VModified>
+{
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
         match self {
-            Diff::Added(added) => write!(f, "[Added] {}", added),
-            Diff::Removed(removed) => write!(f, "[Removed] {}", removed),
-            Diff::Modified(modified) => {
-                write!(f, "{}", modified)
+            Diff::Added(added) => format!("[Added] {}", added.to_string_with_interner(interner)),
+            Diff::Removed(removed) => {
+                format!("[Removed] {}", removed.to_string_with_interner(interner))
             }
-            Diff::Unchanged => Ok(()),
+            Diff::Modified(modified) => {
+                format!("{}", modified.to_string_with_interner(interner))
+            }
+            Diff::Unchanged => String::new(),
         }
     }
 }
 
-impl Display for PropertyInfoListDiff {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl ToStringWithInterner for PropertyInfoListDiff {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
         match &self.0 {
-            VecDiff::Unchanged => Ok(()),
+            VecDiff::Unchanged => String::new(),
             VecDiff::Changed(items) => {
+                let mut buf = String::new();
                 for item in items {
                     match item {
                         Diff::Added(item) => {
-                            write!(f, "[Added] {}", item)?;
+                            buf.push_str(&format!(
+                                "[Added] {}",
+                                item.to_string_with_interner(interner)
+                            ));
                         }
                         Diff::Removed(item) => {
-                            write!(f, "[Removed] {}", item)?;
+                            buf.push_str(&format!(
+                                "[Removed] {}",
+                                item.to_string_with_interner(interner)
+                            ));
                         }
                         Diff::Modified(item) => {
-                            write!(f, "{}", item)?;
+                            buf.push_str(&format!("{}", item.to_string_with_interner(interner)));
                         }
                         Diff::Unchanged => {}
                     }
                 }
-
-                Ok(())
+                buf
             }
         }
     }
 }
 
-impl Display for PropertyInfoDiff {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl ToStringWithInterner for PropertyInfoDiff {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
+        let mut buf = String::new();
         if let Some((old, new)) = &self.operator {
-            write!(f, "({} -> {}) ", old, new)?;
+            buf.push_str(&format!("({} -> {}) ", old, new));
         }
 
-        write!(f, "{} ", self.value)
+        buf.push_str(&format!(
+            "{} ",
+            self.value.to_string_with_interner(interner)
+        ));
+        buf
     }
 }
 
-impl<V, VModified> Display for VecDiff<V, VModified>
+impl<V, VModified> ToStringWithInterner for VecDiff<V, VModified>
 where
-    V: Display,
-    VModified: Display,
+    V: ToStringWithInterner,
+    VModified: ToStringWithInterner,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
         match self {
-            VecDiff::Unchanged => Ok(()),
+            VecDiff::Unchanged => String::new(),
             VecDiff::Changed(items) => {
+                let mut buf = String::new();
                 for item in items {
                     match item {
                         Diff::Added(item) => {
-                            write!(f, "[Added] {}", item)?;
+                            buf.push_str(&format!(
+                                "[Added] {}",
+                                item.to_string_with_interner(interner)
+                            ));
                         }
                         Diff::Removed(item) => {
-                            write!(f, "[Removed] {}", item)?;
+                            buf.push_str(&format!(
+                                "[Removed] {}",
+                                item.to_string_with_interner(interner)
+                            ));
                         }
-                        Diff::Modified(item) => write!(f, "{}", item)?,
+                        Diff::Modified(item) => {
+                            buf.push_str(&format!("{}", item.to_string_with_interner(interner)))
+                        }
                         Diff::Unchanged => {}
                     }
                 }
 
-                Ok(())
+                String::new()
             }
         }
     }
 }
 
-impl<K: Display + Eq + Hash, V: Display, VModified: Display> Display
-    for HashMapDiff<K, V, VModified>
+impl<K: Debug + Eq + Hash, V: ToStringWithInterner, VModified: ToStringWithInterner>
+    ToStringWithInterner for HashMapDiff<K, V, VModified>
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
         match self {
-            HashMapDiff::Unchanged => Ok(()),
+            HashMapDiff::Unchanged => String::new(),
             HashMapDiff::Modified(pairs) => {
+                let mut buf = String::new();
                 for (key, diff) in pairs {
-                    writeln!(f, "{}: {}", key, diff.clone().indented_skip_initial("    "))?;
+                    buf.push_str(&format!(
+                        "{:?}: {}\n",
+                        key,
+                        diff.clone()
+                            .to_string_with_interner(interner)
+                            .indented_skip_initial("    ")
+                    ));
                 }
-                Ok(())
+                buf
             }
         }
     }
 }
 
-// ... similar code for other enums ...
-
-impl Display for EntityDiff {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "{{ ")?;
-        write!(f, "{}", self.items)?;
-        write!(f, "{}", self.properties)?;
-        write!(f, "{}", self.conditional_blocks)?;
-        write!(f, "}} ")
+impl ToStringWithInterner for EntityDiff {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
+        let mut buf = String::from("{\n");
+        buf.push_str(&format!("{}", self.items.to_string_with_interner(interner)));
+        buf.push_str(&format!(
+            "{}",
+            self.properties.to_string_with_interner(interner)
+        ));
+        buf.push_str(&format!(
+            "{}",
+            self.conditional_blocks.to_string_with_interner(interner)
+        ));
+        buf.push_str("}");
+        buf
     }
 }
 
-impl Display for ConditionalBlockDiff {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[[")?;
+impl ToStringWithInterner for ConditionalBlockDiff {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
+        let mut buf = String::from("[[");
         if let Some(((is_not_old, key_old), (is_not_new, key_new))) = &self.key {
+            let key_old = interner.resolve(key_old);
             let old = if *is_not_old {
                 "!".to_owned() + key_old
             } else {
                 key_old.to_string()
             };
+            let key_new = interner.resolve(key_new);
             let new = if *is_not_new {
                 "!".to_owned() + key_new
             } else {
                 key_new.to_string()
             };
-            write!(f, "{} -> {}", old, new)?;
+            buf.push_str(&format!("{} -> {}", old, new));
         }
-        write!(f, "]")?;
-        write!(f, "{}", self.items)?;
-        write!(f, "]")
+        buf.push_str(&format!("]"));
+        buf.push_str(&format!("{}", self.items.to_string_with_interner(interner)));
+        buf.push_str(&format!("]"));
+        buf
     }
 }
 
-impl Display for ValueDiff {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl ToStringWithInterner for ValueDiff {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
         match self {
             ValueDiff::String(Some((old, new))) => {
-                write!(f, "\"{}\" -> \"{}\"", old, new)
+                format!(
+                    "\"{}\" -> \"{}\"",
+                    interner.resolve(old),
+                    interner.resolve(new)
+                )
             }
-            ValueDiff::String(None) => write!(f, "Unchanged"),
+            ValueDiff::String(None) => format!("Unchanged"),
             ValueDiff::Number(Some((old, new))) => {
-                write!(f, "{} -> {}", old, new)
+                format!("{} -> {}", interner.resolve(old), interner.resolve(new))
             }
-            ValueDiff::Number(None) => write!(f, "Unchanged"),
+            ValueDiff::Number(None) => format!("Unchanged"),
             ValueDiff::Boolean(Some((old, new))) => {
-                write!(f, "{} -> {}", old, new)
+                format!("{} -> {}", old, new)
             }
-            ValueDiff::Boolean(None) => write!(f, "Unchanged"),
+            ValueDiff::Boolean(None) => format!("Unchanged"),
             ValueDiff::Define(Some((old, new))) => {
-                write!(f, "{} -> {}", old, new)
+                format!("{} -> {}", interner.resolve(old), interner.resolve(new))
             }
-            ValueDiff::Define(None) => write!(f, "Unchanged"),
+            ValueDiff::Define(None) => format!("Unchanged"),
             ValueDiff::Color(Some(((type1, a1, b1, c1, d1), (type2, a2, b2, c2, d2)))) => {
+                let (type1, a1, b1, c1, d1) = (
+                    interner.resolve(type1),
+                    interner.resolve(a1),
+                    interner.resolve(b1),
+                    interner.resolve(c1),
+                    d1.as_ref().map(|d1| interner.resolve(d1)),
+                );
+                let (type2, a2, b2, c2, d2) = (
+                    interner.resolve(type2),
+                    interner.resolve(a2),
+                    interner.resolve(b2),
+                    interner.resolve(c2),
+                    d2.as_ref().map(|d2| interner.resolve(d2)),
+                );
                 let d1 = match d1 {
                     Some(d1) => format!("{} ", d1),
                     None => "".to_string(),
@@ -820,21 +925,24 @@ impl Display for ValueDiff {
                     Some(d2) => format!("{} ", d2),
                     None => "".to_string(),
                 };
-                write!(
-                    f,
+                format!(
                     "{} {{ {} {} {} {} }} -> {} {{ {} {} {} {} }}",
                     type1, a1, b1, c1, d1, type2, a2, b2, c2, d2
                 )
             }
             ValueDiff::Maths(Some((old, new))) => {
-                write!(f, "{} -> {}", old, new)
+                format!("{} -> {}", interner.resolve(old), interner.resolve(new))
             }
-            ValueDiff::Maths(None) => write!(f, "Unchanged"),
+            ValueDiff::Maths(None) => format!("Unchanged"),
             ValueDiff::TypeChanged(old, new) => {
-                write!(f, "{} -> {}", old, new)
+                format!(
+                    "{} -> {}",
+                    old.to_string_with_interner(interner),
+                    new.to_string_with_interner(interner)
+                )
             }
             ValueDiff::Entity(entity_diff) => {
-                write!(f, "{}", entity_diff)
+                format!("{}", entity_diff.to_string_with_interner(interner))
             }
             _ => todo!(),
         }
@@ -938,14 +1046,14 @@ impl ApplyPatch<ValueDiff> for Value {
         match diff {
             ValueDiff::String(option) => {
                 if let Some((_, new)) = option {
-                    Value::String(new.clone())
+                    Value::String(*new)
                 } else {
                     self.clone()
                 }
             }
             ValueDiff::Number(option) => {
                 if let Some((_, new)) = option {
-                    Value::Number(new.parse().unwrap())
+                    Value::Number(*new)
                 } else {
                     self.clone()
                 }
@@ -966,7 +1074,7 @@ impl ApplyPatch<ValueDiff> for Value {
             }
             ValueDiff::Define(option) => {
                 if let Some((_, new)) = option {
-                    Value::Define(new.clone())
+                    Value::Define(*new)
                 } else {
                     self.clone()
                 }
@@ -980,7 +1088,7 @@ impl ApplyPatch<ValueDiff> for Value {
             }
             ValueDiff::Maths(option) => {
                 if let Some((_, new)) = option {
-                    Value::Maths(new.clone())
+                    Value::Maths(*new)
                 } else {
                     self.clone()
                 }
@@ -1055,8 +1163,10 @@ impl ApplyPatch<ConditionalBlockDiff> for ConditionalBlock {
 
 #[cfg(test)]
 mod tests {
+    use lasso::ThreadedRodeo;
+
     use crate::{
-        cw_model::Module,
+        cw_model::{Module, ToStringWithInterner},
         playset::diff::{Diffable, EntityMergeMode},
     };
 
@@ -1122,13 +1232,14 @@ mod tests {
             entity_3 = {
                 entity_3_property_1 = "string_1"
             }"#;
+        let interner = &ThreadedRodeo::default();
 
-        let module_a = Module::parse(module_a_def.to_string(), "type/path/", "a").unwrap();
-        let module_b = Module::parse(module_b_dev.to_string(), "type/path/", "b").unwrap();
+        let module_a = Module::parse(module_a_def, "type/path/", "a", interner).unwrap();
+        let module_b = Module::parse(module_b_dev, "type/path/", "b", interner).unwrap();
 
-        let diff = module_a.diff_to(&module_b, EntityMergeMode::LIOS);
+        let diff = module_a.diff_to(&module_b, EntityMergeMode::LIOS, interner);
 
-        print!("{}", diff);
+        print!("{}", diff.to_string_with_interner(interner));
     }
 
     #[test]
@@ -1151,14 +1262,15 @@ mod tests {
                 modifier = { factor = 0 }
             }
         }"#;
+        let interner = &ThreadedRodeo::default();
 
-        let module_a = Module::parse(module_a_def.to_string(), "type/path/", "a").unwrap();
-        let module_b = Module::parse(module_b_dev.to_string(), "type/path/", "b").unwrap();
+        let module_a = Module::parse(module_a_def, "type/path/", "a", interner).unwrap();
+        let module_b = Module::parse(module_b_dev, "type/path/", "b", interner).unwrap();
 
-        let diff = module_a.diff_to(&module_b, EntityMergeMode::LIOS);
+        let diff = module_a.diff_to(&module_b, EntityMergeMode::LIOS, interner);
 
         assert_eq!(
-            diff.to_string()
+            diff.to_string_with_interner(interner)
                 .replace(" ", "")
                 .replace("\r", "")
                 .replace("\t", "")
@@ -1191,14 +1303,15 @@ mod tests {
                 modifier = { factor = 1 }
             }
         }"#;
+        let interner = &ThreadedRodeo::default();
 
-        let module_a = Module::parse(module_a_def.to_string(), "type/path/", "a").unwrap();
-        let module_b = Module::parse(module_b_dev.to_string(), "type/path/", "b").unwrap();
+        let module_a = Module::parse(module_a_def, "type/path/", "a", interner).unwrap();
+        let module_b = Module::parse(module_b_dev, "type/path/", "b", interner).unwrap();
 
-        let diff = module_a.diff_to(&module_b, EntityMergeMode::LIOS);
+        let diff = module_a.diff_to(&module_b, EntityMergeMode::LIOS, interner);
 
         assert_eq!(
-            diff.to_string()
+            diff.to_string_with_interner(interner)
                 .replace(" ", "")
                 .replace("\r", "")
                 .replace("\t", "")

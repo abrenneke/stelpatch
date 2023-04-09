@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use crate::cw_model::Entity;
-
     use super::super::super::*;
     use nom_supreme::error::ErrorTree;
 
@@ -9,7 +7,7 @@ mod tests {
     fn empty_entity() {
         let input = "{}";
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
-        assert_eq!(result, Entity::new().into());
+        assert_eq!(result, ParsedEntity::new().into());
     }
 
     #[test]
@@ -18,8 +16,8 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_property("my_var", cw_model::Value::String("value".to_string()))
+            ParsedEntity::new()
+                .with_property("my_var", ParsedValue::String("value"))
                 .into()
         );
     }
@@ -30,10 +28,10 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_property("my_var1", cw_model::Value::String("value1".to_string()))
-                .with_property("my_var2", cw_model::Value::String("value2".to_string()))
-                .with_property("my_var3", cw_model::Value::String("value3".to_string()))
+            ParsedEntity::new()
+                .with_property("my_var1", ParsedValue::String("value1"))
+                .with_property("my_var2", ParsedValue::String("value2"))
+                .with_property("my_var3", ParsedValue::String("value3"))
                 .into()
         );
     }
@@ -49,20 +47,14 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_property("float_val", cw_model::Value::Number("123.4".to_owned()))
-                .with_property("int_val", cw_model::Value::Number("12.0".to_owned()))
-                .with_property("str_val1", cw_model::Value::String("value3".to_string()))
-                .with_property("str_val2", cw_model::Value::String("value4".to_string()))
+            ParsedEntity::new()
+                .with_property("float_val", ParsedValue::Number("123.4"))
+                .with_property("int_val", ParsedValue::Number("12.0"))
+                .with_property("str_val1", ParsedValue::String("value3"))
+                .with_property("str_val2", ParsedValue::String("value4"))
                 .with_property(
                     "color_val",
-                    cw_model::Value::Color((
-                        "rgb".to_string(),
-                        "1.0".to_owned(),
-                        "2.0".to_owned(),
-                        "3.0".to_owned(),
-                        None
-                    ))
+                    ParsedValue::Color(("rgb", "1.0", "2.0", "3.0", None))
                 )
                 .into()
         );
@@ -74,8 +66,8 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_item(cw_model::Value::String("value".to_string()))
+            ParsedEntity::new()
+                .with_item(ParsedValue::String("value"))
                 .into()
         );
     }
@@ -86,10 +78,10 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_item(cw_model::Value::String("value1".to_string()))
-                .with_item(cw_model::Value::String("value2".to_string()))
-                .with_item(cw_model::Value::String("value3".to_string()))
+            ParsedEntity::new()
+                .with_item(ParsedValue::String("value1"))
+                .with_item(ParsedValue::String("value2"))
+                .with_item(ParsedValue::String("value3"))
                 .into()
         );
     }
@@ -100,14 +92,8 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_item(cw_model::Value::Color((
-                    "rgb".to_string(),
-                    "1.0".to_owned(),
-                    "2.0".to_owned(),
-                    "3.0".to_owned(),
-                    None
-                )))
+            ParsedEntity::new()
+                .with_item(ParsedValue::Color(("rgb", "1.0", "2.0", "3.0", None)))
                 .into()
         );
     }
@@ -118,21 +104,9 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_item(cw_model::Value::Color((
-                    "rgb".to_string(),
-                    "1.0".to_owned(),
-                    "2.0".to_owned(),
-                    "3.0".to_owned(),
-                    None
-                )))
-                .with_item(cw_model::Value::Color((
-                    "rgb".to_string(),
-                    "4.0".to_owned(),
-                    "5.0".to_owned(),
-                    "6.0".to_owned(),
-                    None
-                )))
+            ParsedEntity::new()
+                .with_item(ParsedValue::Color(("rgb", "1.0", "2.0", "3.0", None)))
+                .with_item(ParsedValue::Color(("rgb", "4.0", "5.0", "6.0", None)))
                 .into()
         );
     }
@@ -143,16 +117,10 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_item(cw_model::Value::String("value1".to_string()))
-                .with_item(cw_model::Value::Color((
-                    "rgb".to_string(),
-                    "1.0".to_owned(),
-                    "2.0".to_owned(),
-                    "3.0".to_owned(),
-                    None
-                )))
-                .with_item(cw_model::Value::String("value2".to_string()))
+            ParsedEntity::new()
+                .with_item(ParsedValue::String("value1"))
+                .with_item(ParsedValue::Color(("rgb", "1.0", "2.0", "3.0", None)))
+                .with_item(ParsedValue::String("value2"))
                 .into()
         );
     }
@@ -163,9 +131,9 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_item(cw_model::Value::String("value1".to_string()))
-                .with_property("my_var", cw_model::Value::String("value2".to_string()))
+            ParsedEntity::new()
+                .with_item(ParsedValue::String("value1"))
+                .with_property("my_var", ParsedValue::String("value2"))
                 .into()
         );
     }
@@ -181,11 +149,11 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_item(cw_model::Value::String("value1".to_string()))
-                .with_property("my_var1", cw_model::Value::String("value2".to_string()))
-                .with_item(cw_model::Value::String("value3".to_string()))
-                .with_property("my_var2", cw_model::Value::String("value4".to_string()))
+            ParsedEntity::new()
+                .with_item(ParsedValue::String("value1"))
+                .with_property("my_var1", ParsedValue::String("value2"))
+                .with_item(ParsedValue::String("value3"))
+                .with_property("my_var2", ParsedValue::String("value4"))
                 .into()
         );
     }
@@ -199,20 +167,20 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
+            ParsedEntity::new()
                 .with_property(
                     "my_var1",
-                    cw_model::Value::Entity(
-                        Entity::new()
-                            .with_item(cw_model::Value::String("value1".to_string()))
+                    ParsedValue::Entity(
+                        ParsedEntity::new()
+                            .with_item(ParsedValue::String("value1"))
                             .into()
                     )
                 )
                 .with_property(
                     "my_var2",
-                    cw_model::Value::Entity(
-                        Entity::new()
-                            .with_item(cw_model::Value::String("value2".to_string()))
+                    ParsedValue::Entity(
+                        ParsedEntity::new()
+                            .with_item(ParsedValue::String("value2"))
                             .into()
                     )
                 )
@@ -229,15 +197,15 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_item(cw_model::Value::Entity(
-                    Entity::new()
-                        .with_item(cw_model::Value::String("value1".to_string()))
+            ParsedEntity::new()
+                .with_item(ParsedValue::Entity(
+                    ParsedEntity::new()
+                        .with_item(ParsedValue::String("value1"))
                         .into()
                 ))
-                .with_item(cw_model::Value::Entity(
-                    Entity::new()
-                        .with_item(cw_model::Value::String("value2".to_string()))
+                .with_item(ParsedValue::Entity(
+                    ParsedEntity::new()
+                        .with_item(ParsedValue::String("value2"))
                         .into()
                 ))
                 .into()
@@ -266,36 +234,18 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
+            ParsedEntity::new()
                 .with_property(
                     "color1",
-                    cw_model::Value::Color((
-                        "rgb".to_string(),
-                        "255.0".to_owned(),
-                        "0.0".to_owned(),
-                        "0.0".to_owned(),
-                        None
-                    ))
+                    ParsedValue::Color(("rgb", "255.0", "0.0", "0.0", None))
                 )
                 .with_property(
                     "color2",
-                    cw_model::Value::Color((
-                        "rgb".to_string(),
-                        "0.0".to_owned(),
-                        "255.0".to_owned(),
-                        "0.0".to_owned(),
-                        Some("0.5".to_owned())
-                    ))
+                    ParsedValue::Color(("rgb", "0.0", "255.0", "0.0", Some("0.5")))
                 )
                 .with_property(
                     "color3",
-                    cw_model::Value::Color((
-                        "hsv".to_string(),
-                        "120.0".to_owned(),
-                        "50.0".to_owned(),
-                        "100.0".to_owned(),
-                        None
-                    ))
+                    ParsedValue::Color(("hsv", "120.0", "50.0", "100.0", None))
                 )
                 .into()
         );
@@ -313,10 +263,10 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
-                .with_property("my_var1", cw_model::Value::String("value1".to_string()))
-                .with_property("my_var2", cw_model::Value::String("value2".to_string()))
-                .with_property("my_var3", cw_model::Value::String("value3".to_string()))
+            ParsedEntity::new()
+                .with_property("my_var1", ParsedValue::String("value1"))
+                .with_property("my_var2", ParsedValue::String("value2"))
+                .with_property("my_var3", ParsedValue::String("value3"))
                 .into()
         );
     }
@@ -337,22 +287,22 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
+            ParsedEntity::new()
                 // .with_property(
                 //     "my_var1",
-                //     cw_model::Value::String("value1 with space and \"special\" chars".to_string())
+                //     ParsedValue::String("value1 with space and \"special\" chars")
                 // )
                 .with_property(
                     "my_var2",
-                    cw_model::Value::Entity(
-                        Entity::new()
+                    ParsedValue::Entity(
+                        ParsedEntity::new()
                             .with_property(
                                 "nested_var",
-                                cw_model::Value::Entity(
-                                    Entity::new()
+                                ParsedValue::Entity(
+                                    ParsedEntity::new()
                                         .with_property(
                                             "deep_var",
-                                            cw_model::Value::String("deep_value".to_string())
+                                            ParsedValue::String("deep_value")
                                         )
                                         .into()
                                 )
@@ -362,40 +312,31 @@ mod tests {
                 )
                 .with_property(
                     "my_var3",
-                    cw_model::Value::Color((
-                        "rgb".to_string(),
-                        "255.0".to_owned(),
-                        "0.0".to_owned(),
-                        "0.0".to_owned(),
-                        None
-                    ))
+                    ParsedValue::Color(("rgb", "255.0", "0.0", "0.0", None))
                 )
                 // .with_property(
                 //     "my_var4",
-                //     cw_model::Value::String("value_with_escape_characters\nand\ttabs".to_string())
+                //     ParsedValue::String("value_with_escape_characters\nand\ttabs")
                 // )
                 .with_property(
                     "my_var5",
-                    cw_model::Value::Entity(
-                        Entity::new()
-                            .with_item(cw_model::Value::String("nested_entity1".to_string()))
-                            .with_item(cw_model::Value::String("nested_entity2".to_string()))
+                    ParsedValue::Entity(
+                        ParsedEntity::new()
+                            .with_item(ParsedValue::String("nested_entity1"))
+                            .with_item(ParsedValue::String("nested_entity2"))
                     )
                 )
-                .with_property("my_var6", cw_model::Value::String("value6".to_string()))
-                .with_property("my_var7", cw_model::Value::String("value7".to_string()))
+                .with_property("my_var6", ParsedValue::String("value6"))
+                .with_property("my_var7", ParsedValue::String("value7"))
                 .with_property(
                     "my_var8",
-                    cw_model::Value::Entity(
-                        Entity::new()
-                            .with_property(
-                                "nested_var",
-                                cw_model::Value::String("value8".to_string())
-                            )
+                    ParsedValue::Entity(
+                        ParsedEntity::new()
+                            .with_property("nested_var", ParsedValue::String("value8"))
                             .into()
                     )
                 )
-                .with_property("my_var9", cw_model::Value::String("value9".to_string()))
+                .with_property("my_var9", ParsedValue::String("value9"))
                 .into()
         );
     }
@@ -410,13 +351,13 @@ mod tests {
         let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
         assert_eq!(
             result,
-            Entity::new()
+            ParsedEntity::new()
                 .with_property_values(
                     "my_var",
                     vec![
-                        cw_model::Value::String("value1".to_string()),
-                        cw_model::Value::String("value2".to_string()),
-                        cw_model::Value::String("value3".to_string()),
+                        ParsedValue::String("value1"),
+                        ParsedValue::String("value2"),
+                        ParsedValue::String("value3"),
                     ]
                 )
                 .into()
@@ -438,24 +379,18 @@ mod tests {
 
         assert_eq!(
             result,
-            Entity::new()
-                .with_property(
-                    "base",
-                    cw_model::Value::Define("@stabilitylevel2".to_string())
-                )
-                .with_property(
-                    "subtract",
-                    cw_model::Value::String("trigger:planet_stability".to_string())
-                )
-                .with_property("mult", cw_model::Value::Number("0.2".to_owned()))
-                .with_conditional(cw_model::ConditionalBlock {
+            ParsedEntity::new()
+                .with_property("base", ParsedValue::Define("@stabilitylevel2"))
+                .with_property("subtract", ParsedValue::String("trigger:planet_stability"))
+                .with_property("mult", ParsedValue::Number("0.2"))
+                .with_conditional(ParsedConditionalBlock {
                     items: vec![],
-                    key: (false, "ALTERED_STABILITY".to_string()),
+                    key: (false, "ALTERED_STABILITY"),
                     properties: vec![(
-                        "subtract".to_string(),
-                        PropertyInfoList::new().with_property(
-                            cw_model::Operator::Equals,
-                            cw_model::Value::String("$ALTERED_STABILITY$".to_string())
+                        "subtract",
+                        ParsedPropertyInfoList::new().with_property(
+                            Operator::Equals,
+                            ParsedValue::String("$ALTERED_STABILITY$")
                         )
                     )]
                     .into_iter()
@@ -474,11 +409,8 @@ mod tests {
 
         assert_eq!(
             result,
-            Entity::new()
-                .with_property(
-                    "val",
-                    cw_model::Value::Define("@stabilitylevel2".to_string())
-                )
+            ParsedEntity::new()
+                .with_property("val", ParsedValue::Define("@stabilitylevel2"))
                 .into()
         );
     }
@@ -493,11 +425,8 @@ mod tests {
 
         assert_eq!(
             result,
-            Entity::new()
-                .with_property(
-                    "mesh",
-                    cw_model::Value::String("asteroid_01_mesh".to_string())
-                )
+            ParsedEntity::new()
+                .with_property("mesh", ParsedValue::String("asteroid_01_mesh"))
                 .into()
         );
     }
@@ -514,26 +443,23 @@ mod tests {
 
         assert_eq!(
             result,
-            Entity::new()
-                .with_property(
-                    "trigger",
-                    cw_model::Value::String("free_housing".to_string())
-                )
+            ParsedEntity::new()
+                .with_property("trigger", ParsedValue::String("free_housing"))
                 .with_property_with_operator(
                     "-9",
-                    cw_model::Operator::LessThan,
-                    cw_model::Value::Entity(
-                        Entity::new()
-                            .with_property("nine", cw_model::Value::String("yes".to_string()))
+                    Operator::LessThan,
+                    ParsedValue::Entity(
+                        ParsedEntity::new()
+                            .with_property("nine", ParsedValue::String("yes"))
                             .into()
                     )
                 )
                 .with_property_with_operator(
                     "-8",
-                    cw_model::Operator::LessThan,
-                    cw_model::Value::Entity(
-                        Entity::new()
-                            .with_property("eight", cw_model::Value::String("yes".to_string()))
+                    Operator::LessThan,
+                    ParsedValue::Entity(
+                        ParsedEntity::new()
+                            .with_property("eight", ParsedValue::String("yes"))
                             .into()
                     )
                 )
@@ -551,11 +477,11 @@ mod tests {
 
         assert_eq!(
             result,
-            Entity::new()
+            ParsedEntity::new()
                 .with_property_with_operator(
                     "planet_stability",
-                    cw_model::Operator::LessThan,
-                    cw_model::Value::Maths("@[ stabilitylevel2 + 10 ]".to_string())
+                    Operator::LessThan,
+                    ParsedValue::Maths("@[ stabilitylevel2 + 10 ]")
                 )
                 .into()
         );
@@ -571,11 +497,11 @@ mod tests {
 
         assert_eq!(
             result,
-            Entity::new()
+            ParsedEntity::new()
                 .with_property_with_operator(
                     "planet_stability",
-                    cw_model::Operator::LessThan,
-                    cw_model::Value::Maths("@\\[ stabilitylevel2 + 10 ]".to_string())
+                    Operator::LessThan,
+                    ParsedValue::Maths("@\\[ stabilitylevel2 + 10 ]")
                 )
                 .into()
         );

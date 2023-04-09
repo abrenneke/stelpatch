@@ -1,23 +1,28 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::cw_model::{Module, Namespace};
 
 use super::mod_definition::ModDefinition;
 use anyhow::anyhow;
 use colored::*;
+use lasso::{Spur, ThreadedRodeo};
 use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
 mod tests;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct GameMod {
     pub definition: ModDefinition,
     pub modules: Vec<Module>,
-    pub namespaces: HashMap<String, Namespace>,
+    pub namespaces: HashMap<Spur, Namespace>,
 
-    module_lookup_by_path: HashMap<String, usize>,
+    module_lookup_by_path: HashMap<Spur, usize>,
+}
+
+pub enum LoadMode {
+    Serial,
+    Parallel,
 }
 
 impl GameMod {
@@ -30,26 +35,53 @@ impl GameMod {
         }
     }
 
-    pub fn push(&mut self, module: Module) -> () {
+    pub fn push(&mut self, module: Module, interner: &ThreadedRodeo) -> () {
         let index = self.modules.len();
 
         let namespace = self
             .namespaces
             .entry(module.namespace.clone())
-            .or_insert_with(|| Namespace::new(&module.namespace, None));
+            .or_insert_with(|| {
+                let ns_spur = interner.resolve(&module.namespace).to_owned();
+                Namespace::new(&ns_spur, None, interner)
+            });
 
-        namespace.insert(&module);
+        self.module_lookup_by_path
+            .insert(interner.get_or_intern(module.path(interner)), index);
+        namespace.insert(module);
 
-        self.module_lookup_by_path.insert(module.path(), index);
-
-        self.modules.push(module);
+        // self.modules.push(module);
     }
 
-    pub fn get_namespace(&self, namespace: &str) -> Option<&Namespace> {
+    pub fn get_namespace(&self, namespace: &Spur) -> Option<&Namespace> {
         self.namespaces.get(namespace)
     }
 
-    pub fn load_parallel(definition: ModDefinition) -> Result<Self, anyhow::Error> {
+    fn parse_serial(
+        paths: &Vec<PathBuf>,
+        interner: Arc<ThreadedRodeo>,
+    ) -> Vec<Result<Module, anyhow::Error>> {
+        paths
+            .iter()
+            .map(move |path| Module::parse_from_file(path, &interner))
+            .collect()
+    }
+
+    fn parse_parallel(
+        paths: &Vec<PathBuf>,
+        interner: Arc<ThreadedRodeo>,
+    ) -> Vec<Result<Module, anyhow::Error>> {
+        paths
+            .par_iter()
+            .map(move |path| Module::parse_from_file(path, &interner))
+            .collect()
+    }
+
+    pub fn load(
+        definition: ModDefinition,
+        mode: LoadMode,
+        interner: Arc<ThreadedRodeo>,
+    ) -> Result<Self, anyhow::Error> {
         let mut dir = PathBuf::from(definition.path.as_ref().unwrap());
         dir.push("common");
         let mut paths = vec![];
@@ -64,26 +96,26 @@ impl GameMod {
                     .unwrap_or_default()
                     != "common"
             {
-                let path = entry.path().to_string_lossy().to_string();
-                paths.push(path);
+                paths.push(entry.path().to_path_buf());
             }
         }
 
-        let modules: Vec<Result<Module, anyhow::Error>> = paths
-            .par_iter()
-            .map(|path| Module::parse_from_file(path))
-            .collect();
-
         let mut mod_modules = vec![];
 
+        let modules = match mode {
+            LoadMode::Serial => Self::parse_serial(&paths, interner.clone()),
+            LoadMode::Parallel => Self::parse_parallel(&paths, interner.clone()),
+        };
+
         for (module, path) in modules.into_iter().zip(paths.iter()) {
-            let module = module.map_err(|e| anyhow!("Failed to load module at {}: {}", path, e))?;
+            let module = module
+                .map_err(|e| anyhow!("Failed to load module at {}: {}", path.display(), e))?;
             mod_modules.push(module);
         }
 
         let mut game_mod = Self::new(definition);
         for module in mod_modules {
-            game_mod.push(module);
+            game_mod.push(module, &interner.clone());
         }
 
         Ok(game_mod)
@@ -91,7 +123,7 @@ impl GameMod {
 
     /// Gets a module by its path (namespace + filename), or None if it doesn't exist.
     /// For example, "common/units/units"
-    pub fn get_by_path(&self, path: &str) -> Option<&Module> {
+    pub fn get_by_path(&self, path: &Spur) -> Option<&Module> {
         self.module_lookup_by_path
             .get(path)
             .map(|index| &self.modules[*index])
@@ -102,11 +134,18 @@ impl GameMod {
     // self.get_namespace(namespace)?.get_entity(name)
     // }
 
-    pub fn get_overridden_modules(&self, other: &GameMod) -> Vec<&Module> {
+    pub fn get_overridden_modules(
+        &self,
+        other: &GameMod,
+        interner: &ThreadedRodeo,
+    ) -> Vec<&Module> {
         let mut overridden_modules = vec![];
 
         for module in &self.modules {
-            if other.get_by_path(&module.path()).is_some() {
+            if other
+                .get_by_path(&interner.get_or_intern(module.path(interner)))
+                .is_some()
+            {
                 overridden_modules.push(module);
             }
         }
@@ -115,25 +154,25 @@ impl GameMod {
     }
 
     /// Gets the modules that are completely overridden (same file name) by another mod. Groups by namespace.
-    pub fn get_overridden_modules_by_namespace(
-        &self,
-        other: &GameMod,
-    ) -> HashMap<String, Namespace> {
-        let mut namespaces = HashMap::new();
+    // pub fn get_overridden_modules_by_namespace(
+    //     &self,
+    //     other: &GameMod,
+    // ) -> HashMap<String, Namespace> {
+    //     let mut namespaces = HashMap::new();
 
-        for module in &self.modules {
-            for other_module in &other.modules {
-                if module.path() == other_module.path() {
-                    let namespace = namespaces
-                        .entry(module.namespace.clone())
-                        .or_insert_with(|| Namespace::new(&module.namespace, None));
+    //     for module in &self.modules {
+    //         for other_module in &other.modules {
+    //             if module.path() == other_module.path() {
+    //                 let namespace = namespaces
+    //                     .entry(module.namespace.clone())
+    //                     .or_insert_with(|| Namespace::new(&module.namespace, None));
 
-                    namespace.insert(module);
-                }
-            }
-        }
-        namespaces
-    }
+    //                 namespace.insert(module);
+    //             }
+    //         }
+    //     }
+    //     namespaces
+    // }
 
     // pub fn get_overridden_entities(&self, other: &GameMod) -> Vec<(String, String, Value)> {
     //     let mut overridden_entities = vec![];
@@ -153,15 +192,19 @@ impl GameMod {
     //     overridden_entities
     // }
 
-    pub fn print_contents(&self) {
+    pub fn print_contents(&self, resolver: &ThreadedRodeo) {
         println!("{}", "Namespaces:".bold());
         for namespace in self.namespaces.values() {
-            println!("  {}", namespace.namespace);
+            println!("  {}", resolver.resolve(&namespace.namespace));
         }
 
         println!("{}", "Modules:".bold());
         for module in self.modules.iter() {
-            println!("  {}/{}", module.namespace, module.filename.bold());
+            println!(
+                "  {}/{}",
+                resolver.resolve(&module.namespace),
+                resolver.resolve(&module.filename).bold()
+            );
         }
 
         // println!("{}", "Entities:".bold());

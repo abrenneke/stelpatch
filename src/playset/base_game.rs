@@ -2,14 +2,18 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    sync::OnceLock,
+    sync::{Arc, OnceLock},
 };
 
 use anyhow::anyhow;
+use lasso::ThreadedRodeo;
 use lazy_static::lazy_static;
 use winreg::{enums::HKEY_CURRENT_USER, RegKey};
 
-use super::{game_mod::GameMod, mod_definition::ModDefinition};
+use super::{
+    game_mod::{GameMod, LoadMode},
+    mod_definition::ModDefinition,
+};
 
 lazy_static! {
     pub static ref STELLARIS_INSTALL_PATH: Option<PathBuf> =
@@ -23,10 +27,12 @@ static BASE_MOD: OnceLock<GameMod> = OnceLock::new();
 impl BaseGame {
     pub fn load_as_mod_definition(
         install_path: Option<&Path>,
-    ) -> Result<&'static GameMod, anyhow::Error> {
-        if let Some(base_mod) = BASE_MOD.get() {
-            return Ok(base_mod);
-        }
+        load_mode: LoadMode,
+        interner: Arc<ThreadedRodeo>,
+    ) -> Result<GameMod, anyhow::Error> {
+        // if let Some(base_mod) = BASE_MOD.get() {
+        // return Ok(base_mod);
+        // }
 
         let install_path = if let Some(path) = install_path {
             Some(path)
@@ -47,13 +53,14 @@ impl BaseGame {
                     archive: None,
                 };
 
-                let game_mod = GameMod::load_parallel(definition)?;
+                let game_mod = GameMod::load(definition, load_mode, interner)?;
+                Ok(game_mod)
 
-                BASE_MOD
-                    .set(game_mod)
-                    .map_err(|_| anyhow!("Could not set base mod"))?;
+                // BASE_MOD
+                //     .set(game_mod)
+                //     .map_err(|_| anyhow!("Could not set base mod"))?;
 
-                Ok(BASE_MOD.get().unwrap())
+                // Ok(BASE_MOD.get().unwrap())
             }
             None => Err(anyhow!("Could not find Stellaris installation directory")),
         }
@@ -104,7 +111,11 @@ impl BaseGame {
 
 #[cfg(test)]
 mod tests {
-    use crate::playset::base_game::BaseGame;
+    use std::sync::Arc;
+
+    use lasso::ThreadedRodeo;
+
+    use crate::playset::{base_game::BaseGame, game_mod::LoadMode};
 
     #[test]
     fn test_get_install_directory_windows() {
@@ -113,7 +124,9 @@ mod tests {
 
     #[test]
     fn load_base_game_as_mod() {
-        let base_game = BaseGame::load_as_mod_definition(None).unwrap();
+        let interner = Arc::new(ThreadedRodeo::default());
+        let base_game =
+            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, interner).unwrap();
 
         assert!(base_game.modules.len() > 0);
         dbg!(base_game.modules.len());

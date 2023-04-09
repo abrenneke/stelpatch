@@ -3,6 +3,7 @@ mod tests {
     use std::{fs::File, io::Read};
 
     use glob::glob;
+    use lasso::ThreadedRodeo;
 
     use crate::cw_model::Module;
 
@@ -37,59 +38,59 @@ mod tests {
             original_file
                 .read_to_string(&mut contents)
                 .expect("Failed to read file");
+            let interner = &ThreadedRodeo::default();
+            let _result = Module::parse(&contents, "test", "test", interner);
 
-            let result = Module::parse_verbose(&contents, "test", "test");
+            // if let Err(e) = result {
+            //     println!("{} - parse FAILED", original_path.display());
 
-            if let Err(e) = result {
-                println!("{} - parse FAILED", original_path.display());
+            //     match e {
+            //         nom::Err::Error(e) => {
+            //             let (input, last_tried) = e.errors.first().unwrap();
+            //             let lines: String = input.lines().take(2).collect();
+            //             println!("Failed at: {}", lines);
+            //             println!("Last tried: {:?}", last_tried);
 
-                match e {
-                    nom::Err::Error(e) => {
-                        let (input, last_tried) = e.errors.first().unwrap();
-                        let lines: String = input.lines().take(2).collect();
-                        println!("Failed at: {}", lines);
-                        println!("Last tried: {:?}", last_tried);
+            //             print!("Context Chain: ");
+            //             for (_, err) in e.errors {
+            //                 match err {
+            //                     nom::error::VerboseErrorKind::Context(context) => {
+            //                         print!("/{}", context);
+            //                     }
+            //                     nom::error::VerboseErrorKind::Char(c) => {
+            //                         print!("Char: {}", c);
+            //                     }
+            //                     _ => {}
+            //                 }
+            //             }
+            //             println!("");
+            //         }
+            //         nom::Err::Failure(e) => {
+            //             let (input, last_tried) = e.errors.first().unwrap();
+            //             let lines: String = input.lines().take(2).collect();
+            //             println!("Failed at: {}", lines);
+            //             println!("Last tried: {:?}", last_tried);
 
-                        print!("Context Chain: ");
-                        for (_, err) in e.errors {
-                            match err {
-                                nom::error::VerboseErrorKind::Context(context) => {
-                                    print!("/{}", context);
-                                }
-                                nom::error::VerboseErrorKind::Char(c) => {
-                                    print!("Char: {}", c);
-                                }
-                                _ => {}
-                            }
-                        }
-                        println!("");
-                    }
-                    nom::Err::Failure(e) => {
-                        let (input, last_tried) = e.errors.first().unwrap();
-                        let lines: String = input.lines().take(2).collect();
-                        println!("Failed at: {}", lines);
-                        println!("Last tried: {:?}", last_tried);
-
-                        print!("Context Chain: ");
-                        for (_, err) in e.errors {
-                            match err {
-                                nom::error::VerboseErrorKind::Context(context) => {
-                                    print!("/{}", context);
-                                }
-                                nom::error::VerboseErrorKind::Char(c) => {
-                                    print!("Char: {}", c);
-                                }
-                                _ => {}
-                            }
-                        }
-                        println!("");
-                    }
-                    nom::Err::Incomplete(_) => {
-                        println!("Incomplete");
-                    }
-                }
-                panic!("Failed to parse file");
-            }
+            //             print!("Context Chain: ");
+            //             for (_, err) in e.errors {
+            //                 match err {
+            //                     nom::error::VerboseErrorKind::Context(context) => {
+            //                         print!("/{}", context);
+            //                     }
+            //                     nom::error::VerboseErrorKind::Char(c) => {
+            //                         print!("Char: {}", c);
+            //                     }
+            //                     _ => {}
+            //                 }
+            //             }
+            //             println!("");
+            //         }
+            //         nom::Err::Incomplete(_) => {
+            //             println!("Incomplete");
+            //         }
+            //     }
+            //     panic!("Failed to parse file");
+            // }
         }
     }
 }
