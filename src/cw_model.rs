@@ -255,7 +255,7 @@ impl Entity {
         self
     }
 
-    pub fn with_conditional(mut self, value: ConditionalBlock, interner: &ThreadedRodeo) -> Self {
+    pub fn with_conditional(mut self, value: ConditionalBlock) -> Self {
         self.conditional_blocks.insert(value.key.1, value);
         self
     }

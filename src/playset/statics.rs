@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use super::diff::EntityMergeMode;
-use lasso::ThreadedRodeo;
 use lazy_static::lazy_static;
 
 lazy_static! {

@@ -29,10 +29,10 @@ impl BaseGame {
         install_path: Option<&Path>,
         load_mode: LoadMode,
         interner: Arc<ThreadedRodeo>,
-    ) -> Result<GameMod, anyhow::Error> {
-        // if let Some(base_mod) = BASE_MOD.get() {
-        // return Ok(base_mod);
-        // }
+    ) -> Result<&'static GameMod, anyhow::Error> {
+        if let Some(base_mod) = BASE_MOD.get() {
+            return Ok(base_mod);
+        }
 
         let install_path = if let Some(path) = install_path {
             Some(path)
@@ -54,13 +54,12 @@ impl BaseGame {
                 };
 
                 let game_mod = GameMod::load(definition, load_mode, interner)?;
-                Ok(game_mod)
 
-                // BASE_MOD
-                //     .set(game_mod)
-                //     .map_err(|_| anyhow!("Could not set base mod"))?;
+                BASE_MOD
+                    .set(game_mod)
+                    .map_err(|_| anyhow!("Could not set base mod"))?;
 
-                // Ok(BASE_MOD.get().unwrap())
+                Ok(BASE_MOD.get().unwrap())
             }
             None => Err(anyhow!("Could not find Stellaris installation directory")),
         }
