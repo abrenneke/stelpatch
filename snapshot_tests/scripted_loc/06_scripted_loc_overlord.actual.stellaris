@@ -1,8 +1,0 @@
-defined_text {
-    name = MechawarriorContractors
-    text = {
-        localization_key = NAME_mechawarrior_contractors
-    }
-
-}
-

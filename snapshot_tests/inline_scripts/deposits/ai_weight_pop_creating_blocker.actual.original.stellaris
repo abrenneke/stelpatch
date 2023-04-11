@@ -1,8 +1,0 @@
-ai_weight = {
-	weight = 1
-	
-	modifier = {
-		factor = 2
-		from = { num_unemployed = 0 }
-	}
-}

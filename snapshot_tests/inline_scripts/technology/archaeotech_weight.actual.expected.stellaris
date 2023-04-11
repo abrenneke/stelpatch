@@ -1,9 +1,0 @@
-modifier {
-    NOT = {
-        has_ascension_perk = ap_archaeoengineers
-    }
-
-    factor = 0.85
-    has_technology = tech_archaeo_refinery
-}
-
