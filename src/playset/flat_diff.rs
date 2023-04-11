@@ -353,7 +353,7 @@ impl super::diff::ModDiff {
     }
 }
 
-fn sorted_key_value_iter<K, V>(map: &HashMap<K, V>) -> impl Iterator<Item = (K, V)> + '_
+fn _sorted_key_value_iter<K, V>(map: &HashMap<K, V>) -> impl Iterator<Item = (K, V)> + '_
 where
     K: Ord + Clone + Hash,
     V: Clone,

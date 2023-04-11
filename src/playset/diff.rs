@@ -415,10 +415,8 @@ impl Diffable<PropertiesDiff> for Properties {
         for (key, value_a) in &self.kv {
             match other.kv.get(key) {
                 Some(value_b) if value_a != value_b => {
-                    modified.insert(
-                        key.clone(),
-                        Diff::Modified(value_a.diff_to(value_b, next_merge_mode, interner)),
-                    );
+                    let diff = value_a.diff_to(value_b, next_merge_mode, interner);
+                    modified.insert(key.clone(), Diff::Modified(diff));
                 }
                 None => {
                     if merge_mode != EntityMergeMode::MergeShallow
@@ -539,14 +537,18 @@ impl<T: PartialEq + Clone + Debug + JaccardIndex + Diffable<VModified>, VModifie
 
                 for (i, value_b) in other.iter().enumerate() {
                     if claimed.contains(&i) == false {
-                        let jaccard_index = value_a.jaccard_index(value_b, interner);
-                        if jaccard_index > threshold {
+                        let similarity = if value_a == value_b {
+                            1.0
+                        } else {
+                            value_a.jaccard_index(value_b, interner)
+                        };
+                        if similarity > threshold {
                             if let Some((_, max_jaccard_index, _)) = max_found {
-                                if jaccard_index > max_jaccard_index {
-                                    max_found = Some((i, jaccard_index, value_b));
+                                if similarity > max_jaccard_index {
+                                    max_found = Some((i, similarity, value_b));
                                 }
                             } else {
-                                max_found = Some((i, jaccard_index, value_b));
+                                max_found = Some((i, similarity, value_b));
                             }
                         }
                     }

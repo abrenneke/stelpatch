@@ -233,4 +233,41 @@ common/technology
             .trim()
         );
     }
+
+    #[test]
+    fn flat_diff_economic_categories() {
+        let interner = Arc::new(ThreadedRodeo::default());
+        let module = Module::parse(
+            r#"
+        planet_buildings = {
+            parent = planet_structures
+            modifier_category = planet
+            generate_mult_modifiers = {
+                cost
+                upkeep
+                produces
+            }
+        }"#,
+            "common/economic_categories",
+            "Legw_categories",
+            &interner,
+        )
+        .unwrap();
+        let base_game =
+            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, interner.clone()).unwrap();
+
+        let mut game_mod = GameMod::new(ModDefinition::new());
+        game_mod.push(module, &interner);
+
+        let diff = base_game.diff_to(&game_mod, EntityMergeMode::Unknown, &interner);
+
+        let diff_str = diff.short_changes_string(&interner);
+
+        assert_eq!(
+            diff_str.trim(),
+            r#"common/economic_categories
+  +planet_buildings/generate_mult_modifiers/2: produces"#
+                .trim()
+        );
+    }
 }
