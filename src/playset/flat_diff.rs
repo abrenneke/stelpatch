@@ -309,14 +309,16 @@ impl ToStringOneLine for FlatDiff {
 impl super::diff::ModDiff {
     pub fn short_changes_string(&self, interner: &ThreadedRodeo) -> String {
         let mut s = String::new();
-        for (namespace_name, namespace) in sorted_key_value_iter(&self.namespaces) {
+        for (namespace_name, namespace) in sorted_key_value_iter_resolve(&self.namespaces, interner)
+        {
             match &namespace.properties.kv {
                 HashMapDiff::Modified(properties) => {
                     if properties.len() > 0 {
                         s.push_str(&format!("{}\n", interner.resolve(&namespace_name)));
 
                         let mut entries = vec![];
-                        for (changed_entity_name, entity_diff) in sorted_key_value_iter(properties)
+                        for (changed_entity_name, entity_diff) in
+                            sorted_key_value_iter_resolve(properties, interner)
                         {
                             match entity_diff {
                                 Diff::Added(_) => entries
@@ -362,4 +364,22 @@ where
     sorted_keys
         .into_iter()
         .filter_map(move |key| map.get(&key).cloned().map(|value| (key, value)))
+}
+
+fn sorted_key_value_iter_resolve<'a, V>(
+    map: &'a HashMap<Spur, V>,
+    interner: &'a ThreadedRodeo,
+) -> impl Iterator<Item = (Spur, V)> + 'a
+where
+    V: Clone,
+{
+    let mut sorted_keys = map
+        .keys()
+        .map(|k| (k, interner.resolve(k)))
+        .collect::<Vec<(_, _)>>();
+    sorted_keys.sort_by(|(_, a), (_, b)| a.cmp(b));
+
+    sorted_keys
+        .into_iter()
+        .filter_map(move |(key, _)| map.get(&key).cloned().map(|value| (key.clone(), value)))
 }

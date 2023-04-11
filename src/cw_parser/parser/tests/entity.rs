@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use crate::cw_model::Properties;
-
     use super::super::super::*;
     use nom_supreme::error::ErrorTree;
 
