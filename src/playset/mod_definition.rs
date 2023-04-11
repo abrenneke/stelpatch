@@ -56,7 +56,7 @@ impl ModDefinitionList {
         mod_dir.push("mod");
 
         let dot_mod_files = WalkDir::new(mod_dir)
-            .max_depth(0)
+            .max_depth(1)
             .sort_by_file_name()
             .into_iter()
             .filter_map(|e| {
@@ -121,7 +121,8 @@ impl ModDefinitionList {
 
     pub fn search_first(&self, search: &str) -> Result<&ModDefinition, String> {
         for mod_definition in &self.mods {
-            if mod_definition.name == search {
+            let pattern = search.to_lowercase();
+            if mod_definition.name.to_lowercase().contains(&pattern) {
                 return Ok(mod_definition);
             }
         }

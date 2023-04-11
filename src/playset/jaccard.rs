@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use lasso::{Spur, ThreadedRodeo};
 
-use crate::cw_model::{Entity, Module, PropertyInfo, PropertyInfoList, Value};
+use crate::cw_model::{Entity, Module, Properties, PropertyInfo, PropertyInfoList, Value};
 
 trait DeepKeys {
     fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String>;
@@ -42,11 +42,16 @@ impl DeepKeys for Entity {
     }
 }
 
+impl DeepKeys for Properties {
+    fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String> {
+        self.kv.deep_keys(interner)
+    }
+}
+
 impl DeepKeys for Module {
     fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String> {
         let mut keys = vec![];
         keys.extend(self.values.deep_keys(interner));
-        keys.extend(self.defines.deep_keys(interner));
         keys.extend(self.properties.deep_keys(interner));
         keys
     }

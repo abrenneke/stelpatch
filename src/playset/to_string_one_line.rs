@@ -14,7 +14,6 @@ impl ToStringOneLine for Value {
             Value::Number(n) => interner.resolve(n).to_string(),
             Value::Boolean(b) => b.to_string(),
             Value::Entity(e) => e.to_string_one_line(interner),
-            Value::Define(d) => interner.resolve(d).to_string(),
             Value::Color(c) => c.to_string_one_line(interner),
             Value::Maths(m) => interner.resolve(m).to_string(),
         }
@@ -25,14 +24,7 @@ impl ToStringOneLine for Module {
     fn to_string_one_line(&self, interner: &ThreadedRodeo) -> String {
         let mut s = String::new();
         let mut values = vec![];
-        for (key, value) in &self.defines {
-            values.push(format!(
-                "{} = {}",
-                interner.resolve(key),
-                value.to_string_one_line(interner)
-            ));
-        }
-        for (key, value) in &self.properties {
+        for (key, value) in &self.properties.kv {
             values.push(format!(
                 "{} = {}",
                 interner.resolve(key),
@@ -86,7 +78,7 @@ impl ToStringOneLine for Entity {
         for value in &self.items {
             s.push_str(&format!("{} ", value.to_string_one_line(interner)));
         }
-        for (key, value) in &self.properties {
+        for (key, value) in &self.properties.kv {
             s.push_str(&format!(
                 "{} {} ",
                 interner.resolve(key),
@@ -123,7 +115,6 @@ impl ToStringOneLine for (Spur, Spur, Spur, Spur, Option<Spur>) {
 impl ToStringOneLine for ModuleDiff {
     fn to_string_one_line(&self, interner: &ThreadedRodeo) -> String {
         let mut s = String::new();
-        s.push_str(&self.defines.to_string_one_line(interner));
         s.push_str(&self.properties.to_string_one_line(interner));
         // s.push_str(&self.entities.to_string_one_line(interner));
         s.push_str(&self.values.to_string_one_line(interner));
@@ -211,6 +202,12 @@ impl<V: ToStringOneLine, VModified: ToStringOneLine> ToStringOneLine
     }
 }
 
+impl ToStringOneLine for PropertiesDiff {
+    fn to_string_one_line(&self, interner: &ThreadedRodeo) -> String {
+        self.kv.to_string_one_line(interner)
+    }
+}
+
 impl ToStringOneLine for VecDiff<Value, ValueDiff> {
     fn to_string_one_line(&self, interner: &ThreadedRodeo) -> String {
         let mut s = String::new();
@@ -248,12 +245,6 @@ impl ToStringOneLine for ValueDiff {
             },
             ValueDiff::Boolean(v) => match v {
                 Some((before, after)) => format!("{}=>{}", before, after),
-                None => "".to_string(),
-            },
-            ValueDiff::Define(v) => match v {
-                Some((before, after)) => {
-                    format!("{}=>{}", interner.resolve(before), interner.resolve(after))
-                }
                 None => "".to_string(),
             },
             ValueDiff::Number(v) => match v {
@@ -297,7 +288,7 @@ impl ToStringOneLine for EntityDiff {
                 }
             }
         }
-        match &self.properties {
+        match &self.properties.kv {
             HashMapDiff::Unchanged => {}
             HashMapDiff::Modified(m) => {
                 for (key, value) in m {

@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod tests {
+    use crate::cw_model::Properties;
+
     use super::super::super::*;
     use nom_supreme::error::ErrorTree;
 
@@ -380,21 +382,24 @@ mod tests {
         assert_eq!(
             result,
             ParsedEntity::new()
-                .with_property("base", ParsedValue::Define("@stabilitylevel2"))
+                .with_property("base", ParsedValue::String("@stabilitylevel2"))
                 .with_property("subtract", ParsedValue::String("trigger:planet_stability"))
                 .with_property("mult", ParsedValue::Number("0.2"))
                 .with_conditional(ParsedConditionalBlock {
                     items: vec![],
                     key: (false, "ALTERED_STABILITY"),
-                    properties: vec![(
-                        "subtract",
-                        ParsedPropertyInfoList::new().with_property(
-                            Operator::Equals,
-                            ParsedValue::String("$ALTERED_STABILITY$")
-                        )
-                    )]
-                    .into_iter()
-                    .collect(),
+                    properties: ParsedProperties {
+                        kv: vec![(
+                            "subtract",
+                            ParsedPropertyInfoList::new().with_property(
+                                Operator::Equals,
+                                ParsedValue::String("$ALTERED_STABILITY$")
+                            )
+                        )]
+                        .into_iter()
+                        .collect(),
+                        is_module: true
+                    },
                 })
         )
     }
@@ -410,7 +415,7 @@ mod tests {
         assert_eq!(
             result,
             ParsedEntity::new()
-                .with_property("val", ParsedValue::Define("@stabilitylevel2"))
+                .with_property("val", ParsedValue::String("@stabilitylevel2"))
                 .into()
         );
     }

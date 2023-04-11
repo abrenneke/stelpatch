@@ -44,10 +44,16 @@ pub struct ParsedEntity<'a> {
     pub items: Vec<ParsedValue<'a>>,
 
     /// Key value pairs in the entity, like { a = b } or { a > b }
-    pub properties: HashMap<&'a str, ParsedPropertyInfoList<'a>>,
+    pub properties: ParsedProperties<'a>,
 
     /// Conditional blocks in the entity, like [[CONDITION] { a b c }]
     pub conditional_blocks: HashMap<&'a str, ParsedConditionalBlock<'a>>,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct ParsedProperties<'a> {
+    pub kv: HashMap<&'a str, ParsedPropertyInfoList<'a>>,
+    pub is_module: bool,
 }
 
 /// Info about the value of an entity's property. The property info contains the "= b" part of "a = b".
@@ -69,7 +75,6 @@ pub enum ParsedValue<'a> {
     Number(&'a str),
     Boolean(bool),
     Entity(ParsedEntity<'a>),
-    Define(&'a str),
     Color((&'a str, &'a str, &'a str, &'a str, Option<&'a str>)),
     Maths(&'a str),
 }
@@ -79,12 +84,11 @@ pub enum ParsedValue<'a> {
 pub struct ParsedConditionalBlock<'a> {
     pub key: (bool, &'a str),
     pub items: Vec<ParsedValue<'a>>,
-    pub properties: HashMap<&'a str, ParsedPropertyInfoList<'a>>,
+    pub properties: ParsedProperties<'a>,
 }
 
 #[derive(Debug)]
 struct ParsedExpression<'a> {
-    is_define: bool,
     key: &'a str,
     operator: Operator,
     value: ParsedValue<'a>,
@@ -100,8 +104,7 @@ enum ParsedBlockItem<'a> {
 pub struct ParsedModule<'a> {
     pub filename: String,
     pub namespace: String,
-    pub defines: HashMap<&'a str, ParsedValue<'a>>,
-    pub properties: HashMap<&'a str, ParsedPropertyInfoList<'a>>,
+    pub properties: ParsedProperties<'a>,
     pub values: Vec<ParsedValue<'a>>,
 }
 
@@ -189,13 +192,17 @@ impl<'a> ParsedEntity<'a> {
     pub fn new() -> Self {
         Self {
             items: Vec::new(),
-            properties: HashMap::new(),
+            properties: ParsedProperties {
+                kv: HashMap::new(),
+                is_module: false,
+            },
             conditional_blocks: HashMap::new(),
         }
     }
 
     pub fn with_property(mut self, key: &'a str, value: ParsedValue<'a>) -> Self {
         self.properties
+            .kv
             .entry(key)
             .or_insert_with(ParsedPropertyInfoList::new)
             .0
@@ -213,6 +220,7 @@ impl<'a> ParsedEntity<'a> {
     ) -> Self {
         let items = self
             .properties
+            .kv
             .entry(key)
             .or_insert_with(ParsedPropertyInfoList::new);
         for value in values {
@@ -231,6 +239,7 @@ impl<'a> ParsedEntity<'a> {
         value: ParsedValue<'a>,
     ) -> Self {
         self.properties
+            .kv
             .entry(key)
             .or_insert_with(ParsedPropertyInfoList::new)
             .0
@@ -249,24 +258,25 @@ impl<'a> ParsedEntity<'a> {
     }
 }
 
-/// A module is like an entity but also supports defines. A module is a whole file.
+/// A module for most intents and purposes is just an entity.
 pub fn module<'a, E: ParserError<&'a str>>(
     input: &'a str,
     module_name: &'a str,
-) -> IResult<
-    &'a str,
-    (
-        HashMap<&'a str, ParsedValue<'a>>,
-        HashMap<&'a str, ParsedPropertyInfoList<'a>>,
-        Vec<ParsedValue<'a>>,
-    ),
-    E,
-> {
+) -> IResult<&'a str, (ParsedProperties<'a>, Vec<ParsedValue<'a>>), E> {
     let original_input = input;
     let orig_slice: &'a str = &original_input;
 
     if module_name.contains("99_README") {
-        return Ok(("", (HashMap::new(), HashMap::new(), Vec::new())));
+        return Ok((
+            "",
+            (
+                ParsedProperties {
+                    kv: HashMap::new(),
+                    is_module: true,
+                },
+                Vec::new(),
+            ),
+        ));
     }
 
     let (input, _) = opt(tag("\u{feff}"))(orig_slice)?;
@@ -280,7 +290,6 @@ pub fn module<'a, E: ParserError<&'a str>>(
                 ParsedBlockItem::Expression,
             )
             .context("module expression"),
-            map(with_opt_trailing_ws(define), ParsedBlockItem::Expression).context("module define"),
             map(
                 with_opt_trailing_ws(script_value),
                 ParsedBlockItem::ArrayItem,
@@ -292,26 +301,24 @@ pub fn module<'a, E: ParserError<&'a str>>(
     .context("module")
     .parse(input)?;
 
-    let mut defines = HashMap::new();
-    // let mut entities = HashMap::new();
-    let mut properties = HashMap::new();
+    let mut properties = ParsedProperties {
+        kv: HashMap::new(),
+        is_module: true,
+    };
     let mut values = Vec::new();
 
     for expression_or_value in expressions {
         match expression_or_value {
             ParsedBlockItem::Expression(expression) => {
                 if expression.operator == Operator::Equals {
-                    if expression.is_define {
-                        defines.insert(expression.key, expression.value);
-                    } else {
-                        let items = properties
-                            .entry(expression.key.clone())
-                            .or_insert(ParsedPropertyInfoList::new());
-                        items.push(ParsedPropertyInfo {
-                            value: expression.value,
-                            operator: expression.operator,
-                        });
-                    }
+                    let items = properties
+                        .kv
+                        .entry(expression.key.clone())
+                        .or_insert(ParsedPropertyInfoList::new());
+                    items.push(ParsedPropertyInfo {
+                        value: expression.value,
+                        operator: expression.operator,
+                    });
                 }
             }
             ParsedBlockItem::ArrayItem(item) => {
@@ -321,59 +328,32 @@ pub fn module<'a, E: ParserError<&'a str>>(
         }
     }
 
-    Ok((input, (defines, properties, values)))
+    Ok((input, (properties, values)))
 }
-
-// /// Parses a cw module from a string.
-// pub fn parse_module<'a>(
-//     input: &'a str,
-//     namespace: String,
-//     module_name: String,
-// ) -> Result<ParsedModule<'a>, anyhow::Error> {
-
-// }
 
 impl<'a> ParsedModule<'a> {
     pub fn new(namespace: &str, module_name: &str) -> Self {
         Self {
             namespace: namespace.to_string(),
             filename: module_name.to_string(),
-            defines: HashMap::new(),
-            properties: HashMap::new(),
+            properties: ParsedProperties {
+                kv: HashMap::new(),
+                is_module: true,
+            },
             values: Vec::new(),
         }
     }
 
     pub fn parse_input(&'a mut self, input: &'a str) -> Result<(), anyhow::Error> {
-        let (defines, properties, values) = module::<nom::error::Error<_>>(&input, &self.filename)
+        let (properties, values) = module::<nom::error::Error<_>>(&input, &self.filename)
             .map(|(_, module)| module)
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        self.defines = defines;
         self.properties = properties;
         self.values = values;
 
         Ok(())
     }
-
-    /// Parses a cw module from a string.
-    // pub fn parse_verbose(
-    //     input: String,
-    //     namespace: &'a str,
-    //     module_name: &'a str,
-    // ) -> Result<Self, nom::Err<nom::error::VerboseError<&'a str>>> {
-    //     module::<nom::error::VerboseError<_>>(input, namespace, module_name)
-    //         .map(|(_, module)| module)
-    // }
-
-    // /// Parses a cw module from a string.
-    // pub fn parse_tree(
-    //     input: String,
-    //     namespace: &'a str,
-    //     module_name: &'a str,
-    // ) -> Result<Self, nom::Err<ErrorTree<&'a str>>> {
-    //     module::<ErrorTree<&'a str>>(input, namespace, module_name).map(|(_, module)| module)
-    // }
 
     pub fn get_module_info(file_path: &Path) -> (String, String) {
         let path = PathBuf::from(file_path);
@@ -413,14 +393,6 @@ impl<'a> ParsedModule<'a> {
     }
 }
 
-// impl FromStr for ParsedModule<'_> {
-//     type Err = anyhow::Error;
-
-//     fn from_str(input: &str) -> Result<Arc<Self>, Self::Err> {
-//         parse_module(input.to_string(), "".to_string(), "".to_string())
-//     }
-// }
-
 fn expression<'a, E: ParserError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, ParsedExpression<'a>, E> {
@@ -438,7 +410,6 @@ fn expression<'a, E: ParserError<&'a str>>(
             key: key,
             operator: op,
             value,
-            is_define: false,
         },
     ))
 }
@@ -503,7 +474,10 @@ fn entity<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, Parse
     Ok((
         input,
         ParsedEntity {
-            properties,
+            properties: ParsedProperties {
+                kv: properties,
+                is_module: false,
+            },
             items,
             conditional_blocks,
         },
@@ -555,7 +529,10 @@ fn conditional_block<'a, E: ParserError<&'a str>>(
     Ok((
         input,
         ParsedConditionalBlock {
-            properties,
+            properties: ParsedProperties {
+                kv: properties,
+                is_module: false,
+            },
             items,
             key: (is_not.is_some(), key),
         },
@@ -613,38 +590,11 @@ fn script_value<'a, E: ParserError<&'a str>>(
         map(color, ParsedValue::Color),
         map(entity, ParsedValue::Entity),
         map(number_val, ParsedValue::Number),
-        map(define_identifier, |v| ParsedValue::Define(v)),
         map(quoted_or_unquoted_string, |v| ParsedValue::String(v)),
         map(inline_maths, |v| ParsedValue::Maths(v)),
     ))
     .context("script_value")
     .parse(input)
-}
-
-fn define_identifier<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, &str, E> {
-    recognize(pair(char('@'), unquoted_string))
-        .context("define_identifier")
-        .parse(input)
-}
-
-fn define<'a, E: ParserError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, ParsedExpression<'a>, E> {
-    let (input, key) = with_opt_trailing_ws(define_identifier)(input)?; // @identifier_name
-    let (input, _) = with_opt_trailing_ws(char('='))
-        .context("define_equals")
-        .parse(input)?;
-    let (input, value) = script_value::<E>.context("define_value").parse(input)?;
-
-    Ok((
-        input,
-        ParsedExpression {
-            key: key,
-            operator: Operator::Equals,
-            value,
-            is_define: true,
-        },
-    ))
 }
 
 /// A combinator that consumes trailing whitespace and comments after the inner parser. If there is no trailing whitespace, the parser succeeds.
@@ -701,7 +651,7 @@ fn valid_identifier_char<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult
 fn valid_identifier_start_char<'a, E: ParserError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, char, E> {
-    one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789-$")(input)
+    one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789-$@")(input)
 }
 
 /// An unquoted string (i.e. identifier) - a sequence of valid identifier characters, spaces not allowed.

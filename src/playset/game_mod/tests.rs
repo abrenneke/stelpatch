@@ -162,7 +162,7 @@ mod tests {
         let diff = base_mod.diff_to(&game_mod, EntityMergeMode::Unknown, &interner);
 
         for (namespace_name, namespace) in diff.namespaces {
-            match namespace.properties {
+            match &namespace.properties.kv {
                 HashMapDiff::Modified(entities) => {
                     if entities.len() > 0 {
                         println!("{}", interner.resolve(&namespace_name).bold());

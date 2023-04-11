@@ -2,8 +2,8 @@ use indent_write::indentable::Indentable;
 use lasso::{Spur, ThreadedRodeo};
 
 use crate::cw_model::{
-    ConditionalBlock, Entity, Module, Namespace, Operator, PropertyInfo, PropertyInfoList,
-    ToStringWithInterner, Value,
+    ConditionalBlock, Entity, Module, Namespace, Operator, Properties, PropertyInfo,
+    PropertyInfoList, ToStringWithInterner, Value,
 };
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -48,8 +48,7 @@ pub struct Changed<T> {
 pub struct ModuleDiff {
     pub filename: Option<Changed<Spur>>,
     pub namespace: Option<Changed<Spur>>,
-    pub defines: HashMapDiff<Spur, Value, ValueDiff>,
-    pub properties: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
+    pub properties: PropertiesDiff,
     pub values: VecDiff<Value, ValueDiff>,
 }
 
@@ -76,12 +75,15 @@ pub enum Diff<T, TModified> {
 #[derive(Debug, PartialEq, Clone)]
 pub struct EntityDiff {
     pub items: VecDiff<Value, ValueDiff>,
-    pub properties: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
+    pub properties: PropertiesDiff,
     pub conditional_blocks: HashMapDiff<Spur, ConditionalBlock, ConditionalBlockDiff>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct NamedEntityDiff(pub EntityDiff, pub Option<(Spur, Spur)>);
+pub struct PropertiesDiff {
+    pub kv: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
+    pub is_module: bool,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct PropertyInfoDiff {
@@ -96,7 +98,7 @@ pub struct PropertyInfoListDiff(pub VecDiff<PropertyInfo, PropertyInfoDiff>);
 pub struct ConditionalBlockDiff {
     pub key: Option<((bool, Spur), (bool, Spur))>,
     pub items: VecDiff<Value, ValueDiff>,
-    pub properties: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
+    pub properties: PropertiesDiff,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -111,7 +113,6 @@ pub enum ValueDiff {
     Number(Option<(Spur, Spur)>),
     Boolean(Option<(bool, bool)>),
     Entity(EntityDiff),
-    Define(Option<(Spur, Spur)>),
     Color(
         Option<(
             (Spur, Spur, Spur, Spur, Option<Spur>),
@@ -126,10 +127,7 @@ pub enum ValueDiff {
 pub struct NamespaceDiff {
     // TODO to support Duplicate, an entity name actually should be working like a PropertyInfoList,
     // should probably just remove entities and use properties
-    // pub entities: HashMapDiff<String, PropertyInfoList, PropertyInfoListDiff>,
-    // pub entities: HashMapDiff<String, Value, ValueDiff>,
-    pub defines: HashMapDiff<Spur, Value, ValueDiff>,
-    pub properties: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
+    pub properties: PropertiesDiff,
     pub values: VecDiff<Value, ValueDiff>,
 }
 
@@ -172,7 +170,6 @@ impl Diffable<ValueDiff> for Value {
             (Value::Entity(a), Value::Entity(b)) => {
                 ValueDiff::Entity(a.diff_to(&b, merge_mode, interner))
             }
-            (Value::Define(a), Value::Define(b)) => ValueDiff::Define(Some((*a, *b))),
             (Value::Color(a), Value::Color(b)) => ValueDiff::Color(Some((a.clone(), b.clone()))),
             (Value::Maths(a), Value::Maths(b)) => ValueDiff::Maths(Some((*a, *b))),
             (a, b) => ValueDiff::TypeChanged(a.clone(), b.clone()),
@@ -215,30 +212,31 @@ impl Diffable<ModDiff> for GameMod {
 }
 
 impl NamespaceDiff {
-    fn merge_defines_in(&mut self, defines: HashMapDiff<Spur, Value, ValueDiff>) -> &mut Self {
-        if let HashMapDiff::Modified(defines) = defines {
-            match self.defines {
-                HashMapDiff::Unchanged => self.defines = HashMapDiff::Modified(defines),
-                HashMapDiff::Modified(ref mut self_defines) => {
-                    for (name, diff) in &defines {
-                        self_defines.insert(name.clone(), diff.clone());
-                    }
-                }
-            }
-        }
-        self
-    }
-
     fn merge_properties_in(
         &mut self,
         properties: HashMapDiff<Spur, PropertyInfoList, PropertyInfoListDiff>,
         _merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
     ) -> &mut Self {
+        let properties_without_variables =
+            |properties: &HashMap<Spur, Diff<PropertyInfoList, PropertyInfoListDiff>>| {
+                properties
+                    .iter()
+                    .filter(|(name, _)| !interner.resolve(name).starts_with("@"))
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect::<HashMap<_, _>>()
+            };
+
         if let HashMapDiff::Modified(properties) = properties {
-            match self.properties {
-                HashMapDiff::Unchanged => self.properties = HashMapDiff::Modified(properties),
+            match self.properties.kv {
+                HashMapDiff::Unchanged => {
+                    self.properties = PropertiesDiff {
+                        kv: HashMapDiff::Modified(properties_without_variables(&properties)),
+                        is_module: true,
+                    }
+                }
                 HashMapDiff::Modified(ref mut self_properties) => {
-                    for (name, diff) in &properties {
+                    for (name, diff) in properties_without_variables(&properties) {
                         self_properties.insert(name.clone(), diff.clone());
                     }
                 }
@@ -270,9 +268,10 @@ impl Diffable<NamespaceDiff> for Namespace {
         interner: &ThreadedRodeo,
     ) -> NamespaceDiff {
         let mut namespace_diff = NamespaceDiff {
-            // entities: HashMapDiff::Unchanged,
-            defines: HashMapDiff::Unchanged,
-            properties: HashMapDiff::Unchanged,
+            properties: PropertiesDiff {
+                kv: HashMapDiff::Unchanged,
+                is_module: true,
+            },
             values: VecDiff::Unchanged,
         };
 
@@ -282,9 +281,7 @@ impl Diffable<NamespaceDiff> for Namespace {
             // so diff them to get some of the changes (including removals), the merge all those changes into the namespace's changes.
             if let Some(module_b) = module_b {
                 let diff = module_a.diff_to(module_b, merge_mode, interner);
-                // namespace_diff.merge_entities_in(diff.entities);
-                namespace_diff.merge_defines_in(diff.defines);
-                namespace_diff.merge_properties_in(diff.properties, merge_mode);
+                namespace_diff.merge_properties_in(diff.properties.kv, merge_mode, interner);
                 namespace_diff.merge_values_in(diff.values);
             }
         }
@@ -298,8 +295,8 @@ impl Diffable<NamespaceDiff> for Namespace {
         //diff them to get the changes. TODO: Will do some of them twice
         let mut properties_changed: HashMap<Spur, Diff<PropertyInfoList, PropertyInfoListDiff>> =
             HashMap::new();
-        for (property_name, property_b) in &other.properties {
-            let property_a = self.properties.get(property_name);
+        for (property_name, property_b) in &other.properties.kv {
+            let property_a = self.properties.kv.get(property_name);
             if let Some(property_a) = property_a {
                 if property_a == property_b {
                     continue;
@@ -322,7 +319,11 @@ impl Diffable<NamespaceDiff> for Namespace {
             }
         }
 
-        namespace_diff.merge_properties_in(HashMapDiff::Modified(properties_changed), merge_mode);
+        namespace_diff.merge_properties_in(
+            HashMapDiff::Modified(properties_changed),
+            merge_mode,
+            interner,
+        );
 
         namespace_diff
     }
@@ -350,16 +351,12 @@ impl ApplyPatch<ModDiff> for GameMod {
 
 impl ApplyPatch<NamespaceDiff> for Namespace {
     fn apply_patch(&self, diff: &NamespaceDiff) -> Self {
-        // let entities = self.entities.apply_patch(&diff.entities);
-        let defines = self.defines.apply_patch(&diff.defines);
         let properties = self.properties.apply_patch(&diff.properties);
         let values = self.values.apply_patch(&diff.values);
 
         Namespace {
             namespace: self.namespace.clone(),
             modules: HashMap::new(), // An applied patch doesn't have modules, it's all in the namespace only
-            // entities,
-            defines,
             properties,
             values,
             merge_mode: self.merge_mode,
@@ -386,8 +383,6 @@ impl Diffable<ModuleDiff> for Module {
             None
         };
 
-        // let entities = self.entities.diff_to(&other.entities, merge_mode);
-        let defines = self.defines.diff_to(&other.defines, merge_mode, interner);
         let properties = self
             .properties
             .diff_to(&other.properties, merge_mode, interner);
@@ -396,23 +391,77 @@ impl Diffable<ModuleDiff> for Module {
         ModuleDiff {
             filename,
             namespace,
-            // entities,
-            defines,
             properties,
             values,
         }
     }
 }
 
-impl<K: Eq + Hash + Clone, V: PartialEq + Eq + Clone + Diffable<VModified>, VModified>
-    Diffable<HashMapDiff<K, V, VModified>> for HashMap<K, V>
+impl Diffable<PropertiesDiff> for Properties {
+    fn diff_to(
+        &self,
+        other: &Self,
+        merge_mode: EntityMergeMode,
+        interner: &ThreadedRodeo,
+    ) -> PropertiesDiff {
+        let mut modified = HashMap::new();
+
+        let next_merge_mode = if merge_mode == EntityMergeMode::MergeShallow {
+            EntityMergeMode::LIOS
+        } else {
+            merge_mode
+        };
+
+        for (key, value_a) in &self.kv {
+            match other.kv.get(key) {
+                Some(value_b) if value_a != value_b => {
+                    modified.insert(
+                        key.clone(),
+                        Diff::Modified(value_a.diff_to(value_b, next_merge_mode, interner)),
+                    );
+                }
+                None => {
+                    if merge_mode != EntityMergeMode::MergeShallow
+                        && next_merge_mode != EntityMergeMode::Merge
+                    {
+                        // In a merge type merge mode, we don't want to remove anything that's missing,
+                        // only add new key/value pairs and modify existing ones
+                        modified.insert(key.clone(), Diff::Removed(value_a.clone()));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        for (key, value_b) in &other.kv {
+            if !self.kv.contains_key(key) {
+                modified.insert(key.clone(), Diff::Added(value_b.clone()));
+            }
+        }
+
+        if modified.is_empty() {
+            PropertiesDiff {
+                kv: HashMapDiff::Unchanged,
+                is_module: self.is_module,
+            }
+        } else {
+            PropertiesDiff {
+                kv: HashMapDiff::Modified(modified),
+                is_module: self.is_module,
+            }
+        }
+    }
+}
+
+impl Diffable<HashMapDiff<Spur, ConditionalBlock, ConditionalBlockDiff>>
+    for HashMap<Spur, ConditionalBlock>
 {
     fn diff_to(
         &self,
-        other: &HashMap<K, V>,
+        other: &Self,
         merge_mode: EntityMergeMode,
         interner: &ThreadedRodeo,
-    ) -> HashMapDiff<K, V, VModified> {
+    ) -> HashMapDiff<Spur, ConditionalBlock, ConditionalBlockDiff> {
         let mut modified = HashMap::new();
 
         let next_merge_mode = if merge_mode == EntityMergeMode::MergeShallow {
@@ -680,10 +729,6 @@ impl ToStringWithInterner for NamespaceDiff {
         let mut buf = String::new();
         buf.push_str(&format!(
             "{}",
-            self.defines.to_string_with_interner(interner)
-        ));
-        buf.push_str(&format!(
-            "{}",
             self.properties.to_string_with_interner(interner)
         ));
         buf.push_str(&format!(
@@ -697,10 +742,6 @@ impl ToStringWithInterner for NamespaceDiff {
 impl ToStringWithInterner for ModuleDiff {
     fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
         let mut buf = String::new();
-        buf.push_str(&format!(
-            "{}",
-            self.defines.to_string_with_interner(interner)
-        ));
         buf.push_str(&format!(
             "{}",
             self.properties.to_string_with_interner(interner)
@@ -814,9 +855,28 @@ where
     }
 }
 
-impl<K: Debug + Eq + Hash, V: ToStringWithInterner, VModified: ToStringWithInterner>
-    ToStringWithInterner for HashMapDiff<K, V, VModified>
-{
+impl ToStringWithInterner for PropertiesDiff {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
+        match &self.kv {
+            HashMapDiff::Unchanged => String::new(),
+            HashMapDiff::Modified(pairs) => {
+                let mut buf = String::new();
+                for (key, diff) in pairs {
+                    buf.push_str(&format!(
+                        "{:?}: {}\n",
+                        key,
+                        diff.clone()
+                            .to_string_with_interner(interner)
+                            .indented_skip_initial("    ")
+                    ));
+                }
+                buf
+            }
+        }
+    }
+}
+
+impl ToStringWithInterner for HashMapDiff<Spur, ConditionalBlock, ConditionalBlockDiff> {
     fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
         match self {
             HashMapDiff::Unchanged => String::new(),
@@ -898,10 +958,6 @@ impl ToStringWithInterner for ValueDiff {
                 format!("{} -> {}", old, new)
             }
             ValueDiff::Boolean(None) => format!("Unchanged"),
-            ValueDiff::Define(Some((old, new))) => {
-                format!("{} -> {}", interner.resolve(old), interner.resolve(new))
-            }
-            ValueDiff::Define(None) => format!("Unchanged"),
             ValueDiff::Color(Some(((type1, a1, b1, c1, d1), (type2, a2, b2, c2, d2)))) => {
                 let (type1, a1, b1, c1, d1) = (
                     interner.resolve(type1),
@@ -965,26 +1021,53 @@ impl ApplyPatch<ModuleDiff> for Module {
             .as_ref()
             .map(|c| c.new.clone())
             .unwrap_or_else(|| self.namespace.clone());
-        // let entities = self.entities.apply_patch(&diff.entities);
-        let defines = self.defines.apply_patch(&diff.defines);
         let properties = self.properties.apply_patch(&diff.properties);
         let values = self.values.apply_patch(&diff.values);
 
         Module {
             filename,
             namespace,
-            // entities,
-            defines,
             properties,
             values,
         }
     }
 }
 
-impl<K: Hash + Eq + Clone, V: ApplyPatch<VChanged> + Clone, VChanged>
-    ApplyPatch<HashMapDiff<K, V, VChanged>> for HashMap<K, V>
+impl ApplyPatch<PropertiesDiff> for Properties {
+    fn apply_patch(&self, diff: &PropertiesDiff) -> Self {
+        match &diff.kv {
+            HashMapDiff::Unchanged => self.clone(),
+            HashMapDiff::Modified(modified_pairs) => {
+                let mut result = self.clone();
+                for (key, change) in modified_pairs {
+                    match change {
+                        Diff::Added(value) => {
+                            result.kv.insert(key.clone(), value.clone());
+                        }
+                        Diff::Removed(_) => {
+                            result.kv.remove(key);
+                        }
+                        Diff::Modified(modified_value) => {
+                            if let Some(existing_value) = result.kv.get_mut(key) {
+                                *existing_value = existing_value.apply_patch(modified_value);
+                            }
+                        }
+                        Diff::Unchanged => {}
+                    }
+                }
+                result
+            }
+        }
+    }
+}
+
+impl ApplyPatch<HashMapDiff<Spur, ConditionalBlock, ConditionalBlockDiff>>
+    for HashMap<Spur, ConditionalBlock>
 {
-    fn apply_patch(&self, diff: &HashMapDiff<K, V, VChanged>) -> HashMap<K, V> {
+    fn apply_patch(
+        &self,
+        diff: &HashMapDiff<Spur, ConditionalBlock, ConditionalBlockDiff>,
+    ) -> Self {
         match diff {
             HashMapDiff::Unchanged => self.clone(),
             HashMapDiff::Modified(modified_pairs) => {
@@ -1068,13 +1151,6 @@ impl ApplyPatch<ValueDiff> for Value {
             ValueDiff::Entity(diff) => {
                 if let Value::Entity(entity) = self {
                     Value::Entity(entity.apply_patch(diff))
-                } else {
-                    self.clone()
-                }
-            }
-            ValueDiff::Define(option) => {
-                if let Some((_, new)) = option {
-                    Value::Define(*new)
                 } else {
                     self.clone()
                 }

@@ -24,15 +24,17 @@ pub struct Entity {
     pub items: Vec<Value>,
 
     /// Key value pairs in the entity, like { a = b } or { a > b }
-    pub properties: HashMap<Spur, PropertyInfoList>,
+    pub properties: Properties,
 
     /// Conditional blocks in the entity, like [[CONDITION] { a b c }]
     pub conditional_blocks: HashMap<Spur, ConditionalBlock>,
 }
 
-/// An entity with a name, like a = { key = value }
-#[derive(PartialEq, Clone)]
-pub struct NamedEntity(pub Entity, pub String);
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct Properties {
+    pub kv: HashMap<Spur, PropertyInfoList>,
+    pub is_module: bool,
+}
 
 /// An operator that can appear between a key and a value in an entity, like a > b. Usually this is = but it depends on the implementation.
 /// For our purposes it doesn't really matter, we just have to remember what it is.
@@ -68,7 +70,6 @@ pub enum Value {
     Number(Spur),
     Boolean(bool),
     Entity(Entity),
-    Define(Spur),
     Color((Spur, Spur, Spur, Spur, Option<Spur>)),
     Maths(Spur),
 }
@@ -78,7 +79,7 @@ pub enum Value {
 pub struct ConditionalBlock {
     pub key: (bool, Spur),
     pub items: Vec<Value>,
-    pub properties: HashMap<Spur, PropertyInfoList>,
+    pub properties: Properties,
 }
 
 /// A Module is a single file inside of a Namespace. Another module in the same namespace with the same name will overwrite
@@ -90,8 +91,7 @@ pub struct ConditionalBlock {
 pub struct Module {
     pub filename: Spur,
     pub namespace: Spur,
-    pub defines: HashMap<Spur, Value>,
-    pub properties: HashMap<Spur, PropertyInfoList>,
+    pub properties: Properties,
     pub values: Vec<Value>,
 }
 
@@ -101,8 +101,7 @@ pub struct Module {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Namespace {
     pub namespace: Spur,
-    pub defines: HashMap<Spur, Value>,
-    pub properties: HashMap<Spur, PropertyInfoList>,
+    pub properties: Properties,
     pub values: Vec<Value>,
     pub modules: HashMap<Spur, Module>,
     pub merge_mode: EntityMergeMode,
@@ -116,8 +115,7 @@ impl Namespace {
     ) -> Self {
         let ns = Self {
             namespace: interner.get_or_intern(namespace),
-            defines: HashMap::new(),
-            properties: HashMap::new(),
+            properties: Properties::new(),
             values: Vec::new(),
             modules: HashMap::new(),
             merge_mode: merge_mode
@@ -128,12 +126,10 @@ impl Namespace {
     }
 
     pub fn insert(&mut self, module: Module) -> &Self {
-        self.defines.extend(module.defines);
-
         // TODO: properties should follow the merge mode, technically, but it's unlikely a single
         // mod will define the same property twice in the same namespace, so for now we can treat it like
         // EntityMergeMode::LIOS
-        self.properties.extend(module.properties);
+        self.properties.kv.extend(module.properties.kv);
         self.values.extend(module.values);
 
         // self.modules.insert(module.path(), module);
@@ -146,7 +142,7 @@ impl Namespace {
     }
 
     pub fn get_only(&self, key: &str, interner: &ThreadedRodeo) -> Option<&Value> {
-        if let Some(value) = self.properties.get(&interner.get_or_intern(key)) {
+        if let Some(value) = self.properties.kv.get(&interner.get_or_intern(key)) {
             if value.0.len() == 1 {
                 return Some(&value.0[0].value);
             }
@@ -159,6 +155,22 @@ impl Namespace {
     // }
 }
 
+impl Properties {
+    pub fn new() -> Self {
+        Self {
+            kv: HashMap::new(),
+            is_module: false,
+        }
+    }
+
+    pub fn new_module() -> Self {
+        Self {
+            kv: HashMap::new(),
+            is_module: true,
+        }
+    }
+}
+
 impl ToStringWithInterner for Entity {
     fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
         let mut buf = String::from("{\n");
@@ -168,7 +180,7 @@ impl ToStringWithInterner for Entity {
             buf.push_str(&stringified);
         }
 
-        for (key, value) in &self.properties {
+        for (key, value) in &self.properties.kv {
             for item in value.clone().into_iter() {
                 let stringified = indent_all_by(
                     4,
@@ -199,13 +211,17 @@ impl Entity {
     ) -> Self {
         Self {
             items: Vec::with_capacity(items_count),
-            properties: HashMap::with_capacity(properties_count),
+            properties: Properties {
+                kv: HashMap::with_capacity(properties_count),
+                is_module: false,
+            },
             conditional_blocks: HashMap::with_capacity(conditional_blocks_count),
         }
     }
 
     pub fn with_property(mut self, key: &str, value: Value, interner: &ThreadedRodeo) -> Self {
         self.properties
+            .kv
             .entry(interner.get_or_intern(key))
             .or_insert_with(PropertyInfoList::new)
             .0
@@ -224,6 +240,7 @@ impl Entity {
     ) -> Self {
         let items = self
             .properties
+            .kv
             .entry(interner.get_or_intern(key))
             .or_insert_with(PropertyInfoList::new);
         for value in values {
@@ -243,6 +260,7 @@ impl Entity {
         interner: &ThreadedRodeo,
     ) -> Self {
         self.properties
+            .kv
             .entry(interner.get_or_intern(key))
             .or_insert_with(PropertyInfoList::new)
             .0
@@ -403,7 +421,6 @@ impl ToStringWithInterner for Value {
             Self::Number(v) => format!("{}", interner.resolve(v)),
             Self::Boolean(v) => format!("{}", v.to_string()),
             Self::Entity(v) => format!("{}", v.to_string_with_interner(interner)),
-            Self::Define(v) => format!("{}", interner.resolve(v)),
             Self::Color((color_type, a, b, c, d)) => match d {
                 Some(d) => format!(
                     "{} {{ {} {} {} {} }}",
@@ -471,14 +488,6 @@ impl Value {
         }
     }
 
-    pub fn define(&self) -> &Spur {
-        if let Value::Define(d) = self {
-            d
-        } else {
-            panic!("Expected define")
-        }
-    }
-
     pub fn color(&self) -> (Spur, Spur, Spur, Spur, Option<Spur>) {
         if let Value::Color((color_type, h, s, v, a)) = self {
             (*color_type, *h, *s, *v, *a)
@@ -511,10 +520,6 @@ impl Value {
         matches!(self, Value::Boolean(_))
     }
 
-    pub fn is_define(&self) -> bool {
-        matches!(self, Value::Define(_))
-    }
-
     pub fn is_color(&self) -> bool {
         matches!(self, Value::Color((_, _, _, _, _)))
     }
@@ -531,15 +536,7 @@ impl ToStringWithInterner for Module {
             let value = format!("{}\n", value.to_string_with_interner(interner));
             buf.push_str(&value);
         }
-        for (key, value) in &self.defines {
-            let value = format!(
-                "{} = {}\n",
-                interner.resolve(key),
-                value.to_string_with_interner(interner)
-            );
-            buf.push_str(&value);
-        }
-        for (key, value) in &self.properties {
+        for (key, value) in &self.properties.kv {
             let value = format!(
                 "{} = {}\n",
                 interner.resolve(key),
@@ -556,18 +553,13 @@ impl Module {
         Self {
             filename: interner.get_or_intern(filename),
             namespace: interner.get_or_intern(namespace.replace("\\", "/")),
-            defines: HashMap::new(),
-            properties: HashMap::new(),
+            properties: Properties::new_module(),
             values: Vec::new(),
         }
     }
 
-    pub fn add_define(&mut self, key: Spur, value: Value) {
-        self.defines.insert(key, value);
-    }
-
     pub fn add_property(&mut self, key: Spur, value: PropertyInfoList) {
-        self.properties.insert(key, value);
+        self.properties.kv.insert(key, value);
     }
 
     // pub fn add_entity(&mut self, key: String, value: Value) {
@@ -578,16 +570,12 @@ impl Module {
         self.values.push(value);
     }
 
-    pub fn get_define(&self, key: &Spur) -> Option<&Value> {
-        self.defines.get(key)
-    }
-
     pub fn get_property(&self, key: &Spur) -> Option<&PropertyInfoList> {
-        self.properties.get(key)
+        self.properties.kv.get(key)
     }
 
     pub fn get_only_property(&self, key: &Spur) -> Option<&Value> {
-        if let Some(properties) = self.properties.get(key) {
+        if let Some(properties) = self.properties.kv.get(key) {
             if properties.len() == 1 {
                 return Some(&properties.0[0].value);
             } else {
@@ -618,11 +606,7 @@ impl ParsedModule<'_> {
             module.add_value(value.into_value(interner));
         }
 
-        for (key, value) in self.defines {
-            module.add_define(interner.get_or_intern(key), value.into_value(interner));
-        }
-
-        for (key, value) in self.properties {
+        for (key, value) in self.properties.kv {
             module.add_property(
                 interner.get_or_intern(key),
                 value.into_property_info_list(interner),
@@ -653,12 +637,11 @@ impl Module {
     ) -> Result<Self, anyhow::Error> {
         let mut parsed_module = ParsedModule::new(namespace, module_name);
 
-        let (defines, properties, values) =
+        let (properties, values) =
             crate::cw_parser::parser::module::<nom::error::Error<_>>(&content, &module_name)
                 .map(|(_, module)| module)
                 .map_err(|e| anyhow!(e.to_string()))?;
 
-        parsed_module.defines = defines;
         parsed_module.properties = properties;
         parsed_module.values = values;
 
@@ -674,12 +657,11 @@ impl Module {
 
         let mut parsed_module = ParsedModule::new(&namespace, &module_name);
 
-        let (defines, properties, values) =
+        let (properties, values) =
             crate::cw_parser::parser::module::<nom::error::Error<_>>(&input, &module_name)
                 .map(|(_, module)| module)
                 .map_err(|e| anyhow!(e.to_string()))?;
 
-        parsed_module.defines = defines;
         parsed_module.properties = properties;
         parsed_module.values = values;
 
@@ -695,7 +677,6 @@ impl ParsedValue<'_> {
             ParsedValue::String(s) => Value::String(interner.get_or_intern(s)),
             ParsedValue::Number(n) => Value::Number(interner.get_or_intern(n)),
             ParsedValue::Boolean(b) => Value::Boolean(b),
-            ParsedValue::Define(d) => Value::Define(interner.get_or_intern(d)),
             ParsedValue::Color((color_type, a, b, c, d)) => Value::Color((
                 interner.get_or_intern(color_type),
                 interner.get_or_intern(a),
@@ -712,7 +693,7 @@ impl ParsedEntity<'_> {
     pub fn into_entity(self, interner: &ThreadedRodeo) -> Entity {
         let mut entity = Entity::new(
             self.items.len(),
-            self.properties.len(),
+            self.properties.kv.len(),
             self.conditional_blocks.len(),
         );
 
@@ -720,8 +701,8 @@ impl ParsedEntity<'_> {
             entity.items.push(value.into_value(interner));
         }
 
-        for (key, value) in self.properties {
-            entity.properties.insert(
+        for (key, value) in self.properties.kv {
+            entity.properties.kv.insert(
                 interner.get_or_intern(key),
                 value.into_property_info_list(interner),
             );
@@ -768,7 +749,7 @@ impl ToStringWithInterner for ConditionalBlock {
             let value = format!("{}\n", value.to_string_with_interner(interner));
             buf.push_str(&value);
         }
-        for (key, value) in &self.properties {
+        for (key, value) in &self.properties.kv {
             let value = format!(
                 "{} {}\n",
                 interner.resolve(key),

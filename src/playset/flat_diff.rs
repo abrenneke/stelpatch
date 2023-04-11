@@ -4,8 +4,8 @@ use crate::cw_model::{PropertyInfo, PropertyInfoList, ToStringWithInterner, Valu
 
 use super::{
     diff::{
-        Diff, EntityDiff, HashMapDiff, ModuleDiff, PropertyInfoDiff, PropertyInfoListDiff,
-        ValueDiff, VecDiff,
+        Diff, EntityDiff, HashMapDiff, ModuleDiff, PropertiesDiff, PropertyInfoDiff,
+        PropertyInfoListDiff, ValueDiff, VecDiff,
     },
     to_string_one_line::ToStringOneLine,
 };
@@ -41,7 +41,6 @@ impl FlattenDiff for ModuleDiff {
     fn flatten_diff(&self, path: &str, interner: &ThreadedRodeo) -> Vec<FlatDiff> {
         let mut changes = Vec::new();
 
-        changes.extend(self.defines.flatten_diff(&format!("{}", path), interner));
         changes.extend(self.properties.flatten_diff(&format!("{}", path), interner));
 
         changes
@@ -62,6 +61,12 @@ impl<V: ToStringWithInterner + Clone + Into<FlatDiffLeaf>, VModified: FlattenDif
         }
 
         changes
+    }
+}
+
+impl FlattenDiff for PropertiesDiff {
+    fn flatten_diff(&self, path: &str, interner: &ThreadedRodeo) -> Vec<FlatDiff> {
+        self.kv.flatten_diff(path, interner)
     }
 }
 
@@ -211,16 +216,6 @@ impl FlattenDiff for ValueDiff {
             ValueDiff::Entity(entity_diff) => {
                 changes.extend(entity_diff.flatten_diff(path, interner));
             }
-            ValueDiff::Define(option) => {
-                if let Some((old, new)) = option {
-                    changes.push(FlatDiff {
-                        path: path.to_string(),
-                        operation: FlatDiffOperation::Modify,
-                        old_value: Some(FlatDiffLeaf::Value(Value::Define(old.clone()))),
-                        new_value: Some(FlatDiffLeaf::Value(Value::Define(new.clone()))),
-                    });
-                }
-            }
             ValueDiff::Color(option) => {
                 if let Some((old, new)) = option {
                     changes.push(FlatDiff {
@@ -315,7 +310,7 @@ impl super::diff::ModDiff {
     pub fn short_changes_string(&self, interner: &ThreadedRodeo) -> String {
         let mut s = String::new();
         for (namespace_name, namespace) in sorted_key_value_iter(&self.namespaces) {
-            match &namespace.properties {
+            match &namespace.properties.kv {
                 HashMapDiff::Modified(properties) => {
                     if properties.len() > 0 {
                         s.push_str(&format!("{}\n", interner.resolve(&namespace_name)));
