@@ -6,13 +6,13 @@ mod color_tests {
     #[test]
     fn test_color_valid_input_rgb() {
         let result = color::<ErrorTree<_>>("rgb { 255 128 0 }").unwrap();
-        assert_eq!(result, ("", ("rgb", "255", "128", "0.0", None)));
+        assert_eq!(result, ("", ("rgb", "255", "128", "0", None)));
     }
 
     #[test]
     fn test_color_valid_input_hsv() {
         let result = color::<ErrorTree<_>>("hsv { 120 0.5 1 }").unwrap();
-        assert_eq!(result, ("", ("hsv", "120", "0.5", "1.0", None)));
+        assert_eq!(result, ("", ("hsv", "120", "0.5", "1", None)));
     }
 
     #[test]
@@ -30,26 +30,26 @@ mod color_tests {
     #[test]
     fn test_color_valid_input_rgb_no_spaces() {
         let result = color::<ErrorTree<_>>("rgb{255 128 0}").unwrap();
-        assert_eq!(result, ("", ("rgb", "255.0", "128.0", "0.0", None)));
+        assert_eq!(result, ("", ("rgb", "255", "128", "0", None)));
     }
 
     #[test]
     fn test_color_valid_input_hsv_no_spaces() {
         let result = color::<ErrorTree<_>>("hsv{120 0.5 1}").unwrap();
-        assert_eq!(result, ("", ("hsv", "120.0", "0.5", "1.0", None)));
+        assert_eq!(result, ("", ("hsv", "120", "0.5", "1", None)));
     }
 
     #[test]
     fn test_color_valid_input_rgb_comments() {
         let result = color::<ErrorTree<_>>("rgb { 255 #red\n 128 #green\n 0 #blue\n }").unwrap();
-        assert_eq!(result, ("", ("rgb", "255.0", "128.0", "0.0", None)));
+        assert_eq!(result, ("", ("rgb", "255", "128", "0", None)));
     }
 
     #[test]
     fn test_color_valid_input_hsv_comments() {
         let result =
             color::<ErrorTree<_>>("hsv { 120 #hue\n 0.5 #saturation\n 1 #value\n }").unwrap();
-        assert_eq!(result, ("", ("hsv", "120.0", "0.5", "1.0", None)));
+        assert_eq!(result, ("", ("hsv", "120", "0.5", "1", None)));
     }
 
     #[test]

@@ -49,12 +49,12 @@ mod tests {
             result,
             ParsedEntity::new()
                 .with_property("float_val", ParsedValue::Number("123.4"))
-                .with_property("int_val", ParsedValue::Number("12.0"))
+                .with_property("int_val", ParsedValue::Number("12"))
                 .with_property("str_val1", ParsedValue::String("value3"))
                 .with_property("str_val2", ParsedValue::String("value4"))
                 .with_property(
                     "color_val",
-                    ParsedValue::Color(("rgb", "1.0", "2.0", "3.0", None))
+                    ParsedValue::Color(("rgb", "1", "2", "3", None))
                 )
                 .into()
         );
@@ -93,7 +93,7 @@ mod tests {
         assert_eq!(
             result,
             ParsedEntity::new()
-                .with_item(ParsedValue::Color(("rgb", "1.0", "2.0", "3.0", None)))
+                .with_item(ParsedValue::Color(("rgb", "1", "2", "3", None)))
                 .into()
         );
     }
@@ -105,8 +105,8 @@ mod tests {
         assert_eq!(
             result,
             ParsedEntity::new()
-                .with_item(ParsedValue::Color(("rgb", "1.0", "2.0", "3.0", None)))
-                .with_item(ParsedValue::Color(("rgb", "4.0", "5.0", "6.0", None)))
+                .with_item(ParsedValue::Color(("rgb", "1", "2", "3", None)))
+                .with_item(ParsedValue::Color(("rgb", "4", "5", "6", None)))
                 .into()
         );
     }
@@ -119,7 +119,7 @@ mod tests {
             result,
             ParsedEntity::new()
                 .with_item(ParsedValue::String("value1"))
-                .with_item(ParsedValue::Color(("rgb", "1.0", "2.0", "3.0", None)))
+                .with_item(ParsedValue::Color(("rgb", "1", "2", "3", None)))
                 .with_item(ParsedValue::String("value2"))
                 .into()
         );
@@ -235,17 +235,14 @@ mod tests {
         assert_eq!(
             result,
             ParsedEntity::new()
-                .with_property(
-                    "color1",
-                    ParsedValue::Color(("rgb", "255.0", "0.0", "0.0", None))
-                )
+                .with_property("color1", ParsedValue::Color(("rgb", "255", "0", "0", None)))
                 .with_property(
                     "color2",
-                    ParsedValue::Color(("rgb", "0.0", "255.0", "0.0", Some("0.5")))
+                    ParsedValue::Color(("rgb", "0", "255", "0", Some("0.5")))
                 )
                 .with_property(
                     "color3",
-                    ParsedValue::Color(("hsv", "120.0", "50.0", "100.0", None))
+                    ParsedValue::Color(("hsv", "120", "50", "100", None))
                 )
                 .into()
         );
@@ -312,7 +309,7 @@ mod tests {
                 )
                 .with_property(
                     "my_var3",
-                    ParsedValue::Color(("rgb", "255.0", "0.0", "0.0", None))
+                    ParsedValue::Color(("rgb", "255", "0", "0", None))
                 )
                 // .with_property(
                 //     "my_var4",
@@ -396,7 +393,7 @@ mod tests {
                         )]
                         .into_iter()
                         .collect(),
-                        is_module: true
+                        is_module: false
                     },
                 })
         )

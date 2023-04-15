@@ -22,6 +22,9 @@ pub enum EntityMergeMode {
     /// First-in-only-served - the first entity in the list will be the one that is used
     FIOS,
 
+    /// FIOS, but use the specified key for duplicates instead of the entity name
+    FIOSKeyed(&'static str),
+
     /// Entities with the same name will be merged
     Merge,
 
@@ -295,35 +298,36 @@ impl Diffable<NamespaceDiff> for Namespace {
         //diff them to get the changes. TODO: Will do some of them twice
         let mut properties_changed: HashMap<Spur, Diff<PropertyInfoList, PropertyInfoListDiff>> =
             HashMap::new();
-        for (property_name, property_b) in &other.properties.kv {
-            let property_a = self.properties.kv.get(property_name);
-            if let Some(property_a) = property_a {
-                if property_a == property_b {
-                    continue;
-                }
 
-                // The entity exists in both A and B, so diff them to get the changes
-                // then merge those changes into the namespace's changes
-                let diff = property_a.diff_to(property_b, merge_mode, interner);
-                match merge_mode {
-                    EntityMergeMode::No => {}
-                    _ => {
-                        // Merge is handled in the diff, so we can just set the changes here as well
-                        properties_changed.insert(property_name.to_owned(), Diff::Modified(diff));
-                    }
-                }
-            } else {
-                // It's new in B, so take the values of B and insert that for the property name
-                properties_changed
-                    .insert(property_name.clone(), Diff::Added(property_b.to_owned()));
-            }
-        }
+        let properties_diff = self
+            .properties
+            .diff_to(&other.properties, merge_mode, interner);
 
-        namespace_diff.merge_properties_in(
-            HashMapDiff::Modified(properties_changed),
-            merge_mode,
-            interner,
-        );
+        // for (property_name, property_b) in &other.properties.kv {
+        //     let property_a = self.properties.kv.get(property_name);
+        //     if let Some(property_a) = property_a {
+        //         if property_a == property_b {
+        //             continue;
+        //         }
+
+        //         // The entity exists in both A and B, so diff them to get the changes
+        //         // then merge those changes into the namespace's changes
+        //         let diff = property_a.diff_to(property_b, merge_mode, interner);
+        //         match merge_mode {
+        //             EntityMergeMode::No => {}
+        //             _ => {
+        //                 // Merge is handled in the diff, so we can just set the changes here as well
+        //                 properties_changed.insert(property_name.to_owned(), Diff::Modified(diff));
+        //             }
+        //         }
+        //     } else {
+        //         // It's new in B, so take the values of B and insert that for the property name
+        //         properties_changed
+        //             .insert(property_name.clone(), Diff::Added(property_b.to_owned()));
+        //     }
+        // }
+
+        namespace_diff.merge_properties_in(properties_diff.kv, merge_mode, interner);
 
         namespace_diff
     }
@@ -412,15 +416,34 @@ impl Diffable<PropertiesDiff> for Properties {
             merge_mode
         };
 
+        let append_only = |modified: &mut HashMap<_, _>, key: &Spur, value: &PropertyInfoList| {
+            let diff = PropertyInfoListDiff(VecDiff::Changed(
+                value.0.iter().map(|x| Diff::Added(x.clone())).collect(),
+            ));
+            modified.insert(key.clone(), Diff::Modified(diff));
+        };
+
         for (key, value_a) in &self.kv {
             match other.kv.get(key) {
                 Some(value_b) if value_a != value_b => {
-                    let diff = value_a.diff_to(value_b, next_merge_mode, interner);
-                    modified.insert(key.clone(), Diff::Modified(diff));
+                    if merge_mode == EntityMergeMode::FIOS {
+                        // In a FIOS merge mode, anything that exists must stay as-is.
+                    } else if let EntityMergeMode::FIOSKeyed(_) = merge_mode {
+                        if self.is_module {
+                            // For the purposes of a *diff* we treat this like "duplicates" mode, and append-only
+                            append_only(&mut modified, key, value_b);
+                        }
+                    } else if merge_mode == EntityMergeMode::Duplicate {
+                        append_only(&mut modified, key, value_b);
+                    } else {
+                        let diff = value_a.diff_to(value_b, next_merge_mode, interner);
+                        modified.insert(key.clone(), Diff::Modified(diff));
+                    }
                 }
                 None => {
                     if merge_mode != EntityMergeMode::MergeShallow
                         && next_merge_mode != EntityMergeMode::Merge
+                        && !self.is_module
                     {
                         // In a merge type merge mode, we don't want to remove anything that's missing,
                         // only add new key/value pairs and modify existing ones
@@ -641,7 +664,11 @@ impl Diffable<PropertyInfoListDiff> for PropertyInfoList {
             return PropertyInfoListDiff(VecDiff::Unchanged);
         }
 
-        if self.len() == other.len() {
+        // Lengths are the same in LIOS mode, so we can diff the entries individually
+        if self.len() == other.len()
+            && (merge_mode == EntityMergeMode::LIOS || merge_mode == EntityMergeMode::Unknown)
+        {
+            // No duplicate entries under one key, most common case, no diff needed
             if self.len() == 1 {
                 let self_first = self.clone().into_vec()[0].clone();
                 let other_first = other.clone().into_vec()[0].clone();
@@ -652,17 +679,12 @@ impl Diffable<PropertyInfoListDiff> for PropertyInfoList {
 
             let mut diff = Vec::new();
 
-            for (a, b) in self
-                .clone()
-                .into_vec()
-                .into_iter()
-                .zip(other.clone().into_vec().into_iter())
-            {
+            for (a, b) in self.0.iter().zip(other.0.iter()) {
                 if a.value.jaccard_index(&b.value, interner) > 0.8 {
                     diff.push(Diff::Modified(a.diff_to(&b, merge_mode, interner)));
                 } else {
-                    diff.push(Diff::Removed(a));
-                    diff.push(Diff::Added(b));
+                    diff.push(Diff::Removed(a.to_owned()));
+                    diff.push(Diff::Added(b.to_owned()));
                 }
             }
 

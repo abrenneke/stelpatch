@@ -27,6 +27,7 @@ lazy_static! {
                 ("common/bombardment_stances", EntityMergeMode::LIOS),
                 ("common/defines", EntityMergeMode::MergeShallow),
                 ("common/on_actions", EntityMergeMode::Merge),
+                ("common/special_projects", EntityMergeMode::FIOSKeyed("key"))
                 // TODO the rest of them D:
             ].iter().map(|(k, v)| (k.to_string(), *v)).collect();
             map

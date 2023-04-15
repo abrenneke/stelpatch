@@ -1,3 +1,5 @@
 /target
 .release
 stelpatch.code-workspace
+
+changes.txt

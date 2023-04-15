@@ -11,7 +11,8 @@ use lasso::{Spur, ThreadedRodeo};
 
 use crate::{
     cw_parser::parser::{
-        ParsedEntity, ParsedModule, ParsedPropertyInfo, ParsedPropertyInfoList, ParsedValue,
+        ParsedEntity, ParsedModule, ParsedProperties, ParsedPropertyInfo, ParsedPropertyInfoList,
+        ParsedValue,
     },
     playset::{diff::EntityMergeMode, statics::get_merge_mode_for_namespace},
 };
@@ -606,14 +607,25 @@ impl ParsedModule<'_> {
             module.add_value(value.into_value(interner));
         }
 
-        for (key, value) in self.properties.kv {
-            module.add_property(
+        module.properties = self.properties.into_properties(interner);
+
+        module
+    }
+}
+
+impl ParsedProperties<'_> {
+    pub fn into_properties(self, interner: &ThreadedRodeo) -> Properties {
+        let mut properties = Properties::new();
+        properties.is_module = self.is_module;
+
+        for (key, value) in self.kv {
+            properties.kv.insert(
                 interner.get_or_intern(key),
                 value.into_property_info_list(interner),
             );
         }
 
-        module
+        properties
     }
 }
 
