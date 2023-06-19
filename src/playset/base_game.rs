@@ -25,15 +25,21 @@ pub struct BaseGame {}
 static BASE_MOD: OnceLock<GameMod> = OnceLock::new();
 
 impl BaseGame {
+    pub fn load_global_as_mod_definition(
+        load_mode: LoadMode,
+        interner: &ThreadedRodeo,
+    ) -> &'static GameMod {
+        BASE_MOD.get_or_init(|| {
+            Self::load_as_mod_definition(None, load_mode, interner)
+                .expect("Could not load base game")
+        })
+    }
+
     pub fn load_as_mod_definition(
         install_path: Option<&Path>,
         load_mode: LoadMode,
         interner: &ThreadedRodeo,
     ) -> Result<GameMod, anyhow::Error> {
-        // if let Some(base_mod) = BASE_MOD.get() {
-        //     return Ok(base_mod);
-        // }
-
         let install_path = if let Some(path) = install_path {
             Some(path)
         } else {

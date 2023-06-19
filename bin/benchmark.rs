@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use clap::{command, Parser};
 use lasso::ThreadedRodeo;
@@ -17,7 +17,7 @@ struct Cli {
 fn main() {
     let params = Cli::parse();
 
-    let interner = ThreadedRodeo::default();
+    let interner = ThreadedRodeo::new();
     let samples = params.samples.unwrap_or(1);
 
     for _ in 0..samples {

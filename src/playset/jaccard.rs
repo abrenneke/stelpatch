@@ -253,11 +253,11 @@ mod tests {
         let module2 = Module::parse(input2, "", "", interner).unwrap();
 
         let entity1 = module
-            .get_only_property(&interner.get_or_intern("entity_1"))
+            .get_only_property(&interner.get("entity_1").unwrap())
             .unwrap()
             .entity();
         let entity2 = module2
-            .get_only_property(&interner.get_or_intern("entity_1"))
+            .get_only_property(&interner.get("entity_1").unwrap())
             .unwrap()
             .entity();
 

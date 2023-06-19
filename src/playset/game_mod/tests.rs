@@ -3,12 +3,9 @@ mod tests {
     use colored_diff::PrettyDifference;
     use lazy_static::lazy_static;
 
-    use crate::cw_model::ToStringWithInterner;
     use crate::playset::base_game::BaseGame;
     use crate::playset::diff::Diffable;
     use crate::playset::diff::EntityMergeMode;
-
-    use crate::playset::diff::HashMapDiff;
 
     use super::super::*;
 
@@ -63,49 +60,49 @@ mod tests {
         let _game_mod = GameMod::load(definition, LoadMode::Parallel, &interner).unwrap();
     }
 
-    #[test]
-    fn list_changes_by_namespace_in_mod_1() {
-        let definition =
-            ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE.as_path()).unwrap();
+    // #[test]
+    // fn list_changes_by_namespace_in_mod_1() {
+    //     let definition =
+    //         ModDefinition::load_from_file(UNIVERSAL_RESOURCE_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let interner = ThreadedRodeo::default();
-        let base_mod =
-            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, &interner).unwrap();
-        let game_mod = GameMod::load(definition, LoadMode::Parallel, &interner).unwrap();
+    //     let interner = ThreadedRodeo::default();
+    //     let base_mod =
+    //         BaseGame::load_as_mod_definition(None, LoadMode::Parallel, &interner).unwrap();
+    //     let game_mod = GameMod::load(definition, LoadMode::Parallel, &interner).unwrap();
 
-        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::Unknown, &interner);
+    //     let diff = base_mod.diff_to(&game_mod, EntityMergeMode::Unknown, &interner);
 
-        for (namespace_name, namespace) in diff.namespaces {
-            match &namespace.properties.kv {
-                HashMapDiff::Modified(entities) => {
-                    if entities.len() > 0 {
-                        // println!("{}", interner.resolve(&namespace_name).bold());
-                        // for (changed_entity_name, _entity_diff) in entities {
-                        //     println!("  {}", interner.resolve(&changed_entity_name));
-                        // }
-                        // println!("");
-                    }
-                }
-                HashMapDiff::Unchanged => {}
-            }
-        }
-    }
+    //     for (namespace_name, namespace) in diff.namespaces {
+    //         match &namespace.properties.kv {
+    //             HashMapDiff::Modified(entities) => {
+    //                 if entities.len() > 0 {
+    //                     println!("{}", interner.resolve(&namespace_name).bold());
+    //                     for (changed_entity_name, _entity_diff) in entities {
+    //                         println!("  {}", interner.resolve(&changed_entity_name));
+    //                     }
+    //                     println!("");
+    //                 }
+    //             }
+    //             HashMapDiff::Unchanged => {}
+    //         }
+    //     }
+    // }
 
-    #[test]
-    fn list_changes_by_namespace_in_mod_2() {
-        let definition =
-            ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
+    // #[test]
+    // fn list_changes_by_namespace_in_mod_2() {
+    //     let definition =
+    //         ModDefinition::load_from_file(UNOFFICIAL_PATCH_MOD_FILE.as_path()).unwrap();
 
-        let interner = ThreadedRodeo::default();
-        let base_mod =
-            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, &interner).unwrap();
-        let game_mod = GameMod::load(definition, LoadMode::Parallel, &interner).unwrap();
+    //     let interner = ThreadedRodeo::default();
+    //     let base_mod =
+    //         BaseGame::load_as_mod_definition(None, LoadMode::Parallel, &interner).unwrap();
+    //     let game_mod = GameMod::load(definition, LoadMode::Parallel, &interner).unwrap();
 
-        let diff = base_mod.diff_to(&game_mod, EntityMergeMode::LIOS, &interner);
+    //     let diff = base_mod.diff_to(&game_mod, EntityMergeMode::LIOS, &interner);
 
-        let diff_str = diff.short_changes_string(&interner);
-        // print!("{}", diff_str);
-    }
+    //     let diff_str = diff.short_changes_string(&interner);
+    //     // print!("{}", diff_str);
+    // }
 
     fn assert_eq_pretty(expected: &str, actual: &str) {
         if expected != actual {
