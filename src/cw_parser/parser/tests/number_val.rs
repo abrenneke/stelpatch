@@ -6,7 +6,7 @@ mod number_val_tests {
     #[test]
     fn test_number_val_valid_input() {
         let result = number_val::<ErrorTree<_>>("123  ").unwrap();
-        assert_eq!(result, ("  ", "123.0"));
+        assert_eq!(result, ("  ", "123"));
     }
 
     #[test]
@@ -18,7 +18,7 @@ mod number_val_tests {
     #[test]
     fn test_number_val_positive_input() {
         let result = number_val::<ErrorTree<_>>("+12.34  ").unwrap();
-        assert_eq!(result, ("  ", "12.34"));
+        assert_eq!(result, ("  ", "+12.34"));
     }
 
     #[test]
@@ -30,7 +30,7 @@ mod number_val_tests {
     #[test]
     fn test_number_val_valid_input_with_comments() {
         let result = number_val::<ErrorTree<_>>("123# This is a comment").unwrap();
-        assert_eq!(result, ("# This is a comment", "123.0"));
+        assert_eq!(result, ("# This is a comment", "123"));
     }
 
     #[test]

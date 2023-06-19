@@ -116,7 +116,7 @@ impl Namespace {
     ) -> Self {
         let ns = Self {
             namespace: interner.get_or_intern(namespace),
-            properties: Properties::new(),
+            properties: Properties::new_module(),
             values: Vec::new(),
             modules: HashMap::new(),
             merge_mode: merge_mode
@@ -185,7 +185,11 @@ impl ToStringWithInterner for Entity {
             for item in value.clone().into_iter() {
                 let stringified = indent_all_by(
                     4,
-                    format!("{:?} {}\n", key, item.to_string_with_interner(interner)),
+                    format!(
+                        "{:?} {}\n",
+                        interner.resolve(key),
+                        item.to_string_with_interner(interner)
+                    ),
                 );
                 buf.push_str(&stringified);
             }

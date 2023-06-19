@@ -49,8 +49,8 @@ mod tests {
             ParsedProperties {
                 is_module: true,
                 kv: vec![
-                    ("@MY_DEFINE", ParsedValue::Number("123")),
-                    ("@ANOTHER_DEFINE", ParsedValue::String("hello")),
+                    ("@MY_DEFINE", ParsedValue::Number("123").into()),
+                    ("@ANOTHER_DEFINE", ParsedValue::String("hello").into()),
                 ]
                 .into_iter()
                 .collect()
@@ -74,8 +74,8 @@ mod tests {
             ParsedProperties {
                 is_module: true,
                 kv: vec![
-                    ("@MY_DEFINE", ParsedValue::Number("123")),
-                    ("my_var1", ParsedValue::String("value1")),
+                    ("@MY_DEFINE", ParsedValue::Number("123").into()),
+                    ("my_var1", ParsedValue::String("value1").into()),
                     (
                         "entity",
                         ParsedEntity::new()
@@ -112,21 +112,27 @@ mod tests {
                 kv: vec![(
                     "revolt_situation_low_stability_factor",
                     ParsedEntity::new()
-                        .with_property("base", ParsedValue::Define("@stabilitylevel2"))
-                        .with_property("subtract", ParsedValue::String("trigger:planet_stability"))
-                        .with_property("mult", ParsedValue::Number("0.2"))
+                        .with_property("base", ParsedValue::String("@stabilitylevel2").into())
+                        .with_property(
+                            "subtract",
+                            ParsedValue::String("trigger:planet_stability").into()
+                        )
+                        .with_property("mult", ParsedValue::Number("0.2").into())
                         .with_conditional(ParsedConditionalBlock {
                             items: vec![],
                             key: (false, "ALTERED_STABILITY"),
-                            properties: vec![(
-                                "subtract",
-                                ParsedPropertyInfoList::new().with_property(
-                                    Operator::Equals,
-                                    ParsedValue::String("$ALTERED_STABILITY$")
-                                )
-                            )]
-                            .into_iter()
-                            .collect(),
+                            properties: ParsedProperties {
+                                is_module: false,
+                                kv: vec![(
+                                    "subtract",
+                                    ParsedPropertyInfoList::new().with_property(
+                                        Operator::Equals,
+                                        ParsedValue::String("$ALTERED_STABILITY$")
+                                    )
+                                )]
+                                .into_iter()
+                                .collect(),
+                            }
                         })
                         .into()
                 ),]
@@ -147,7 +153,13 @@ mod tests {
 
         let (_, (properties, values)) = module::<ErrorTree<_>>(input, "my_module").unwrap();
 
-        assert_eq!(properties, HashMap::new());
+        assert_eq!(
+            properties,
+            ParsedProperties {
+                is_module: true,
+                kv: HashMap::new()
+            }
+        );
 
         assert_eq!(
             values,
@@ -166,7 +178,13 @@ mod tests {
 
         let (_, (properties, values)) = module::<ErrorTree<_>>(input, "my_module").unwrap();
 
-        assert_eq!(properties, HashMap::new());
+        assert_eq!(
+            properties,
+            ParsedProperties {
+                is_module: true,
+                kv: HashMap::new()
+            }
+        );
 
         assert_eq!(values, vec![]);
     }
@@ -179,7 +197,13 @@ mod tests {
 
         let (_, (properties, values)) = module::<ErrorTree<_>>(input, "my_module").unwrap();
 
-        assert_eq!(properties, HashMap::new());
+        assert_eq!(
+            properties,
+            ParsedProperties {
+                is_module: true,
+                kv: HashMap::new()
+            }
+        );
 
         assert_eq!(values, vec![]);
     }
@@ -190,7 +214,13 @@ mod tests {
 
         let (_, (properties, values)) = module::<ErrorTree<_>>(input, "my_module").unwrap();
 
-        assert_eq!(properties, HashMap::new());
+        assert_eq!(
+            properties,
+            ParsedProperties {
+                is_module: true,
+                kv: HashMap::new()
+            }
+        );
 
         assert_eq!(values, vec![]);
     }
@@ -201,7 +231,13 @@ mod tests {
 
         let (_, (properties, values)) = module::<ErrorTree<_>>(input, "my_module").unwrap();
 
-        assert_eq!(properties, HashMap::new());
+        assert_eq!(
+            properties,
+            ParsedProperties {
+                is_module: true,
+                kv: HashMap::new()
+            }
+        );
 
         assert_eq!(values, vec![]);
     }
@@ -215,7 +251,13 @@ mod tests {
 
         let (_, (properties, values)) = module::<ErrorTree<_>>(input, "99_README_ETC").unwrap();
 
-        assert_eq!(properties, HashMap::new());
+        assert_eq!(
+            properties,
+            ParsedProperties {
+                is_module: true,
+                kv: HashMap::new()
+            }
+        );
 
         assert_eq!(values, vec![]);
     }

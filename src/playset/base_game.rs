@@ -2,7 +2,7 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::OnceLock,
 };
 
 use anyhow::anyhow;
@@ -28,11 +28,11 @@ impl BaseGame {
     pub fn load_as_mod_definition(
         install_path: Option<&Path>,
         load_mode: LoadMode,
-        interner: Arc<ThreadedRodeo>,
-    ) -> Result<&'static GameMod, anyhow::Error> {
-        if let Some(base_mod) = BASE_MOD.get() {
-            return Ok(base_mod);
-        }
+        interner: &ThreadedRodeo,
+    ) -> Result<GameMod, anyhow::Error> {
+        // if let Some(base_mod) = BASE_MOD.get() {
+        //     return Ok(base_mod);
+        // }
 
         let install_path = if let Some(path) = install_path {
             Some(path)
@@ -55,11 +55,12 @@ impl BaseGame {
 
                 let game_mod = GameMod::load(definition, load_mode, interner)?;
 
-                BASE_MOD
-                    .set(game_mod)
-                    .map_err(|_| anyhow!("Could not set base mod"))?;
+                // BASE_MOD
+                //     .set(game_mod)
+                //     .map_err(|_| anyhow!("Could not set base mod"))?;
 
-                Ok(BASE_MOD.get().unwrap())
+                Ok(game_mod)
+                // Ok(BASE_MOD.get().unwrap())
             }
             None => Err(anyhow!("Could not find Stellaris installation directory")),
         }
@@ -118,16 +119,15 @@ mod tests {
 
     #[test]
     fn test_get_install_directory_windows() {
-        dbg!(BaseGame::get_install_directory_windows());
+        // dbg!(BaseGame::get_install_directory_windows());
     }
 
     #[test]
     fn load_base_game_as_mod() {
         let interner = Arc::new(ThreadedRodeo::default());
         let base_game =
-            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, interner).unwrap();
+            BaseGame::load_as_mod_definition(None, LoadMode::Parallel, &interner).unwrap();
 
-        assert!(base_game.modules.len() > 0);
-        dbg!(base_game.modules.len());
+        assert!(base_game.namespaces.len() > 0);
     }
 }

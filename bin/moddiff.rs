@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use clap::*;
 use colored::Colorize;
 use lasso::ThreadedRodeo;
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 use stelpatch::playset::{
     base_game::BaseGame,
     diff::{Diffable, EntityMergeMode},
@@ -57,10 +57,10 @@ fn moddiff(cli: Cli) -> Result<(), anyhow::Error> {
     let mod_name_search = cli.mod_input.mod_name.as_deref();
     let mods_path = cli.mods_path.as_ref().map(|p| p.as_path());
 
-    let interner = Arc::new(ThreadedRodeo::default());
+    let interner = ThreadedRodeo::default();
     let (base_game_res, game_mod_res) = rayon::join(
         || {
-            BaseGame::load_as_mod_definition(stellaris_path, LoadMode::Parallel, interner.clone())
+            BaseGame::load_as_mod_definition(stellaris_path, LoadMode::Parallel, &interner)
                 .map_err(|e| anyhow!("Could not load base Stellaris game: {e}"))
         },
         || -> Result<GameMod, anyhow::Error> {
@@ -90,7 +90,7 @@ fn moddiff(cli: Cli) -> Result<(), anyhow::Error> {
                 }
             };
 
-            let game_mod = GameMod::load(mod_definition, LoadMode::Parallel, interner.clone())
+            let game_mod = GameMod::load(mod_definition, LoadMode::Parallel, &interner)
                 .map_err(|e| anyhow!("Could not load mod: {}", e))?;
 
             Ok(game_mod)

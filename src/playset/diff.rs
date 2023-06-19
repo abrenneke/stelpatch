@@ -128,8 +128,6 @@ pub enum ValueDiff {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct NamespaceDiff {
-    // TODO to support Duplicate, an entity name actually should be working like a PropertyInfoList,
-    // should probably just remove entities and use properties
     pub properties: PropertiesDiff,
     pub values: VecDiff<Value, ValueDiff>,
 }
@@ -200,12 +198,12 @@ impl Diffable<ModDiff> for GameMod {
                     namespaces.insert(namespace.namespace, diff);
                 }
                 None => {
-                    let ns_spur = interner.resolve(&namespace.namespace).to_owned();
-                    let fake_ns = Namespace::new(&ns_spur, None, interner);
-                    namespaces.insert(
-                        namespace.namespace,
-                        namespace.diff_to(&fake_ns, fake_ns.merge_mode, interner),
-                    );
+                    // let ns_spur = interner.resolve(&namespace.namespace).to_owned();
+                    // let fake_ns = Namespace::new(&ns_spur, None, interner);
+                    // namespaces.insert(
+                    //     namespace.namespace,
+                    //     namespace.diff_to(&fake_ns, fake_ns.merge_mode, interner),
+                    // );
                 }
             }
         }
@@ -296,36 +294,9 @@ impl Diffable<NamespaceDiff> for Namespace {
         // - LIOS: The entity overwrites the entity in A
         // - No / FIOS: Do nothing (TODO nuance)
         //diff them to get the changes. TODO: Will do some of them twice
-        let mut properties_changed: HashMap<Spur, Diff<PropertyInfoList, PropertyInfoListDiff>> =
-            HashMap::new();
-
         let properties_diff = self
             .properties
             .diff_to(&other.properties, merge_mode, interner);
-
-        // for (property_name, property_b) in &other.properties.kv {
-        //     let property_a = self.properties.kv.get(property_name);
-        //     if let Some(property_a) = property_a {
-        //         if property_a == property_b {
-        //             continue;
-        //         }
-
-        //         // The entity exists in both A and B, so diff them to get the changes
-        //         // then merge those changes into the namespace's changes
-        //         let diff = property_a.diff_to(property_b, merge_mode, interner);
-        //         match merge_mode {
-        //             EntityMergeMode::No => {}
-        //             _ => {
-        //                 // Merge is handled in the diff, so we can just set the changes here as well
-        //                 properties_changed.insert(property_name.to_owned(), Diff::Modified(diff));
-        //             }
-        //         }
-        //     } else {
-        //         // It's new in B, so take the values of B and insert that for the property name
-        //         properties_changed
-        //             .insert(property_name.clone(), Diff::Added(property_b.to_owned()));
-        //     }
-        // }
 
         namespace_diff.merge_properties_in(properties_diff.kv, merge_mode, interner);
 
@@ -347,7 +318,6 @@ impl ApplyPatch<ModDiff> for GameMod {
 
         let mut game_mod = self.clone();
         game_mod.namespaces = namespaces;
-        game_mod.modules = vec![]; // An applied patch doesn't have modules, it's all in the namespace only
 
         game_mod
     }
@@ -410,11 +380,13 @@ impl Diffable<PropertiesDiff> for Properties {
     ) -> PropertiesDiff {
         let mut modified = HashMap::new();
 
-        let next_merge_mode = if merge_mode == EntityMergeMode::MergeShallow {
-            EntityMergeMode::LIOS
-        } else {
-            merge_mode
-        };
+        // If these properties are for a top-level entity and we're on MergeShallow, then any next entities will be LIOS
+        let next_merge_mode =
+            if merge_mode == EntityMergeMode::MergeShallow && self.is_module == false {
+                EntityMergeMode::LIOS
+            } else {
+                merge_mode
+            };
 
         let append_only = |modified: &mut HashMap<_, _>, key: &Spur, value: &PropertyInfoList| {
             let diff = PropertyInfoListDiff(VecDiff::Changed(
@@ -605,14 +577,8 @@ impl<T: PartialEq + Clone + Debug + JaccardIndex + Diffable<VModified>, VModifie
             } else {
                 VecDiff::Changed(diffs)
             }
-        } else if merge_mode == EntityMergeMode::MergeShallow
-            || merge_mode == EntityMergeMode::Merge
-            || merge_mode == EntityMergeMode::Duplicate
-        {
+        } else if merge_mode == EntityMergeMode::Merge || merge_mode == EntityMergeMode::Duplicate {
             // In a merge type mod for a list, we can only append to the list. No such thing as matching (can only match on keys)
-            // for _ in self {
-            //     diffs.push(Diff::Unchanged);
-            // }
 
             for value_b in other {
                 diffs.push(Diff::Added(value_b.clone()));
@@ -623,6 +589,37 @@ impl<T: PartialEq + Clone + Debug + JaccardIndex + Diffable<VModified>, VModifie
             } else {
                 VecDiff::Changed(diffs)
             }
+        } else if merge_mode == EntityMergeMode::MergeShallow {
+            if self.len() > 1 || other.len() > 1 {
+                panic!(
+                    "Merge shallow mode can only be used on lists of length 1. base: {}, other: {}",
+                    self.len(),
+                    other.len()
+                );
+            }
+
+            if other.len() == 0 {
+                return VecDiff::Unchanged;
+            }
+
+            if self.len() == 0 {
+                panic!(
+                    "Merge shallow mode can only be used on lists of length 1. base: {}, other: {}",
+                    self.len(),
+                    other.len()
+                );
+            }
+
+            let val_a = &self[0];
+            let val_b = &other[0];
+
+            if val_a == val_b {
+                return VecDiff::Unchanged;
+            }
+
+            let diff = self[0].diff_to(&other[0], merge_mode, interner);
+
+            VecDiff::Changed(vec![Diff::Modified(diff)])
         } else {
             // We're in No merge mode, so can't merge the lists at all
             VecDiff::Unchanged
@@ -666,7 +663,9 @@ impl Diffable<PropertyInfoListDiff> for PropertyInfoList {
 
         // Lengths are the same in LIOS mode, so we can diff the entries individually
         if self.len() == other.len()
-            && (merge_mode == EntityMergeMode::LIOS || merge_mode == EntityMergeMode::Unknown)
+            && (merge_mode == EntityMergeMode::LIOS
+                || merge_mode == EntityMergeMode::Unknown
+                || merge_mode == EntityMergeMode::Merge)
         {
             // No duplicate entries under one key, most common case, no diff needed
             if self.len() == 1 {
@@ -745,6 +744,33 @@ impl Diffable<ConditionalBlockDiff> for ConditionalBlock {
             key,
             properties,
         }
+    }
+}
+
+impl ToStringWithInterner for ModDiff {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
+        let mut buf = String::new();
+        buf.push_str(&format!(
+            "{}",
+            self.namespaces.to_string_with_interner(interner)
+        ));
+        buf
+    }
+}
+
+impl ToStringWithInterner for HashMap<Spur, NamespaceDiff> {
+    fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
+        let mut buf = String::new();
+
+        for (key, value) in self {
+            buf.push_str(&format!(
+                "[{}]\n{}",
+                interner.resolve(key),
+                value.to_string_with_interner(interner)
+            ));
+        }
+
+        buf
     }
 }
 
@@ -873,7 +899,7 @@ where
                     }
                 }
 
-                String::new()
+                buf
             }
         }
     }
@@ -887,8 +913,8 @@ impl ToStringWithInterner for PropertiesDiff {
                 let mut buf = String::new();
                 for (key, diff) in pairs {
                     buf.push_str(&format!(
-                        "{:?}: {}\n",
-                        key,
+                        "{}: {}\n",
+                        interner.resolve(key),
                         diff.clone()
                             .to_string_with_interner(interner)
                             .indented_skip_initial("    ")
@@ -909,7 +935,7 @@ impl ToStringWithInterner for HashMapDiff<Spur, ConditionalBlock, ConditionalBlo
                 for (key, diff) in pairs {
                     buf.push_str(&format!(
                         "{:?}: {}\n",
-                        key,
+                        interner.resolve(key),
                         diff.clone()
                             .to_string_with_interner(interner)
                             .indented_skip_initial("    ")
@@ -1264,11 +1290,36 @@ impl ApplyPatch<ConditionalBlockDiff> for ConditionalBlock {
 #[cfg(test)]
 mod tests {
     use lasso::ThreadedRodeo;
+    use regex::Regex;
 
     use crate::{
         cw_model::{Module, ToStringWithInterner},
         playset::diff::{Diffable, EntityMergeMode},
     };
+
+    fn check_diff(module_a_def: &str, module_b_def: &str, expected_diff: &str) {
+        let mut interner = ThreadedRodeo::new();
+        let module_a = Module::parse(module_a_def, "type/path", "a", &mut interner).unwrap();
+        let module_b = Module::parse(module_b_def, "type/path", "b", &mut interner).unwrap();
+        let diff = module_a.diff_to(&module_b, EntityMergeMode::LIOS, &interner);
+
+        let replacer = Regex::new(r#"(\s+)"#).unwrap();
+
+        let diff_str_raw = diff.to_string_with_interner(&interner);
+        let diff_str = replacer.replace_all(&diff_str_raw, " ");
+        let expected_diff_str = replacer.replace_all(expected_diff, " ");
+
+        if diff_str != expected_diff_str {
+            println!(
+                "{}",
+                colored_diff::PrettyDifference {
+                    expected: &expected_diff_str,
+                    actual: &diff_str
+                }
+            );
+            panic!();
+        }
+    }
 
     #[test]
     fn compare_modules_1() {
@@ -1306,11 +1357,11 @@ mod tests {
             
             entity_unchanged = {}"#;
 
-        let module_b_dev = r#"
+        let module_b_def = r#"
             @define1 = 1
             @define2 = 3
 
-            val_1 = "CHANGED"
+            val_1 = "CHANGED" # Changed
             val_2 = 3
             val_3 = { 1 4 3 4 }
             val_4 = 4
@@ -1324,22 +1375,18 @@ mod tests {
                     nested_property_2 = 2
                     nested_property_3 = { 1 2 3 }
                 }
+                # added
                 entity_2_property_5 = "string_5"
             }
 
             entity_unchanged = {}
             
+            # added
             entity_3 = {
                 entity_3_property_1 = "string_1"
             }"#;
-        let interner = &ThreadedRodeo::default();
 
-        let module_a = Module::parse(module_a_def, "type/path/", "a", interner).unwrap();
-        let module_b = Module::parse(module_b_dev, "type/path/", "b", interner).unwrap();
-
-        let diff = module_a.diff_to(&module_b, EntityMergeMode::LIOS, interner);
-
-        print!("{}", diff.to_string_with_interner(interner));
+        check_diff(module_a_def, module_b_def, "entity_2: { entity_2_property_5: [Added] = string_5 } val_1: \"string_1\" -> \"CHANGED\"");
     }
 
     #[test]

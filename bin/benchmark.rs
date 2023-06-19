@@ -17,7 +17,7 @@ struct Cli {
 fn main() {
     let params = Cli::parse();
 
-    let interner = Arc::new(ThreadedRodeo::default());
+    let interner = ThreadedRodeo::default();
     let samples = params.samples.unwrap_or(1);
 
     for _ in 0..samples {
@@ -29,7 +29,7 @@ fn main() {
             } else {
                 LoadMode::Serial
             },
-            interner.clone(),
+            &interner,
         )
         .unwrap();
         let duration = start_time.elapsed();
