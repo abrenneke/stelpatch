@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
     use colored_diff::PrettyDifference;
+    use cw_parser::model::EntityMergeMode;
     use lazy_static::lazy_static;
 
     use crate::playset::base_game::BaseGame;
     use crate::playset::diff::Diffable;
-    use crate::playset::diff::EntityMergeMode;
 
     use super::super::*;
 
@@ -192,23 +192,26 @@ common/technology
     fn flat_diff_economic_categories_simple() {
         let interner = ThreadedRodeo::default();
 
-        let base = Module::parse(
-            r#"planet_structures = {
+        let base = GameMod::with_module(
+            Module::parse(
+                r#"planet_structures = {
                 foo = bar
                 generate_mult_modifiers = {
                     cost
                     upkeep
                 }
             }"#,
-            "common/economic_categories",
-            "00_economic_categories",
+                "common/economic_categories",
+                "00_economic_categories",
+                &interner,
+            )
+            .unwrap(),
             &interner,
-        )
-        .unwrap()
-        .into_mod(&interner);
+        );
 
-        let game_mod = Module::parse(
-            r#"
+        let game_mod = GameMod::with_module(
+            Module::parse(
+                r#"
         planet_structures = {
             foo = bar
             generate_mult_modifiers = {
@@ -217,12 +220,13 @@ common/technology
                 produces
             }
         }"#,
-            "common/economic_categories",
-            "Legw_categories",
+                "common/economic_categories",
+                "Legw_categories",
+                &interner,
+            )
+            .unwrap(),
             &interner,
-        )
-        .unwrap()
-        .into_mod(&interner);
+        );
 
         let diff = base.diff_to(&game_mod, EntityMergeMode::Unknown, &interner);
 
@@ -239,8 +243,9 @@ common/technology
     #[test]
     fn flat_diff_economic_categories() {
         let strs = ThreadedRodeo::default();
-        let game_mod = Module::parse(
-            r#"
+        let game_mod = GameMod::with_module(
+            Module::parse(
+                r#"
         planet_buildings = {
             parent = planet_structures
             modifier_category = planet
@@ -250,12 +255,13 @@ common/technology
                 produces
             }
         }"#,
-            "common/economic_categories",
-            "Legw_categories",
+                "common/economic_categories",
+                "Legw_categories",
+                &strs,
+            )
+            .unwrap(),
             &strs,
-        )
-        .unwrap()
-        .into_mod(&strs);
+        );
 
         let diff_str = BaseGame::load_as_mod_definition(None, LoadMode::Parallel, &strs)
             .unwrap()

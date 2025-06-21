@@ -9,12 +9,9 @@ use anyhow::anyhow;
 use indent::indent_all_by;
 use lasso::{Spur, ThreadedRodeo};
 
-use crate::{
-    cw_parser::parser::{
-        ParsedEntity, ParsedModule, ParsedProperties, ParsedPropertyInfo, ParsedPropertyInfoList,
-        ParsedValue,
-    },
-    playset::{diff::EntityMergeMode, statics::get_merge_mode_for_namespace},
+use crate::parser::{
+    ParsedEntity, ParsedModule, ParsedProperties, ParsedPropertyInfo, ParsedPropertyInfoList,
+    ParsedValue,
 };
 
 /// An entity is an object with items, key value pairs, and conditional blocks. The majority of values in a module are entities.
@@ -108,19 +105,43 @@ pub struct Namespace {
     pub merge_mode: EntityMergeMode,
 }
 
+/// Different namespaces in stellaris have different merge mechanics when it comes to entities with the same name
+/// in different files. This defines the merge mode to use for entities with the same name.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum EntityMergeMode {
+    /// Last-in-only-served - the last entity in the list will be the one that is used
+    LIOS,
+
+    /// First-in-only-served - the first entity in the list will be the one that is used
+    FIOS,
+
+    /// FIOS, but use the specified key for duplicates instead of the entity name
+    FIOSKeyed(&'static str),
+
+    /// Entities with the same name will be merged
+    Merge,
+
+    /// Like LIOS, but for the properties of the entities instead of the entities themselves.
+    MergeShallow,
+
+    /// Entities with the same name act like a PropertyInfoList, and there are multiple for the one key
+    Duplicate,
+
+    /// Entities cannot be target overridden at all, have to only overwrite at the module level
+    No,
+
+    /// Who knows!
+    Unknown,
+}
+
 impl Namespace {
-    pub fn new(
-        namespace: &str,
-        merge_mode: Option<EntityMergeMode>,
-        interner: &ThreadedRodeo,
-    ) -> Self {
+    pub fn new(namespace: &str, interner: &ThreadedRodeo) -> Self {
         let ns = Self {
             namespace: interner.get_or_intern(namespace),
             properties: Properties::new_module(),
             values: Vec::new(),
             modules: HashMap::new(),
-            merge_mode: merge_mode
-                .unwrap_or_else(|| get_merge_mode_for_namespace(&namespace.clone())),
+            merge_mode: EntityMergeMode::Unknown,
         };
 
         ns
@@ -666,7 +687,7 @@ impl Module {
 
         let mut content = content;
 
-        let (properties, values) = crate::cw_parser::parser::module(&mut content, &module_name)
+        let (properties, values) = crate::parser::module(&mut content, &module_name)
             .map_err(|e| anyhow!(e.to_string()))?;
 
         parsed_module.properties = properties;
@@ -686,8 +707,8 @@ impl Module {
 
         let mut input = input.as_ref();
 
-        let (properties, values) = crate::cw_parser::parser::module(&mut input, &module_name)
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let (properties, values) =
+            crate::parser::module(&mut input, &module_name).map_err(|e| anyhow!(e.to_string()))?;
 
         parsed_module.properties = properties;
         parsed_module.values = values;

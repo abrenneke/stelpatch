@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use crate::cw_model::Operator;
+use crate::model::Operator;
 use winnow::ascii::{digit1, escaped, multispace1, till_line_ending};
 use winnow::combinator::{alt, cut_err, delimited, eof, opt, peek, repeat_till};
 use winnow::error::{ErrMode, ParserError, StrContext};

@@ -1,7 +1,7 @@
 use lasso::{Spur, ThreadedRodeo};
 
-use crate::cw_model::*;
 use crate::playset::diff::*;
+use cw_parser::model::*;
 
 pub trait ToStringOneLine {
     fn to_string_one_line(&self, interner: &ThreadedRodeo) -> String;

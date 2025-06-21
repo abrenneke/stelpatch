@@ -357,6 +357,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
+name = "cw_parser"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "indent",
+ "lasso",
+ "path-slash",
+ "winnow",
+]
+
+[[package]]
 name = "darling"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1046,6 +1057,7 @@ dependencies = [
  "colored",
  "colored-diff",
  "const_format",
+ "cw_parser",
  "dashmap 5.5.3",
  "dirs",
  "fn-fixture",

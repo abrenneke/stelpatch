@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::cw_model::{Module, Namespace};
+use cw_parser::model::{Module, Namespace};
 
 use super::mod_definition::ModDefinition;
 use anyhow::anyhow;
@@ -49,7 +49,7 @@ impl GameMod {
             .entry(module.namespace.clone())
             .or_insert_with(|| {
                 let ns_spur = interner.resolve(&module.namespace).to_owned();
-                Namespace::new(&ns_spur, None, interner)
+                Namespace::new(&ns_spur, interner)
             });
 
         namespace.insert(module);
@@ -129,11 +129,5 @@ impl GameMod {
         for namespace in self.namespaces.values() {
             println!("  {}", resolver.resolve(&namespace.namespace));
         }
-    }
-}
-
-impl Module {
-    pub fn into_mod(self, interner: &ThreadedRodeo) -> GameMod {
-        GameMod::with_module(self, interner)
     }
 }

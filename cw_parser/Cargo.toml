@@ -1,0 +1,11 @@
+[package]
+name = "cw_parser"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.70"
+indent = "0.1.1"
+lasso = { version = "0.7.3", features = ["ahash", "multi-threaded"] }
+path-slash = "0.2.1"
+winnow = "0.7.11" 

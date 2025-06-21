@@ -1,9 +1,9 @@
 use indent_write::indentable::Indentable;
 use lasso::{Spur, ThreadedRodeo};
 
-use crate::cw_model::{
-    ConditionalBlock, Entity, Module, Namespace, Operator, Properties, PropertyInfo,
-    PropertyInfoList, ToStringWithInterner, Value,
+use cw_parser::model::{
+    ConditionalBlock, Entity, EntityMergeMode, Module, Namespace, Operator, Properties,
+    PropertyInfo, PropertyInfoList, ToStringWithInterner, Value,
 };
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -11,35 +11,6 @@ use std::{collections::HashMap, hash::Hash};
 
 use super::game_mod::GameMod;
 use super::jaccard::JaccardIndex;
-
-/// Different namespaces in stellaris have different merge mechanics when it comes to entities with the same name
-/// in different files. This defines the merge mode to use for entities with the same name.
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum EntityMergeMode {
-    /// Last-in-only-served - the last entity in the list will be the one that is used
-    LIOS,
-
-    /// First-in-only-served - the first entity in the list will be the one that is used
-    FIOS,
-
-    /// FIOS, but use the specified key for duplicates instead of the entity name
-    FIOSKeyed(&'static str),
-
-    /// Entities with the same name will be merged
-    Merge,
-
-    /// Like LIOS, but for the properties of the entities instead of the entities themselves.
-    MergeShallow,
-
-    /// Entities with the same name act like a PropertyInfoList, and there are multiple for the one key
-    Duplicate,
-
-    /// Entities cannot be target overridden at all, have to only overwrite at the module level
-    No,
-
-    /// Who knows!
-    Unknown,
-}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Changed<T> {
@@ -134,8 +105,11 @@ pub struct NamespaceDiff {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ModDiff {
-    pub namespaces: HashMap<Spur, NamespaceDiff>,
+    pub namespaces: NamespaceMap,
 }
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct NamespaceMap(pub HashMap<Spur, NamespaceDiff>);
 
 impl<T> Changed<T> {
     pub fn new(old: T, new: T) -> Self {
@@ -208,7 +182,9 @@ impl Diffable<ModDiff> for GameMod {
             }
         }
 
-        ModDiff { namespaces }
+        ModDiff {
+            namespaces: NamespaceMap(namespaces),
+        }
     }
 }
 
@@ -310,7 +286,7 @@ impl ApplyPatch<ModDiff> for GameMod {
 
         for namespace in self.namespaces.values() {
             let mut namespace = namespace.clone();
-            if let Some(namespace_diff) = diff.namespaces.get(&namespace.namespace) {
+            if let Some(namespace_diff) = diff.namespaces.0.get(&namespace.namespace) {
                 namespace = namespace.apply_patch(namespace_diff);
             }
             namespaces.insert(namespace.namespace.clone(), namespace);
@@ -758,11 +734,11 @@ impl ToStringWithInterner for ModDiff {
     }
 }
 
-impl ToStringWithInterner for HashMap<Spur, NamespaceDiff> {
+impl ToStringWithInterner for NamespaceMap {
     fn to_string_with_interner(&self, interner: &ThreadedRodeo) -> String {
         let mut buf = String::new();
 
-        for (key, value) in self {
+        for (key, value) in &self.0 {
             buf.push_str(&format!(
                 "[{}]\n{}",
                 interner.resolve(key),
@@ -1293,7 +1269,7 @@ mod tests {
     use regex::Regex;
 
     use crate::{
-        cw_model::{Module, ToStringWithInterner},
+        cw_parser::model::{Module, ToStringWithInterner},
         playset::diff::{Diffable, EntityMergeMode},
     };
 
@@ -1386,7 +1362,11 @@ mod tests {
                 entity_3_property_1 = "string_1"
             }"#;
 
-        check_diff(module_a_def, module_b_def, "entity_2: { entity_2_property_5: [Added] = string_5 } val_1: \"string_1\" -> \"CHANGED\"");
+        check_diff(
+            module_a_def,
+            module_b_def,
+            "entity_2: { entity_2_property_5: [Added] = string_5 } val_1: \"string_1\" -> \"CHANGED\"",
+        );
     }
 
     #[test]

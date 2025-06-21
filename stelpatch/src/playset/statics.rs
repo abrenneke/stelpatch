@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::diff::EntityMergeMode;
+use cw_parser::model::EntityMergeMode;
 use lazy_static::lazy_static;
 
 lazy_static! {

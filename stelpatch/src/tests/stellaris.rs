@@ -5,7 +5,7 @@ mod tests {
     use glob::glob;
     use lasso::ThreadedRodeo;
 
-    use crate::cw_model::Module;
+    use cw_parser::model::Module;
 
     #[test]
     fn test_vanilla_files() {

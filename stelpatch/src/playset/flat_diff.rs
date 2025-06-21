@@ -1,6 +1,6 @@
 use lasso::{Spur, ThreadedRodeo};
 
-use crate::cw_model::{PropertyInfo, PropertyInfoList, ToStringWithInterner, Value};
+use cw_parser::model::{PropertyInfo, PropertyInfoList, ToStringWithInterner, Value};
 
 use super::{
     diff::{
@@ -309,7 +309,8 @@ impl ToStringOneLine for FlatDiff {
 impl super::diff::ModDiff {
     pub fn short_changes_string(&self, interner: &ThreadedRodeo) -> String {
         let mut s = String::new();
-        for (namespace_name, namespace) in sorted_key_value_iter_resolve(&self.namespaces, interner)
+        for (namespace_name, namespace) in
+            sorted_key_value_iter_resolve(&self.namespaces.0, interner)
         {
             match &namespace.properties.kv {
                 HashMapDiff::Modified(properties) => {

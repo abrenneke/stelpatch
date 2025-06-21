@@ -1,7 +1,7 @@
 #![cfg(test)]
 use winnow::Parser;
 
-use crate::cw_parser::parser::inline_maths;
+use crate::parser::inline_maths;
 
 #[test]
 fn inline_maths_test() {

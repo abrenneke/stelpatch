@@ -1,11 +1,12 @@
 use anyhow::anyhow;
 use clap::*;
 use colored::Colorize;
+use cw_parser::model::EntityMergeMode;
 use lasso::ThreadedRodeo;
 use std::path::PathBuf;
 use stelpatch::playset::{
     base_game::BaseGame,
-    diff::{Diffable, EntityMergeMode},
+    diff::Diffable,
     game_mod::{GameMod, LoadMode},
     loader::stellaris_documents_dir,
     mod_definition::{ModDefinition, ModDefinitionList},

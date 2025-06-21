@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use lasso::{Spur, ThreadedRodeo};
 
-use crate::cw_model::{Entity, Module, Properties, PropertyInfo, PropertyInfoList, Value};
+use cw_parser::model::{Entity, Module, Properties, PropertyInfo, PropertyInfoList, Value};
 
 trait DeepKeys {
     fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String>;
@@ -146,7 +146,7 @@ mod tests {
     use lasso::ThreadedRodeo;
 
     use crate::{
-        cw_model::Module,
+        cw_parser::model::Module,
         playset::jaccard::{DeepKeys, JaccardIndex},
     };
 
