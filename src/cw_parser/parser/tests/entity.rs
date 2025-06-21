@@ -1,19 +1,18 @@
 #[cfg(test)]
 mod tests {
     use super::super::super::*;
-    use nom_supreme::error::ErrorTree;
 
     #[test]
     fn empty_entity() {
         let input = "{}";
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(result, ParsedEntity::new().into());
     }
 
     #[test]
     fn entity_with_property() {
         let input = "{ my_var = value }";
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -25,7 +24,7 @@ mod tests {
     #[test]
     fn entity_with_many_properties() {
         let input = "{ my_var1 = value1\nmy_var2 = value2 my_var3 = value3 }";
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -44,7 +43,7 @@ mod tests {
             str_val2 = "value4"
             color_val = rgb { 1 2 3 }
         }"#;
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -63,7 +62,7 @@ mod tests {
     #[test]
     fn entity_with_item() {
         let input = "{ value }";
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -75,7 +74,7 @@ mod tests {
     #[test]
     fn entity_with_many_items() {
         let input = "{ value1 value2 value3 }";
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -89,7 +88,7 @@ mod tests {
     #[test]
     fn entity_with_color_item() {
         let input = "{ rgb { 1 2 3 } }";
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -101,7 +100,7 @@ mod tests {
     #[test]
     fn entity_with_color_items() {
         let input = "{ rgb { 1 2 3 } rgb { 4 5 6 } }";
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -114,7 +113,7 @@ mod tests {
     #[test]
     fn entity_with_mixed_items() {
         let input = "{ value1 rgb { 1 2 3 } value2 }";
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -128,7 +127,7 @@ mod tests {
     #[test]
     fn entity_with_values_and_properties() {
         let input = "{ value1 my_var = value2 }";
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -146,7 +145,7 @@ mod tests {
             value3 # comment
             my_var2 = value4
         }"#;
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -164,7 +163,7 @@ mod tests {
             my_var1 = { value1 }
             my_var2 = { value2 }
         }"#;
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -194,7 +193,7 @@ mod tests {
             { value1 }
             { value2 }
         }"#;
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -215,13 +214,13 @@ mod tests {
     #[test]
     fn invalid_entity_missing_opening_bracket() {
         let input = " my_var = value }";
-        assert!(entity::<ErrorTree<_>>(input).is_err());
+        assert!(entity.parse(input).is_err());
     }
 
     #[test]
     fn invalid_entity_missing_closing_bracket() {
         let input = "{ my_var = value ";
-        assert!(entity::<ErrorTree<_>>(input).is_err());
+        assert!(entity.parse(input).is_err());
     }
 
     #[test]
@@ -231,7 +230,7 @@ mod tests {
         color2 = rgb { 0 255 0 0.5 }
         color3 = hsv { 120 50 100 }
     }"#;
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -257,7 +256,7 @@ mod tests {
         my_var2 = value2
         my_var3 = value3 # comment3
     }"#;
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -281,7 +280,7 @@ mod tests {
         my_var8 = { nested_var = value8 }
         my_var9 = value9
     }"#;
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -345,7 +344,7 @@ mod tests {
         my_var = value2
         my_var = value3
     }"#;
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
             ParsedEntity::new()
@@ -372,7 +371,7 @@ mod tests {
             mult = 0.2
         }"#;
 
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
 
         assert_eq!(
             result,
@@ -405,7 +404,7 @@ mod tests {
             val = @stabilitylevel2
         }"#;
 
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
 
         assert_eq!(
             result,
@@ -421,7 +420,7 @@ mod tests {
             mesh="asteroid_01_mesh"
         }"#;
 
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
 
         assert_eq!(
             result,
@@ -439,7 +438,7 @@ mod tests {
             -8 < { eight = yes } # 9
 		}"#;
 
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
 
         assert_eq!(
             result,
@@ -473,7 +472,7 @@ mod tests {
 			planet_stability < @[ stabilitylevel2 + 10 ]
         }"#;
 
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
 
         assert_eq!(
             result,
@@ -493,7 +492,7 @@ mod tests {
 			planet_stability < @\[ stabilitylevel2 + 10 ]
         }"#;
 
-        let (_, result) = entity::<ErrorTree<_>>(input).unwrap();
+        let result = entity.parse(input).unwrap();
 
         assert_eq!(
             result,

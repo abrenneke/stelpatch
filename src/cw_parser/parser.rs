@@ -3,41 +3,19 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use crate::cw_model::Operator;
-use nom::branch::alt;
-use nom::bytes::complete::{escaped, is_not};
-use nom::character::complete::{char, digit1, multispace1, one_of};
-use nom::combinator::{cut, eof, map, map_res, opt, peek, recognize, value};
-use nom::error::{FromExternalError, ParseError};
-use nom::multi::{many0_count, many1_count, many_till};
-use nom::sequence::{delimited, pair, tuple};
-use nom::{IResult, Parser};
-use nom_supreme::context::ContextError;
-use nom_supreme::error::ErrorTree;
-use nom_supreme::tag::complete::tag;
-use nom_supreme::tag::TagError;
-use nom_supreme::ParserExt;
+use winnow::ascii::{digit1, escaped, multispace1, till_line_ending};
+use winnow::combinator::{alt, cut_err, delimited, eof, opt, peek, repeat_till};
+use winnow::error::{ErrMode, ParserError, StrContext};
+use winnow::token::{none_of, one_of, take_till, take_while};
+
+use winnow::combinator::repeat;
 
 use anyhow::anyhow;
 use path_slash::PathExt;
+use winnow::token::literal;
+use winnow::{ModalResult, Parser};
 
 mod tests;
-
-impl<'a> ParserError<&'a str> for ErrorTree<&'a str> {}
-
-impl<'a> ParserError<&'a str> for nom::error::VerboseError<&'a str> {}
-
-impl<'a> ParserError<&'a str> for nom::error::Error<&'a str> {}
-
-pub trait ParserError<I>:
-    ParseError<I>
-    + ContextError<I, &'static str>
-    + TagError<I, &'static str>
-    + FromExternalError<I, <f32 as FromStr>::Err>
-    + FromExternalError<I, anyhow::Error>
-    + std::fmt::Debug
-{
-}
-
 #[derive(PartialEq, Eq, Debug)]
 pub struct ParsedEntity<'a> {
     /// Array items in the entity, like { a b c }
@@ -167,7 +145,7 @@ impl<'a> ParsedPropertyInfoList<'a> {
         self.0.push(property);
     }
 
-    pub fn iter(&self) -> std::slice::Iter<ParsedPropertyInfo<'a>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, ParsedPropertyInfo<'a>> {
         self.0.iter()
     }
 
@@ -259,47 +237,39 @@ impl<'a> ParsedEntity<'a> {
 }
 
 /// A module for most intents and purposes is just an entity.
-pub fn module<'a, E: ParserError<&'a str>>(
-    input: &'a str,
+pub fn module<'a>(
+    input: &mut &'a str,
     module_name: &'a str,
-) -> IResult<&'a str, (ParsedProperties<'a>, Vec<ParsedValue<'a>>), E> {
-    let original_input = input;
-    let orig_slice: &'a str = &original_input;
-
+) -> ModalResult<(ParsedProperties<'a>, Vec<ParsedValue<'a>>)> {
     if module_name.contains("99_README") {
         return Ok((
-            "",
-            (
-                ParsedProperties {
-                    kv: HashMap::new(),
-                    is_module: true,
-                },
-                Vec::new(),
-            ),
+            ParsedProperties {
+                kv: HashMap::new(),
+                is_module: true,
+            },
+            Vec::new(),
         ));
     }
 
-    let (input, _) = opt(tag("\u{feff}"))(orig_slice)?;
-    let (input, _) = opt(ws_and_comments)
-        .context("module start whitespace")
-        .parse(input)?;
-    let (input, (expressions, _)) = many_till(
+    opt(literal("\u{feff}")).parse_next(input)?;
+    opt(ws_and_comments)
+        .context(StrContext::Label("module start whitespace"))
+        .parse_next(input)?;
+
+    let (expressions, _): (Vec<ParsedBlockItem>, _) = repeat_till(
+        0..,
         alt((
-            map(
-                with_opt_trailing_ws(expression),
-                ParsedBlockItem::Expression,
-            )
-            .context("module expression"),
-            map(
-                with_opt_trailing_ws(script_value),
-                ParsedBlockItem::ArrayItem,
-            )
-            .context("module script value"),
+            with_opt_trailing_ws(expression)
+                .map(ParsedBlockItem::Expression)
+                .context(StrContext::Label("module expression")),
+            with_opt_trailing_ws(script_value)
+                .map(ParsedBlockItem::ArrayItem)
+                .context(StrContext::Label("module script value")),
         )),
         eof,
     )
-    .context("module")
-    .parse(input)?;
+    .context(StrContext::Label("module"))
+    .parse_next(input)?;
 
     let mut properties = ParsedProperties {
         kv: HashMap::new(),
@@ -313,7 +283,7 @@ pub fn module<'a, E: ParserError<&'a str>>(
                 if expression.operator == Operator::Equals {
                     let items = properties
                         .kv
-                        .entry(expression.key.clone())
+                        .entry(expression.key)
                         .or_insert(ParsedPropertyInfoList::new());
                     items.push(ParsedPropertyInfo {
                         value: expression.value,
@@ -328,7 +298,7 @@ pub fn module<'a, E: ParserError<&'a str>>(
         }
     }
 
-    Ok((input, (properties, values)))
+    Ok((properties, values))
 }
 
 impl<'a> ParsedModule<'a> {
@@ -345,9 +315,10 @@ impl<'a> ParsedModule<'a> {
     }
 
     pub fn parse_input(&'a mut self, input: &'a str) -> Result<(), anyhow::Error> {
-        let (properties, values) = module::<nom::error::Error<_>>(&input, &self.filename)
-            .map(|(_, module)| module)
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let mut input = input;
+
+        let (properties, values) = module(&mut input, &self.filename)
+            .map_err(|e| anyhow!("Failed to parse module {}: {}", self.filename, e))?;
 
         self.properties = properties;
         self.values = values;
@@ -393,59 +364,59 @@ impl<'a> ParsedModule<'a> {
     }
 }
 
-fn expression<'a, E: ParserError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, ParsedExpression<'a>, E> {
-    let (input, key) = with_opt_trailing_ws(quoted_or_unquoted_string)
-        .context("key")
-        .parse(input)?;
-    let (input, op) = map_res(with_opt_trailing_ws(operator), Operator::from_str)
-        .context("operator")
-        .parse(input)?;
-    let (input, value) = cut(script_value).context("expression value").parse(input)?;
+fn expression<'a>(input: &mut &'a str) -> ModalResult<ParsedExpression<'a>> {
+    let key = with_opt_trailing_ws(quoted_or_unquoted_string)
+        .context(StrContext::Label("key"))
+        .parse_next(input)?;
+    let op = with_opt_trailing_ws(operator)
+        .try_map(Operator::from_str)
+        .context(StrContext::Label("operator"))
+        .parse_next(input)?;
+    let value = cut_err(script_value)
+        .context(StrContext::Label("expression value"))
+        .parse_next(input)?;
 
-    Ok((
-        input,
-        ParsedExpression {
-            key: key,
-            operator: op,
-            value,
-        },
-    ))
+    Ok(ParsedExpression {
+        key: key,
+        operator: op,
+        value,
+    })
 }
 
-fn operator<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, &str, E> {
+fn operator<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
     alt((
-        tag(">="),
-        tag("<="),
-        tag("!="),
-        tag("+="),
-        tag("-="),
-        tag("*="),
-        tag("="),
-        tag(">"),
-        tag("<"),
-    ))(input)
+        literal(">="),
+        literal("<="),
+        literal("!="),
+        literal("+="),
+        literal("-="),
+        literal("*="),
+        literal("="),
+        literal(">"),
+        literal("<"),
+    ))
+    .parse_next(input)
 }
 
-fn entity<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, ParsedEntity<'a>, E> {
-    let (input, _) = with_opt_trailing_ws(char('{'))
-        .context("opening bracket")
-        .parse(input)?;
+fn entity<'a>(input: &mut &'a str) -> ModalResult<ParsedEntity<'a>> {
+    with_opt_trailing_ws('{')
+        .context(StrContext::Label("opening bracket"))
+        .parse_next(input)?;
 
-    let (input, (expressions, _)) = cut(many_till(
+    let (expressions, _): (Vec<_>, _) = cut_err(repeat_till(
+        0..,
         alt((
-            with_opt_trailing_ws(map(expression, ParsedBlockItem::Expression))
-                .context("expression entity item"),
-            with_opt_trailing_ws(map(script_value, ParsedBlockItem::ArrayItem))
-                .context("array item entity item"),
-            with_opt_trailing_ws(map(conditional_block, ParsedBlockItem::Conditional))
-                .context("conditional block entity item"),
+            with_opt_trailing_ws(expression.map(ParsedBlockItem::Expression))
+                .context(StrContext::Label("expression entity item")),
+            with_opt_trailing_ws(script_value.map(ParsedBlockItem::ArrayItem))
+                .context(StrContext::Label("array item entity item")),
+            with_opt_trailing_ws(conditional_block.map(ParsedBlockItem::Conditional))
+                .context(StrContext::Label("conditional block entity item")),
         )),
-        char('}').context("closing bracket"),
+        '}'.context(StrContext::Label("closing bracket")),
     ))
-    .context("expression")
-    .parse(input)?;
+    .context(StrContext::Label("expression"))
+    .parse_next(input)?;
 
     let mut items = vec![];
     let mut properties = HashMap::new();
@@ -471,38 +442,34 @@ fn entity<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, Parse
         }
     }
 
-    Ok((
-        input,
-        ParsedEntity {
-            properties: ParsedProperties {
-                kv: properties,
-                is_module: false,
-            },
-            items,
-            conditional_blocks,
+    Ok(ParsedEntity {
+        properties: ParsedProperties {
+            kv: properties,
+            is_module: false,
         },
-    ))
+        items,
+        conditional_blocks,
+    })
 }
 
-fn conditional_block<'a, E: ParserError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, ParsedConditionalBlock<'a>, E> {
-    let (input, _) = with_opt_trailing_ws(tag("[["))(input)?;
-    let (input, is_not) = opt(with_opt_trailing_ws(tag("!")))(input)?;
-    let (input, key) = with_opt_trailing_ws(quoted_or_unquoted_string)(input)?;
-    let (input, _) = with_opt_trailing_ws(char(']'))(input)?;
+fn conditional_block<'a>(input: &mut &'a str) -> ModalResult<ParsedConditionalBlock<'a>> {
+    with_opt_trailing_ws(literal("[[")).parse_next(input)?;
+    let is_not = opt(with_opt_trailing_ws(literal("!"))).parse_next(input)?;
+    let key = with_opt_trailing_ws(quoted_or_unquoted_string).parse_next(input)?;
+    with_opt_trailing_ws(']').parse_next(input)?;
 
-    let (input, (expressions, _)) = cut(many_till(
+    let (expressions, _): (Vec<_>, _) = repeat_till(
+        0..,
         alt((
-            with_opt_trailing_ws(map(expression, ParsedBlockItem::Expression))
-                .context("expression conditional item"),
-            with_opt_trailing_ws(map(script_value, ParsedBlockItem::ArrayItem))
-                .context("array item conditional item"),
+            with_opt_trailing_ws(expression.map(ParsedBlockItem::Expression))
+                .context(StrContext::Label("expression conditional item")),
+            with_opt_trailing_ws(script_value.map(ParsedBlockItem::ArrayItem))
+                .context(StrContext::Label("array item conditional item")),
         )),
-        char(']').context("closing bracket"),
-    ))
-    .context("expression")
-    .parse(input)?;
+        ']'.context(StrContext::Label("closing bracket")),
+    )
+    .context(StrContext::Label("expression"))
+    .parse_next(input)?;
 
     let mut items = vec![];
     let mut properties = HashMap::new();
@@ -526,188 +493,179 @@ fn conditional_block<'a, E: ParserError<&'a str>>(
         }
     }
 
-    Ok((
-        input,
-        ParsedConditionalBlock {
-            properties: ParsedProperties {
-                kv: properties,
-                is_module: false,
-            },
-            items,
-            key: (is_not.is_some(), key),
+    Ok(ParsedConditionalBlock {
+        properties: ParsedProperties {
+            kv: properties,
+            is_module: false,
         },
-    ))
+        items,
+        key: (is_not.is_some(), key),
+    })
 }
 
 /// A color is either rgb { r g b a } or hsv { h s v a }. The a component is optional.
-fn color<'a, E: ParserError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, (&'a str, &'a str, &'a str, &'a str, Option<&'a str>), E> {
-    let (input, color_type) = with_opt_trailing_ws(alt((tag("rgb"), tag("hsv"))))
-        .context("color tag")
-        .parse(input)?;
+fn color<'a>(
+    input: &mut &'a str,
+) -> ModalResult<(&'a str, &'a str, &'a str, &'a str, Option<&'a str>)> {
+    let color_type = with_opt_trailing_ws(alt((literal("rgb"), literal("hsv"))))
+        .context(StrContext::Label("color type"))
+        .parse_next(input)?;
 
-    let (input, (r, g, b, a)) = delimited(
-        with_opt_trailing_ws(char('{')),
-        cut(with_opt_trailing_ws(tuple((
-            with_trailing_ws(number_val).context("color a"),
-            with_trailing_ws(number_val).context("color b"),
-            with_opt_trailing_ws(number_val).context("color c"),
-            opt(number_val).context("color d"),
-        ))))
-        .context("color tuple"),
-        char('}'),
+    let (r, g, b, a) = delimited(
+        with_opt_trailing_ws('{'),
+        cut_err((
+            with_trailing_ws(number_val).context(StrContext::Label("color a")),
+            with_trailing_ws(number_val).context(StrContext::Label("color b")),
+            with_opt_trailing_ws(number_val).context(StrContext::Label("color c")),
+            opt(with_opt_trailing_ws(number_val)).context(StrContext::Label("color d")),
+        )),
+        '}',
     )
-    .context("color")
-    .parse(input)?;
+    .context(StrContext::Label("color tuple"))
+    .parse_next(input)?;
 
-    Ok((input, (color_type, r, g, b, a)))
+    Ok((color_type, r, g, b, a))
 }
 
 /// A number is a sequence of digits, optionally preceded by a sign and optionally followed by a decimal point and more digits, followed by whitespace.
-fn number_val<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    let (input, v) = recognize(value(
-        (),
-        tuple((
-            opt(alt((char('-'), char('+')))),
-            digit1,
-            opt(pair(char('.'), digit1)),
-        )),
-    ))
-    .context("number")
-    .parse(input)?;
-    // Could be followed by whitespace or comment, or could close a block like 1.23}, but can't be like 1.23/ etc.
-    let (input, _) = peek(value_terminator)
-        .context("number_terminator")
-        .parse(input)?;
-    Ok((input, v))
+fn number_val<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+    let v = (opt(alt(('-', '+'))), digit1, opt(('.', digit1)))
+        .take()
+        .context(StrContext::Label("number_val"))
+        .parse_next(input)?;
+
+    peek(value_terminator)
+        .context(StrContext::Label("number_val terminator"))
+        .parse_next(input)?;
+
+    Ok(v)
 }
 
-fn script_value<'a, E: ParserError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, ParsedValue<'a>, E> {
+fn script_value<'a>(input: &mut &'a str) -> ModalResult<ParsedValue<'a>> {
     alt((
-        map(color, ParsedValue::Color),
-        map(entity, ParsedValue::Entity),
-        map(number_val, ParsedValue::Number),
-        map(quoted_or_unquoted_string, |v| ParsedValue::String(v)),
-        map(inline_maths, |v| ParsedValue::Maths(v)),
+        color.map(ParsedValue::Color),
+        entity.map(ParsedValue::Entity),
+        number_val.map(ParsedValue::Number),
+        quoted_or_unquoted_string.map(|v| ParsedValue::String(v)),
+        inline_maths.map(|v| ParsedValue::Maths(v)),
     ))
-    .context("script_value")
-    .parse(input)
+    .context(StrContext::Label("script_value"))
+    .parse_next(input)
 }
 
 /// A combinator that consumes trailing whitespace and comments after the inner parser. If there is no trailing whitespace, the parser succeeds.
-fn with_opt_trailing_ws<'a, F, O, E>(mut inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+fn with_opt_trailing_ws<'a, F, O, E>(mut inner: F) -> impl winnow::ModalParser<&'a str, O, E>
 where
-    F: FnMut(&'a str) -> IResult<&'a str, O, E>,
+    F: winnow::ModalParser<&'a str, O, E>,
     E: ParserError<&'a str>,
+    ErrMode<E>: From<ErrMode<winnow::error::ContextError>>,
 {
-    move |input| {
-        let (input, value) = inner(input)?;
-        let (input, _) = opt(ws_and_comments)(input)?;
-        Ok((input, value))
+    move |input: &mut &'a str| {
+        let value = inner.parse_next(input)?;
+        opt(ws_and_comments).parse_next(input)?;
+        Ok(value)
     }
 }
 
 /// A combinator that consumes trailing whitespace and comments after the inner parser.
-fn with_trailing_ws<'a, F, O, E>(mut inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+fn with_trailing_ws<'a, F, E>(mut inner: F) -> impl winnow::ModalParser<&'a str, &'a str, E>
 where
-    F: FnMut(&'a str) -> IResult<&'a str, O, E>,
+    F: winnow::ModalParser<&'a str, &'a str, E>,
     E: ParserError<&'a str>,
+    ErrMode<E>: From<ErrMode<winnow::error::ContextError>>,
 {
-    move |input| {
-        let (input, value) = inner(input)?;
-        let (input, _) = ws_and_comments(input)?;
-        Ok((input, value))
+    move |input: &mut &'a str| {
+        let value = inner.parse_next(input)?;
+        ws_and_comments.parse_next(input)?;
+        Ok(value)
     }
 }
 
 /// Matches any amount of whitespace and comments.
-fn ws_and_comments<'a, E: ParserError<&'a str>>(i: &'a str) -> IResult<&'a str, (), E> {
-    value(
-        (), // Output is thrown away.
-        many1_count(alt((value((), multispace1), comment))),
-    )
-    .context("ws_and_comments")
-    .parse(i)
+fn ws_and_comments<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+    repeat(1.., alt((multispace1, comment)))
+        .map(|()| ())
+        .take()
+        .context(StrContext::Label("ws_and_comments"))
+        .parse_next(input)
 }
 
 /// Comments using #
-fn comment<'a, E: ParserError<&'a str>>(i: &'a str) -> IResult<&'a str, (), E> {
-    let (input, _) = value(
-        (), // Output is thrown away.
-        pair(char('#'), opt(is_not("\n\r"))),
-    )
-    .context("comment")
-    .parse(i)?;
-    Ok((input, ()))
+fn comment<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+    ("#", till_line_ending)
+        .take()
+        .context(StrContext::Label("comment"))
+        .parse_next(input)
 }
 
-fn valid_identifier_char<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
-    one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:.@-|/$'")(input)
-}
+const VALID_IDENTIFIER_CHARS: &[u8] =
+    b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:.@-|/$'";
 
-fn valid_identifier_start_char<'a, E: ParserError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, char, E> {
-    one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789-$@")(input)
-}
+const VALID_IDENTIFIER_START_CHARS: &[u8] =
+    b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789-$@";
 
 /// An unquoted string (i.e. identifier) - a sequence of valid identifier characters, spaces not allowed.
-fn unquoted_string<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, &str, E> {
-    terminated_value(recognize(pair(
-        valid_identifier_start_char,
-        many0_count(valid_identifier_char),
-    )))
-    .context("unquoted_string")
-    .parse(input)
+fn unquoted_string<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+    terminated_value(
+        (
+            one_of(VALID_IDENTIFIER_START_CHARS),
+            take_while(0.., VALID_IDENTIFIER_CHARS),
+        )
+            .take(),
+    )
+    .context(StrContext::Label("unquoted_string"))
+    .parse_next(input)
 }
 
 /// A string that is quoted with double quotes. Allows spaces and other characters that would otherwise be invalid in an unquoted string.
-fn quoted_string<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, &str, E> {
+fn quoted_string<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
     terminated_value(delimited(
-        char('"'),
-        recognize(many0_count(escaped(is_not("\\\""), '\\', is_not("\"")))),
-        char('"'),
+        '"',
+        escaped(none_of(['\\', '"']), '\\', "\"".value("\""))
+            .map(|()| ())
+            .take(),
+        '"',
     ))
-    .context("quoted_string")
-    .parse(input)
+    .context(StrContext::Label("quoted_string"))
+    .parse_next(input)
 }
 
 /// A string that is either quoted or unquoted.
-fn quoted_or_unquoted_string<'a, E: ParserError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, &str, E> {
+fn quoted_or_unquoted_string<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
     alt((quoted_string, unquoted_string))
-        .context("quoted_or_unquoted_string")
-        .parse(input)
+        .context(StrContext::Label("quoted_or_unquoted_string"))
+        .parse_next(input)
 }
 
 /// Combinator that peeks ahead to see if a value is terminated correctly. Values can terminate with a space, }, etc.
-fn terminated_value<'a, F, O, E>(mut inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+fn terminated_value<'a, F, O, E>(mut inner: F) -> impl winnow::ModalParser<&'a str, O, E>
 where
-    F: FnMut(&'a str) -> IResult<&'a str, O, E>,
+    F: winnow::ModalParser<&'a str, O, E>,
     E: ParserError<&'a str>,
+    ErrMode<E>: From<ErrMode<winnow::error::ContextError>>,
 {
-    move |input| {
-        let (input, value) = inner(input)?;
-        let (input, _) = peek(value_terminator)(input)?;
-        Ok((input, value))
+    move |input: &mut &'a str| {
+        let value = inner.parse_next(input)?;
+        peek(value_terminator).parse_next(input)?;
+        Ok(value)
     }
 }
 
 /// Characters that can terminate a value, like whitespace, a comma, or a closing brace.
-fn value_terminator<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, (), E> {
-    alt((ws_and_comments, value((), one_of("}=]")), value((), eof))).parse(input)
+fn value_terminator<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+    alt((ws_and_comments.void(), one_of(b"}=]").void(), eof.void()))
+        .take()
+        .parse_next(input)
 }
 
 /// Insanity, inline math like @[x + 1], we don't really care about the formula inside, just that it's there.
-fn inline_maths<'a, E: ParserError<&'a str>>(input: &'a str) -> IResult<&'a str, &str, E> {
-    recognize(tuple((
-        with_opt_trailing_ws(alt((tag("@["), tag("@\\[")))),
-        many_till(is_not("]"), tag("]")),
-    )))
-    .context("inline_maths")
-    .parse(input)
+fn inline_maths<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+    (
+        with_opt_trailing_ws(alt((literal("@["), literal("@\\[")))),
+        take_till(0.., ']'),
+        ']',
+    )
+        .take()
+        .context(StrContext::Label("inline_maths"))
+        .parse_next(input)
 }

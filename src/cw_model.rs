@@ -312,7 +312,7 @@ impl PropertyInfoList {
         self.0.push(property);
     }
 
-    pub fn iter(&self) -> std::slice::Iter<PropertyInfo> {
+    pub fn iter(&self) -> std::slice::Iter<'_, PropertyInfo> {
         self.0.iter()
     }
 
@@ -400,8 +400,19 @@ impl Debug for Operator {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StringError(String);
+
+impl Display for StringError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for StringError {}
+
 impl FromStr for Operator {
-    type Err = anyhow::Error;
+    type Err = StringError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -414,7 +425,7 @@ impl FromStr for Operator {
             "-=" => Ok(Operator::MinusEquals),
             "+=" => Ok(Operator::PlusEquals),
             "*=" => Ok(Operator::MultiplyEquals),
-            _ => Err(anyhow!("Invalid operator: {}", s)),
+            _ => Err(StringError(format!("Unknown operator: {}", s))),
         }
     }
 }
@@ -653,10 +664,10 @@ impl Module {
     ) -> Result<Self, anyhow::Error> {
         let mut parsed_module = ParsedModule::new(namespace, module_name);
 
-        let (properties, values) =
-            crate::cw_parser::parser::module::<nom::error::Error<_>>(&content, &module_name)
-                .map(|(_, module)| module)
-                .map_err(|e| anyhow!(e.to_string()))?;
+        let mut content = content;
+
+        let (properties, values) = crate::cw_parser::parser::module(&mut content, &module_name)
+            .map_err(|e| anyhow!(e.to_string()))?;
 
         parsed_module.properties = properties;
         parsed_module.values = values;
@@ -673,10 +684,10 @@ impl Module {
 
         let mut parsed_module = ParsedModule::new(&namespace, &module_name);
 
-        let (properties, values) =
-            crate::cw_parser::parser::module::<nom::error::Error<_>>(&input, &module_name)
-                .map(|(_, module)| module)
-                .map_err(|e| anyhow!(e.to_string()))?;
+        let mut input = input.as_ref();
+
+        let (properties, values) = crate::cw_parser::parser::module(&mut input, &module_name)
+            .map_err(|e| anyhow!(e.to_string()))?;
 
         parsed_module.properties = properties;
         parsed_module.values = values;
