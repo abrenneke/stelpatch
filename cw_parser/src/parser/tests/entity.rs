@@ -4,14 +4,14 @@ mod tests {
 
     #[test]
     fn empty_entity() {
-        let input = "{}";
+        let input = LocatingSlice::new("{}");
         let result = entity.parse(input).unwrap();
         assert_eq!(result, ParsedEntity::new().into());
     }
 
     #[test]
     fn entity_with_property() {
-        let input = "{ my_var = value }";
+        let input = LocatingSlice::new("{ my_var = value }");
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -23,7 +23,7 @@ mod tests {
 
     #[test]
     fn entity_with_many_properties() {
-        let input = "{ my_var1 = value1\nmy_var2 = value2 my_var3 = value3 }";
+        let input = LocatingSlice::new("{ my_var1 = value1\nmy_var2 = value2 my_var3 = value3 }");
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -37,12 +37,14 @@ mod tests {
 
     #[test]
     fn entity_with_mixed_properties() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
             float_val = 123.4
             int_val = 12 str_val1 = value3#comment
             str_val2 = "value4"
             color_val = rgb { 1 2 3 }
-        }"#;
+        }"#,
+        );
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -61,7 +63,7 @@ mod tests {
 
     #[test]
     fn entity_with_item() {
-        let input = "{ value }";
+        let input = LocatingSlice::new("{ value }");
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -73,7 +75,7 @@ mod tests {
 
     #[test]
     fn entity_with_many_items() {
-        let input = "{ value1 value2 value3 }";
+        let input = LocatingSlice::new("{ value1 value2 value3 }");
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -87,7 +89,7 @@ mod tests {
 
     #[test]
     fn entity_with_color_item() {
-        let input = "{ rgb { 1 2 3 } }";
+        let input = LocatingSlice::new("{ rgb { 1 2 3 } }");
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -99,7 +101,7 @@ mod tests {
 
     #[test]
     fn entity_with_color_items() {
-        let input = "{ rgb { 1 2 3 } rgb { 4 5 6 } }";
+        let input = LocatingSlice::new("{ rgb { 1 2 3 } rgb { 4 5 6 } }");
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -112,7 +114,7 @@ mod tests {
 
     #[test]
     fn entity_with_mixed_items() {
-        let input = "{ value1 rgb { 1 2 3 } value2 }";
+        let input = LocatingSlice::new("{ value1 rgb { 1 2 3 } value2 }");
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -126,7 +128,7 @@ mod tests {
 
     #[test]
     fn entity_with_values_and_properties() {
-        let input = "{ value1 my_var = value2 }";
+        let input = LocatingSlice::new("{ value1 my_var = value2 }");
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -139,12 +141,14 @@ mod tests {
 
     #[test]
     fn entity_with_many_values_and_properties() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
             value1
             my_var1 = value2
             value3 # comment
             my_var2 = value4
-        }"#;
+        }"#,
+        );
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -159,10 +163,12 @@ mod tests {
 
     #[test]
     fn entity_with_entity_properties() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
             my_var1 = { value1 }
             my_var2 = { value2 }
-        }"#;
+        }"#,
+        );
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -189,10 +195,12 @@ mod tests {
 
     #[test]
     fn entity_with_entity_values() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
             { value1 }
             { value2 }
-        }"#;
+        }"#,
+        );
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -213,23 +221,25 @@ mod tests {
 
     #[test]
     fn invalid_entity_missing_opening_bracket() {
-        let input = " my_var = value }";
+        let input = LocatingSlice::new(" my_var = value }");
         assert!(entity.parse(input).is_err());
     }
 
     #[test]
     fn invalid_entity_missing_closing_bracket() {
-        let input = "{ my_var = value ";
+        let input = LocatingSlice::new("{ my_var = value ");
         assert!(entity.parse(input).is_err());
     }
 
     #[test]
     fn entity_with_mixed_color_values() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
         color1 = rgb { 255 0 0 }
         color2 = rgb { 0 255 0 0.5 }
         color3 = hsv { 120 50 100 }
-    }"#;
+    }"#,
+        );
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -249,13 +259,15 @@ mod tests {
 
     #[test]
     fn entity_with_comments() {
-        let input = r#"{#comment
+        let input = LocatingSlice::new(
+            r#"{#comment
         #comment
         my_var1 = value1 # comment1
         # comment2
         my_var2 = value2
         my_var3 = value3 # comment3
-    }"#;
+    }"#,
+        );
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -269,7 +281,8 @@ mod tests {
 
     #[test]
     fn entity_with_complex_input() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
         # my_var1 = "value1 with space and \"special\" chars"
         my_var2 = { nested_var = { deep_var = "deep_value" } }
         my_var3 = rgb { 255 0 0 }
@@ -279,7 +292,8 @@ mod tests {
         my_var7 = value7
         my_var8 = { nested_var = value8 }
         my_var9 = value9
-    }"#;
+    }"#,
+        );
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -339,11 +353,13 @@ mod tests {
 
     #[test]
     fn entity_with_duplicate_properties_adds_to_array_at_key() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
         my_var = value1
         my_var = value2
         my_var = value3
-    }"#;
+    }"#,
+        );
         let result = entity.parse(input).unwrap();
         assert_eq!(
             result,
@@ -362,14 +378,16 @@ mod tests {
 
     #[test]
     fn entity_with_dynamic_scripting() {
-        let input = r#"{ # 0.2 for each point below 25
+        let input = LocatingSlice::new(
+            r#"{ # 0.2 for each point below 25
             base = @stabilitylevel2
             subtract = trigger:planet_stability
             [[ALTERED_STABILITY]
                 subtract = $ALTERED_STABILITY$
             ]
             mult = 0.2
-        }"#;
+        }"#,
+        );
 
         let result = entity.parse(input).unwrap();
 
@@ -400,9 +418,11 @@ mod tests {
 
     #[test]
     fn entity_with_define_value() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
             val = @stabilitylevel2
-        }"#;
+        }"#,
+        );
 
         let result = entity.parse(input).unwrap();
 
@@ -416,9 +436,11 @@ mod tests {
 
     #[test]
     fn compact_equality() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
             mesh="asteroid_01_mesh"
-        }"#;
+        }"#,
+        );
 
         let result = entity.parse(input).unwrap();
 
@@ -432,11 +454,13 @@ mod tests {
 
     #[test]
     fn switch_statement() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
             trigger = free_housing
             -9 < { nine = yes } # 10
             -8 < { eight = yes } # 9
-		}"#;
+		}"#,
+        );
 
         let result = entity.parse(input).unwrap();
 
@@ -468,9 +492,11 @@ mod tests {
 
     #[test]
     fn inline_maths() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
 			planet_stability < @[ stabilitylevel2 + 10 ]
-        }"#;
+        }"#,
+        );
 
         let result = entity.parse(input).unwrap();
 
@@ -488,9 +514,11 @@ mod tests {
 
     #[test]
     fn inline_maths_alt() {
-        let input = r#"{
+        let input = LocatingSlice::new(
+            r#"{
 			planet_stability < @\[ stabilitylevel2 + 10 ]
-        }"#;
+        }"#,
+        );
 
         let result = entity.parse(input).unwrap();
 

@@ -1,11 +1,11 @@
 #![cfg(test)]
-use winnow::Parser;
+use winnow::{LocatingSlice, Parser};
 
 use crate::parser::inline_maths;
 
 #[test]
 fn inline_maths_test() {
-    let input = "@[ stabilitylevel2 + 10 ]";
+    let input = LocatingSlice::new("@[ stabilitylevel2 + 10 ]");
 
     let result = inline_maths.parse(input).unwrap();
 
@@ -14,7 +14,7 @@ fn inline_maths_test() {
 
 #[test]
 fn inline_maths_alt_test() {
-    let input = "@\\[ stabilitylevel2 + 10 ]";
+    let input = LocatingSlice::new("@\\[ stabilitylevel2 + 10 ]");
 
     let result = inline_maths.parse(input).unwrap();
 

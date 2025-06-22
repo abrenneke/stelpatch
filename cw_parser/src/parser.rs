@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -13,9 +14,127 @@ use winnow::combinator::repeat;
 use anyhow::anyhow;
 use path_slash::PathExt;
 use winnow::token::literal;
-use winnow::{ModalResult, Parser};
+use winnow::{LocatingSlice, ModalResult, Parser};
 
 mod tests;
+
+pub struct AstNode<T> {
+    pub value: T,
+    pub span: Span,
+}
+
+/// AST representation of a string with position info
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AstString<'a> {
+    pub value: &'a str,
+    pub is_quoted: bool,
+    pub range: Range<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Position {
+    /// Line number (1-based)
+    pub line: usize,
+    /// Column number (1-based)
+    pub column: usize,
+    /// Byte offset from start of input (0-based)
+    pub offset: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Span {
+    /// Start position of the span
+    pub start: Position,
+    /// End position of the span (exclusive)
+    pub end: Position,
+}
+
+impl Span {
+    pub fn new(start: Position, end: Position) -> Self {
+        Self { start, end }
+    }
+
+    pub fn from_offsets(start_offset: usize, end_offset: usize, input: &str) -> Self {
+        Self {
+            start: Position::from_offset(start_offset, input),
+            end: Position::from_offset(end_offset, input),
+        }
+    }
+
+    /// Get the text covered by this span
+    pub fn text<'a>(&self, input: &'a str) -> &'a str {
+        &input[self.start.offset..self.end.offset]
+    }
+
+    /// Check if this span contains another span
+    pub fn contains(&self, other: &Span) -> bool {
+        self.start.offset <= other.start.offset && other.end.offset <= self.end.offset
+    }
+}
+
+impl Position {
+    pub fn new(line: usize, column: usize, offset: usize) -> Self {
+        Self {
+            line,
+            column,
+            offset,
+        }
+    }
+
+    pub fn from_offset(offset: usize, input: &str) -> Self {
+        let mut line = 1;
+        let mut column = 1;
+
+        for (i, ch) in input.char_indices() {
+            if i >= offset {
+                break;
+            }
+            if ch == '\n' {
+                line += 1;
+                column = 1;
+            } else {
+                column += 1;
+            }
+        }
+
+        Self {
+            line,
+            column,
+            offset,
+        }
+    }
+
+    pub fn start() -> Self {
+        Self {
+            line: 1,
+            column: 1,
+            offset: 0,
+        }
+    }
+}
+
+/// Helper to convert Range<usize> to Span using the input
+fn range_to_span(range: Range<usize>, original_input: &str) -> Span {
+    Span {
+        start: Position::from_offset(range.start, original_input),
+        end: Position::from_offset(range.end, original_input),
+    }
+}
+
+impl<'a> AstString<'a> {
+    pub fn new(value: &'a str, is_quoted: bool, range: Range<usize>) -> Self {
+        Self {
+            value,
+            is_quoted,
+            range,
+        }
+    }
+
+    pub fn to_span(&self, original_input: &str) -> Span {
+        range_to_span(self.range.clone(), original_input)
+    }
+}
+
 #[derive(PartialEq, Eq, Debug)]
 pub struct ParsedEntity<'a> {
     /// Array items in the entity, like { a b c }
@@ -238,7 +357,7 @@ impl<'a> ParsedEntity<'a> {
 
 /// A module for most intents and purposes is just an entity.
 pub fn module<'a>(
-    input: &mut &'a str,
+    input: &mut LocatingSlice<&'a str>,
     module_name: &'a str,
 ) -> ModalResult<(ParsedProperties<'a>, Vec<ParsedValue<'a>>)> {
     if module_name.contains("99_README") {
@@ -315,7 +434,7 @@ impl<'a> ParsedModule<'a> {
     }
 
     pub fn parse_input(&'a mut self, input: &'a str) -> Result<(), anyhow::Error> {
-        let mut input = input;
+        let mut input = LocatingSlice::new(input);
 
         let (properties, values) = module(&mut input, &self.filename)
             .map_err(|e| anyhow!("Failed to parse module {}: {}", self.filename, e))?;
@@ -364,7 +483,7 @@ impl<'a> ParsedModule<'a> {
     }
 }
 
-fn expression<'a>(input: &mut &'a str) -> ModalResult<ParsedExpression<'a>> {
+fn expression<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<ParsedExpression<'a>> {
     let key = with_opt_trailing_ws(quoted_or_unquoted_string)
         .context(StrContext::Label("key"))
         .parse_next(input)?;
@@ -377,13 +496,13 @@ fn expression<'a>(input: &mut &'a str) -> ModalResult<ParsedExpression<'a>> {
         .parse_next(input)?;
 
     Ok(ParsedExpression {
-        key: key,
+        key: key.value, // Extract the string value from AstString
         operator: op,
         value,
     })
 }
 
-fn operator<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+fn operator<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<&'a str> {
     alt((
         literal(">="),
         literal("<="),
@@ -398,7 +517,7 @@ fn operator<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
     .parse_next(input)
 }
 
-fn entity<'a>(input: &mut &'a str) -> ModalResult<ParsedEntity<'a>> {
+fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<ParsedEntity<'a>> {
     with_opt_trailing_ws('{')
         .context(StrContext::Label("opening bracket"))
         .parse_next(input)?;
@@ -452,7 +571,9 @@ fn entity<'a>(input: &mut &'a str) -> ModalResult<ParsedEntity<'a>> {
     })
 }
 
-fn conditional_block<'a>(input: &mut &'a str) -> ModalResult<ParsedConditionalBlock<'a>> {
+fn conditional_block<'a>(
+    input: &mut LocatingSlice<&'a str>,
+) -> ModalResult<ParsedConditionalBlock<'a>> {
     with_opt_trailing_ws(literal("[[")).parse_next(input)?;
     let is_not = opt(with_opt_trailing_ws(literal("!"))).parse_next(input)?;
     let key = with_opt_trailing_ws(quoted_or_unquoted_string).parse_next(input)?;
@@ -499,13 +620,13 @@ fn conditional_block<'a>(input: &mut &'a str) -> ModalResult<ParsedConditionalBl
             is_module: false,
         },
         items,
-        key: (is_not.is_some(), key),
+        key: (is_not.is_some(), key.value), // Extract the string value from AstString
     })
 }
 
 /// A color is either rgb { r g b a } or hsv { h s v a }. The a component is optional.
 fn color<'a>(
-    input: &mut &'a str,
+    input: &mut LocatingSlice<&'a str>,
 ) -> ModalResult<(&'a str, &'a str, &'a str, &'a str, Option<&'a str>)> {
     let color_type = with_opt_trailing_ws(alt((literal("rgb"), literal("hsv"))))
         .context(StrContext::Label("color type"))
@@ -528,7 +649,7 @@ fn color<'a>(
 }
 
 /// A number is a sequence of digits, optionally preceded by a sign and optionally followed by a decimal point and more digits, followed by whitespace.
-fn number_val<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+fn number_val<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<&'a str> {
     let v = (opt(alt(('-', '+'))), digit1, opt(('.', digit1)))
         .take()
         .context(StrContext::Label("number_val"))
@@ -541,12 +662,12 @@ fn number_val<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
     Ok(v)
 }
 
-fn script_value<'a>(input: &mut &'a str) -> ModalResult<ParsedValue<'a>> {
+fn script_value<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<ParsedValue<'a>> {
     alt((
         color.map(ParsedValue::Color),
         entity.map(ParsedValue::Entity),
         number_val.map(ParsedValue::Number),
-        quoted_or_unquoted_string.map(|v| ParsedValue::String(v)),
+        quoted_or_unquoted_string.map(|v| ParsedValue::String(v.value)),
         inline_maths.map(|v| ParsedValue::Maths(v)),
     ))
     .context(StrContext::Label("script_value"))
@@ -554,13 +675,15 @@ fn script_value<'a>(input: &mut &'a str) -> ModalResult<ParsedValue<'a>> {
 }
 
 /// A combinator that consumes trailing whitespace and comments after the inner parser. If there is no trailing whitespace, the parser succeeds.
-fn with_opt_trailing_ws<'a, F, O, E>(mut inner: F) -> impl winnow::ModalParser<&'a str, O, E>
+fn with_opt_trailing_ws<'a, F, O, E>(
+    mut inner: F,
+) -> impl winnow::ModalParser<LocatingSlice<&'a str>, O, E>
 where
-    F: winnow::ModalParser<&'a str, O, E>,
+    F: winnow::ModalParser<LocatingSlice<&'a str>, O, E>,
     E: ParserError<&'a str>,
     ErrMode<E>: From<ErrMode<winnow::error::ContextError>>,
 {
-    move |input: &mut &'a str| {
+    move |input: &mut LocatingSlice<&'a str>| {
         let value = inner.parse_next(input)?;
         opt(ws_and_comments).parse_next(input)?;
         Ok(value)
@@ -568,13 +691,15 @@ where
 }
 
 /// A combinator that consumes trailing whitespace and comments after the inner parser.
-fn with_trailing_ws<'a, F, E>(mut inner: F) -> impl winnow::ModalParser<&'a str, &'a str, E>
+fn with_trailing_ws<'a, F, O, E>(
+    mut inner: F,
+) -> impl winnow::ModalParser<LocatingSlice<&'a str>, O, E>
 where
-    F: winnow::ModalParser<&'a str, &'a str, E>,
+    F: winnow::ModalParser<LocatingSlice<&'a str>, O, E>,
     E: ParserError<&'a str>,
     ErrMode<E>: From<ErrMode<winnow::error::ContextError>>,
 {
-    move |input: &mut &'a str| {
+    move |input: &mut LocatingSlice<&'a str>| {
         let value = inner.parse_next(input)?;
         ws_and_comments.parse_next(input)?;
         Ok(value)
@@ -582,7 +707,7 @@ where
 }
 
 /// Matches any amount of whitespace and comments.
-fn ws_and_comments<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+fn ws_and_comments<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<&'a str> {
     repeat(1.., alt((multispace1, comment)))
         .map(|()| ())
         .take()
@@ -591,7 +716,7 @@ fn ws_and_comments<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
 }
 
 /// Comments using #
-fn comment<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+fn comment<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<&'a str> {
     ("#", till_line_ending)
         .take()
         .context(StrContext::Label("comment"))
@@ -605,7 +730,7 @@ const VALID_IDENTIFIER_START_CHARS: &[u8] =
     b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789-$@";
 
 /// An unquoted string (i.e. identifier) - a sequence of valid identifier characters, spaces not allowed.
-fn unquoted_string<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+fn unquoted_string<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstString<'a>> {
     terminated_value(
         (
             one_of(VALID_IDENTIFIER_START_CHARS),
@@ -613,12 +738,14 @@ fn unquoted_string<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
         )
             .take(),
     )
+    .with_span()
+    .map(|(s, range)| AstString::new(s, false, range))
     .context(StrContext::Label("unquoted_string"))
     .parse_next(input)
 }
 
 /// A string that is quoted with double quotes. Allows spaces and other characters that would otherwise be invalid in an unquoted string.
-fn quoted_string<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+fn quoted_string<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstString<'a>> {
     terminated_value(delimited(
         '"',
         escaped(none_of(['\\', '"']), '\\', "\"".value("\""))
@@ -626,25 +753,29 @@ fn quoted_string<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
             .take(),
         '"',
     ))
+    .with_span()
+    .map(|(s, range)| AstString::new(s, true, range))
     .context(StrContext::Label("quoted_string"))
     .parse_next(input)
 }
 
 /// A string that is either quoted or unquoted.
-fn quoted_or_unquoted_string<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+fn quoted_or_unquoted_string<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstString<'a>> {
     alt((quoted_string, unquoted_string))
         .context(StrContext::Label("quoted_or_unquoted_string"))
         .parse_next(input)
 }
 
 /// Combinator that peeks ahead to see if a value is terminated correctly. Values can terminate with a space, }, etc.
-fn terminated_value<'a, F, O, E>(mut inner: F) -> impl winnow::ModalParser<&'a str, O, E>
+fn terminated_value<'a, F, O, E>(
+    mut inner: F,
+) -> impl winnow::ModalParser<LocatingSlice<&'a str>, O, E>
 where
-    F: winnow::ModalParser<&'a str, O, E>,
+    F: winnow::ModalParser<LocatingSlice<&'a str>, O, E>,
     E: ParserError<&'a str>,
     ErrMode<E>: From<ErrMode<winnow::error::ContextError>>,
 {
-    move |input: &mut &'a str| {
+    move |input: &mut LocatingSlice<&'a str>| {
         let value = inner.parse_next(input)?;
         peek(value_terminator).parse_next(input)?;
         Ok(value)
@@ -652,14 +783,14 @@ where
 }
 
 /// Characters that can terminate a value, like whitespace, a comma, or a closing brace.
-fn value_terminator<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+fn value_terminator<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<&'a str> {
     alt((ws_and_comments.void(), one_of(b"}=]").void(), eof.void()))
         .take()
         .parse_next(input)
 }
 
 /// Insanity, inline math like @[x + 1], we don't really care about the formula inside, just that it's there.
-fn inline_maths<'a>(input: &mut &'a str) -> ModalResult<&'a str> {
+fn inline_maths<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<&'a str> {
     (
         with_opt_trailing_ws(alt((literal("@["), literal("@\\[")))),
         take_till(0.., ']'),

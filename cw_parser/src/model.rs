@@ -8,6 +8,7 @@ use std::{
 use anyhow::anyhow;
 use indent::indent_all_by;
 use lasso::{Spur, ThreadedRodeo};
+use winnow::LocatingSlice;
 
 use crate::parser::{
     ParsedEntity, ParsedModule, ParsedProperties, ParsedPropertyInfo, ParsedPropertyInfoList,
@@ -685,7 +686,7 @@ impl Module {
     ) -> Result<Self, anyhow::Error> {
         let mut parsed_module = ParsedModule::new(namespace, module_name);
 
-        let mut content = content;
+        let mut content = LocatingSlice::new(content);
 
         let (properties, values) = crate::parser::module(&mut content, &module_name)
             .map_err(|e| anyhow!(e.to_string()))?;
@@ -705,7 +706,7 @@ impl Module {
 
         let mut parsed_module = ParsedModule::new(&namespace, &module_name);
 
-        let mut input = input.as_ref();
+        let mut input = LocatingSlice::new(input.as_ref());
 
         let (properties, values) =
             crate::parser::module(&mut input, &module_name).map_err(|e| anyhow!(e.to_string()))?;
