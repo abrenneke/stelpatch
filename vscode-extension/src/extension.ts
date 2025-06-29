@@ -1,0 +1,187 @@
+import * as path from 'path';
+import * as fs from 'fs';
+import { workspace, ExtensionContext, window, OutputChannel, commands } from 'vscode';
+
+import {
+	LanguageClient,
+	LanguageClientOptions,
+	ServerOptions,
+	TransportKind,
+	State
+} from 'vscode-languageclient/node';
+
+// Debug: Check if extension module is loaded at all
+console.log('🔍 CW LSP Extension: Module loaded!');
+
+let client: LanguageClient;
+let outputChannel: OutputChannel;
+
+export function activate(context: ExtensionContext) {
+	// Debug: Check if activate function is called
+	console.log('🚀 CW LSP Extension: ACTIVATE FUNCTION CALLED!');
+	
+	// Create output channel for logging
+	outputChannel = window.createOutputChannel('CW LSP Extension');
+	outputChannel.show(true);
+	
+	log('🚀 CW LSP Extension activating...');
+	log(`Extension path: ${context.extensionPath}`);
+	
+	// The server is implemented as a separate cargo project
+	const serverCommand = 'cargo';
+	const serverArgs = ['run'];
+	
+	// Get the path to the LSP server (assuming it's in ../lsp relative to this extension)
+	const serverWorkingDirectory = path.join(context.extensionPath, '..', 'lsp');
+	log(`Server working directory: ${serverWorkingDirectory}`);
+	
+	// Check if the LSP server directory exists
+	if (!fs.existsSync(serverWorkingDirectory)) {
+		log(`❌ ERROR: LSP server directory does not exist: ${serverWorkingDirectory}`);
+		window.showErrorMessage(`CW LSP: Server directory not found at ${serverWorkingDirectory}`);
+		return;
+	}
+	
+	// Check if Cargo.toml exists in the server directory
+	const cargoTomlPath = path.join(serverWorkingDirectory, 'Cargo.toml');
+	if (!fs.existsSync(cargoTomlPath)) {
+		log(`❌ ERROR: Cargo.toml not found at: ${cargoTomlPath}`);
+		window.showErrorMessage(`CW LSP: Cargo.toml not found in server directory`);
+		return;
+	}
+	
+	log('✅ Server directory and Cargo.toml found');
+
+	const serverOptions: ServerOptions = {
+		run: { 
+			command: serverCommand, 
+			args: serverArgs,
+			options: {
+				cwd: serverWorkingDirectory
+			}
+		},
+		debug: {
+			command: serverCommand,
+			args: serverArgs,
+			options: {
+				cwd: serverWorkingDirectory
+			}
+		}
+	};
+
+	log('📋 Server options configured:');
+	log(`  Command: ${serverCommand}`);
+	log(`  Args: ${JSON.stringify(serverArgs)}`);
+	log(`  Working directory: ${serverWorkingDirectory}`);
+
+	// Options to control the language client
+	const clientOptions: LanguageClientOptions = {
+		// Register the server for Stellaris documents
+		documentSelector: [{ scheme: 'file', language: 'stellaris' }],
+		synchronize: {
+			// Notify the server about file changes to files contained in the workspace
+			fileEvents: workspace.createFileSystemWatcher('**/.clientrc')
+		},
+		outputChannel: outputChannel,
+		revealOutputChannelOn: 4 // Show on error
+	};
+
+	log('📋 Client options configured');
+	log(`  Document selector: ${JSON.stringify(clientOptions.documentSelector)}`);
+
+	// Create the language client and start the client.
+	client = new LanguageClient(
+		'cwLanguageServer',
+		'CW Language Server',
+		serverOptions,
+		clientOptions
+	);
+
+	log('🔧 Language client created');
+
+	// Add event listeners for debugging
+	client.onDidChangeState((event) => {
+		log(`🔄 Client state changed: ${State[event.oldState]} -> ${State[event.newState]}`);
+		
+		if (event.newState === State.Running) {
+			log('✅ LSP server is now running!');
+			window.showInformationMessage('CW LSP: Server started successfully');
+		} else if (event.newState === State.Stopped) {
+			log('🛑 LSP server stopped');
+			if (event.oldState === State.Starting) {
+				log('❌ Server failed to start');
+				window.showErrorMessage('CW LSP: Server failed to start. Check the output for details.');
+			}
+		}
+	});
+
+	// Note: We'll rely on state changes to detect when the server is ready
+
+	// Start the client. This will also launch the server
+	log('🚀 Starting language client...');
+	try {
+		client.start();
+		log('✅ Client start() called successfully');
+	} catch (error) {
+		log(`❌ Error starting client: ${error}`);
+		window.showErrorMessage(`CW LSP: Error starting client: ${error}`);
+	}
+	
+	// Register restart command
+	const restartCommand = commands.registerCommand('cwlsp.restartServer', async () => {
+		log('🔄 Manual server restart requested');
+		await restartServer();
+	});
+
+	// Add the client and command to the context so they can be disposed
+	context.subscriptions.push(client);
+	context.subscriptions.push(restartCommand);
+	log('📝 Extension activation completed');
+}
+
+async function restartServer() {
+	if (client) {
+		log('🛑 Stopping current server...');
+		try {
+			await client.stop();
+			log('✅ Server stopped successfully');
+		} catch (error) {
+			log(`❌ Error stopping server: ${error}`);
+		}
+		
+		log('🚀 Starting server again...');
+		try {
+			await client.start();
+			log('✅ Server restarted successfully');
+			window.showInformationMessage('CW LSP: Server restarted successfully');
+		} catch (error) {
+			log(`❌ Error restarting server: ${error}`);
+			window.showErrorMessage(`CW LSP: Error restarting server: ${error}`);
+		}
+	} else {
+		log('❌ No client to restart');
+		window.showWarningMessage('CW LSP: No server to restart');
+	}
+}
+
+function log(message: string) {
+	const timestamp = new Date().toISOString();
+	const logMessage = `[${timestamp}] ${message}`;
+	
+	if (outputChannel) {
+		outputChannel.appendLine(logMessage);
+	}
+	
+	// Also log to console for development
+	console.log(`[CW LSP Extension] ${logMessage}`);
+}
+
+export function deactivate(): Thenable<void> | undefined {
+	console.log('🛑 CW LSP Extension: DEACTIVATE FUNCTION CALLED!');
+	log('🛑 Extension deactivating...');
+	
+	if (!client) {
+		return undefined;
+	}
+	return client.stop();
+} 

@@ -8,7 +8,6 @@ use winnow::{
     LocatingSlice, ModalResult, Parser,
     combinator::{alt, eof, opt, repeat_till},
     error::StrContext,
-    stream::Location,
     token::literal,
 };
 
@@ -37,7 +36,13 @@ impl<'a> AstModule<'a> {
         }
     }
 
-    pub fn parse_input(&'a mut self, input: &'a str) -> Result<(), anyhow::Error> {
+    pub fn from_input(input: &'a str) -> Result<Self, anyhow::Error> {
+        let mut module = Self::new("common", "test");
+        module.parse_input(input)?;
+        Ok(module)
+    }
+
+    pub fn parse_input(&mut self, input: &'a str) -> Result<(), anyhow::Error> {
         let mut input = LocatingSlice::new(input);
 
         let (items, span) = module(&mut input, &self.filename)
@@ -141,20 +146,18 @@ impl<'a> AstNode for AstModule<'a> {
 /// A module for most intents and purposes is just an entity.
 pub fn module<'a>(
     input: &mut LocatingSlice<&'a str>,
-    module_name: &'a str,
+    module_name: impl AsRef<str>,
 ) -> ModalResult<(Vec<AstEntityItem<'a>>, Range<usize>)> {
-    if module_name.contains("99_README") {
+    if module_name.as_ref().contains("99_README") {
         return Ok((Vec::new(), 0..0));
     }
-
-    let start = input.current_token_start();
 
     opt(literal("\u{feff}")).parse_next(input)?;
     opt(ws_and_comments)
         .context(StrContext::Label("module start whitespace"))
         .parse_next(input)?;
 
-    let (expressions, _): (Vec<AstBlockItem>, _) = repeat_till(
+    let ((expressions, _), span): ((Vec<AstBlockItem>, _), _) = repeat_till(
         0..,
         alt((
             with_opt_trailing_ws(expression)
@@ -166,12 +169,13 @@ pub fn module<'a>(
         )),
         eof,
     )
+    .with_span()
     .context(StrContext::Label("module"))
     .parse_next(input)?;
 
     let mut items = Vec::new();
 
-    let span = start..input.current_token_start();
+    let span = 0..span.end;
 
     for expression_or_value in expressions {
         match expression_or_value {

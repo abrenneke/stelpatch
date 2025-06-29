@@ -1,0 +1,71 @@
+# Test Stellaris Building
+test_building = {
+    name = "Test Research Lab"
+    description = "A basic research facility"
+    
+    category = research
+    
+    cost = {
+        minerals = 200
+        energy = 100
+    }
+    
+    upkeep = {
+        energy = 2
+    }
+    
+    prerequisites = {
+        "tech_basic_science_lab_1"
+    }
+    
+    planet_modifier = {
+        job_researcher_add = 2
+    }
+    
+    potential = {
+        exists = owner
+        owner = {
+            is_regular_empire = yes
+        }
+    }
+    
+    allow = {
+        has_major_upgraded_capital = yes
+    }
+    
+    resources = {
+        category = planet_buildings
+        produces = {
+            physics_research = 4
+            society_research = 4
+            engineering_research = 4
+        }
+    }
+}
+
+# Test Technology
+tech_advanced_materials = {
+    cost = @tier2cost1
+    area = engineering
+    tier = 2
+    category = { materials }
+    
+    prerequisites = { "tech_basic_industry" }
+    weight = @tier2weight1
+    
+    gateway = materials
+    
+    modifier = {
+        planet_building_cost_mult = -0.1
+    }
+    
+    weight_modifier = {
+        modifier = {
+            factor = 1.25
+            research_leader = {
+                area = engineering
+                has_trait = "leader_trait_expertise_materials"
+            }
+        }
+    }
+} 

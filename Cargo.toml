@@ -1,3 +1,4 @@
 [workspace]
 resolver = "3"
-members = ["cw_parser", "stelpatch"]
+members = ["cw_parser", "lsp", "stelpatch"]
+
