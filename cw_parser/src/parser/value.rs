@@ -3,8 +3,8 @@ use std::ops::Range;
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrContext};
 
 use crate::{
-    AstBoolean, AstColor, AstEntity, AstMaths, AstNumber, AstString, color, entity, inline_maths,
-    number_val, quoted_or_unquoted_string,
+    AstBoolean, AstColor, AstEntity, AstMaths, AstNode, AstNumber, AstString, color, entity,
+    inline_maths, number_val, quoted_or_unquoted_string,
 };
 
 /// A value is anything after an =
@@ -97,6 +97,19 @@ impl<'a> AstValue<'a> {
 
     pub fn new_maths(value: &'a str, span: Range<usize>) -> Self {
         Self::Maths(AstMaths::new(value, span))
+    }
+}
+
+impl<'a> AstNode for AstValue<'a> {
+    fn span_range(&self) -> Range<usize> {
+        match self {
+            Self::String(s) => s.span_range(),
+            Self::Number(n) => n.span_range(),
+            Self::Boolean(b) => b.span_range(),
+            Self::Entity(e) => e.span_range(),
+            Self::Color(c) => c.span_range(),
+            Self::Maths(m) => m.span_range(),
+        }
     }
 }
 

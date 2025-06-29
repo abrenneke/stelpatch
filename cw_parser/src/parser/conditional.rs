@@ -8,8 +8,8 @@ use winnow::{
 };
 
 use crate::{
-    AstBlockItem, AstEntityItem, AstProperty, AstString, expression, quoted_or_unquoted_string,
-    script_value, with_opt_trailing_ws,
+    AstBlockItem, AstEntityItem, AstNode, AstProperty, AstString, expression,
+    quoted_or_unquoted_string, script_value, with_opt_trailing_ws,
 };
 
 /// A conditional block looks like [[PARAM_NAME] key = value] and is dumb
@@ -34,6 +34,12 @@ impl<'a> AstConditionalBlock<'a> {
             items,
             span,
         }
+    }
+}
+
+impl<'a> AstNode for AstConditionalBlock<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.span.clone()
     }
 }
 

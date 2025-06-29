@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::AstToken;
+use crate::{AstNode, AstToken};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstBoolean<'a> {
@@ -12,5 +12,11 @@ impl<'a> AstBoolean<'a> {
         Self {
             value: AstToken { value, span },
         }
+    }
+}
+
+impl<'a> AstNode for AstBoolean<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.value.span.clone()
     }
 }

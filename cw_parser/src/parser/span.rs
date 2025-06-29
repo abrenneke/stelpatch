@@ -89,3 +89,15 @@ pub(crate) fn range_to_span(range: Range<usize>, original_input: &str) -> Span {
         end: Position::from_offset(range.end, original_input),
     }
 }
+
+pub trait AstNode {
+    fn span_range(&self) -> Range<usize>;
+
+    fn span(&self, original_input: &str) -> Span {
+        Span::from_offsets(
+            self.span_range().start,
+            self.span_range().end,
+            original_input,
+        )
+    }
+}

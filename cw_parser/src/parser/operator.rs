@@ -2,7 +2,7 @@ use std::{ops::Range, str::FromStr};
 
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, token::literal};
 
-use crate::{AstToken, StringError};
+use crate::{AstNode, AstToken, StringError};
 
 /// An operator that can appear between a key and a value in an entity, like a > b. Usually this is = but it depends on the implementation.
 /// For our purposes it doesn't really matter, we just have to remember what it is.
@@ -80,6 +80,12 @@ impl<'a> AstOperator<'a> {
 
     pub fn equals(span: Range<usize>) -> Self {
         Self::new("=", span).unwrap()
+    }
+}
+
+impl<'a> AstNode for AstOperator<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.value.span.clone()
     }
 }
 

@@ -7,7 +7,7 @@ use winnow::{
     error::StrContext,
 };
 
-use crate::{AstToken, value_terminator};
+use crate::{AstNode, AstToken, value_terminator};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstNumber<'a> {
@@ -19,6 +19,12 @@ impl<'a> AstNumber<'a> {
         Self {
             value: AstToken { value, span },
         }
+    }
+}
+
+impl<'a> AstNode for AstNumber<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.value.span.clone()
     }
 }
 

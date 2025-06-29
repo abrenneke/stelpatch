@@ -11,7 +11,7 @@ use winnow::{
     token::{none_of, one_of, take_while},
 };
 
-use crate::{AstToken, terminated_value};
+use crate::{AstNode, AstToken, terminated_value};
 
 /// AST representation of a string with position info
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +32,12 @@ impl<'a> AstString<'a> {
             value: AstToken::new(value, span),
             is_quoted,
         }
+    }
+}
+
+impl<'a> AstNode for AstString<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.value.span.clone()
     }
 }
 

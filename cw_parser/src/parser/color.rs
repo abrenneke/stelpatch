@@ -7,7 +7,7 @@ use winnow::{
     token::literal,
 };
 
-use crate::{AstNumber, AstToken, number_val, with_opt_trailing_ws, with_trailing_ws};
+use crate::{AstNode, AstNumber, AstToken, number_val, with_opt_trailing_ws, with_trailing_ws};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstColor<'a> {
@@ -43,6 +43,13 @@ impl<'a> AstColor<'a> {
         }
     }
 }
+
+impl<'a> AstNode for AstColor<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.span.clone()
+    }
+}
+
 /// A color is either rgb { r g b a } or hsv { h s v a }. The a component is optional.
 pub(crate) fn color<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstColor<'a>> {
     let (color_type, color_type_span) =

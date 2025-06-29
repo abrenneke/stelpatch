@@ -7,7 +7,7 @@ use winnow::{
     token::{literal, take_till},
 };
 
-use crate::{AstToken, with_opt_trailing_ws};
+use crate::{AstNode, AstToken, with_opt_trailing_ws};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstMaths<'a> {
@@ -19,6 +19,12 @@ impl<'a> AstMaths<'a> {
         Self {
             value: AstToken { value, span },
         }
+    }
+}
+
+impl<'a> AstNode for AstMaths<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.value.span.clone()
     }
 }
 

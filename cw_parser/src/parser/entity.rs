@@ -7,8 +7,8 @@ use winnow::{
 };
 
 use crate::{
-    AstBlockItem, AstConditionalBlock, AstOperator, AstProperty, AstString, conditional_block,
-    expression, script_value, with_opt_trailing_ws,
+    AstBlockItem, AstConditionalBlock, AstNode, AstOperator, AstProperty, AstString,
+    conditional_block, expression, script_value, with_opt_trailing_ws,
 };
 
 use super::AstValue;
@@ -60,6 +60,12 @@ impl<'a> AstEntity<'a> {
         self.items
             .push(AstEntityItem::Conditional(conditional_block));
         self
+    }
+}
+
+impl<'a> AstNode for AstEntity<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.span.clone()
     }
 }
 

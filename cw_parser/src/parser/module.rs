@@ -1,15 +1,19 @@
-use std::path::{Path, PathBuf};
+use std::{
+    ops::Range,
+    path::{Path, PathBuf},
+};
 
 use path_slash::PathBufExt;
 use winnow::{
     LocatingSlice, ModalResult, Parser,
     combinator::{alt, eof, opt, repeat_till},
     error::StrContext,
+    stream::Location,
     token::literal,
 };
 
 use crate::{
-    AstBlockItem, AstEntityItem, AstProperty, Operator, expression, script_value,
+    AstBlockItem, AstEntityItem, AstNode, AstProperty, Operator, expression, script_value,
     with_opt_trailing_ws, ws_and_comments,
 };
 
@@ -20,6 +24,7 @@ pub struct AstModule<'a> {
     pub filename: String,
     pub namespace: String,
     pub items: Vec<AstEntityItem<'a>>,
+    pub span: Range<usize>,
 }
 
 impl<'a> AstModule<'a> {
@@ -28,16 +33,18 @@ impl<'a> AstModule<'a> {
             namespace: namespace.to_string(),
             filename: module_name.to_string(),
             items: Vec::new(),
+            span: 0..0,
         }
     }
 
     pub fn parse_input(&'a mut self, input: &'a str) -> Result<(), anyhow::Error> {
         let mut input = LocatingSlice::new(input);
 
-        let items = module(&mut input, &self.filename)
+        let (items, span) = module(&mut input, &self.filename)
             .map_err(|e| anyhow!("Failed to parse module {}: {}", self.filename, e))?;
 
         self.items = items;
+        self.span = span;
 
         Ok(())
     }
@@ -80,14 +87,22 @@ impl<'a> AstModule<'a> {
     }
 }
 
+impl<'a> AstNode for AstModule<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.span.clone()
+    }
+}
+
 /// A module for most intents and purposes is just an entity.
 pub fn module<'a>(
     input: &mut LocatingSlice<&'a str>,
     module_name: &'a str,
-) -> ModalResult<Vec<AstEntityItem<'a>>> {
+) -> ModalResult<(Vec<AstEntityItem<'a>>, Range<usize>)> {
     if module_name.contains("99_README") {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), 0..0));
     }
+
+    let start = input.current_token_start();
 
     opt(literal("\u{feff}")).parse_next(input)?;
     opt(ws_and_comments)
@@ -111,6 +126,8 @@ pub fn module<'a>(
 
     let mut items = Vec::new();
 
+    let span = start..input.current_token_start();
+
     for expression_or_value in expressions {
         match expression_or_value {
             AstBlockItem::Expression(expression) => {
@@ -129,5 +146,5 @@ pub fn module<'a>(
         }
     }
 
-    Ok(items)
+    Ok((items, span))
 }

@@ -12,7 +12,9 @@ fn module_with_entities() {
         entity2 = { prop2 = value2 }
     "#,
     );
-    let items = module(&mut input, "my_module").unwrap();
+    let (items, span) = module(&mut input, "my_module").unwrap();
+
+    assert_eq!(span, 0..79);
 
     assert_eq!(
         items,
@@ -47,7 +49,10 @@ fn module_with_defines() {
         @ANOTHER_DEFINE = "hello"
     "#,
     );
-    let items = module(&mut input, "my_module").unwrap();
+    let (items, span) = module(&mut input, "my_module").unwrap();
+
+    assert_eq!(span, 0..64);
+
     assert_eq!(
         items,
         vec![
@@ -76,7 +81,9 @@ fn module_with_properties() {
         }
     "#,
     );
-    let items = module(&mut input, "my_module").unwrap();
+    let (items, span) = module(&mut input, "my_module").unwrap();
+
+    assert_eq!(span, 0..111);
 
     assert_eq!(
         items,
@@ -133,7 +140,9 @@ fn module_with_value_list() {
         "#,
     );
 
-    let items = module(&mut input, "my_module").unwrap();
+    let (items, span) = module(&mut input, "my_module").unwrap();
+
+    assert_eq!(span, 0..143);
 
     assert_eq!(
         items,
@@ -166,7 +175,9 @@ fn module_with_value_list() {
 fn empty_module() {
     let mut input = LocatingSlice::new(r#""#);
 
-    let items = module(&mut input, "my_module").unwrap();
+    let (items, span) = module(&mut input, "my_module").unwrap();
+
+    assert_eq!(span, 0..0);
 
     assert_eq!(items, vec![]);
 }
@@ -179,7 +190,9 @@ fn commented_out_module() {
         "#,
     );
 
-    let items = module(&mut input, "my_module").unwrap();
+    let (items, span) = module(&mut input, "my_module").unwrap();
+
+    assert_eq!(span, 0..32);
 
     assert_eq!(items, vec![]);
 }
@@ -188,7 +201,9 @@ fn commented_out_module() {
 fn commented_out_module_2() {
     let mut input = LocatingSlice::new(r#"# @foo = 1"#);
 
-    let items = module(&mut input, "my_module").unwrap();
+    let (items, span) = module(&mut input, "my_module").unwrap();
+
+    assert_eq!(span, 0..10);
 
     assert_eq!(items, vec![]);
 }
@@ -197,7 +212,9 @@ fn commented_out_module_2() {
 fn handle_bom() {
     let mut input = LocatingSlice::new("\u{feff}# Comment");
 
-    let items = module(&mut input, "my_module").unwrap();
+    let (items, span) = module(&mut input, "my_module").unwrap();
+
+    assert_eq!(span, 0..12);
 
     assert_eq!(items, vec![]);
 }
@@ -211,7 +228,9 @@ fn handle_readme() {
         "#,
     );
 
-    let items = module(&mut input, "99_README_ETC").unwrap();
+    let (items, span) = module(&mut input, "99_README_ETC").unwrap();
+
+    assert_eq!(span, 0..0);
 
     assert_eq!(items, vec![]);
 }
