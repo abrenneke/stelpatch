@@ -61,6 +61,59 @@ impl<'a> AstEntity<'a> {
             .push(AstEntityItem::Conditional(conditional_block));
         self
     }
+
+    /// Find all properties with the given key name
+    pub fn find_properties(&self, key: &str) -> Vec<&AstProperty<'a>> {
+        self.items
+            .iter()
+            .filter_map(|item| match item {
+                AstEntityItem::Property(prop) if prop.key.raw_value() == key => Some(prop),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Find the first property with the given key name
+    pub fn find_property(&self, key: &str) -> Option<&AstProperty<'a>> {
+        self.items.iter().find_map(|item| match item {
+            AstEntityItem::Property(prop) if prop.key.raw_value() == key => Some(prop),
+            _ => None,
+        })
+    }
+
+    /// Get all properties in the entity
+    pub fn properties(&self) -> impl Iterator<Item = &AstProperty<'a>> {
+        self.items.iter().filter_map(|item| match item {
+            AstEntityItem::Property(prop) => Some(prop),
+            _ => None,
+        })
+    }
+
+    /// Get all array items in the entity
+    pub fn array_items(&self) -> impl Iterator<Item = &AstValue<'a>> {
+        self.items.iter().filter_map(|item| match item {
+            AstEntityItem::Item(value) => Some(value),
+            _ => None,
+        })
+    }
+
+    /// Get all conditional blocks in the entity
+    pub fn conditional_blocks(&self) -> impl Iterator<Item = &AstConditionalBlock<'a>> {
+        self.items.iter().filter_map(|item| match item {
+            AstEntityItem::Conditional(cond) => Some(cond),
+            _ => None,
+        })
+    }
+
+    /// Check if the entity contains any items
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    /// Get the number of items in the entity
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
 }
 
 impl<'a> AstNode for AstEntity<'a> {

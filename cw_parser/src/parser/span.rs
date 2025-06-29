@@ -39,6 +39,32 @@ impl Span {
     pub fn contains(&self, other: &Span) -> bool {
         self.start.offset <= other.start.offset && other.end.offset <= self.end.offset
     }
+
+    /// Check if this span overlaps with another span
+    pub fn overlaps(&self, other: &Span) -> bool {
+        self.start.offset < other.end.offset && other.start.offset < self.end.offset
+    }
+
+    /// Get the union of two spans (smallest span containing both)
+    pub fn union(&self, other: &Span) -> Self {
+        Self {
+            start: if self.start.offset <= other.start.offset {
+                self.start
+            } else {
+                other.start
+            },
+            end: if self.end.offset >= other.end.offset {
+                self.end
+            } else {
+                other.end
+            },
+        }
+    }
+
+    /// Check if a position is within this span
+    pub fn contains_position(&self, pos: Position) -> bool {
+        self.start.offset <= pos.offset && pos.offset < self.end.offset
+    }
 }
 
 impl Position {
@@ -82,14 +108,6 @@ impl Position {
     }
 }
 
-/// Helper to convert Range<usize> to Span using the input
-pub(crate) fn range_to_span(range: Range<usize>, original_input: &str) -> Span {
-    Span {
-        start: Position::from_offset(range.start, original_input),
-        end: Position::from_offset(range.end, original_input),
-    }
-}
-
 pub trait AstNode {
     fn span_range(&self) -> Range<usize>;
 
@@ -99,5 +117,11 @@ pub trait AstNode {
             self.span_range().end,
             original_input,
         )
+    }
+
+    /// Get the text content of this node from the original input
+    fn text<'a>(&self, original_input: &'a str) -> &'a str {
+        let range = self.span_range();
+        &original_input[range]
     }
 }

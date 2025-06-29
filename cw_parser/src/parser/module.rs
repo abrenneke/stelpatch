@@ -85,6 +85,51 @@ impl<'a> AstModule<'a> {
 
         (namespace, module_name.to_string())
     }
+
+    /// Find all properties with the given key name
+    pub fn find_properties(&self, key: &str) -> Vec<&AstProperty<'a>> {
+        self.items
+            .iter()
+            .filter_map(|item| match item {
+                AstEntityItem::Property(prop) if prop.key.raw_value() == key => Some(prop),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Find the first property with the given key name
+    pub fn find_property(&self, key: &str) -> Option<&AstProperty<'a>> {
+        self.items.iter().find_map(|item| match item {
+            AstEntityItem::Property(prop) if prop.key.raw_value() == key => Some(prop),
+            _ => None,
+        })
+    }
+
+    /// Get all properties in the module
+    pub fn properties(&self) -> impl Iterator<Item = &AstProperty<'a>> {
+        self.items.iter().filter_map(|item| match item {
+            AstEntityItem::Property(prop) => Some(prop),
+            _ => None,
+        })
+    }
+
+    /// Get all array items in the module
+    pub fn array_items(&self) -> impl Iterator<Item = &crate::AstValue<'a>> {
+        self.items.iter().filter_map(|item| match item {
+            AstEntityItem::Item(value) => Some(value),
+            _ => None,
+        })
+    }
+
+    /// Check if the module contains any items
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    /// Get the number of items in the module
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
 }
 
 impl<'a> AstNode for AstModule<'a> {

@@ -23,3 +23,9 @@ impl<'a> AstProperty<'a> {
         }
     }
 }
+
+impl<'a> AstNode for AstProperty<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.span.clone()
+    }
+}

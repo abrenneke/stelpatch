@@ -33,6 +33,21 @@ impl<'a> AstString<'a> {
             is_quoted,
         }
     }
+
+    /// Check if two strings have the same semantic value (ignoring quotes)
+    pub fn semantic_eq(&self, other: &AstString<'a>) -> bool {
+        self.value.value == other.value.value
+    }
+
+    /// Get the raw string value
+    pub fn raw_value(&self) -> &'a str {
+        self.value.value
+    }
+
+    /// Check if this is an identifier (unquoted string)
+    pub fn is_identifier(&self) -> bool {
+        !self.is_quoted
+    }
 }
 
 impl<'a> AstNode for AstString<'a> {

@@ -98,6 +98,84 @@ impl<'a> AstValue<'a> {
     pub fn new_maths(value: &'a str, span: Range<usize>) -> Self {
         Self::Maths(AstMaths::new(value, span))
     }
+
+    /// Check if this value is a string
+    pub fn is_string(&self) -> bool {
+        matches!(self, Self::String(_))
+    }
+
+    /// Check if this value is a number
+    pub fn is_number(&self) -> bool {
+        matches!(self, Self::Number(_))
+    }
+
+    /// Check if this value is a boolean
+    pub fn is_boolean(&self) -> bool {
+        matches!(self, Self::Boolean(_))
+    }
+
+    /// Check if this value is an entity (block)
+    pub fn is_entity(&self) -> bool {
+        matches!(self, Self::Entity(_))
+    }
+
+    /// Check if this value is a color
+    pub fn is_color(&self) -> bool {
+        matches!(self, Self::Color(_))
+    }
+
+    /// Check if this value is a math expression
+    pub fn is_maths(&self) -> bool {
+        matches!(self, Self::Maths(_))
+    }
+
+    /// Try to get the value as a string
+    pub fn as_string(&self) -> Option<&AstString<'a>> {
+        match self {
+            Self::String(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Try to get the value as a number
+    pub fn as_number(&self) -> Option<&AstNumber<'a>> {
+        match self {
+            Self::Number(n) => Some(n),
+            _ => None,
+        }
+    }
+
+    /// Try to get the value as a boolean
+    pub fn as_boolean(&self) -> Option<&AstBoolean<'a>> {
+        match self {
+            Self::Boolean(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    /// Try to get the value as an entity
+    pub fn as_entity(&self) -> Option<&AstEntity<'a>> {
+        match self {
+            Self::Entity(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    /// Try to get the value as a color
+    pub fn as_color(&self) -> Option<&AstColor<'a>> {
+        match self {
+            Self::Color(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// Try to get the value as a math expression
+    pub fn as_maths(&self) -> Option<&AstMaths<'a>> {
+        match self {
+            Self::Maths(m) => Some(m),
+            _ => None,
+        }
+    }
 }
 
 impl<'a> AstNode for AstValue<'a> {
