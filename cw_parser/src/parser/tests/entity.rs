@@ -8,7 +8,7 @@ use super::super::super::*;
 fn empty_entity() {
     let input = LocatingSlice::new("{}");
     let result = entity.parse(input).unwrap();
-    assert_eq!(result, AstEntity::new().into());
+    assert_eq!(result, AstEntity::new(0..2).into());
 }
 
 #[test]
@@ -17,7 +17,7 @@ fn entity_with_property() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..18)
             .with_property(
                 AstString::new("my_var", false, 2..8),
                 AstOperator::equals(9..10),
@@ -33,7 +33,7 @@ fn entity_with_many_properties() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..54)
             .with_property(
                 AstString::new("my_var1", false, 2..9),
                 AstOperator::equals(10..11),
@@ -66,7 +66,7 @@ fn entity_with_mixed_properties() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..162)
             .with_property(
                 AstString::new("float_val", false, 14..23),
                 AstOperator::equals(24..25),
@@ -114,7 +114,7 @@ fn entity_with_item() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..9)
             .with_item(AstValue::new_string("value", false, 2..7))
             .into()
     );
@@ -126,7 +126,7 @@ fn entity_with_many_items() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..24)
             .with_item(AstValue::new_string("value1", false, 2..8))
             .with_item(AstValue::new_string("value2", false, 9..15))
             .with_item(AstValue::new_string("value3", false, 16..22))
@@ -140,7 +140,7 @@ fn entity_with_color_item() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..17)
             .with_item(AstValue::new_color(
                 "rgb",
                 2..5,
@@ -164,7 +164,7 @@ fn entity_with_color_items() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..31)
             .with_item(AstValue::new_color(
                 "rgb",
                 2..5,
@@ -201,7 +201,7 @@ fn entity_with_mixed_items() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..31)
             .with_item(AstValue::new_string("value1", false, 2..8))
             .with_item(AstValue::new_color(
                 "rgb",
@@ -227,7 +227,7 @@ fn entity_with_values_and_properties() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..26)
             .with_item(AstValue::new_string("value1", false, 2..8))
             .with_property(
                 AstString::new("my_var", false, 9..15),
@@ -251,7 +251,7 @@ fn entity_with_many_values_and_properties() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..117)
             .with_item(AstValue::new_string("value1", false, 14..20))
             .with_property(
                 AstString::new("my_var1", false, 33..40),
@@ -279,12 +279,12 @@ fn entity_with_entity_properties() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..77)
             .with_property(
                 AstString::new("my_var1", false, 14..21),
                 AstOperator::equals(22..23),
                 AstValue::Entity(
-                    AstEntity::new()
+                    AstEntity::new(24..34)
                         .with_item(AstValue::new_string("value1", false, 26..32))
                         .into()
                 )
@@ -293,7 +293,7 @@ fn entity_with_entity_properties() {
                 AstString::new("my_var2", false, 47..54),
                 AstOperator::equals(55..56),
                 AstValue::Entity(
-                    AstEntity::new()
+                    AstEntity::new(57..67)
                         .with_item(AstValue::new_string("value2", false, 59..65))
                         .into()
                 )
@@ -313,14 +313,14 @@ fn entity_with_entity_values() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..57)
             .with_item(AstValue::Entity(
-                AstEntity::new()
+                AstEntity::new(14..24)
                     .with_item(AstValue::new_string("value1", false, 16..22))
                     .into()
             ))
             .with_item(AstValue::Entity(
-                AstEntity::new()
+                AstEntity::new(37..47)
                     .with_item(AstValue::new_string("value2", false, 39..45))
                     .into()
             ))
@@ -352,7 +352,7 @@ fn entity_with_mixed_color_values() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..113)
             .with_property(
                 AstString::new("color1", false, 10..16),
                 AstOperator::equals(17..18),
@@ -422,7 +422,7 @@ fn entity_with_comments() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..148)
             .with_property(
                 AstString::new("my_var1", false, 35..42),
                 AstOperator::equals(43..44),
@@ -460,7 +460,7 @@ fn entity_with_complex_input() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..395)
             // .with_property(
             //     "my_var1",
             //     AstValue::String("value1 with space and \"special\" chars")
@@ -469,12 +469,12 @@ fn entity_with_complex_input() {
                 AstString::new("my_var2", false, 72..79),
                 AstOperator::equals(80..81),
                 AstValue::Entity(
-                    AstEntity::new()
+                    AstEntity::new(82..126)
                         .with_property(
                             AstString::new("nested_var", false, 84..94),
                             AstOperator::equals(95..96),
                             AstValue::Entity(
-                                AstEntity::new()
+                                AstEntity::new(97..124)
                                     .with_property(
                                         AstString::new("deep_var", false, 99..107),
                                         AstOperator::equals(108..109),
@@ -511,7 +511,7 @@ fn entity_with_complex_input() {
                 AstString::new("my_var5", false, 229..236),
                 AstOperator::equals(237..238),
                 AstValue::Entity(
-                    AstEntity::new()
+                    AstEntity::new(239..272)
                         .with_item(AstValue::new_string("nested_entity1", false, 241..255))
                         .with_item(AstValue::new_string("nested_entity2", false, 256..270))
                 )
@@ -530,7 +530,7 @@ fn entity_with_complex_input() {
                 AstString::new("my_var8", false, 331..338),
                 AstOperator::equals(339..340),
                 AstValue::Entity(
-                    AstEntity::new()
+                    AstEntity::new(341..364)
                         .with_property(
                             AstString::new("nested_var", false, 343..353),
                             AstOperator::equals(354..355),
@@ -560,7 +560,7 @@ fn entity_with_duplicate_properties_adds_to_array_at_key() {
     let result = entity.parse(input).unwrap();
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..79)
             .with_property(
                 AstString::new("my_var", false, 10..16),
                 AstOperator::equals(17..18),
@@ -597,7 +597,7 @@ fn entity_with_dynamic_scripting() {
 
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..242)
             .with_property(
                 AstString::new("base", false, 44..48),
                 AstOperator::equals(49..50),
@@ -615,7 +615,8 @@ fn entity_with_dynamic_scripting() {
                     AstString::new("subtract", false, 165..173),
                     AstOperator::equals(174..175),
                     AstValue::new_string("$ALTERED_STABILITY$", false, 176..195)
-                ))]
+                ))],
+                128..209
             ))
             .with_property(
                 AstString::new("mult", false, 222..226),
@@ -638,7 +639,7 @@ fn entity_with_define_value() {
 
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..46)
             .with_property(
                 AstString::new("val", false, 14..17),
                 AstOperator::equals(18..19),
@@ -660,7 +661,7 @@ fn compact_equality() {
 
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..47)
             .with_property(
                 AstString::new("mesh", false, 14..18),
                 AstOperator::equals(18..19),
@@ -684,7 +685,7 @@ fn switch_statement() {
 
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..114)
             .with_property(
                 AstString::new("trigger", false, 14..21),
                 AstOperator::equals(22..23),
@@ -694,7 +695,7 @@ fn switch_statement() {
                 AstString::new("-9", false, 49..51),
                 AstOperator::new("<", 52..53).unwrap(),
                 AstValue::Entity(
-                    AstEntity::new()
+                    AstEntity::new(54..68)
                         .with_property(
                             AstString::new("nine", false, 56..60),
                             AstOperator::equals(61..62),
@@ -707,7 +708,7 @@ fn switch_statement() {
                 AstString::new("-8", false, 86..88),
                 AstOperator::new("<", 89..90).unwrap(),
                 AstValue::Entity(
-                    AstEntity::new()
+                    AstEntity::new(91..106)
                         .with_property(
                             AstString::new("eight", false, 93..98),
                             AstOperator::equals(99..100),
@@ -732,7 +733,7 @@ fn inline_maths() {
 
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..59)
             .with_property(
                 AstString::new("planet_stability", false, 5..21),
                 AstOperator::new("<", 22..23).unwrap(),
@@ -754,7 +755,7 @@ fn inline_maths_alt() {
 
     assert_eq!(
         result,
-        AstEntity::new()
+        AstEntity::new(0..60)
             .with_property(
                 AstString::new("planet_stability", false, 5..21),
                 AstOperator::new("<", 22..23).unwrap(),

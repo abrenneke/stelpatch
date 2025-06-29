@@ -20,7 +20,7 @@ fn module_with_entities() {
             AstEntityItem::Property(AstProperty::new(
                 AstString::new("entity1", false, 9..16),
                 AstOperator::new("=", 17..18).unwrap(),
-                AstValue::Entity(AstEntity::new().with_property(
+                AstValue::Entity(AstEntity::new(19..37).with_property(
                     AstString::new("prop1", false, 21..26),
                     AstOperator::new("=", 27..28).unwrap(),
                     AstValue::new_string("value1", false, 29..35)
@@ -29,7 +29,7 @@ fn module_with_entities() {
             AstEntityItem::Property(AstProperty::new(
                 AstString::new("entity2", false, 46..53),
                 AstOperator::new("=", 54..55).unwrap(),
-                AstValue::Entity(AstEntity::new().with_property(
+                AstValue::Entity(AstEntity::new(56..74).with_property(
                     AstString::new("prop2", false, 58..63),
                     AstOperator::new("=", 64..65).unwrap(),
                     AstValue::new_string("value2", false, 66..72)
@@ -94,7 +94,7 @@ fn module_with_properties() {
             AstEntityItem::Property(AstProperty::new(
                 AstString::new("entity", false, 59..65),
                 AstOperator::new("=", 66..67).unwrap(),
-                AstValue::Entity(AstEntity::new().with_property(
+                AstValue::Entity(AstEntity::new(68..106).with_property(
                     AstString::new("prop1", false, 82..87),
                     AstOperator::new("=", 88..89).unwrap(),
                     AstValue::new_string("value1", false, 90..96)

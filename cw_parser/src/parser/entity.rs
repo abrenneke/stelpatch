@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use winnow::{
     LocatingSlice, ModalResult, Parser,
     combinator::{alt, cut_err, repeat_till},
@@ -14,6 +16,7 @@ use super::AstValue;
 #[derive(PartialEq, Eq, Debug)]
 pub struct AstEntity<'a> {
     pub items: Vec<AstEntityItem<'a>>,
+    pub span: Range<usize>,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -29,8 +32,11 @@ pub enum AstEntityItem<'a> {
 }
 
 impl<'a> AstEntity<'a> {
-    pub fn new() -> Self {
-        Self { items: Vec::new() }
+    pub fn new(span: Range<usize>) -> Self {
+        Self {
+            items: Vec::new(),
+            span,
+        }
     }
 
     pub fn with_property(
@@ -58,11 +64,12 @@ impl<'a> AstEntity<'a> {
 }
 
 pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstEntity<'a>> {
-    with_opt_trailing_ws('{')
+    let start = with_opt_trailing_ws('{')
+        .span()
         .context(StrContext::Label("opening bracket"))
         .parse_next(input)?;
 
-    let (expressions, _): (Vec<_>, _) = cut_err(repeat_till(
+    let ((expressions, _), span): ((Vec<_>, _), _) = cut_err(repeat_till(
         0..,
         alt((
             with_opt_trailing_ws(expression.map(AstBlockItem::Expression))
@@ -74,8 +81,11 @@ pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstE
         )),
         '}'.context(StrContext::Label("closing bracket")),
     ))
+    .with_span()
     .context(StrContext::Label("expression"))
     .parse_next(input)?;
+
+    let span = start.start..span.end;
 
     let mut items = vec![];
 
@@ -97,5 +107,5 @@ pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstE
         }
     }
 
-    Ok(AstEntity { items })
+    Ok(AstEntity { items, span })
 }
