@@ -1,7 +1,8 @@
 #![cfg(test)]
+use pretty_assertions::assert_eq;
 use winnow::{LocatingSlice, Parser};
 
-use crate::parser::inline_maths;
+use crate::{AstMaths, parser::inline_maths};
 
 #[test]
 fn inline_maths_test() {
@@ -9,7 +10,7 @@ fn inline_maths_test() {
 
     let result = inline_maths.parse(input).unwrap();
 
-    assert_eq!(result, "@[ stabilitylevel2 + 10 ]");
+    assert_eq!(result, AstMaths::new("@[ stabilitylevel2 + 10 ]", 0..25));
 }
 
 #[test]
@@ -18,5 +19,5 @@ fn inline_maths_alt_test() {
 
     let result = inline_maths.parse(input).unwrap();
 
-    assert_eq!(result, "@\\[ stabilitylevel2 + 10 ]");
+    assert_eq!(result, AstMaths::new("@\\[ stabilitylevel2 + 10 ]", 0..26));
 }

@@ -1,0 +1,133 @@
+use std::path::{Path, PathBuf};
+
+use path_slash::PathBufExt;
+use winnow::{
+    LocatingSlice, ModalResult, Parser,
+    combinator::{alt, eof, opt, repeat_till},
+    error::StrContext,
+    token::literal,
+};
+
+use crate::{
+    AstBlockItem, AstEntityItem, AstProperty, Operator, expression, script_value,
+    with_opt_trailing_ws, ws_and_comments,
+};
+
+use anyhow::anyhow;
+
+#[derive(Debug, PartialEq)]
+pub struct AstModule<'a> {
+    pub filename: String,
+    pub namespace: String,
+    pub items: Vec<AstEntityItem<'a>>,
+}
+
+impl<'a> AstModule<'a> {
+    pub fn new(namespace: &str, module_name: &str) -> Self {
+        Self {
+            namespace: namespace.to_string(),
+            filename: module_name.to_string(),
+            items: Vec::new(),
+        }
+    }
+
+    pub fn parse_input(&'a mut self, input: &'a str) -> Result<(), anyhow::Error> {
+        let mut input = LocatingSlice::new(input);
+
+        let items = module(&mut input, &self.filename)
+            .map_err(|e| anyhow!("Failed to parse module {}: {}", self.filename, e))?;
+
+        self.items = items;
+
+        Ok(())
+    }
+
+    pub fn get_module_info(file_path: &Path) -> (String, String) {
+        let path = PathBuf::from(file_path);
+        let mut namespace = String::new();
+        let mut cur_path = path.clone();
+
+        while let Some(common_index) = cur_path
+            .components()
+            .position(|c| c.as_os_str() == "common")
+        {
+            if let Some(common_prefix) = cur_path
+                .components()
+                .take(common_index + 1)
+                .collect::<PathBuf>()
+                .to_str()
+            {
+                namespace = cur_path
+                    .strip_prefix(common_prefix)
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+                cur_path = cur_path.strip_prefix(common_prefix).unwrap().to_path_buf();
+            }
+        }
+
+        namespace = ["common", &namespace]
+            .iter()
+            .collect::<PathBuf>()
+            .to_slash_lossy()
+            .to_string();
+
+        let module_name = path.file_stem().unwrap().to_str().unwrap();
+
+        (namespace, module_name.to_string())
+    }
+}
+
+/// A module for most intents and purposes is just an entity.
+pub fn module<'a>(
+    input: &mut LocatingSlice<&'a str>,
+    module_name: &'a str,
+) -> ModalResult<Vec<AstEntityItem<'a>>> {
+    if module_name.contains("99_README") {
+        return Ok(Vec::new());
+    }
+
+    opt(literal("\u{feff}")).parse_next(input)?;
+    opt(ws_and_comments)
+        .context(StrContext::Label("module start whitespace"))
+        .parse_next(input)?;
+
+    let (expressions, _): (Vec<AstBlockItem>, _) = repeat_till(
+        0..,
+        alt((
+            with_opt_trailing_ws(expression)
+                .map(AstBlockItem::Expression)
+                .context(StrContext::Label("module expression")),
+            with_opt_trailing_ws(script_value)
+                .map(AstBlockItem::ArrayItem)
+                .context(StrContext::Label("module script value")),
+        )),
+        eof,
+    )
+    .context(StrContext::Label("module"))
+    .parse_next(input)?;
+
+    let mut items = Vec::new();
+
+    for expression_or_value in expressions {
+        match expression_or_value {
+            AstBlockItem::Expression(expression) => {
+                if expression.operator.operator == Operator::Equals {
+                    items.push(AstEntityItem::Property(AstProperty::new(
+                        expression.key,
+                        expression.operator,
+                        expression.value,
+                    )));
+                }
+            }
+            AstBlockItem::ArrayItem(item) => {
+                items.push(AstEntityItem::Item(item));
+            }
+            AstBlockItem::Conditional(_) => {}
+        }
+    }
+
+    Ok(items)
+}
