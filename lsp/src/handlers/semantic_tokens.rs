@@ -5,11 +5,13 @@ use tower_lsp::Client;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 
+use super::document_cache::DocumentCache;
 use crate::semantic_token_collector::generate_semantic_tokens;
 
 pub async fn semantic_tokens_full(
     client: &Client,
     documents: &Arc<RwLock<HashMap<String, String>>>,
+    document_cache: &DocumentCache,
     params: SemanticTokensParams,
 ) -> Result<Option<SemanticTokensResult>> {
     let uri = params.text_document.uri.to_string();
@@ -23,7 +25,10 @@ pub async fn semantic_tokens_full(
 
     let documents_guard = documents.read().await;
     if let Some(content) = documents_guard.get(&uri) {
-        let token_data = generate_semantic_tokens(content).await;
+        // Use document cache for efficient token generation
+        let token_data = document_cache
+            .get_semantic_tokens(&uri, content, None)
+            .await;
         Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
             result_id: None,
             data: token_data,
@@ -39,6 +44,7 @@ pub async fn semantic_tokens_full(
 pub async fn semantic_tokens_range(
     client: &Client,
     documents: &Arc<RwLock<HashMap<String, String>>>,
+    document_cache: &DocumentCache,
     params: SemanticTokensRangeParams,
 ) -> Result<Option<SemanticTokensRangeResult>> {
     let uri = params.text_document.uri.to_string();
@@ -55,7 +61,12 @@ pub async fn semantic_tokens_range(
 
     let documents_guard = documents.read().await;
     if let Some(content) = documents_guard.get(&uri) {
-        let token_data = generate_semantic_tokens(content).await;
+        // Use document cache for efficient token generation
+        // Note: For range requests, we're still generating full tokens
+        // A more advanced implementation could optimize this
+        let token_data = document_cache
+            .get_semantic_tokens(&uri, content, None)
+            .await;
         Ok(Some(SemanticTokensRangeResult::Tokens(SemanticTokens {
             result_id: None,
             data: token_data,

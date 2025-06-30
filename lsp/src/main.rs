@@ -6,9 +6,12 @@ use tower_lsp::{Client, LspService, Server};
 mod handlers;
 mod semantic_token_collector;
 
+use handlers::document_cache::DocumentCache;
+
 struct CwLspServer {
     client: Client,
     documents: Arc<RwLock<HashMap<String, String>>>,
+    document_cache: DocumentCache,
 }
 
 impl CwLspServer {
@@ -16,6 +19,7 @@ impl CwLspServer {
         Self {
             client,
             documents: Arc::new(RwLock::new(HashMap::new())),
+            document_cache: DocumentCache::new(),
         }
     }
 }
