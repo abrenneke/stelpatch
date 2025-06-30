@@ -6,7 +6,6 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 
 use super::document_cache::DocumentCache;
-use crate::semantic_token_collector::generate_semantic_tokens;
 
 pub async fn semantic_tokens_full(
     client: &Client,

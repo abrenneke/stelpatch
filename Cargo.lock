@@ -378,6 +378,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cw_model"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "colored",
+ "cw_parser",
+ "dirs",
+ "path-slash",
+ "rayon",
+ "serde",
+ "serde_json",
+ "walkdir",
+]
+
+[[package]]
 name = "cw_parser"
 version = "0.1.0"
 dependencies = [
@@ -387,6 +402,7 @@ dependencies = [
  "lasso",
  "path-slash",
  "pretty_assertions",
+ "self_cell",
  "winnow",
 ]
 

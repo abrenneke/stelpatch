@@ -1,9 +1,5 @@
-use std::{
-    ops::Range,
-    path::{Path, PathBuf},
-};
+use std::ops::Range;
 
-use path_slash::PathBufExt;
 use winnow::{
     LocatingSlice, ModalResult, Parser,
     combinator::{alt, eof, opt, repeat_till},
@@ -17,27 +13,46 @@ use crate::{
 };
 
 use anyhow::anyhow;
+use self_cell::self_cell;
 
 #[derive(Debug, PartialEq)]
 pub struct AstModule<'a> {
-    pub filename: String,
-    pub namespace: String,
     pub items: Vec<AstEntityItem<'a>>,
     pub span: Range<usize>,
 }
 
+pub type AstModuleResult<'a> = Result<AstModule<'a>, anyhow::Error>;
+
+self_cell!(
+    pub struct AstModuleCell {
+        owner: String,
+
+        #[covariant]
+        dependent: AstModuleResult,
+    }
+
+    impl {Debug, PartialEq}
+);
+
+impl AstModuleCell {
+    pub fn from_input(input: String) -> Self {
+        Self::new(input, |input| {
+            let mut module = AstModule::new();
+            module.parse_input(&input).map(|_| module)
+        })
+    }
+}
+
 impl<'a> AstModule<'a> {
-    pub fn new(namespace: &str, module_name: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            namespace: namespace.to_string(),
-            filename: module_name.to_string(),
             items: Vec::new(),
             span: 0..0,
         }
     }
 
     pub fn from_input(input: &'a str) -> Result<Self, anyhow::Error> {
-        let mut module = Self::new("common", "test");
+        let mut module = Self::new();
         module.parse_input(input)?;
         Ok(module)
     }
@@ -45,50 +60,13 @@ impl<'a> AstModule<'a> {
     pub fn parse_input(&mut self, input: &'a str) -> Result<(), anyhow::Error> {
         let mut input = LocatingSlice::new(input);
 
-        let (items, span) = module(&mut input, &self.filename)
-            .map_err(|e| anyhow!("Failed to parse module {}: {}", self.filename, e))?;
+        let (items, span) =
+            module(&mut input).map_err(|e| anyhow!("Failed to parse module: {}", e))?;
 
         self.items = items;
         self.span = span;
 
         Ok(())
-    }
-
-    pub fn get_module_info(file_path: &Path) -> (String, String) {
-        let path = PathBuf::from(file_path);
-        let mut namespace = String::new();
-        let mut cur_path = path.clone();
-
-        while let Some(common_index) = cur_path
-            .components()
-            .position(|c| c.as_os_str() == "common")
-        {
-            if let Some(common_prefix) = cur_path
-                .components()
-                .take(common_index + 1)
-                .collect::<PathBuf>()
-                .to_str()
-            {
-                namespace = cur_path
-                    .strip_prefix(common_prefix)
-                    .unwrap()
-                    .parent()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string();
-                cur_path = cur_path.strip_prefix(common_prefix).unwrap().to_path_buf();
-            }
-        }
-
-        namespace = ["common", &namespace]
-            .iter()
-            .collect::<PathBuf>()
-            .to_slash_lossy()
-            .to_string();
-
-        let module_name = path.file_stem().unwrap().to_str().unwrap();
-
-        (namespace, module_name.to_string())
     }
 
     /// Find all properties with the given key name
@@ -146,12 +124,7 @@ impl<'a> AstNode for AstModule<'a> {
 /// A module for most intents and purposes is just an entity.
 pub fn module<'a>(
     input: &mut LocatingSlice<&'a str>,
-    module_name: impl AsRef<str>,
 ) -> ModalResult<(Vec<AstEntityItem<'a>>, Range<usize>)> {
-    if module_name.as_ref().contains("99_README") {
-        return Ok((Vec::new(), 0..0));
-    }
-
     opt(literal("\u{feff}")).parse_next(input)?;
     opt(ws_and_comments)
         .context(StrContext::Label("module start whitespace"))

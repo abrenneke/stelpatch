@@ -19,9 +19,9 @@ self_cell!(
 
 #[derive(Debug)]
 pub struct CachedDocument {
-    pub document: DocumentWithAst,
-    pub semantic_tokens: Vec<SemanticToken>,
-    pub version: Option<i32>,
+    document: DocumentWithAst,
+    semantic_tokens: Vec<SemanticToken>,
+    version: Option<i32>,
 }
 
 impl CachedDocument {

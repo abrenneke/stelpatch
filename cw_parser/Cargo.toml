@@ -10,5 +10,6 @@ indexmap = "2.10.0"
 lasso = { version = "0.7.3", features = ["ahash", "multi-threaded"] }
 path-slash = "0.2.1"
 pretty_assertions = "1.4.1"
+self_cell = "1.2.0"
 winnow = "0.7.11"
 

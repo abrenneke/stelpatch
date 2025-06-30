@@ -1,18 +1,18 @@
 #![cfg(test)]
 use pretty_assertions::assert_eq;
-use winnow::LocatingSlice;
+use winnow::{LocatingSlice, Parser};
 
 use super::super::super::*;
 
 #[test]
 fn module_with_entities() {
-    let mut input = LocatingSlice::new(
+    let input = LocatingSlice::new(
         r#"
         entity1 = { prop1 = value1 }
         entity2 = { prop2 = value2 }
     "#,
     );
-    let (items, span) = module(&mut input, "my_module").unwrap();
+    let (items, span) = module.parse(input).unwrap();
 
     assert_eq!(span, 0..79);
 
@@ -43,13 +43,13 @@ fn module_with_entities() {
 
 #[test]
 fn module_with_defines() {
-    let mut input = LocatingSlice::new(
+    let input = LocatingSlice::new(
         r#"
         @MY_DEFINE = 123
         @ANOTHER_DEFINE = "hello"
     "#,
     );
-    let (items, span) = module(&mut input, "my_module").unwrap();
+    let (items, span) = module.parse(input).unwrap();
 
     assert_eq!(span, 0..64);
 
@@ -72,7 +72,7 @@ fn module_with_defines() {
 
 #[test]
 fn module_with_properties() {
-    let mut input = LocatingSlice::new(
+    let input = LocatingSlice::new(
         r#"
         @MY_DEFINE = 123
         my_var1 = value1
@@ -81,7 +81,7 @@ fn module_with_properties() {
         }
     "#,
     );
-    let (items, span) = module(&mut input, "my_module").unwrap();
+    let (items, span) = module.parse(input).unwrap();
 
     assert_eq!(span, 0..111);
 
@@ -113,7 +113,7 @@ fn module_with_properties() {
 
 #[test]
 fn module_with_dynamic_scripting() {
-    let mut input = LocatingSlice::new(
+    let input = LocatingSlice::new(
         r#"
         revolt_situation_low_stability_factor = { # 0.2 for each point below 25
             base = @stabilitylevel2
@@ -126,12 +126,12 @@ fn module_with_dynamic_scripting() {
     "#,
     );
 
-    assert!(module(&mut input, "my_module").is_ok());
+    assert!(module.parse(input).is_ok());
 }
 
 #[test]
 fn module_with_value_list() {
-    let mut input = LocatingSlice::new(
+    let input = LocatingSlice::new(
         r#"
             weapon_type_energy
             weapon_type_kinetic
@@ -140,7 +140,7 @@ fn module_with_value_list() {
         "#,
     );
 
-    let (items, span) = module(&mut input, "my_module").unwrap();
+    let (items, span) = module.parse(input).unwrap();
 
     assert_eq!(span, 0..143);
 
@@ -173,9 +173,9 @@ fn module_with_value_list() {
 
 #[test]
 fn empty_module() {
-    let mut input = LocatingSlice::new(r#""#);
+    let input = LocatingSlice::new(r#""#);
 
-    let (items, span) = module(&mut input, "my_module").unwrap();
+    let (items, span) = module.parse(input).unwrap();
 
     assert_eq!(span, 0..0);
 
@@ -184,13 +184,13 @@ fn empty_module() {
 
 #[test]
 fn commented_out_module() {
-    let mut input = LocatingSlice::new(
+    let input = LocatingSlice::new(
         r#"
             # @foo = 1
         "#,
     );
 
-    let (items, span) = module(&mut input, "my_module").unwrap();
+    let (items, span) = module.parse(input).unwrap();
 
     assert_eq!(span, 0..32);
 
@@ -199,9 +199,9 @@ fn commented_out_module() {
 
 #[test]
 fn commented_out_module_2() {
-    let mut input = LocatingSlice::new(r#"# @foo = 1"#);
+    let input = LocatingSlice::new(r#"# @foo = 1"#);
 
-    let (items, span) = module(&mut input, "my_module").unwrap();
+    let (items, span) = module.parse(input).unwrap();
 
     assert_eq!(span, 0..10);
 
@@ -210,27 +210,11 @@ fn commented_out_module_2() {
 
 #[test]
 fn handle_bom() {
-    let mut input = LocatingSlice::new("\u{feff}# Comment");
+    let input = LocatingSlice::new("\u{feff}# Comment");
 
-    let (items, span) = module(&mut input, "my_module").unwrap();
+    let (items, span) = module.parse(input).unwrap();
 
     assert_eq!(span, 0..12);
-
-    assert_eq!(items, vec![]);
-}
-
-#[test]
-fn handle_readme() {
-    let mut input = LocatingSlice::new(
-        r#"
-            Special variables for Edicts (Country and Empire):
-            # cost, base cost as in resource(s) and amount for activating the edict.
-        "#,
-    );
-
-    let (items, span) = module(&mut input, "99_README_ETC").unwrap();
-
-    assert_eq!(span, 0..0);
 
     assert_eq!(items, vec![]);
 }
