@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrContext};
 
 use super::array::array_value;

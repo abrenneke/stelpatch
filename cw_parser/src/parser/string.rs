@@ -5,7 +5,7 @@ use std::{
 
 use winnow::{
     LocatingSlice, ModalResult, Parser,
-    ascii::escaped,
+    ascii::{alphanumeric1, escaped},
     combinator::{alt, delimited},
     error::StrContext,
     token::{none_of, one_of, take_while},
@@ -62,11 +62,21 @@ impl<'a> Hash for AstString<'a> {
     }
 }
 
-const VALID_IDENTIFIER_CHARS: &[u8] =
-    b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:.@-|/$'";
+fn is_valid_identifier_start_char(c: char) -> bool {
+    c.is_ascii_alphanumeric()
+        || match c {
+            '_' | '-' | '$' | '@' => true,
+            _ => false,
+        }
+}
 
-const VALID_IDENTIFIER_START_CHARS: &[u8] =
-    b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789-$@";
+fn is_valid_identifier_char<'a>(c: char) -> bool {
+    c.is_ascii_alphanumeric()
+        || match c {
+            '_' | ':' | '.' | '@' | '-' | '|' | '/' | '$' | '\'' => true,
+            _ => false,
+        }
+}
 
 /// An unquoted string (i.e. identifier) - a sequence of valid identifier characters, spaces not allowed.
 pub(crate) fn unquoted_string<'a>(
@@ -74,8 +84,8 @@ pub(crate) fn unquoted_string<'a>(
 ) -> ModalResult<AstString<'a>> {
     terminated_value(
         (
-            one_of(VALID_IDENTIFIER_START_CHARS),
-            take_while(0.., VALID_IDENTIFIER_CHARS),
+            one_of(is_valid_identifier_start_char),
+            take_while(0.., is_valid_identifier_char),
         )
             .take(),
     )

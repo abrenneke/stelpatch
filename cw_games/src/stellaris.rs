@@ -105,3 +105,22 @@ impl BaseGame {
         stellaris_path
     }
 }
+
+/// Gets /Users/Username/Documents/Paradox Interactive/Stellaris
+pub fn stellaris_documents_dir() -> Result<PathBuf, anyhow::Error> {
+    let home_dir =
+        dirs::document_dir().ok_or_else(|| anyhow!("Could not find Documents directory"))?;
+    let path = vec![
+        home_dir.to_str().ok_or_else(|| {
+            anyhow!(
+                "Could not convert Documents directory to string: {}",
+                home_dir.display()
+            )
+        })?,
+        "Paradox Interactive",
+        "Stellaris",
+    ]
+    .iter()
+    .collect::<PathBuf>();
+    Ok(path.into())
+}

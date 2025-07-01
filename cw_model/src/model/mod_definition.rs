@@ -9,8 +9,6 @@ use cw_parser::{
 };
 use walkdir::WalkDir;
 
-use crate::loader::stellaris_documents_dir;
-
 // Define the ModDefinition struct to hold the parsed values
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ModDefinition {
@@ -45,8 +43,8 @@ impl ModDefinitionList {
     }
 
     /// Loads all mod definitions from the Documents folder
-    pub fn load_from_my_documents(custom_path: Option<&Path>) -> Result<Self, anyhow::Error> {
-        let mut mod_dir = stellaris_documents_dir(custom_path)?;
+    pub fn load_from_my_documents(dir_path: &Path) -> Result<Self, anyhow::Error> {
+        let mut mod_dir = dir_path.to_path_buf();
         mod_dir.push("mod");
 
         let dot_mod_files = WalkDir::new(mod_dir)

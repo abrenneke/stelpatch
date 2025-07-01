@@ -19,42 +19,9 @@ struct EnabledModsWrapper {
     enabled_mods: Vec<String>,
 }
 
-/// Gets /Users/Username/Documents/Paradox Interactive/Stellaris
-pub fn stellaris_documents_dir(custom_path: Option<&Path>) -> Result<PathBuf> {
-    match custom_path {
-        Some(path) => {
-            if path.exists() {
-                Ok(path.to_path_buf())
-            } else {
-                Err(anyhow!(
-                    "Custom path does not exist on the file system: {}",
-                    path.display()
-                ))
-            }
-        }
-        None => {
-            let home_dir = dirs::document_dir()
-                .ok_or_else(|| anyhow!("Could not find Documents directory"))?;
-            let path = vec![
-                home_dir.to_str().ok_or_else(|| {
-                    anyhow!(
-                        "Could not convert Documents directory to string: {}",
-                        home_dir.display()
-                    )
-                })?,
-                "Paradox Interactive",
-                "Stellaris",
-            ]
-            .iter()
-            .collect::<PathBuf>();
-            Ok(path.into())
-        }
-    }
-}
-
 impl EnabledMod {
-    pub fn load_definition(&self, custom_path: Option<&Path>) -> Result<ModDefinition> {
-        let mut mod_definition_path = stellaris_documents_dir(custom_path)?;
+    pub fn load_definition(&self, dir_path: &Path) -> Result<ModDefinition> {
+        let mut mod_definition_path = dir_path.to_path_buf();
         mod_definition_path.push(&self.path);
 
         let mut mod_definition_file = File::open(&mod_definition_path).with_context(|| {
@@ -85,8 +52,8 @@ impl EnabledMod {
     }
 }
 
-pub fn load_playset(custom_path: Option<&Path>) -> Result<Vec<EnabledMod>> {
-    let mut json_file_path = stellaris_documents_dir(custom_path)?;
+pub fn load_playset(dir_path: &Path) -> Result<Vec<EnabledMod>> {
+    let mut json_file_path = dir_path.to_path_buf();
     json_file_path.push("dlc_load.json");
 
     let mut json_file = File::open(&json_file_path)
@@ -118,9 +85,28 @@ pub fn load_playset(custom_path: Option<&Path>) -> Result<Vec<EnabledMod>> {
 mod tests {
     use super::*;
 
+    /// Gets /Users/Username/Documents/Paradox Interactive/Stellaris
+    pub fn stellaris_documents_dir() -> Result<PathBuf, anyhow::Error> {
+        let home_dir =
+            dirs::document_dir().ok_or_else(|| anyhow!("Could not find Documents directory"))?;
+        let path = vec![
+            home_dir.to_str().ok_or_else(|| {
+                anyhow!(
+                    "Could not convert Documents directory to string: {}",
+                    home_dir.display()
+                )
+            })?,
+            "Paradox Interactive",
+            "Stellaris",
+        ]
+        .iter()
+        .collect::<PathBuf>();
+        Ok(path.into())
+    }
+
     #[test]
     fn test_load_playset() {
-        let enabled_mods = load_playset(None).unwrap();
+        let enabled_mods = load_playset(&stellaris_documents_dir().unwrap()).unwrap();
         assert!(enabled_mods.len() > 0);
 
         for enabled_mod in enabled_mods {
@@ -131,9 +117,11 @@ mod tests {
 
     #[test]
     fn test_load_all_mods() {
-        let enabled_mods = load_playset(None).unwrap();
+        let enabled_mods = load_playset(&stellaris_documents_dir().unwrap()).unwrap();
         for enabled_mod in enabled_mods {
-            let mod_definition = enabled_mod.load_definition(None).unwrap();
+            let mod_definition = enabled_mod
+                .load_definition(&stellaris_documents_dir().unwrap())
+                .unwrap();
             assert!(mod_definition.name.len() > 0);
 
             if let Some(version) = mod_definition.version {

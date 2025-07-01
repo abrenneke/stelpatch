@@ -2,7 +2,7 @@ use winnow::{
     LocatingSlice, ModalResult, Parser,
     ascii::{multispace1, till_line_ending},
     combinator::{alt, eof, opt, peek, repeat},
-    error::{ErrMode, ParserError, StrContext},
+    error::{ErrMode, ParserError},
     token::one_of,
 };
 
@@ -43,16 +43,12 @@ pub(crate) fn ws_and_comments<'a>(input: &mut LocatingSlice<&'a str>) -> ModalRe
     repeat(1.., alt((multispace1, comment)))
         .map(|()| ())
         .take()
-        .context(StrContext::Label("ws_and_comments"))
         .parse_next(input)
 }
 
 /// Comments using #
 pub(crate) fn comment<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<&'a str> {
-    ("#", till_line_ending)
-        .take()
-        .context(StrContext::Label("comment"))
-        .parse_next(input)
+    ("#", till_line_ending).take().parse_next(input)
 }
 
 /// Combinator that peeks ahead to see if a value is terminated correctly. Values can terminate with a space, }, etc.
