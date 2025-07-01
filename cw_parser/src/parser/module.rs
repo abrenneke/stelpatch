@@ -34,6 +34,13 @@ self_cell!(
     impl {Debug, PartialEq}
 );
 
+impl Clone for AstModuleCell {
+    fn clone(&self) -> Self {
+        let owner_clone = self.borrow_owner().to_owned();
+        Self::from_input(owner_clone) // Have to re-parse on clone because the original AST points at the original string, can't just change all the references
+    }
+}
+
 impl AstModuleCell {
     pub fn from_input(input: String) -> Self {
         Self::new(input, |input| {

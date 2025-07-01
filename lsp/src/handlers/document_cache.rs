@@ -28,7 +28,7 @@ impl CachedDocument {
     /// Create a new cached document by parsing the content
     pub fn new(content: String, version: Option<i32>) -> Option<Self> {
         let document = DocumentWithAst::new(content, |content_ref| {
-            let mut module = AstModule::new("common", "cached_doc");
+            let mut module = AstModule::new();
             module.parse_input(content_ref).unwrap();
             module
         });

@@ -189,7 +189,7 @@ impl<'a> AstVisitor<'a> for SemanticTokenCollector {
 /// Generate semantic tokens for the given content
 pub async fn generate_semantic_tokens(content: &str) -> Vec<SemanticToken> {
     // Parse the content using cw_parser
-    let mut module = AstModule::new("common", "test");
+    let mut module = AstModule::new();
 
     // Parse the input first
     if let Err(_) = module.parse_input(content) {

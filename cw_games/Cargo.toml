@@ -1,0 +1,21 @@
+[package]
+name = "cw_games"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "load_stellaris"
+
+[[bench]]
+harness = false
+name = "load_base_game"
+
+[dependencies]
+anyhow = "1.0.98"
+criterion = "0.5"
+cw_model = { path = "../cw_model" }
+lazy_static = "1.5.0"
+winreg = "0.55.0"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }

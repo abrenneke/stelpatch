@@ -3,10 +3,20 @@ use std::path::{Path, PathBuf};
 use cw_parser::AstModuleCell;
 use path_slash::PathBufExt;
 
+use crate::{Properties, Value};
+
+/// A Module is a single file inside of a Namespace. Another module in the same namespace with the same name will overwrite
+/// the previous module in the game's load order. Entities in a module are unique in a namespace. An entity defined in one module
+/// and defined in another module with a different name will be overwritten by the second module in the game's load order. If two
+/// modules at the same point in the load order define the same entity, the entity will be overwritten by the second module's name alphabetically.
+/// This is why some modules start with 00_, 01_, etc. to ensure they are loaded first and get overridden first.
+#[derive(Debug, PartialEq, Clone)]
 pub struct Module {
+    pub filename: String,
     pub namespace: String,
-    pub module_name: String,
-    pub ast: AstModuleCell,
+    pub properties: Properties,
+    pub values: Vec<Value>,
+    pub ast: Option<AstModuleCell>,
 }
 
 impl Module {
@@ -18,9 +28,11 @@ impl Module {
         let ast = AstModuleCell::from_input(file_content);
 
         Ok(Self {
+            filename: module_name,
             namespace,
-            module_name,
-            ast,
+            properties: Properties::new_module(),
+            values: Vec::new(),
+            ast: Some(ast),
         })
     }
 
