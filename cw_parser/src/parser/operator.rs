@@ -2,7 +2,9 @@ use std::{ops::Range, str::FromStr};
 
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, token::literal};
 
-use crate::{AstComment, AstNode, AstToken, StringError};
+use crate::{
+    AstComment, AstNode, AstToken, StringError, opt_trailing_comment, opt_ws_and_comments,
+};
 
 /// An operator that can appear between a key and a value in an entity, like a > b. Usually this is = but it depends on the implementation.
 /// For our purposes it doesn't really matter, we just have to remember what it is.
@@ -100,7 +102,9 @@ impl<'a> AstNode<'a> for AstOperator<'a> {
 }
 
 pub(crate) fn operator<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstOperator<'a>> {
-    alt((
+    let leading_comments = opt_ws_and_comments.parse_next(input)?;
+
+    let (op, span) = alt((
         literal(">="),
         literal("<="),
         literal("!="),
@@ -112,11 +116,14 @@ pub(crate) fn operator<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<As
         literal("<"),
     ))
     .with_span()
-    .map(|(op, span)| AstOperator {
+    .parse_next(input)?;
+
+    let trailing_comment = opt_trailing_comment.parse_next(input)?;
+
+    Ok(AstOperator {
         operator: Operator::from_str(op).unwrap(),
         value: AstToken::new(op, span),
-        leading_comments: vec![],
-        trailing_comment: None,
+        leading_comments,
+        trailing_comment,
     })
-    .parse_next(input)
 }

@@ -70,10 +70,11 @@ impl<'a> AstModule<'a> {
     }
 
     pub fn parse_input(&mut self, input: &'a str) -> Result<(), anyhow::Error> {
-        let mut input = LocatingSlice::new(input);
+        let input = LocatingSlice::new(input);
 
-        let (items, span) =
-            module(&mut input).map_err(|e| anyhow!("Failed to parse module: {}", e))?;
+        let (items, span) = module
+            .parse(input)
+            .map_err(|e| anyhow!("Failed to parse module: {}", e))?;
 
         self.items = items;
         self.span = span;

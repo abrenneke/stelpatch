@@ -33,6 +33,10 @@ impl Module {
     pub fn from_file(file_path: &Path) -> Result<Self, anyhow::Error> {
         let (namespace, module_name) = Self::get_module_info(file_path);
 
+        if module_name.starts_with("99_README") {
+            return Ok(Self::new(namespace, module_name));
+        }
+
         let file_content = std::fs::read_to_string(file_path)?;
 
         let ast = AstModuleCell::from_input(file_content);
@@ -40,13 +44,15 @@ impl Module {
         let mut module = Self::new(namespace, module_name);
         let mut module_visitor = ModuleVisitor::new(&mut module);
 
-        if let Ok(ast) = ast.borrow_dependent() {
-            module_visitor.visit_module(ast);
-        } else {
-            return Err(anyhow::anyhow!(
-                "Failed to parse module at {}",
-                file_path.display()
-            ));
+        match ast.borrow_dependent() {
+            Ok(ast) => module_visitor.visit_module(ast),
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "Failed to parse module at {}: {}",
+                    file_path.display(),
+                    e
+                ));
+            }
         }
 
         module.ast = Some(ast);

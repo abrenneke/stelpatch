@@ -820,3 +820,28 @@ fn inline_maths_alt() {
             .into()
     );
 }
+
+#[test]
+fn shroud_tunnel_entity() {
+    let input = LocatingSlice::new(
+        r#"{
+	ftl_ship_effect	= "gateway_ftl_ship_effect_entity"
+	ftl_bypass_effect = "gateway_ftl_bypass_effect_entity"
+}"#,
+    );
+
+    let result = entity.parse(input);
+
+    assert!(result.is_ok());
+}
+
+#[test]
+fn scripted_effects() {
+    let input = LocatingSlice::new(
+        r#"{
+	log = "- This: \\[This.GetName]"
+}"#,
+    );
+
+    let _result = entity.parse(input).unwrap();
+}

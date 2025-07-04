@@ -132,9 +132,13 @@ pub(crate) fn quoted_string<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResu
 
     let (s, range) = terminated_value(delimited(
         '"',
-        escaped(none_of(['\\', '"']), '\\', "\"".value("\""))
-            .map(|()| ())
-            .take(),
+        escaped(
+            none_of(['\\', '"']),
+            '\\',
+            alt(("\"".value("\""), "\\".value("\\"), "n".value("\n"))),
+        )
+        .map(|()| ())
+        .take(),
         '"',
     ))
     .with_span()
@@ -330,6 +334,16 @@ mod tests {
                 ],
                 trailing_comment: Some(AstComment::new(" This is a trailing comment", 107..135)),
             }
+        );
+    }
+
+    #[test]
+    fn comment() {
+        let input = LocatingSlice::new(r#""- This: \\[This.GetName]""#);
+        let result = quoted_string.parse(input).unwrap();
+        assert_eq!(
+            result,
+            AstString::new("- This: \\\\[This.GetName]", true, 0..26)
         );
     }
 }
