@@ -5,7 +5,6 @@ use crate::{Entity, EntityVisitor};
 pub enum Value {
     String(String),
     Number(String),
-    Boolean(bool),
     Entity(Entity),
     Color(Color),
     Maths(String),
@@ -22,7 +21,6 @@ impl ToString for Value {
         match self {
             Self::String(v) => format!("{}", v),
             Self::Number(v) => format!("{}", v),
-            Self::Boolean(v) => format!("{}", v.to_string()),
             Self::Entity(v) => format!("{}", v.to_string()),
             Self::Color(c) => match &c.a {
                 Some(a) => format!("{} {{ {} {} {} {} }}", c.color_type, c.r, c.g, c.b, a),
@@ -40,12 +38,6 @@ pub struct Color {
     g: String,
     b: String,
     a: Option<String>,
-}
-
-impl From<bool> for Value {
-    fn from(v: bool) -> Self {
-        Self::Boolean(v)
-    }
 }
 
 impl From<Entity> for Value {
@@ -79,14 +71,6 @@ impl Value {
         }
     }
 
-    pub fn boolean(&self) -> &bool {
-        if let Value::Boolean(b) = self {
-            b
-        } else {
-            panic!("Expected boolean")
-        }
-    }
-
     pub fn color(&self) -> &Color {
         if let Value::Color(c) = self {
             c
@@ -113,10 +97,6 @@ impl Value {
 
     pub fn is_number(&self) -> bool {
         matches!(self, Value::Number(_))
-    }
-
-    pub fn is_boolean(&self) -> bool {
-        matches!(self, Value::Boolean(_))
     }
 
     pub fn is_color(&self) -> bool {
@@ -147,10 +127,6 @@ impl<'a, 'b> cw_parser::AstVisitor<'b> for ValueVisitor<'a> {
 
     fn visit_number(&mut self, node: &cw_parser::AstNumber<'b>) -> Self::Result {
         *self.value = Value::Number(node.value.value.to_string());
-    }
-
-    fn visit_boolean(&mut self, node: &cw_parser::AstBoolean<'b>) -> Self::Result {
-        *self.value = Value::Boolean(node.value.value == "true");
     }
 
     fn visit_color(&mut self, node: &cw_parser::AstColor<'b>) -> Self::Result {

@@ -3,8 +3,8 @@ use std::ops::Range;
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrContext};
 
 use crate::{
-    AstBoolean, AstColor, AstComment, AstEntity, AstMaths, AstNode, AstNumber, AstString, color,
-    entity, inline_maths, number_val, quoted_or_unquoted_string,
+    AstColor, AstComment, AstEntity, AstMaths, AstNode, AstNumber, AstString, color, entity,
+    inline_maths, number_val, quoted_or_unquoted_string,
 };
 
 /// A value is anything after an =
@@ -12,7 +12,6 @@ use crate::{
 pub enum AstValue<'a> {
     String(AstString<'a>),
     Number(AstNumber<'a>),
-    Boolean(AstBoolean<'a>),
     Entity(AstEntity<'a>),
     Color(AstColor<'a>),
     Maths(AstMaths<'a>),
@@ -27,12 +26,6 @@ impl<'a> From<AstString<'a>> for AstValue<'a> {
 impl<'a> From<AstNumber<'a>> for AstValue<'a> {
     fn from(value: AstNumber<'a>) -> Self {
         Self::Number(value)
-    }
-}
-
-impl<'a> From<AstBoolean<'a>> for AstValue<'a> {
-    fn from(value: AstBoolean<'a>) -> Self {
-        Self::Boolean(value)
     }
 }
 
@@ -61,10 +54,6 @@ impl<'a> AstValue<'a> {
 
     pub fn new_number(value: &'a str, span: Range<usize>) -> Self {
         Self::Number(AstNumber::new(value, span))
-    }
-
-    pub fn new_boolean(value: &'a str, span: Range<usize>) -> Self {
-        Self::Boolean(AstBoolean::new(value, span))
     }
 
     pub fn new_color(
@@ -109,11 +98,6 @@ impl<'a> AstValue<'a> {
         matches!(self, Self::Number(_))
     }
 
-    /// Check if this value is a boolean
-    pub fn is_boolean(&self) -> bool {
-        matches!(self, Self::Boolean(_))
-    }
-
     /// Check if this value is an entity (block)
     pub fn is_entity(&self) -> bool {
         matches!(self, Self::Entity(_))
@@ -141,14 +125,6 @@ impl<'a> AstValue<'a> {
     pub fn as_number(&self) -> Option<&AstNumber<'a>> {
         match self {
             Self::Number(n) => Some(n),
-            _ => None,
-        }
-    }
-
-    /// Try to get the value as a boolean
-    pub fn as_boolean(&self) -> Option<&AstBoolean<'a>> {
-        match self {
-            Self::Boolean(b) => Some(b),
             _ => None,
         }
     }
@@ -183,7 +159,6 @@ impl<'a> AstNode<'a> for AstValue<'a> {
         match self {
             Self::String(s) => s.span_range(),
             Self::Number(n) => n.span_range(),
-            Self::Boolean(b) => b.span_range(),
             Self::Entity(e) => e.span_range(),
             Self::Color(c) => c.span_range(),
             Self::Maths(m) => m.span_range(),
@@ -194,7 +169,6 @@ impl<'a> AstNode<'a> for AstValue<'a> {
         match self {
             Self::String(s) => s.leading_comments(),
             Self::Number(n) => n.leading_comments(),
-            Self::Boolean(b) => b.leading_comments(),
             Self::Entity(e) => e.leading_comments(),
             Self::Color(c) => c.leading_comments(),
             Self::Maths(m) => m.leading_comments(),
@@ -205,7 +179,6 @@ impl<'a> AstNode<'a> for AstValue<'a> {
         match self {
             Self::String(s) => s.trailing_comment(),
             Self::Number(n) => n.trailing_comment(),
-            Self::Boolean(b) => b.trailing_comment(),
             Self::Entity(e) => e.trailing_comment(),
             Self::Color(c) => c.trailing_comment(),
             Self::Maths(m) => m.trailing_comment(),

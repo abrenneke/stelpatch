@@ -1,6 +1,6 @@
 use crate::{
-    AstBlockItem, AstBoolean, AstColor, AstConditionalBlock, AstEntity, AstEntityItem,
-    AstExpression, AstMaths, AstModule, AstNumber, AstOperator, AstString, AstToken, AstValue,
+    AstBlockItem, AstColor, AstConditionalBlock, AstEntity, AstEntityItem, AstExpression, AstMaths,
+    AstModule, AstNumber, AstOperator, AstString, AstToken, AstValue,
 };
 
 /// Visitor trait for traversing the AST
@@ -33,10 +33,6 @@ pub trait AstVisitor<'a> {
 
     fn visit_number(&mut self, node: &AstNumber<'a>) -> Self::Result {
         self.walk_number(node)
-    }
-
-    fn visit_boolean(&mut self, node: &AstBoolean<'a>) -> Self::Result {
-        self.walk_boolean(node)
     }
 
     fn visit_color(&mut self, node: &AstColor<'a>) -> Self::Result {
@@ -97,7 +93,6 @@ pub trait AstVisitor<'a> {
         match node {
             AstValue::String(s) => self.visit_string(s),
             AstValue::Number(n) => self.visit_number(n),
-            AstValue::Boolean(b) => self.visit_boolean(b),
             AstValue::Entity(e) => self.visit_entity(e),
             AstValue::Color(c) => self.visit_color(c),
             AstValue::Maths(m) => self.visit_maths(m),
@@ -118,10 +113,6 @@ pub trait AstVisitor<'a> {
     }
 
     fn walk_number(&mut self, _node: &AstNumber<'a>) -> Self::Result {
-        Self::Result::default()
-    }
-
-    fn walk_boolean(&mut self, _node: &AstBoolean<'a>) -> Self::Result {
         Self::Result::default()
     }
 

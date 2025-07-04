@@ -2,14 +2,13 @@ use std::ops::Range;
 
 use winnow::{
     LocatingSlice, ModalResult, Parser,
-    combinator::{alt, cut_err, opt, repeat_till},
+    combinator::{alt, cut_err, repeat_till},
     error::StrContext,
 };
 
 use crate::{
     AstBlockItem, AstComment, AstConditionalBlock, AstExpression, AstNode, AstOperator, AstString,
     conditional_block, expression, opt_trailing_comment, opt_ws_and_comments, script_value,
-    ws_and_comments,
 };
 
 use super::AstValue;

@@ -1,5 +1,4 @@
 mod block_item;
-mod boolean;
 mod color;
 mod comment;
 mod conditional;
@@ -17,7 +16,6 @@ mod utils;
 mod value;
 
 pub use block_item::*;
-pub use boolean::*;
 pub use color::*;
 pub use comment::*;
 pub use conditional::*;

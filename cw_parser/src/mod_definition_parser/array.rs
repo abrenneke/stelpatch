@@ -2,15 +2,12 @@ use std::ops::Range;
 
 use winnow::{
     LocatingSlice, ModalResult, Parser,
-    combinator::{alt, delimited, opt, peek, repeat},
+    combinator::{delimited, repeat},
     error::StrContext,
-    token::literal,
 };
 
-use super::string::string_value;
 use crate::{
     AstComment, AstNode, AstString, opt_trailing_comment, opt_ws_and_comments, quoted_string,
-    ws_and_comments,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
