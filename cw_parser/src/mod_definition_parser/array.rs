@@ -7,7 +7,8 @@ use winnow::{
 };
 
 use crate::{
-    AstComment, AstNode, AstString, opt_trailing_comment, opt_ws_and_comments, quoted_string,
+    AstComment, AstNode, AstString, get_comments, opt_trailing_comment, opt_ws_and_comments,
+    quoted_string,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -63,7 +64,7 @@ pub(crate) fn array_value<'a>(
     Ok(AstArrayValue {
         values,
         span,
-        leading_comments,
+        leading_comments: get_comments(&leading_comments),
         trailing_comment,
     })
 }

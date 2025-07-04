@@ -452,6 +452,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
+name = "cw_format"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "cw_parser",
+ "pretty_assertions",
+]
+
+[[package]]
 name = "cw_games"
 version = "0.1.0"
 dependencies = [
@@ -469,6 +478,7 @@ name = "cw_lsp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cw_format",
  "cw_parser",
  "dashmap 6.1.0",
  "self_cell",

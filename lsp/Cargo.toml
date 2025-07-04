@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0"
+cw_format = { path = "../cw_format" }
 cw_parser = { path = "../cw_parser" }
 dashmap = "6.1"
 self_cell = "1.2.0"

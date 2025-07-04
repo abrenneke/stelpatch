@@ -24,53 +24,77 @@ where
     }
 }
 
+pub(crate) fn ws_count_blank_lines<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<usize> {
+    let whitespace: &str = multispace1.parse_next(input)?;
+
+    let num_newlines = whitespace.chars().filter(|c| *c == '\n').count();
+    Ok(num_newlines)
+}
+
 pub(crate) fn opt_ws_and_comments<'a>(
     input: &mut LocatingSlice<&'a str>,
-) -> ModalResult<Vec<AstComment<'a>>> {
+) -> ModalResult<Vec<CommentOrWhitespace<'a>>> {
     let comments_and_whitespace: Vec<CommentOrWhitespace<'a>> = repeat(
         0..,
         alt((
-            multispace1.map(|_| CommentOrWhitespace::Whitespace),
-            comment.map(|c| CommentOrWhitespace::Comment(c)),
+            ws_count_blank_lines.map(|blank_lines| CommentOrWhitespace::Whitespace { blank_lines }),
+            comment.map(CommentOrWhitespace::Comment),
         )),
     )
     .parse_next(input)?;
 
-    Ok(comments_and_whitespace
-        .into_iter()
-        .filter_map(|c| match c {
-            CommentOrWhitespace::Comment(c) => Some(c),
-            CommentOrWhitespace::Whitespace => None,
-        })
-        .collect())
+    Ok(comments_and_whitespace)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum CommentOrWhitespace<'a> {
+pub enum CommentOrWhitespace<'a> {
     Comment(AstComment<'a>),
-    Whitespace,
+    Whitespace { blank_lines: usize },
 }
 
 /// Matches any amount of whitespace and comments.
 pub(crate) fn ws_and_comments<'a>(
     input: &mut LocatingSlice<&'a str>,
-) -> ModalResult<Vec<AstComment<'a>>> {
+) -> ModalResult<Vec<CommentOrWhitespace<'a>>> {
     let comments_and_whitespace: Vec<CommentOrWhitespace<'a>> = repeat(
         1..,
         alt((
-            multispace1.map(|_| CommentOrWhitespace::Whitespace),
-            comment.map(|c| CommentOrWhitespace::Comment(c)),
+            ws_count_blank_lines.map(|blank_lines| CommentOrWhitespace::Whitespace { blank_lines }),
+            comment.map(CommentOrWhitespace::Comment),
         )),
     )
     .parse_next(input)?;
 
-    Ok(comments_and_whitespace
-        .into_iter()
+    Ok(comments_and_whitespace)
+}
+
+pub(crate) fn get_leading_newlines_count<'a>(whitespace: &[CommentOrWhitespace<'a>]) -> usize {
+    let mut leading_newlines = 0;
+    for item in whitespace {
+        match item {
+            CommentOrWhitespace::Whitespace { blank_lines } => {
+                leading_newlines += *blank_lines;
+            }
+            CommentOrWhitespace::Comment(_) => {
+                break;
+            }
+        }
+    }
+    if leading_newlines > 1 {
+        leading_newlines - 1 // Only count >= 2 newlines as leading newlines
+    } else {
+        0
+    }
+}
+
+pub(crate) fn get_comments<'a>(whitespace: &[CommentOrWhitespace<'a>]) -> Vec<AstComment<'a>> {
+    whitespace
+        .iter()
         .filter_map(|c| match c {
-            CommentOrWhitespace::Comment(c) => Some(c),
-            CommentOrWhitespace::Whitespace => None,
+            CommentOrWhitespace::Comment(c) => Some(c.clone()),
+            CommentOrWhitespace::Whitespace { .. } => None,
         })
-        .collect())
+        .collect()
 }
 
 /// Matches any spaces and then a comment on the same line.
@@ -83,10 +107,22 @@ pub(crate) fn opt_trailing_comment<'a>(
 
 /// Comments using #
 pub(crate) fn comment<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstComment<'a>> {
-    ("#", till_line_ending)
-        .with_span()
-        .map(|((_, text), span)| AstComment::new(text, span))
-        .parse_next(input)
+    let ((_, comment), span) = ("#", till_line_ending).with_span().parse_next(input)?;
+
+    // Consume the newline but dont' count it for the comment text
+    opt(eol).parse_next(input)?;
+
+    Ok(AstComment::new(comment, span))
+}
+
+pub(crate) fn eol<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<()> {
+    let matched = one_of(b"\n\r").parse_next(input)?;
+
+    if matched == '\r' && peek('\n').parse_next(input)? == '\n' {
+        one_of('\n').void().parse_next(input)?;
+    }
+
+    Ok(())
 }
 
 /// Combinator that peeks ahead to see if a value is terminated correctly. Values can terminate with a space, }, etc.

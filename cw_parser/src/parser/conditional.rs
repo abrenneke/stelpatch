@@ -9,8 +9,8 @@ use winnow::{
 
 use crate::{
     AstBlockItem, AstComment, AstEntityItem, AstExpression, AstNode, AstString, expression,
-    opt_trailing_comment, opt_ws_and_comments, quoted_or_unquoted_string, script_value,
-    with_opt_trailing_ws,
+    get_comments, opt_trailing_comment, opt_ws_and_comments, quoted_or_unquoted_string,
+    script_value, with_opt_trailing_ws,
 };
 
 /// A conditional block looks like [[PARAM_NAME] key = value] and is dumb
@@ -113,7 +113,7 @@ pub(crate) fn conditional_block<'a>(
         items,
         key,
         span,
-        leading_comments,
+        leading_comments: get_comments(&leading_comments),
         trailing_comment,
     })
 }

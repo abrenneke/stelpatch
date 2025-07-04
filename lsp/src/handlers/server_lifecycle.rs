@@ -19,6 +19,8 @@ pub async fn initialize(_params: InitializeParams) -> Result<InitializeResult> {
                     full: Some(SemanticTokensFullOptions::Bool(true)),
                 }),
             ),
+            document_formatting_provider: Some(OneOf::Left(true)),
+            document_range_formatting_provider: Some(OneOf::Left(true)),
             ..Default::default()
         },
         server_info: Some(ServerInfo {

@@ -6,7 +6,7 @@ use tower_lsp::{Client, jsonrpc::Result};
 
 use super::document_cache::DocumentCache;
 use super::utils::position_to_offset;
-use cw_parser::{AstEntity, AstNode, AstProperty, AstValue, AstVisitor};
+use cw_parser::{AstEntity, AstExpression, AstNode, AstValue, AstVisitor};
 
 /// A visitor that builds property paths for hover functionality
 struct PropertyPathBuilder<'a> {
@@ -46,7 +46,7 @@ impl<'a> PropertyPathBuilder<'a> {
 impl<'a> AstVisitor<'a> for PropertyPathBuilder<'a> {
     type Result = ();
 
-    fn walk_property(&mut self, node: &AstProperty<'a>) -> Self::Result {
+    fn visit_expression(&mut self, node: &AstExpression<'a>) -> Self::Result {
         let key_span = node.key.span(&self.original_input);
 
         // Check if the position is within this property's key

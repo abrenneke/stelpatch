@@ -8,7 +8,7 @@ use winnow::{
 };
 
 use crate::{
-    AstComment, AstNode, AstNumber, AstToken, number_val, opt_trailing_comment,
+    AstComment, AstNode, AstNumber, AstToken, get_comments, number_val, opt_trailing_comment,
     opt_ws_and_comments, with_opt_trailing_ws,
 };
 
@@ -100,7 +100,7 @@ pub(crate) fn color<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstCo
         b,
         a,
         span: start..span.end,
-        leading_comments,
+        leading_comments: get_comments(&leading_comments),
         trailing_comment,
     })
 }

@@ -12,7 +12,8 @@ use winnow::{
 };
 
 use crate::{
-    AstComment, AstNode, AstToken, opt_trailing_comment, opt_ws_and_comments, terminated_value,
+    AstComment, AstNode, AstToken, get_comments, get_leading_newlines_count, opt_trailing_comment,
+    opt_ws_and_comments, terminated_value,
 };
 
 /// AST representation of a string with position info
@@ -21,6 +22,7 @@ pub struct AstString<'a> {
     pub value: AstToken<'a>,
     pub is_quoted: bool,
 
+    pub leading_newlines: usize,
     pub leading_comments: Vec<AstComment<'a>>,
     pub trailing_comment: Option<AstComment<'a>>,
 }
@@ -42,6 +44,7 @@ impl<'a> AstString<'a> {
         Self {
             value: AstToken::new(value, span),
             is_quoted,
+            leading_newlines: 0,
             leading_comments: vec![],
             trailing_comment: None,
         }
@@ -121,7 +124,8 @@ pub(crate) fn unquoted_string<'a>(
     Ok(AstString {
         value: AstToken::new(s, range),
         is_quoted: false,
-        leading_comments,
+        leading_newlines: get_leading_newlines_count(&leading_comments),
+        leading_comments: get_comments(&leading_comments),
         trailing_comment,
     })
 }
@@ -150,7 +154,8 @@ pub(crate) fn quoted_string<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResu
     Ok(AstString {
         value: AstToken::new(s, range),
         is_quoted: true,
-        leading_comments,
+        leading_newlines: get_leading_newlines_count(&leading_comments),
+        leading_comments: get_comments(&leading_comments),
         trailing_comment,
     })
 }
@@ -180,6 +185,7 @@ mod tests {
             AstString {
                 value: AstToken::new("hello123", 0..8),
                 is_quoted: false,
+                leading_newlines: 0,
                 leading_comments: vec![],
                 trailing_comment: None,
             }
@@ -202,6 +208,7 @@ mod tests {
             AstString {
                 value: AstToken::new("hello world", 0..13),
                 is_quoted: true,
+                leading_newlines: 0,
                 leading_comments: vec![],
                 trailing_comment: None,
             }
@@ -217,6 +224,7 @@ mod tests {
             AstString {
                 value: AstToken::new("a:b.c|d/e$f'g", 0..15),
                 is_quoted: true,
+                leading_newlines: 0,
                 leading_comments: vec![],
                 trailing_comment: None,
             }
@@ -239,6 +247,7 @@ mod tests {
             AstString {
                 value: AstToken::new("hello123", 0..8),
                 is_quoted: false,
+                leading_newlines: 0,
                 leading_comments: vec![],
                 trailing_comment: None,
             }
@@ -254,6 +263,7 @@ mod tests {
             AstString {
                 value: AstToken::new("hello world", 0..13),
                 is_quoted: true,
+                leading_newlines: 0,
                 leading_comments: vec![],
                 trailing_comment: None,
             }
@@ -269,6 +279,7 @@ mod tests {
             AstString {
                 value: AstToken::new("a:b.c|d/e$f'g", 0..15),
                 is_quoted: true,
+                leading_newlines: 0,
                 leading_comments: vec![],
                 trailing_comment: None,
             }
@@ -291,6 +302,7 @@ mod tests {
             AstString {
                 value: AstToken::new("", 0..2),
                 is_quoted: true,
+                leading_newlines: 0,
                 leading_comments: vec![],
                 trailing_comment: None,
             }
@@ -306,6 +318,7 @@ mod tests {
             AstString {
                 value: AstToken::new("$FLAG$", 0..6),
                 is_quoted: false,
+                leading_newlines: 0,
                 leading_comments: vec![],
                 trailing_comment: None,
             }
@@ -316,6 +329,7 @@ mod tests {
     fn string_with_comments() {
         let mut input = LocatingSlice::new(
             r#"
+
             # This is a leading comment
             # This is another leading comment
             "Hello" # This is a trailing comment
@@ -326,13 +340,14 @@ mod tests {
         assert_eq!(
             result,
             AstString {
-                value: AstToken::new("Hello", 99..106),
+                value: AstToken::new("Hello", 100..107),
                 is_quoted: true,
+                leading_newlines: 1,
                 leading_comments: vec![
-                    AstComment::new(" This is a leading comment", 13..40),
-                    AstComment::new(" This is another leading comment", 53..86),
+                    AstComment::new(" This is a leading comment", 14..41),
+                    AstComment::new(" This is another leading comment", 54..87),
                 ],
-                trailing_comment: Some(AstComment::new(" This is a trailing comment", 107..135)),
+                trailing_comment: Some(AstComment::new(" This is a trailing comment", 108..136)),
             }
         );
     }
@@ -345,5 +360,18 @@ mod tests {
             result,
             AstString::new("- This: \\\\[This.GetName]", true, 0..26)
         );
+    }
+
+    #[test]
+    fn leading_newlines() {
+        let input = LocatingSlice::new(
+            r#"
+
+
+        "Hello""#,
+        );
+        let result = quoted_or_unquoted_string.parse(input).unwrap();
+
+        assert_eq!(result.leading_newlines, 2);
     }
 }

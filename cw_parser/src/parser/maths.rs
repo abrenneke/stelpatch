@@ -8,7 +8,8 @@ use winnow::{
 };
 
 use crate::{
-    AstComment, AstNode, AstToken, opt_trailing_comment, opt_ws_and_comments, with_opt_trailing_ws,
+    AstComment, AstNode, AstToken, get_comments, opt_trailing_comment, opt_ws_and_comments,
+    with_opt_trailing_ws,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,7 +62,7 @@ pub(crate) fn inline_maths<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResul
 
     Ok(AstMaths {
         value: AstToken::new(value, span),
-        leading_comments,
+        leading_comments: get_comments(&leading_comments),
         trailing_comment,
     })
 }

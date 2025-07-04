@@ -8,7 +8,8 @@ use winnow::{
 
 use crate::{
     AstBlockItem, AstComment, AstConditionalBlock, AstExpression, AstNode, AstOperator, AstString,
-    conditional_block, expression, opt_trailing_comment, opt_ws_and_comments, script_value,
+    conditional_block, expression, get_comments, opt_trailing_comment, opt_ws_and_comments,
+    script_value,
 };
 
 use super::AstValue;
@@ -197,7 +198,7 @@ pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstE
     Ok(AstEntity {
         items,
         span,
-        leading_comments,
+        leading_comments: get_comments(&leading_comments),
         trailing_comment,
     })
 }

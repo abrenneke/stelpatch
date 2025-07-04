@@ -147,9 +147,6 @@ pub fn module<'a>(
     input: &mut LocatingSlice<&'a str>,
 ) -> ModalResult<(Vec<AstEntityItem<'a>>, Range<usize>)> {
     opt(literal("\u{feff}")).parse_next(input)?;
-    opt(ws_and_comments)
-        .context(StrContext::Label("module start whitespace"))
-        .parse_next(input)?;
 
     let ((expressions, _), span): ((Vec<AstBlockItem>, _), _) = repeat_till(
         0..,

@@ -3,7 +3,8 @@ use std::{ops::Range, str::FromStr};
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, token::literal};
 
 use crate::{
-    AstComment, AstNode, AstToken, StringError, opt_trailing_comment, opt_ws_and_comments,
+    AstComment, AstNode, AstToken, StringError, get_comments, opt_trailing_comment,
+    opt_ws_and_comments,
 };
 
 /// An operator that can appear between a key and a value in an entity, like a > b. Usually this is = but it depends on the implementation.
@@ -123,7 +124,7 @@ pub(crate) fn operator<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<As
     Ok(AstOperator {
         operator: Operator::from_str(op).unwrap(),
         value: AstToken::new(op, span),
-        leading_comments,
+        leading_comments: get_comments(&leading_comments),
         trailing_comment,
     })
 }

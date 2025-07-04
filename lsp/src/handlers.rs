@@ -6,6 +6,7 @@ use crate::CwLspServer;
 
 mod document;
 pub mod document_cache;
+mod formatting;
 mod hover;
 mod semantic_tokens;
 mod server_lifecycle;
@@ -61,5 +62,23 @@ impl LanguageServer for CwLspServer {
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         hover::hover(&self.client, &self.documents, &self.document_cache, params).await
+    }
+
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        formatting::document_formatting(&self.client, &self.documents, &self.document_cache, params)
+            .await
+    }
+
+    async fn range_formatting(
+        &self,
+        params: DocumentRangeFormattingParams,
+    ) -> Result<Option<Vec<TextEdit>>> {
+        formatting::document_range_formatting(
+            &self.client,
+            &self.documents,
+            &self.document_cache,
+            params,
+        )
+        .await
     }
 }

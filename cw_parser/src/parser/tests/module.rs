@@ -218,3 +218,26 @@ fn handle_bom() {
 
     assert_eq!(items, vec![]);
 }
+
+#[test]
+fn item_with_comments() {
+    let input = LocatingSlice::new(
+        r#"
+        # comment1
+        my_var # comment2
+        "#,
+    );
+
+    let (items, _span) = module.parse(input).unwrap();
+
+    assert_eq!(
+        items,
+        vec![AstEntityItem::Item(AstValue::String(AstString {
+            value: AstToken::new("my_var", 28..34),
+            is_quoted: false,
+            leading_newlines: 0,
+            leading_comments: vec![AstComment::new(" comment1", 9..19)],
+            trailing_comment: Some(AstComment::new(" comment2", 35..45)),
+        }))],
+    );
+}

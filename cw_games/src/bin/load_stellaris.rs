@@ -11,8 +11,14 @@ pub fn main() {
         .map(|ns| ns.modules.len())
         .sum::<usize>();
 
+    let num_properties = loaded_mod
+        .namespaces
+        .values()
+        .map(|ns| ns.properties.kv.len())
+        .sum::<usize>();
+
     println!(
-        "Loaded {} namespaces with {} modules",
-        num_namespaces, num_modules
+        "Loaded {} namespaces with {} modules and {} properties",
+        num_namespaces, num_modules, num_properties
     );
 }

@@ -1,4 +1,4 @@
 [workspace]
 resolver = "3"
-members = [ "cw_games", "cw_model","cw_parser", "lsp", "stelpatch"]
+members = [ "cw_format","cw_games", "cw_model", "cw_parser", "lsp", "stelpatch"]
 

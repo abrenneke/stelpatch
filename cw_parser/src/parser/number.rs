@@ -9,7 +9,8 @@ use winnow::{
 };
 
 use crate::{
-    AstComment, AstNode, AstToken, opt_trailing_comment, opt_ws_and_comments, value_terminator,
+    AstComment, AstNode, AstToken, get_comments, opt_trailing_comment, opt_ws_and_comments,
+    value_terminator,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,7 +71,7 @@ pub(crate) fn number_val<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<
     Ok(AstNumber {
         value: AstToken::new(value, span),
         is_percentage: is_percentage.is_ok(),
-        leading_comments,
+        leading_comments: get_comments(&leading_comments),
         trailing_comment,
     })
 }

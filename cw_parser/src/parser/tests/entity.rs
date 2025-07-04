@@ -83,6 +83,7 @@ fn entity_with_mixed_properties() {
                 AstValue::String(AstString {
                     value: AstToken::new("value3", 68..74),
                     is_quoted: false,
+                    leading_newlines: 0,
                     leading_comments: vec![],
                     trailing_comment: Some(AstComment::new("comment", 74..82))
                 })
@@ -266,6 +267,7 @@ fn entity_with_many_values_and_properties() {
             .with_item(AstValue::String(AstString {
                 value: AstToken::new("value3", 62..68),
                 is_quoted: false,
+                leading_newlines: 0,
                 leading_comments: vec![],
                 trailing_comment: Some(AstComment::new(" comment", 69..78))
             }))
@@ -437,6 +439,7 @@ fn entity_with_comments() {
                 AstString {
                     value: AstToken::new("my_var1", 35..42),
                     is_quoted: false,
+                    leading_newlines: 0,
                     leading_comments: vec![
                         AstComment::new("comment", 1..9),
                         AstComment::new("comment", 18..26),
@@ -447,6 +450,7 @@ fn entity_with_comments() {
                 AstValue::String(AstString {
                     value: AstToken::new("value1", 45..51),
                     is_quoted: false,
+                    leading_newlines: 0,
                     leading_comments: vec![],
                     trailing_comment: Some(AstComment::new(" comment1", 52..62))
                 })
@@ -455,6 +459,7 @@ fn entity_with_comments() {
                 AstString {
                     value: AstToken::new("my_var2", 90..97),
                     is_quoted: false,
+                    leading_newlines: 0,
                     leading_comments: vec![AstComment::new(" comment2", 71..81),],
                     trailing_comment: None
                 },
@@ -467,6 +472,7 @@ fn entity_with_comments() {
                 AstValue::String(AstString {
                     value: AstToken::new("value3", 125..131),
                     is_quoted: false,
+                    leading_newlines: 0,
                     leading_comments: vec![],
                     trailing_comment: Some(AstComment::new(" comment3", 132..142))
                 }),
@@ -502,6 +508,7 @@ fn entity_with_complex_input() {
                 AstString {
                     value: AstToken::new("my_var2", 72..79),
                     is_quoted: false,
+                    leading_newlines: 0,
                     leading_comments: vec![AstComment::new(
                         " my_var1 = \"value1 with space and \\\"special\\\" chars\"",
                         10..63
@@ -552,6 +559,7 @@ fn entity_with_complex_input() {
                 AstString {
                     value: AstToken::new("my_var5", 229..236),
                     is_quoted: false,
+                    leading_newlines: 0,
                     leading_comments: vec![AstComment::new(
                         " my_var4 = value_with_escape_characters\\nand\\ttabs",
                         169..220
@@ -651,6 +659,7 @@ fn entity_with_dynamic_scripting() {
                 AstString {
                     value: AstToken::new("base", 44..48),
                     is_quoted: false,
+                    leading_newlines: 0,
                     leading_comments: vec![AstComment::new(" 0.2 for each point below 25", 2..31),],
                     trailing_comment: None
                 },

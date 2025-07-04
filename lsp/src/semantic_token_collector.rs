@@ -1,6 +1,6 @@
 use cw_parser::{
-    AstBoolean, AstColor, AstConditionalBlock, AstMaths, AstModule, AstNode, AstNumber,
-    AstOperator, AstProperty, AstString, AstVisitor,
+    AstColor, AstConditionalBlock, AstExpression, AstMaths, AstModule, AstNode, AstNumber,
+    AstOperator, AstString, AstVisitor,
 };
 use std::sync::Arc;
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType};
@@ -130,23 +130,19 @@ impl SemanticTokenCollector {
 impl<'a> AstVisitor<'a> for SemanticTokenCollector {
     type Result = ();
 
-    fn walk_string(&mut self, node: &AstString<'a>) -> Self::Result {
+    fn visit_string(&mut self, node: &AstString<'a>) -> Self::Result {
         self.add_token(node, CwSemanticTokenType::String.as_u32()); // STRING
     }
 
-    fn walk_number(&mut self, node: &AstNumber<'a>) -> Self::Result {
+    fn visit_number(&mut self, node: &AstNumber<'a>) -> Self::Result {
         self.add_token(node, CwSemanticTokenType::Number.as_u32()); // NUMBER
     }
 
-    fn walk_operator(&mut self, node: &AstOperator<'a>) -> Self::Result {
+    fn visit_operator(&mut self, node: &AstOperator<'a>) -> Self::Result {
         self.add_token(node, CwSemanticTokenType::Operator.as_u32()); // OPERATOR
     }
 
-    fn walk_boolean(&mut self, node: &AstBoolean<'a>) -> Self::Result {
-        self.add_token(node, CwSemanticTokenType::Keyword.as_u32()); // KEYWORD
-    }
-
-    fn walk_property(&mut self, node: &AstProperty<'a>) -> Self::Result {
+    fn visit_expression(&mut self, node: &AstExpression<'a>) -> Self::Result {
         // Property keys are marked as PROPERTY
         self.add_token(&node.key, CwSemanticTokenType::Property.as_u32()); // PROPERTY
         self.visit_operator(&node.operator);
@@ -154,7 +150,7 @@ impl<'a> AstVisitor<'a> for SemanticTokenCollector {
         Self::Result::default()
     }
 
-    fn walk_color(&mut self, node: &AstColor<'a>) -> Self::Result {
+    fn visit_color(&mut self, node: &AstColor<'a>) -> Self::Result {
         // Color type keyword (rgb/hsv) as custom COLOR type
         self.add_token(&node.color_type, CwSemanticTokenType::Color.as_u32());
         // Color components as numbers
@@ -167,13 +163,13 @@ impl<'a> AstVisitor<'a> for SemanticTokenCollector {
         Self::Result::default()
     }
 
-    fn walk_maths(&mut self, node: &AstMaths<'a>) -> Self::Result {
+    fn visit_maths(&mut self, node: &AstMaths<'a>) -> Self::Result {
         // Math expressions like @[x + 1] as custom MATH type
         self.add_token(&node.value, CwSemanticTokenType::Math.as_u32());
         Self::Result::default()
     }
 
-    fn walk_conditional_block(&mut self, node: &AstConditionalBlock<'a>) -> Self::Result {
+    fn visit_conditional_block(&mut self, node: &AstConditionalBlock<'a>) -> Self::Result {
         // Conditional blocks like [[PARAM_NAME] ...] as custom CONDITIONAL type
         self.add_token(node, CwSemanticTokenType::Conditional.as_u32());
         // Also visit the key inside the conditional
