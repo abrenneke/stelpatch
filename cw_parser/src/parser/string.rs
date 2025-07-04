@@ -5,7 +5,7 @@ use std::{
 
 use winnow::{
     LocatingSlice, ModalResult, Parser,
-    ascii::{alphanumeric1, escaped},
+    ascii::escaped,
     combinator::{alt, delimited},
     error::StrContext,
     token::{none_of, one_of, take_while},
@@ -18,6 +18,12 @@ use crate::{AstNode, AstToken, terminated_value};
 pub struct AstString<'a> {
     pub value: AstToken<'a>,
     pub is_quoted: bool,
+}
+
+impl<'a> ToString for AstString<'a> {
+    fn to_string(&self) -> String {
+        self.value.to_string()
+    }
 }
 
 impl<'a> AsRef<str> for AstString<'a> {

@@ -11,6 +11,12 @@ pub struct AstToken<'a> {
     pub span: Range<usize>,
 }
 
+impl ToString for AstToken<'_> {
+    fn to_string(&self) -> String {
+        self.value.to_string()
+    }
+}
+
 impl<'a> AstToken<'a> {
     pub fn new(value: &'a str, span: Range<usize>) -> Self {
         Self { value, span }

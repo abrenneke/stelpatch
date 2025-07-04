@@ -31,8 +31,8 @@ impl Namespace {
         // TODO: properties should follow the merge mode, technically, but it's unlikely a single
         // mod will define the same property twice in the same namespace, so for now we can treat it like
         // EntityMergeMode::LIOS
-        // self.properties.kv.extend(module.properties.kv);
-        // self.values.extend(module.values);
+        self.properties.kv.extend(module.properties.kv.clone());
+        self.values.extend(module.values.clone());
 
         self.modules.insert(module.filename.clone(), module);
 
