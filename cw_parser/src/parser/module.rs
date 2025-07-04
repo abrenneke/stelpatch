@@ -8,8 +8,8 @@ use winnow::{
 };
 
 use crate::{
-    AstBlockItem, AstEntityItem, AstNode, AstProperty, Operator, expression, script_value,
-    with_opt_trailing_ws, ws_and_comments,
+    AstBlockItem, AstComment, AstEntityItem, AstExpression, AstNode, Operator, expression,
+    script_value, with_opt_trailing_ws, ws_and_comments,
 };
 
 use anyhow::anyhow;
@@ -19,6 +19,9 @@ use self_cell::self_cell;
 pub struct AstModule<'a> {
     pub items: Vec<AstEntityItem<'a>>,
     pub span: Range<usize>,
+
+    pub leading_comments: Vec<AstComment<'a>>,
+    pub trailing_comment: Option<AstComment<'a>>,
 }
 
 pub type AstModuleResult<'a> = Result<AstModule<'a>, anyhow::Error>;
@@ -55,6 +58,8 @@ impl<'a> AstModule<'a> {
         Self {
             items: Vec::new(),
             span: 0..0,
+            leading_comments: vec![],
+            trailing_comment: None,
         }
     }
 
@@ -77,28 +82,28 @@ impl<'a> AstModule<'a> {
     }
 
     /// Find all properties with the given key name
-    pub fn find_properties(&self, key: &str) -> Vec<&AstProperty<'a>> {
+    pub fn find_properties(&self, key: &str) -> Vec<&AstExpression<'a>> {
         self.items
             .iter()
             .filter_map(|item| match item {
-                AstEntityItem::Property(prop) if prop.key.raw_value() == key => Some(prop),
+                AstEntityItem::Expression(prop) if prop.key.raw_value() == key => Some(prop),
                 _ => None,
             })
             .collect()
     }
 
     /// Find the first property with the given key name
-    pub fn find_property(&self, key: &str) -> Option<&AstProperty<'a>> {
+    pub fn find_property(&self, key: &str) -> Option<&AstExpression<'a>> {
         self.items.iter().find_map(|item| match item {
-            AstEntityItem::Property(prop) if prop.key.raw_value() == key => Some(prop),
+            AstEntityItem::Expression(prop) if prop.key.raw_value() == key => Some(prop),
             _ => None,
         })
     }
 
     /// Get all properties in the module
-    pub fn properties(&self) -> impl Iterator<Item = &AstProperty<'a>> {
+    pub fn properties(&self) -> impl Iterator<Item = &AstExpression<'a>> {
         self.items.iter().filter_map(|item| match item {
-            AstEntityItem::Property(prop) => Some(prop),
+            AstEntityItem::Expression(prop) => Some(prop),
             _ => None,
         })
     }
@@ -122,9 +127,17 @@ impl<'a> AstModule<'a> {
     }
 }
 
-impl<'a> AstNode for AstModule<'a> {
+impl<'a> AstNode<'a> for AstModule<'a> {
     fn span_range(&self) -> Range<usize> {
         self.span.clone()
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        &self.leading_comments
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        self.trailing_comment.as_ref()
     }
 }
 
@@ -139,14 +152,14 @@ pub fn module<'a>(
 
     let ((expressions, _), span): ((Vec<AstBlockItem>, _), _) = repeat_till(
         0..,
-        alt((
-            with_opt_trailing_ws(expression)
+        with_opt_trailing_ws(alt((
+            expression
                 .map(AstBlockItem::Expression)
                 .context(StrContext::Label("module expression")),
-            with_opt_trailing_ws(script_value)
+            script_value
                 .map(AstBlockItem::ArrayItem)
                 .context(StrContext::Label("module script value")),
-        )),
+        ))),
         eof,
     )
     .with_span()
@@ -161,7 +174,7 @@ pub fn module<'a>(
         match expression_or_value {
             AstBlockItem::Expression(expression) => {
                 if expression.operator.operator == Operator::Equals {
-                    items.push(AstEntityItem::Property(AstProperty::new(
+                    items.push(AstEntityItem::Expression(AstExpression::new(
                         expression.key,
                         expression.operator,
                         expression.value,

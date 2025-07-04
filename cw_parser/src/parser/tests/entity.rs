@@ -80,7 +80,12 @@ fn entity_with_mixed_properties() {
             .with_property(
                 AstString::new("str_val1", false, 57..65),
                 AstOperator::equals(66..67),
-                AstValue::new_string("value3", false, 68..74)
+                AstValue::String(AstString {
+                    value: AstToken::new("value3", 68..74),
+                    is_quoted: false,
+                    leading_comments: vec![],
+                    trailing_comment: Some(AstComment::new("comment", 74..82))
+                })
             )
             .with_property(
                 AstString::new("str_val2", false, 95..103),
@@ -258,7 +263,12 @@ fn entity_with_many_values_and_properties() {
                 AstOperator::equals(41..42),
                 AstValue::new_string("value2", false, 43..49)
             )
-            .with_item(AstValue::new_string("value3", false, 62..68))
+            .with_item(AstValue::String(AstString {
+                value: AstToken::new("value3", 62..68),
+                is_quoted: false,
+                leading_comments: vec![],
+                trailing_comment: Some(AstComment::new(" comment", 69..78))
+            }))
             .with_property(
                 AstString::new("my_var2", false, 91..98),
                 AstOperator::equals(99..100),
@@ -424,19 +434,42 @@ fn entity_with_comments() {
         result,
         AstEntity::new(0..148)
             .with_property(
-                AstString::new("my_var1", false, 35..42),
+                AstString {
+                    value: AstToken::new("my_var1", 35..42),
+                    is_quoted: false,
+                    leading_comments: vec![
+                        AstComment::new("comment", 1..9),
+                        AstComment::new("comment", 18..26),
+                    ],
+                    trailing_comment: None
+                },
                 AstOperator::equals(43..44),
-                AstValue::new_string("value1", false, 45..51)
+                AstValue::String(AstString {
+                    value: AstToken::new("value1", 45..51),
+                    is_quoted: false,
+                    leading_comments: vec![],
+                    trailing_comment: Some(AstComment::new(" comment1", 52..62))
+                })
             )
             .with_property(
-                AstString::new("my_var2", false, 90..97),
+                AstString {
+                    value: AstToken::new("my_var2", 90..97),
+                    is_quoted: false,
+                    leading_comments: vec![AstComment::new(" comment2", 71..81),],
+                    trailing_comment: None
+                },
                 AstOperator::equals(98..99),
                 AstValue::new_string("value2", false, 100..106)
             )
             .with_property(
                 AstString::new("my_var3", false, 115..122),
                 AstOperator::equals(123..124),
-                AstValue::new_string("value3", false, 125..131)
+                AstValue::String(AstString {
+                    value: AstToken::new("value3", 125..131),
+                    is_quoted: false,
+                    leading_comments: vec![],
+                    trailing_comment: Some(AstComment::new(" comment3", 132..142))
+                }),
             )
             .into()
     );
@@ -466,7 +499,15 @@ fn entity_with_complex_input() {
             //     AstValue::String("value1 with space and \"special\" chars")
             // )
             .with_property(
-                AstString::new("my_var2", false, 72..79),
+                AstString {
+                    value: AstToken::new("my_var2", 72..79),
+                    is_quoted: false,
+                    leading_comments: vec![AstComment::new(
+                        " my_var1 = \"value1 with space and \\\"special\\\" chars\"",
+                        10..63
+                    ),],
+                    trailing_comment: None
+                },
                 AstOperator::equals(80..81),
                 AstValue::Entity(
                     AstEntity::new(82..126)
@@ -508,7 +549,15 @@ fn entity_with_complex_input() {
             //     AstValue::String("value_with_escape_characters\nand\ttabs")
             // )
             .with_property(
-                AstString::new("my_var5", false, 229..236),
+                AstString {
+                    value: AstToken::new("my_var5", 229..236),
+                    is_quoted: false,
+                    leading_comments: vec![AstComment::new(
+                        " my_var4 = value_with_escape_characters\\nand\\ttabs",
+                        169..220
+                    ),],
+                    trailing_comment: None
+                },
                 AstOperator::equals(237..238),
                 AstValue::Entity(
                     AstEntity::new(239..272)
@@ -599,7 +648,12 @@ fn entity_with_dynamic_scripting() {
         result,
         AstEntity::new(0..242)
             .with_property(
-                AstString::new("base", false, 44..48),
+                AstString {
+                    value: AstToken::new("base", 44..48),
+                    is_quoted: false,
+                    leading_comments: vec![AstComment::new(" 0.2 for each point below 25", 2..31),],
+                    trailing_comment: None
+                },
                 AstOperator::equals(49..50),
                 AstValue::new_string("@stabilitylevel2", false, 51..67)
             )
@@ -611,7 +665,7 @@ fn entity_with_dynamic_scripting() {
             .with_conditional_block(AstConditionalBlock::new(
                 false,
                 AstString::new("ALTERED_STABILITY", false, 130..147),
-                vec![AstEntityItem::Property(AstProperty::new(
+                vec![AstEntityItem::Expression(AstExpression::new(
                     AstString::new("subtract", false, 165..173),
                     AstOperator::equals(174..175),
                     AstValue::new_string("$ALTERED_STABILITY$", false, 176..195)
@@ -701,6 +755,7 @@ fn switch_statement() {
                             AstOperator::equals(61..62),
                             AstValue::new_string("yes", false, 63..66)
                         )
+                        .with_trailing_comment(AstComment::new(" 10", 69..73))
                         .into()
                 )
             )
@@ -714,6 +769,7 @@ fn switch_statement() {
                             AstOperator::equals(99..100),
                             AstValue::new_string("yes", false, 101..104)
                         )
+                        .with_trailing_comment(AstComment::new(" 9", 107..110))
                         .into()
                 )
             )

@@ -8,8 +8,9 @@ use winnow::{
 };
 
 use crate::{
-    AstBlockItem, AstEntityItem, AstNode, AstProperty, AstString, expression,
-    quoted_or_unquoted_string, script_value, with_opt_trailing_ws,
+    AstBlockItem, AstComment, AstEntityItem, AstExpression, AstNode, AstString, expression,
+    opt_trailing_comment, opt_ws_and_comments, quoted_or_unquoted_string, script_value,
+    with_opt_trailing_ws,
 };
 
 /// A conditional block looks like [[PARAM_NAME] key = value] and is dumb
@@ -19,6 +20,9 @@ pub struct AstConditionalBlock<'a> {
     pub key: AstString<'a>,
     pub items: Vec<AstEntityItem<'a>>,
     pub span: Range<usize>,
+
+    pub leading_comments: Vec<AstComment<'a>>,
+    pub trailing_comment: Option<AstComment<'a>>,
 }
 
 impl<'a> AstConditionalBlock<'a> {
@@ -33,19 +37,31 @@ impl<'a> AstConditionalBlock<'a> {
             key,
             items,
             span,
+            leading_comments: vec![],
+            trailing_comment: None,
         }
     }
 }
 
-impl<'a> AstNode for AstConditionalBlock<'a> {
+impl<'a> AstNode<'a> for AstConditionalBlock<'a> {
     fn span_range(&self) -> Range<usize> {
         self.span.clone()
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        &self.leading_comments
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        self.trailing_comment.as_ref()
     }
 }
 
 pub(crate) fn conditional_block<'a>(
     input: &mut LocatingSlice<&'a str>,
 ) -> ModalResult<AstConditionalBlock<'a>> {
+    let leading_comments = opt_ws_and_comments.parse_next(input)?;
+
     let start = with_opt_trailing_ws(literal("[["))
         .span()
         .parse_next(input)?;
@@ -55,17 +71,21 @@ pub(crate) fn conditional_block<'a>(
 
     let ((expressions, _), span): ((Vec<_>, _), _) = repeat_till(
         0..,
-        alt((
-            with_opt_trailing_ws(expression.map(AstBlockItem::Expression))
+        with_opt_trailing_ws(alt((
+            expression
+                .map(AstBlockItem::Expression)
                 .context(StrContext::Label("expression conditional item")),
-            with_opt_trailing_ws(script_value.map(AstBlockItem::ArrayItem))
+            script_value
+                .map(AstBlockItem::ArrayItem)
                 .context(StrContext::Label("array item conditional item")),
-        )),
+        ))),
         ']'.context(StrContext::Label("closing bracket")),
     )
     .with_span()
     .context(StrContext::Label("expression"))
     .parse_next(input)?;
+
+    let trailing_comment = opt_trailing_comment.parse_next(input)?;
 
     let span = start.start..span.end;
 
@@ -74,7 +94,7 @@ pub(crate) fn conditional_block<'a>(
     for expression in expressions {
         match expression {
             AstBlockItem::Expression(expression) => {
-                items.push(AstEntityItem::Property(AstProperty::new(
+                items.push(AstEntityItem::Expression(AstExpression::new(
                     expression.key,
                     expression.operator,
                     expression.value,
@@ -93,5 +113,7 @@ pub(crate) fn conditional_block<'a>(
         items,
         key,
         span,
+        leading_comments,
+        trailing_comment,
     })
 }

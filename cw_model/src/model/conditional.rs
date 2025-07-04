@@ -74,10 +74,10 @@ impl<'a, 'b> cw_parser::AstVisitor<'b> for ConditionalBlockVisitor<'a> {
         self.walk_conditional_block(node);
     }
 
-    fn visit_property(&mut self, node: &cw_parser::AstProperty<'b>) -> Self::Result {
+    fn visit_expression(&mut self, node: &cw_parser::AstExpression<'b>) -> Self::Result {
         let mut property = PropertyInfo::default();
         let mut property_visitor = PropertyVisitor::new(&mut property);
-        property_visitor.visit_property(node);
+        property_visitor.visit_expression(node);
         self.conditional_block
             .properties
             .kv

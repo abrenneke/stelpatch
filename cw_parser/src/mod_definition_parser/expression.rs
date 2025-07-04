@@ -5,7 +5,7 @@ use winnow::combinator::opt;
 use winnow::error::StrContext;
 use winnow::{ModalResult, Parser};
 
-use crate::{AstNode, AstToken, ws_and_comments};
+use crate::{AstComment, AstNode, AstToken, ws_and_comments};
 
 use super::identifier::identifier;
 use super::value::{AstValue, value};
@@ -15,17 +15,34 @@ pub struct AstExpression<'a> {
     pub key: AstToken<'a>,
     pub value: AstValue<'a>,
     pub span: Range<usize>,
+
+    pub leading_comments: Vec<AstComment<'a>>,
+    pub trailing_comment: Option<AstComment<'a>>,
 }
 
-impl<'a> AstNode for AstExpression<'a> {
+impl<'a> AstNode<'a> for AstExpression<'a> {
     fn span_range(&self) -> Range<usize> {
         self.span.clone()
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        &self.leading_comments
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        self.trailing_comment.as_ref()
     }
 }
 
 impl<'a> AstExpression<'a> {
     pub fn new(key: AstToken<'a>, value: AstValue<'a>, span: Range<usize>) -> Self {
-        Self { key, value, span }
+        Self {
+            key,
+            value,
+            span,
+            leading_comments: vec![],
+            trailing_comment: None,
+        }
     }
 }
 
@@ -38,7 +55,13 @@ pub(crate) fn expression<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<
         value,
     )
         .with_span()
-        .map(|((key, _, _, _, value), span)| AstExpression { key, value, span })
+        .map(|((key, _, _, _, value), span)| AstExpression {
+            key,
+            value,
+            span,
+            leading_comments: vec![],
+            trailing_comment: None,
+        })
         .parse_next(input)
 }
 

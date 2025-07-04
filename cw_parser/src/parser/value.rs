@@ -3,8 +3,8 @@ use std::ops::Range;
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrContext};
 
 use crate::{
-    AstBoolean, AstColor, AstEntity, AstMaths, AstNode, AstNumber, AstString, color, entity,
-    inline_maths, number_val, quoted_or_unquoted_string,
+    AstBoolean, AstColor, AstComment, AstEntity, AstMaths, AstNode, AstNumber, AstString, color,
+    entity, inline_maths, number_val, quoted_or_unquoted_string,
 };
 
 /// A value is anything after an =
@@ -178,7 +178,7 @@ impl<'a> AstValue<'a> {
     }
 }
 
-impl<'a> AstNode for AstValue<'a> {
+impl<'a> AstNode<'a> for AstValue<'a> {
     fn span_range(&self) -> Range<usize> {
         match self {
             Self::String(s) => s.span_range(),
@@ -187,6 +187,28 @@ impl<'a> AstNode for AstValue<'a> {
             Self::Entity(e) => e.span_range(),
             Self::Color(c) => c.span_range(),
             Self::Maths(m) => m.span_range(),
+        }
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        match self {
+            Self::String(s) => s.leading_comments(),
+            Self::Number(n) => n.leading_comments(),
+            Self::Boolean(b) => b.leading_comments(),
+            Self::Entity(e) => e.leading_comments(),
+            Self::Color(c) => c.leading_comments(),
+            Self::Maths(m) => m.leading_comments(),
+        }
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        match self {
+            Self::String(s) => s.trailing_comment(),
+            Self::Number(n) => n.trailing_comment(),
+            Self::Boolean(b) => b.trailing_comment(),
+            Self::Entity(e) => e.trailing_comment(),
+            Self::Color(c) => c.trailing_comment(),
+            Self::Maths(m) => m.trailing_comment(),
         }
     }
 }

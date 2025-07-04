@@ -1,0 +1,25 @@
+{
+  "folders": [
+    {
+      "path": "."
+    },
+    {
+      "path": "D:/SteamLibrary/steamapps/common/Stellaris/common"
+    },
+    {
+      "path": "../../Users/Andy/Documents/Paradox Interactive/Stellaris/mod"
+    },
+    {
+      "path": "D:/SteamLibrary/steamapps/workshop/content/281990"
+    }
+  ],
+  "settings": {
+    "rust-analyzer.showUnlinkedFileNotification": false,
+    "powershell.cwd": "c:\\dev\\stelpatch",
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "python.formatting.provider": "none",
+    "python.languageServer": "None"
+  }
+}

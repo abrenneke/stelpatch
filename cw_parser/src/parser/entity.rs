@@ -2,13 +2,14 @@ use std::ops::Range;
 
 use winnow::{
     LocatingSlice, ModalResult, Parser,
-    combinator::{alt, cut_err, repeat_till},
+    combinator::{alt, cut_err, opt, repeat_till},
     error::StrContext,
 };
 
 use crate::{
-    AstBlockItem, AstConditionalBlock, AstNode, AstOperator, AstProperty, AstString,
-    conditional_block, expression, script_value, with_opt_trailing_ws,
+    AstBlockItem, AstComment, AstConditionalBlock, AstExpression, AstNode, AstOperator, AstString,
+    conditional_block, expression, opt_trailing_comment, opt_ws_and_comments, script_value,
+    ws_and_comments,
 };
 
 use super::AstValue;
@@ -17,12 +18,15 @@ use super::AstValue;
 pub struct AstEntity<'a> {
     pub items: Vec<AstEntityItem<'a>>,
     pub span: Range<usize>,
+
+    pub leading_comments: Vec<AstComment<'a>>,
+    pub trailing_comment: Option<AstComment<'a>>,
 }
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum AstEntityItem<'a> {
     /// Key value pairs in the entity, like { a = b } or { a > b }
-    Property(AstProperty<'a>),
+    Expression(AstExpression<'a>),
 
     /// Array items in the entity, like { a b c }
     Item(AstValue<'a>),
@@ -36,6 +40,8 @@ impl<'a> AstEntity<'a> {
         Self {
             items: Vec::new(),
             span,
+            leading_comments: vec![],
+            trailing_comment: None,
         }
     }
 
@@ -45,9 +51,20 @@ impl<'a> AstEntity<'a> {
         operator: AstOperator<'a>,
         value: AstValue<'a>,
     ) -> Self {
-        self.items.push(AstEntityItem::Property(AstProperty::new(
-            key, operator, value,
-        )));
+        self.items
+            .push(AstEntityItem::Expression(AstExpression::new(
+                key, operator, value,
+            )));
+        self
+    }
+
+    pub fn with_leading_comment(mut self, comment: AstComment<'a>) -> Self {
+        self.leading_comments.push(comment);
+        self
+    }
+
+    pub fn with_trailing_comment(mut self, comment: AstComment<'a>) -> Self {
+        self.trailing_comment = Some(comment);
         self
     }
 
@@ -63,28 +80,28 @@ impl<'a> AstEntity<'a> {
     }
 
     /// Find all properties with the given key name
-    pub fn find_properties(&self, key: &str) -> Vec<&AstProperty<'a>> {
+    pub fn find_properties(&self, key: &str) -> Vec<&AstExpression<'a>> {
         self.items
             .iter()
             .filter_map(|item| match item {
-                AstEntityItem::Property(prop) if prop.key.raw_value() == key => Some(prop),
+                AstEntityItem::Expression(prop) if prop.key.raw_value() == key => Some(prop),
                 _ => None,
             })
             .collect()
     }
 
     /// Find the first property with the given key name
-    pub fn find_property(&self, key: &str) -> Option<&AstProperty<'a>> {
+    pub fn find_property(&self, key: &str) -> Option<&AstExpression<'a>> {
         self.items.iter().find_map(|item| match item {
-            AstEntityItem::Property(prop) if prop.key.raw_value() == key => Some(prop),
+            AstEntityItem::Expression(prop) if prop.key.raw_value() == key => Some(prop),
             _ => None,
         })
     }
 
     /// Get all properties in the entity
-    pub fn properties(&self) -> impl Iterator<Item = &AstProperty<'a>> {
+    pub fn properties(&self) -> impl Iterator<Item = &AstExpression<'a>> {
         self.items.iter().filter_map(|item| match item {
-            AstEntityItem::Property(prop) => Some(prop),
+            AstEntityItem::Expression(prop) => Some(prop),
             _ => None,
         })
     }
@@ -116,33 +133,45 @@ impl<'a> AstEntity<'a> {
     }
 }
 
-impl<'a> AstNode for AstEntity<'a> {
+impl<'a> AstNode<'a> for AstEntity<'a> {
     fn span_range(&self) -> Range<usize> {
         self.span.clone()
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        &self.leading_comments
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        self.trailing_comment.as_ref()
     }
 }
 
 pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstEntity<'a>> {
-    let start = with_opt_trailing_ws('{')
-        .span()
-        .context(StrContext::Label("opening bracket"))
-        .parse_next(input)?;
+    let leading_comments = opt_ws_and_comments.parse_next(input)?;
+
+    let start = '{'.span().parse_next(input)?;
 
     let ((expressions, _), span): ((Vec<_>, _), _) = cut_err(repeat_till(
         0..,
         alt((
-            with_opt_trailing_ws(expression.map(AstBlockItem::Expression))
+            expression
+                .map(AstBlockItem::Expression)
                 .context(StrContext::Label("expression entity item")),
-            with_opt_trailing_ws(script_value.map(AstBlockItem::ArrayItem))
+            script_value
+                .map(AstBlockItem::ArrayItem)
                 .context(StrContext::Label("array item entity item")),
-            with_opt_trailing_ws(conditional_block.map(AstBlockItem::Conditional))
+            conditional_block
+                .map(AstBlockItem::Conditional)
                 .context(StrContext::Label("conditional block entity item")),
         )),
-        '}'.context(StrContext::Label("closing bracket")),
+        (opt_ws_and_comments, '}'),
     ))
     .with_span()
     .context(StrContext::Label("expression"))
     .parse_next(input)?;
+
+    let trailing_comment = opt_trailing_comment.parse_next(input)?;
 
     let span = start.start..span.end;
 
@@ -151,7 +180,7 @@ pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstE
     for expression in expressions {
         match expression {
             AstBlockItem::Expression(expression) => {
-                items.push(AstEntityItem::Property(AstProperty::new(
+                items.push(AstEntityItem::Expression(AstExpression::new(
                     expression.key,
                     expression.operator,
                     expression.value,
@@ -166,5 +195,10 @@ pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstE
         }
     }
 
-    Ok(AstEntity { items, span })
+    Ok(AstEntity {
+        items,
+        span,
+        leading_comments,
+        trailing_comment,
+    })
 }

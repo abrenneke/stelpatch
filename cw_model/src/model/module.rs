@@ -42,6 +42,11 @@ impl Module {
 
         if let Ok(ast) = ast.borrow_dependent() {
             module_visitor.visit_module(ast);
+        } else {
+            return Err(anyhow::anyhow!(
+                "Failed to parse module at {}",
+                file_path.display()
+            ));
         }
 
         module.ast = Some(ast);
@@ -115,10 +120,10 @@ impl<'a> ModuleVisitor<'a> {
 impl<'a, 'b> cw_parser::AstVisitor<'b> for ModuleVisitor<'a> {
     type Result = ();
 
-    fn visit_property(&mut self, node: &cw_parser::AstProperty<'b>) -> Self::Result {
+    fn visit_expression(&mut self, node: &cw_parser::AstExpression<'b>) -> Self::Result {
         let mut property = PropertyInfo::default();
         let mut property_visitor = PropertyVisitor::new(&mut property);
-        property_visitor.visit_property(node);
+        property_visitor.visit_expression(node);
         self.module
             .properties
             .kv

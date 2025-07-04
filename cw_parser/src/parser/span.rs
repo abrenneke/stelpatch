@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use crate::AstComment;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
     /// Line number (1-based)
@@ -108,7 +110,7 @@ impl Position {
     }
 }
 
-pub trait AstNode {
+pub trait AstNode<'a> {
     fn span_range(&self) -> Range<usize>;
 
     fn span(&self, original_input: &str) -> Span {
@@ -120,8 +122,18 @@ pub trait AstNode {
     }
 
     /// Get the text content of this node from the original input
-    fn text<'a>(&self, original_input: &'a str) -> &'a str {
+    fn text(&self, original_input: &'a str) -> &'a str {
         let range = self.span_range();
         &original_input[range]
+    }
+
+    /// Comments that appear before this node.
+    fn leading_comments(&self) -> &[AstComment<'a>];
+
+    /// Comment that appears after this node on the *same line*.
+    fn trailing_comment(&self) -> Option<&AstComment<'a>>;
+
+    fn inner_comments(&self) -> &[AstComment<'a>] {
+        &[]
     }
 }

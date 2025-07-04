@@ -8,23 +8,42 @@ use winnow::{
 };
 
 use super::string::string_value;
-use crate::{AstNode, AstString, ws_and_comments};
+use crate::{
+    AstComment, AstNode, AstString, opt_trailing_comment, opt_ws_and_comments, quoted_string,
+    ws_and_comments,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AstArrayValue<'a> {
     values: Vec<AstString<'a>>,
     span: Range<usize>,
+
+    pub leading_comments: Vec<AstComment<'a>>,
+    pub trailing_comment: Option<AstComment<'a>>,
 }
 
-impl<'a> AstNode for AstArrayValue<'a> {
+impl<'a> AstNode<'a> for AstArrayValue<'a> {
     fn span_range(&self) -> Range<usize> {
         self.span.clone()
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        &self.leading_comments
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        self.trailing_comment.as_ref()
     }
 }
 
 impl<'a> AstArrayValue<'a> {
     pub fn new(values: Vec<AstString<'a>>, span: Range<usize>) -> Self {
-        Self { values, span }
+        Self {
+            values,
+            span,
+            leading_comments: vec![],
+            trailing_comment: None,
+        }
     }
 
     pub fn values(&self) -> &[AstString<'a>] {
@@ -35,23 +54,21 @@ impl<'a> AstArrayValue<'a> {
 pub(crate) fn array_value<'a>(
     input: &mut LocatingSlice<&'a str>,
 ) -> ModalResult<AstArrayValue<'a>> {
-    delimited(
-        '{',
-        repeat(
-            1..,
-            (
-                opt(ws_and_comments),
-                string_value,
-                alt((ws_and_comments, peek(literal("}")))),
-            )
-                .map(|(_, s, _)| s),
-        ),
-        '}',
-    )
-    .with_span()
-    .context(StrContext::Label("array_value"))
-    .map(|(values, span): (Vec<_>, _)| AstArrayValue { values, span })
-    .parse_next(input)
+    let leading_comments = opt_ws_and_comments.parse_next(input)?;
+
+    let (values, span) = delimited('{', repeat(1.., quoted_string), (opt_ws_and_comments, '}'))
+        .with_span()
+        .context(StrContext::Label("array_value"))
+        .parse_next(input)?;
+
+    let trailing_comment = opt_trailing_comment.parse_next(input)?;
+
+    Ok(AstArrayValue {
+        values,
+        span,
+        leading_comments,
+        trailing_comment,
+    })
 }
 
 #[cfg(test)]

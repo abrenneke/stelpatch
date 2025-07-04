@@ -5,7 +5,7 @@ use winnow::{
     combinator::{eof, opt, repeat_till},
 };
 
-use crate::{AstNode, ws_and_comments};
+use crate::{AstComment, AstNode, ws_and_comments};
 use self_cell::self_cell;
 
 use super::expression::{AstExpression, expression};
@@ -51,17 +51,33 @@ impl AstModDefinitionCell {
 pub struct AstModDefinition<'a> {
     pub expressions: Vec<AstExpression<'a>>,
     pub span: Range<usize>,
+
+    pub leading_comments: Vec<AstComment<'a>>,
+    pub trailing_comment: Option<AstComment<'a>>,
 }
 
 impl<'a> AstModDefinition<'a> {
     pub fn new(expressions: Vec<AstExpression<'a>>, span: Range<usize>) -> Self {
-        Self { expressions, span }
+        Self {
+            expressions,
+            span,
+            leading_comments: vec![],
+            trailing_comment: None,
+        }
     }
 }
 
-impl<'a> AstNode for AstModDefinition<'a> {
+impl<'a> AstNode<'a> for AstModDefinition<'a> {
     fn span_range(&self) -> Range<usize> {
         self.span.clone()
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        &self.leading_comments
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        self.trailing_comment.as_ref()
     }
 }
 
@@ -75,7 +91,14 @@ pub(crate) fn mod_definition<'a>(
         eof,
     )
     .with_span()
-    .map(|((expressions, _), span): ((Vec<_>, _), _)| AstModDefinition { expressions, span })
+    .map(
+        |((expressions, _), span): ((Vec<_>, _), _)| AstModDefinition {
+            expressions,
+            span,
+            leading_comments: vec![],
+            trailing_comment: None,
+        },
+    )
     .parse_next(input)
 }
 

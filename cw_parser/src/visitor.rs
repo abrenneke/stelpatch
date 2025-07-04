@@ -1,7 +1,6 @@
 use crate::{
     AstBlockItem, AstBoolean, AstColor, AstConditionalBlock, AstEntity, AstEntityItem,
-    AstExpression, AstMaths, AstModule, AstNumber, AstOperator, AstProperty, AstString, AstToken,
-    AstValue,
+    AstExpression, AstMaths, AstModule, AstNumber, AstOperator, AstString, AstToken, AstValue,
 };
 
 /// Visitor trait for traversing the AST
@@ -18,10 +17,6 @@ pub trait AstVisitor<'a> {
 
     fn visit_entity_item(&mut self, node: &AstEntityItem<'a>) -> Self::Result {
         self.walk_entity_item(node)
-    }
-
-    fn visit_property(&mut self, node: &AstProperty<'a>) -> Self::Result {
-        self.walk_property(node)
     }
 
     fn visit_expression(&mut self, node: &AstExpression<'a>) -> Self::Result {
@@ -85,17 +80,10 @@ pub trait AstVisitor<'a> {
 
     fn walk_entity_item(&mut self, node: &AstEntityItem<'a>) -> Self::Result {
         match node {
-            AstEntityItem::Property(prop) => self.visit_property(prop),
+            AstEntityItem::Expression(prop) => self.visit_expression(prop),
             AstEntityItem::Item(value) => self.visit_value(value),
             AstEntityItem::Conditional(cond) => self.visit_conditional_block(cond),
         }
-    }
-
-    fn walk_property(&mut self, node: &AstProperty<'a>) -> Self::Result {
-        self.visit_string(&node.key);
-        self.visit_operator(&node.operator);
-        self.visit_value(&node.value);
-        Self::Result::default()
     }
 
     fn walk_expression(&mut self, node: &AstExpression<'a>) -> Self::Result {

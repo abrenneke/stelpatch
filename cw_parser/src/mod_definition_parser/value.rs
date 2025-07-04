@@ -2,7 +2,7 @@ use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrCont
 
 use super::array::array_value;
 use super::string::string_value;
-use crate::{AstNode, AstString, mod_definition_parser::array::AstArrayValue};
+use crate::{AstComment, AstNode, AstString, mod_definition_parser::array::AstArrayValue};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum AstValue<'a> {
@@ -10,11 +10,25 @@ pub enum AstValue<'a> {
     Array(AstArrayValue<'a>),
 }
 
-impl<'a> AstNode for AstValue<'a> {
+impl<'a> AstNode<'a> for AstValue<'a> {
     fn span_range(&self) -> std::ops::Range<usize> {
         match self {
             AstValue::String(s) => s.span_range(),
             AstValue::Array(a) => a.span_range(),
+        }
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        match self {
+            AstValue::String(s) => s.leading_comments(),
+            AstValue::Array(a) => a.leading_comments(),
+        }
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        match self {
+            AstValue::String(s) => s.trailing_comment(),
+            AstValue::Array(a) => a.trailing_comment(),
         }
     }
 }

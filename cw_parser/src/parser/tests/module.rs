@@ -19,7 +19,7 @@ fn module_with_entities() {
     assert_eq!(
         items,
         vec![
-            AstEntityItem::Property(AstProperty::new(
+            AstEntityItem::Expression(AstExpression::new(
                 AstString::new("entity1", false, 9..16),
                 AstOperator::new("=", 17..18).unwrap(),
                 AstValue::Entity(AstEntity::new(19..37).with_property(
@@ -28,7 +28,7 @@ fn module_with_entities() {
                     AstValue::new_string("value1", false, 29..35)
                 ))
             )),
-            AstEntityItem::Property(AstProperty::new(
+            AstEntityItem::Expression(AstExpression::new(
                 AstString::new("entity2", false, 46..53),
                 AstOperator::new("=", 54..55).unwrap(),
                 AstValue::Entity(AstEntity::new(56..74).with_property(
@@ -56,12 +56,12 @@ fn module_with_defines() {
     assert_eq!(
         items,
         vec![
-            AstEntityItem::Property(AstProperty::new(
+            AstEntityItem::Expression(AstExpression::new(
                 AstString::new("@MY_DEFINE", false, 9..19),
                 AstOperator::new("=", 20..21).unwrap(),
                 AstValue::Number(AstNumber::new("123", 22..25))
             )),
-            AstEntityItem::Property(AstProperty::new(
+            AstEntityItem::Expression(AstExpression::new(
                 AstString::new("@ANOTHER_DEFINE", false, 34..49),
                 AstOperator::new("=", 50..51).unwrap(),
                 AstValue::String(AstString::new("hello", true, 52..59))
@@ -88,17 +88,17 @@ fn module_with_properties() {
     assert_eq!(
         items,
         vec![
-            AstEntityItem::Property(AstProperty::new(
+            AstEntityItem::Expression(AstExpression::new(
                 AstString::new("@MY_DEFINE", false, 9..19),
                 AstOperator::new("=", 20..21).unwrap(),
                 AstValue::Number(AstNumber::new("123", 22..25))
             )),
-            AstEntityItem::Property(AstProperty::new(
+            AstEntityItem::Expression(AstExpression::new(
                 AstString::new("my_var1", false, 34..41),
                 AstOperator::new("=", 42..43).unwrap(),
                 AstValue::String(AstString::new("value1", false, 44..50))
             )),
-            AstEntityItem::Property(AstProperty::new(
+            AstEntityItem::Expression(AstExpression::new(
                 AstString::new("entity", false, 59..65),
                 AstOperator::new("=", 66..67).unwrap(),
                 AstValue::Entity(AstEntity::new(68..106).with_property(

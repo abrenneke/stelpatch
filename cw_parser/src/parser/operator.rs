@@ -2,7 +2,7 @@ use std::{ops::Range, str::FromStr};
 
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, token::literal};
 
-use crate::{AstNode, AstToken, StringError};
+use crate::{AstComment, AstNode, AstToken, StringError};
 
 /// An operator that can appear between a key and a value in an entity, like a > b. Usually this is = but it depends on the implementation.
 /// For our purposes it doesn't really matter, we just have to remember what it is.
@@ -65,16 +65,18 @@ impl FromStr for Operator {
 pub struct AstOperator<'a> {
     pub operator: Operator,
     pub value: AstToken<'a>,
+
+    pub leading_comments: Vec<AstComment<'a>>,
+    pub trailing_comment: Option<AstComment<'a>>,
 }
 
 impl<'a> AstOperator<'a> {
     pub fn new(operator: &'a str, span: Range<usize>) -> Result<Self, StringError> {
         Ok(Self {
             operator: Operator::from_str(operator)?,
-            value: AstToken {
-                value: operator,
-                span,
-            },
+            value: AstToken::new(operator, span),
+            leading_comments: vec![],
+            trailing_comment: None,
         })
     }
 
@@ -83,9 +85,17 @@ impl<'a> AstOperator<'a> {
     }
 }
 
-impl<'a> AstNode for AstOperator<'a> {
+impl<'a> AstNode<'a> for AstOperator<'a> {
     fn span_range(&self) -> Range<usize> {
         self.value.span.clone()
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        &self.leading_comments
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        self.trailing_comment.as_ref()
     }
 }
 
@@ -104,7 +114,9 @@ pub(crate) fn operator<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<As
     .with_span()
     .map(|(op, span)| AstOperator {
         operator: Operator::from_str(op).unwrap(),
-        value: AstToken { value: op, span },
+        value: AstToken::new(op, span),
+        leading_comments: vec![],
+        trailing_comment: None,
     })
     .parse_next(input)
 }
