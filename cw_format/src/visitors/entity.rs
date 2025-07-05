@@ -4,7 +4,7 @@ use cw_parser::AstVisitor;
 
 use crate::{
     util::indent,
-    visitors::{ExpressionVisitor, ValueVisitor},
+    visitors::{ConditionalVisitor, ExpressionVisitor, ValueVisitor},
 };
 
 pub struct EntityVisitor<'a> {
@@ -97,9 +97,8 @@ impl<'a> AstVisitor<'a> for ItemVisitor<'a> {
                 visitor.visit_expression(expression);
             }
             cw_parser::AstEntityItem::Conditional(conditional) => {
-                todo!()
-                // let mut visitor = ConditionalVisitor::new(self.output);
-                // visitor.visit_conditional(conditional);
+                let mut visitor = ConditionalVisitor::new(self.output);
+                visitor.visit_conditional_block(conditional);
             }
         }
     }
