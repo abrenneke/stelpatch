@@ -128,29 +128,26 @@ impl SemanticTokenCollector {
 }
 
 impl<'a> AstVisitor<'a> for SemanticTokenCollector {
-    type Result = ();
-
-    fn visit_string(&mut self, node: &AstString<'a>) -> Self::Result {
+    fn visit_string(&mut self, node: &AstString<'a>) -> () {
         self.add_token(node, CwSemanticTokenType::String.as_u32()); // STRING
     }
 
-    fn visit_number(&mut self, node: &AstNumber<'a>) -> Self::Result {
+    fn visit_number(&mut self, node: &AstNumber<'a>) -> () {
         self.add_token(node, CwSemanticTokenType::Number.as_u32()); // NUMBER
     }
 
-    fn visit_operator(&mut self, node: &AstOperator<'a>) -> Self::Result {
+    fn visit_operator(&mut self, node: &AstOperator<'a>) -> () {
         self.add_token(node, CwSemanticTokenType::Operator.as_u32()); // OPERATOR
     }
 
-    fn visit_expression(&mut self, node: &AstExpression<'a>) -> Self::Result {
+    fn visit_expression(&mut self, node: &AstExpression<'a>) -> () {
         // Property keys are marked as PROPERTY
         self.add_token(&node.key, CwSemanticTokenType::Property.as_u32()); // PROPERTY
         self.visit_operator(&node.operator);
         self.visit_value(&node.value);
-        Self::Result::default()
     }
 
-    fn visit_color(&mut self, node: &AstColor<'a>) -> Self::Result {
+    fn visit_color(&mut self, node: &AstColor<'a>) -> () {
         // Color type keyword (rgb/hsv) as custom COLOR type
         self.add_token(&node.color_type, CwSemanticTokenType::Color.as_u32());
         // Color components as numbers
@@ -160,16 +157,14 @@ impl<'a> AstVisitor<'a> for SemanticTokenCollector {
         if let Some(a) = &node.a {
             self.visit_number(a);
         }
-        Self::Result::default()
     }
 
-    fn visit_maths(&mut self, node: &AstMaths<'a>) -> Self::Result {
+    fn visit_maths(&mut self, node: &AstMaths<'a>) -> () {
         // Math expressions like @[x + 1] as custom MATH type
         self.add_token(&node.value, CwSemanticTokenType::Math.as_u32());
-        Self::Result::default()
     }
 
-    fn visit_conditional_block(&mut self, node: &AstConditionalBlock<'a>) -> Self::Result {
+    fn visit_conditional_block(&mut self, node: &AstConditionalBlock<'a>) -> () {
         // Conditional blocks like [[PARAM_NAME] ...] as custom CONDITIONAL type
         self.add_token(node, CwSemanticTokenType::Conditional.as_u32());
         // Also visit the key inside the conditional
@@ -178,7 +173,6 @@ impl<'a> AstVisitor<'a> for SemanticTokenCollector {
         for item in &node.items {
             self.visit_entity_item(item);
         }
-        Self::Result::default()
     }
 }
 

@@ -44,9 +44,7 @@ impl<'a> PropertyPathBuilder<'a> {
 }
 
 impl<'a> AstVisitor<'a> for PropertyPathBuilder<'a> {
-    type Result = ();
-
-    fn visit_expression(&mut self, node: &AstExpression<'a>) -> Self::Result {
+    fn visit_expression(&mut self, node: &AstExpression<'a>) -> () {
         let key_span = node.key.span(&self.original_input);
 
         // Check if the position is within this property's key
@@ -76,14 +74,13 @@ impl<'a> AstVisitor<'a> for PropertyPathBuilder<'a> {
         }
     }
 
-    fn walk_entity(&mut self, node: &AstEntity<'a>) -> Self::Result {
+    fn walk_entity(&mut self, node: &AstEntity<'a>) -> () {
         for item in &node.items {
             self.visit_entity_item(item);
             if self.found_property.is_some() {
                 break;
             }
         }
-        Self::Result::default()
     }
 }
 
@@ -119,7 +116,12 @@ pub async fn hover(
 
     // Find the property at the given position
     let mut builder = PropertyPathBuilder::new(offset, cached_document.borrow_input());
-    builder.visit_module(cached_document.borrow_ast());
+
+    if let Ok(ast) = cached_document.borrow_ast() {
+        builder.visit_module(ast);
+    } else {
+        return Ok(None);
+    }
 
     if let Some(property_path) = builder.found_property {
         // Create hover content

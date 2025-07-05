@@ -1,25 +1,13 @@
 use crate::semantic_token_collector::{SemanticTokenCollector, generate_semantic_tokens};
-use cw_parser::{AstModule, AstVisitor};
-use self_cell::self_cell;
+use cw_parser::{AstModule, AstModuleCell, AstVisitor};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::lsp_types::*;
 
-self_cell!(
-    struct DocumentWithAst {
-        owner: String,
-
-        #[covariant]
-        dependent: AstModule,
-    }
-
-    impl {Debug}
-);
-
 #[derive(Debug)]
 pub struct CachedDocument {
-    document: DocumentWithAst,
+    document: AstModuleCell,
     semantic_tokens: Vec<SemanticToken>,
     version: Option<i32>,
 }
@@ -27,16 +15,18 @@ pub struct CachedDocument {
 impl CachedDocument {
     /// Create a new cached document by parsing the content
     pub fn new(content: String, version: Option<i32>) -> Option<Self> {
-        let document = DocumentWithAst::new(content, |content_ref| {
-            let mut module = AstModule::new();
-            module.parse_input(content_ref).unwrap();
-            module
-        });
+        let document = AstModuleCell::from_input(content);
 
         let content_arc: Arc<str> = document.borrow_owner().as_str().into();
 
         let mut collector = SemanticTokenCollector::new(content_arc);
-        collector.visit_module(&document.borrow_dependent());
+
+        if let Ok(ast) = document.borrow_dependent().as_ref() {
+            collector.visit_module(ast);
+        } else {
+            return None;
+        }
+
         let semantic_tokens = collector.build_tokens();
 
         Some(CachedDocument {
@@ -46,8 +36,8 @@ impl CachedDocument {
         })
     }
 
-    pub fn borrow_ast(&self) -> &AstModule {
-        &self.document.borrow_dependent()
+    pub fn borrow_ast<'a>(&'a self) -> Result<&'a AstModule<'a>, &'a anyhow::Error> {
+        self.document.borrow_dependent().as_ref()
     }
 
     pub fn borrow_input(&self) -> &str {

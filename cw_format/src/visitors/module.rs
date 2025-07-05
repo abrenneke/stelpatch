@@ -13,14 +13,25 @@ impl<'a> ModuleVisitor<'a> {
 }
 
 impl<'a> AstVisitor<'a> for ModuleVisitor<'a> {
-    type Result = ();
+    fn visit_module(&mut self, node: &cw_parser::AstModule<'a>) -> () {
+        self.output.push_str(
+            &node
+                .leading_comments
+                .iter()
+                .map(|c| format!("#{}\n", c.text))
+                .collect::<Vec<_>>()
+                .join(""),
+        );
 
-    fn visit_value(&mut self, node: &cw_parser::AstValue<'a>) -> Self::Result {
+        self.walk_module(node);
+    }
+
+    fn visit_value(&mut self, node: &cw_parser::AstValue<'a>) -> () {
         let mut visitor = ValueVisitor::new(self.output);
         visitor.visit_value(node);
     }
 
-    fn visit_expression(&mut self, node: &cw_parser::AstExpression<'a>) -> Self::Result {
+    fn visit_expression(&mut self, node: &cw_parser::AstExpression<'a>) -> () {
         let mut visitor = ExpressionVisitor::new(self.output);
         visitor.visit_expression(node);
     }

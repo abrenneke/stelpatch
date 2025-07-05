@@ -16,9 +16,7 @@ impl<'a> EntityVisitor<'a> {
 }
 
 impl<'a> AstVisitor<'a> for EntityVisitor<'a> {
-    type Result = ();
-
-    fn visit_entity(&mut self, node: &cw_parser::AstEntity<'a>) -> Self::Result {
+    fn visit_entity(&mut self, node: &cw_parser::AstEntity<'a>) -> () {
         for comment in node.leading_comments.iter() {
             self.output.push_str(&format!("#{}\n", comment.text));
         }
@@ -35,11 +33,13 @@ impl<'a> AstVisitor<'a> for EntityVisitor<'a> {
             self.output.push_str(&format!("\n{}\n", &indent(&buf)));
         }
 
-        self.output.push_str(&format!("}}"));
+        self.output.push_str("}");
 
         if let Some(trailing_comment) = node.trailing_comment.as_ref() {
             self.output
                 .push_str(&format!(" #{}\n", trailing_comment.text));
+        } else {
+            self.output.push_str("\n");
         }
     }
 }
@@ -55,9 +55,7 @@ impl<'a> ItemVisitor<'a> {
 }
 
 impl<'a> AstVisitor<'a> for ItemVisitor<'a> {
-    type Result = ();
-
-    fn visit_entity_item(&mut self, node: &cw_parser::AstEntityItem<'a>) -> Self::Result {
+    fn visit_entity_item(&mut self, node: &cw_parser::AstEntityItem<'a>) -> () {
         match node {
             cw_parser::AstEntityItem::Item(item) => {
                 let mut visitor = ValueVisitor::new(self.output);

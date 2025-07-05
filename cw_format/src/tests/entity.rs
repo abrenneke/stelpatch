@@ -1,9 +1,9 @@
 use crate::format_module;
 use crate::tests::{compare, identity};
 
-identity!(format_entity_identity, r#"{}"#);
+identity!(format_entity_identity, "{}\n");
 
-identity!(format_entity, "{\n\tvalue1\n}");
+identity!(format_entity, "{\n\tvalue1\n}\n");
 
 compare!(
     format_entity_with_comments,

@@ -119,17 +119,15 @@ impl<'a> ValueVisitor<'a> {
 }
 
 impl<'a, 'b> cw_parser::AstVisitor<'b> for ValueVisitor<'a> {
-    type Result = ();
-
-    fn visit_string(&mut self, node: &cw_parser::AstString<'b>) -> Self::Result {
+    fn visit_string(&mut self, node: &cw_parser::AstString<'b>) -> () {
         *self.value = Value::String(node.value.value.to_string());
     }
 
-    fn visit_number(&mut self, node: &cw_parser::AstNumber<'b>) -> Self::Result {
+    fn visit_number(&mut self, node: &cw_parser::AstNumber<'b>) -> () {
         *self.value = Value::Number(node.value.value.to_string());
     }
 
-    fn visit_color(&mut self, node: &cw_parser::AstColor<'b>) -> Self::Result {
+    fn visit_color(&mut self, node: &cw_parser::AstColor<'b>) -> () {
         *self.value = Value::Color(Color {
             color_type: node.color_type.to_string(),
             r: node.r.value.to_string(),
@@ -139,11 +137,11 @@ impl<'a, 'b> cw_parser::AstVisitor<'b> for ValueVisitor<'a> {
         });
     }
 
-    fn visit_maths(&mut self, node: &cw_parser::AstMaths<'b>) -> Self::Result {
+    fn visit_maths(&mut self, node: &cw_parser::AstMaths<'b>) -> () {
         *self.value = Value::Maths(node.value.value.to_string());
     }
 
-    fn visit_entity(&mut self, node: &cw_parser::AstEntity<'b>) -> Self::Result {
+    fn visit_entity(&mut self, node: &cw_parser::AstEntity<'b>) -> () {
         let mut entity = Entity::new();
         let mut entity_visitor = EntityVisitor::new(&mut entity);
         entity_visitor.visit_entity(node);

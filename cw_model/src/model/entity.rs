@@ -156,9 +156,7 @@ impl<'a> EntityVisitor<'a> {
 }
 
 impl<'a, 'b> cw_parser::AstVisitor<'b> for EntityVisitor<'a> {
-    type Result = ();
-
-    fn visit_expression(&mut self, node: &cw_parser::AstExpression<'b>) -> Self::Result {
+    fn visit_expression(&mut self, node: &cw_parser::AstExpression<'b>) -> () {
         let mut property = PropertyInfo::default();
         let mut property_visitor = PropertyVisitor::new(&mut property);
         property_visitor.visit_expression(node);
@@ -171,17 +169,14 @@ impl<'a, 'b> cw_parser::AstVisitor<'b> for EntityVisitor<'a> {
             .push(property);
     }
 
-    fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> Self::Result {
+    fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> () {
         let mut value = Value::default();
         let mut value_visitor = ValueVisitor::new(&mut value);
         value_visitor.visit_value(node);
         self.entity.items.push(value);
     }
 
-    fn visit_conditional_block(
-        &mut self,
-        node: &cw_parser::AstConditionalBlock<'b>,
-    ) -> Self::Result {
+    fn visit_conditional_block(&mut self, node: &cw_parser::AstConditionalBlock<'b>) -> () {
         let mut conditional_block = ConditionalBlock::default();
         let mut conditional_block_visitor = ConditionalBlockVisitor::new(&mut conditional_block);
         conditional_block_visitor.visit_conditional_block(node);

@@ -12,12 +12,12 @@ fn module_with_entities() {
         entity2 = { prop2 = value2 }
     "#,
     );
-    let (items, span) = module.parse(input).unwrap();
+    let module = module.parse(input).unwrap();
 
-    assert_eq!(span, 0..79);
+    assert_eq!(module.span, 0..79);
 
     assert_eq!(
-        items,
+        module.items,
         vec![
             AstEntityItem::Expression(AstExpression::new(
                 AstString::new("entity1", false, 9..16),
@@ -49,12 +49,12 @@ fn module_with_defines() {
         @ANOTHER_DEFINE = "hello"
     "#,
     );
-    let (items, span) = module.parse(input).unwrap();
+    let module = module.parse(input).unwrap();
 
-    assert_eq!(span, 0..64);
+    assert_eq!(module.span, 0..64);
 
     assert_eq!(
-        items,
+        module.items,
         vec![
             AstEntityItem::Expression(AstExpression::new(
                 AstString::new("@MY_DEFINE", false, 9..19),
@@ -81,12 +81,12 @@ fn module_with_properties() {
         }
     "#,
     );
-    let (items, span) = module.parse(input).unwrap();
+    let module = module.parse(input).unwrap();
 
-    assert_eq!(span, 0..111);
+    assert_eq!(module.span, 0..111);
 
     assert_eq!(
-        items,
+        module.items,
         vec![
             AstEntityItem::Expression(AstExpression::new(
                 AstString::new("@MY_DEFINE", false, 9..19),
@@ -140,12 +140,12 @@ fn module_with_value_list() {
         "#,
     );
 
-    let (items, span) = module.parse(input).unwrap();
+    let module = module.parse(input).unwrap();
 
-    assert_eq!(span, 0..143);
+    assert_eq!(module.span, 0..143);
 
     assert_eq!(
-        items,
+        module.items,
         vec![
             AstEntityItem::Item(AstValue::String(AstString::new(
                 "weapon_type_energy",
@@ -175,11 +175,11 @@ fn module_with_value_list() {
 fn empty_module() {
     let input = LocatingSlice::new(r#""#);
 
-    let (items, span) = module.parse(input).unwrap();
+    let module = module.parse(input).unwrap();
 
-    assert_eq!(span, 0..0);
+    assert_eq!(module.span, 0..0);
 
-    assert_eq!(items, vec![]);
+    assert_eq!(module.items, vec![]);
 }
 
 #[test]
@@ -190,33 +190,33 @@ fn commented_out_module() {
         "#,
     );
 
-    let (items, span) = module.parse(input).unwrap();
+    let module = module.parse(input).unwrap();
 
-    assert_eq!(span, 0..32);
+    assert_eq!(module.span, 0..32);
 
-    assert_eq!(items, vec![]);
+    assert_eq!(module.items, vec![]);
 }
 
 #[test]
 fn commented_out_module_2() {
     let input = LocatingSlice::new(r#"# @foo = 1"#);
 
-    let (items, span) = module.parse(input).unwrap();
+    let module = module.parse(input).unwrap();
 
-    assert_eq!(span, 0..10);
+    assert_eq!(module.span, 0..10);
 
-    assert_eq!(items, vec![]);
+    assert_eq!(module.items, vec![]);
 }
 
 #[test]
 fn handle_bom() {
     let input = LocatingSlice::new("\u{feff}# Comment");
 
-    let (items, span) = module.parse(input).unwrap();
+    let module = module.parse(input).unwrap();
 
-    assert_eq!(span, 0..12);
+    assert_eq!(module.span, 0..12);
 
-    assert_eq!(items, vec![]);
+    assert_eq!(module.items, vec![]);
 }
 
 #[test]
@@ -225,19 +225,29 @@ fn item_with_comments() {
         r#"
         # comment1
         my_var # comment2
+        # comment3
+        # comment4
         "#,
     );
 
-    let (items, _span) = module.parse(input).unwrap();
+    let module = module.parse(input).unwrap();
 
     assert_eq!(
-        items,
-        vec![AstEntityItem::Item(AstValue::String(AstString {
-            value: AstToken::new("my_var", 28..34),
-            is_quoted: false,
-            leading_newlines: 0,
+        module,
+        AstModule {
+            items: vec![AstEntityItem::Item(AstValue::String(AstString {
+                value: AstToken::new("my_var", 28..34),
+                is_quoted: false,
+                leading_newlines: 0,
+                leading_comments: vec![],
+                trailing_comment: Some(AstComment::new(" comment2", 35..45)),
+            }))],
+            span: 0..92,
             leading_comments: vec![AstComment::new(" comment1", 9..19)],
-            trailing_comment: Some(AstComment::new(" comment2", 35..45)),
-        }))],
+            trailing_comments: vec![
+                AstComment::new(" comment3", 54..64),
+                AstComment::new(" comment4", 73..83),
+            ],
+        }
     );
 }

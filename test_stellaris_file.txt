@@ -1,946 +1,370 @@
-############################
-### ANOMALY CATEGORIES ###
-############################
-
-@distar_weight = 1
-
-# Crashed Ship (Asteroid)
-crashed_ship_asteroid_category = {
-	desc = crashed_ship_asteroid_category_desc
-	picture = GFX_evt_crashed_station
-	level = 3
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_asteroid = yes
-		}
-	}
-
-	on_success = {
-		1 = anomaly.35
-		1 = {
-			modifier = {
-				factor = 0
-				from = { has_any_strategic_resource = yes }
-			}
-			anomaly_event = anomaly.65
-		}
-	}
-}
-
-# Unknown Origin (Asteroid)
-origin_asteroid_category = {
-	desc = "origin_asteroid_category_desc"
-	picture = GFX_evt_mining_station
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_asteroid = yes
-		}
-	}
-
-	on_success = {
-		1 = {
-			modifier = {
-				factor = 0
-				from = { has_any_strategic_resource = yes }
-			}
-			anomaly_event = anomaly.1
-		}
-		1 = anomaly.15
-		0 = {
-			modifier = {
-				add = @distar_weight
-				has_distar = yes
-			}
-			modifier = {
-				factor = 0
-				from = { has_any_strategic_resource = yes }
-			}
-			anomaly_event = distar.225
-		}
-	}
-}
-
-# Covered in Debris (Asteroid)
-debris_asteroid_category = {
-	desc = "debris_asteroid_category_desc"
-	picture = GFX_evt_mining_station
-	level = 3
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_asteroid = yes
-			has_any_strategic_resource = no
-		}
-	}
-
-	on_success = {
-		1 = anomaly.30
-		1 = anomaly.6800
-	}
-}
-
-# Energy Emissions (Asteroid)
-emissions_asteroid_category = {
-	desc = "emissions_asteroid_category_desc"
-	picture = GFX_evt_mining_station
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_asteroid = yes
-		}
-	}
-
-	on_success = {
-		1 = {
-			modifier = {
-				factor = 0
-				from = { has_any_strategic_resource = yes }
-			}
-			anomaly_event = anomaly.50
-		}
-		1 = anomaly.60
-	}
-}
-
-# Docking Hatch (Asteroid)
-hatch_asteroid_category = {
-	desc = "hatch_asteroid_category_desc"
-	picture = GFX_evt_mining_station
-	level = 3
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_asteroid = yes
-		}
-	}
-
-	on_success = {
-		1 = anomaly.5
-		1 = {
-			modifier = {
-				factor = 0
-				from = { has_any_strategic_resource = yes }
-			}
-			anomaly_event = anomaly.25
-		}
-	}
-}
-
-# Collision Asteroid (Asteroid)
-collision_asteroid_category = {
-	desc = "collision_asteroid_category_desc"
-	picture = GFX_evt_mining_station
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_asteroid = yes
-		}
-	}
-
-	max_once = yes
-
-	on_success = {
-		1 = {
-			modifier = {
-				factor = 0
-				from = { has_any_strategic_resource = yes }
-			}
-			anomaly_event = anomaly.55
-		}
-		1 = anomaly.6805
-	}
-}
-
-# Abandoned Station (Asteroid)
-station_asteroid_category = {
-	desc = "station_asteroid_category_desc"
-	picture = GFX_evt_mining_station
-	level = 3
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_asteroid = yes
-			num_minerals > 0
-		}
-	}
-
-	max_once = yes
-
-	on_success = {
-		1 = anomaly.40
-		1 = anomaly.6810
-	}
-}
-
-# Life Signs (Asteroid)
-life_asteroid_category = {
-	desc = "life_asteroid_category_desc"
-	picture = GFX_evt_microscopic_life
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_asteroid = yes
-			has_any_strategic_resource = no
-		}
-	}
-
-	max_once = yes
-
-	on_success = {
-		1 = anomaly.10
-		1 = anomaly.6825
-	}
-}
-
-# Atmospheric Object (Gas Giant)
-object_gasgiant_category = {
-	desc = "object_gasgiant_category_desc"
-	picture = GFX_evt_gas_giant_station
-	level = 4
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_gas_giant
-		}
-	}
-
-	on_success = {
-		1 = anomaly.325
-		1 = anomaly.335
-	}
-}
-
-# Promising Moon (Gas Giant)
-moon_gasgiant_category = {
-	desc = "moon_gasgiant_category_desc"
-	picture = GFX_evt_ship_in_orbit_3
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_gas_giant
-			has_any_strategic_resource = no
-		}
-	}
-
-	max_once = yes
-
-	on_success = {
-		1 = anomaly.340
-		0 = {
-			modifier = {
-				add = 10
-				FROM = { has_ring = no }
-			}
-			anomaly_event = anomaly.6840
-		}
-	}
-}
-
-# Life Signs (Gas Giant)
-life_gasgiant_category = {
-	desc = "life_gasgiant_category_desc"
-	picture = GFX_evt_atmospheric_flight
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_gas_giant
-			has_any_strategic_resource = no
-		}
-	}
-
-	max_once = yes
-
-	on_success = {
-		1 = anomaly.300
-		1 = anomaly.6845
-	}
-}
-
-# Atmospheric Storms (Gas Giant)
-storms_gasgiant_category = {
-	desc = "storms_gasgiant_category_desc"
-	picture = GFX_evt_atmospheric_flight
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_gas_giant
-		}
-	}
-
-	on_success = {
-		1 = anomaly.330
-		0 = {
-			modifier = {
-				add = 1
-				owner = {
-					count_owned_ship = {
-						limit = { is_ship_class = shipclass_science_ship }
-						count > 1
-					}
-				}
-			}
-			anomaly_event = anomaly.6855
-		}
-	}
-}
-
-
-aerostat_gasgiant_category = {
-	desc = "aerostat_gasgiant_category_desc"
-	picture = GFX_evt_gas_giant_station
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_gas_giant
-		}
-	}
-
-	on_success = {
-		1 = anomaly.310
-		1 = anomaly.315
-	}
-}
-
-
-cargo_gasgiant_category = {
-	desc = "cargo_gasgiant_category_desc"
-	picture = GFX_evt_ship_in_orbit
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_gas_giant
-		}
-	}
-
-	on_success = {
-		1 = anomaly.305
-		1 = anomaly.6865
-	}
-}
-
-
-debris_gasgiant_category = {
-	desc = "debris_gasgiant_category_desc"
-	picture = GFX_evt_ruined_system
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_gas_giant
-			has_any_strategic_resource = no
-		}
-	}
-
-	on_success = {
-		0 = {
-			modifier = {
-				add = 1
-				OR = {
-					any_system = {
-						OR = {
-							has_star_flag = com_sol
-							has_star_flag = nuked_sol
-						}
-					}
-					any_country = {
-						OR = {
-							has_country_flag = human_1
-							has_country_flag = humans_early_space_age
-						}
-					}
-				}
-				owner = {
-					NOR = {
-						is_human_species = yes
-						has_country_flag = human_1
-						has_country_flag = human_2
-					}
-				}
-			}
-			anomaly_event = distar.1055
-		}
-		1 = anomaly.320
-	}
-}
-
-
-impact_uninhabitable_category = {
-	desc = "impact_uninhabitable_category_desc"
-	picture = GFX_evt_nuclear_explosion
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			uninhabitable_regular_planet = yes
-		}
-	}
-
-	on_success = {
-		1 = {
-			modifier = {
-				factor = 0
-				from = { has_any_strategic_resource = yes }
-			}
-			anomaly_event = anomaly.600
-		}
-		1 = anomaly.605
-	}
-}
-
-
-energy_uninhabitable_category = {
-	desc = "energy_uninhabitable_category_desc"
-	picture = GFX_evt_ship_in_orbit_3
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			uninhabitable_regular_planet = yes
-		}
-	}
-
-	on_success = {
-		1 = {
-			modifier = {
-				factor = 0
-				from = { has_any_strategic_resource = yes }
-			}
-			anomaly_event = anomaly.610
-		}
-		1 = anomaly.615
-		1 = anomaly.655
-		1 = distar.1040
-	}
-}
-
-
-signal_uninhabitable_category = {
-	desc = "signal_uninhabitable_category_desc"
-	picture = GFX_evt_ship_in_orbit_2
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			uninhabitable_regular_planet = yes
-		}
-	}
-
-	on_success = {
-		1 = anomaly.625
-		1 = anomaly.630
-	}
-}
-
-# Asteroid in Orbit (Uninhabitable Planet)
-asteroid_uninhabitable_category = {
-	desc = "asteroid_uninhabitable_category_desc"
-	picture = GFX_evt_asteroid_approaching_planet
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			uninhabitable_regular_planet = yes
-		}
-		modifier = {
-			factor = 0
-			is_moon = yes
-		}
-	}
-
-	on_success = {
-		1 = {
-			modifier = {
-				factor = 0
-				from = { has_any_strategic_resource = yes }
-			}
-			anomaly_event = anomaly.660
-		}
-		1 = anomaly.6875
-	}
-}
-
-# Solar Sailer (Uninhabitable Planet)
-solar_uninhabitable_category = {
-	desc = "solar_uninhabitable_category_desc"
-	picture = GFX_evt_ship_in_orbit
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 2
-			uninhabitable_regular_planet = yes
-		}
-	}
-
-	on_success = anomaly.650
-}
-
-# Life Signs (Toxic Planet)
-life_toxic_category = {
-	desc = "life_toxic_category_desc"
-	picture = GFX_evt_microscopic_life
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_toxic
-			has_any_strategic_resource = no
-		}
-	}
-
-	on_success = {
-		1 = anomaly.690
-		1 = anomaly.6895
-	}
-}
-
-
-life_frozen_category = {
-	desc = "life_frozen_category_desc"
-	picture = GFX_evt_microscopic_life
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_frozen
-			has_any_strategic_resource = no
-		}
-	}
-
-	on_success = {
-		1 = anomaly.2510
-		1 = anomaly.6900
-	}
-
-}
-
-
-life_barren_category = {
-	desc = "life_barren_category_desc"
-	picture = GFX_evt_microscopic_life
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			OR = {
-				is_planet_class = pc_barren
-				is_planet_class = pc_barren_cold
-			}
-			has_any_strategic_resource = no
-		}
-	}
-
-	on_success = anomaly.695
-}
-
-
-#station_uninhabitable_category = {
-#	desc = "station_uninhabitable_category_desc"
-#	picture = GFX_evt_ship_travel
-#	level = 1
 #
-#	spawn_chance = {
-#		modifier = {
-#			add = 3
-#			uninhabitable_regular_planet = yes
-#			num_minerals > 0
-#			exists = space_owner
-#			space_owner = { is_same_value = from.owner }
-#		}
+# These define the type of bypasses that exist in game. This is only the logical connection between systems.
+# These can be added to megastructures.
+#
+# bypass_type = {
+#	name = GATEWAY_GALACTIC		# the localization key used in triggers and effects for the type
+#	is_pathfind = yes			# whether this type can be automatically used by the pathfinding (otherwise you'll have to right click the object containing it)
+#	requires_exploration = no	# whether this bypass type needs to be 'seen' before it can be used
+#	uses_action = no			# whether this type needs an action or can be used automagically
+#	always_active = no			# whether bypasses of these types are automatically active on creation, or if they need to be researched/upgraded to be activated
+#	windup_time = 0.0			# days preparing before travel, translated into ticks on load.
+#	winddown_time = 0.0			# days preparing after travel, translated into ticks on load.
+#	ftl_multiplier = 0			# 0 is supposed to mean instant, WARNING: not implemented correctly.
+#	extends_sensors = yes		# whether you can "see through" the bypass and extends your sensor range to the other side
+#	icon_frame = 25
+#	remember_instances = no	# whether countries remember meeting a specific instance of that type, or if they just remember seeing the type in general
+#	galactic_map_tooltip_header=GATEWAY_GALACTIC
+#	galactic_map_tooltip_desc=GATEWAY_GALACTIC_DESC
+#	connection_type = any_other
+#	ftl_ship_effect	= "gateway_ftl_ship_effect_entity"		# what effect to spawn on the ship when they jump through the bypass
+#	ftl_bypass_effect	= "gateway_ftl_bypass_effect_entity"	# what effect to spawn on the bypass when a ship jumps through
+#	bypass_effect		= ""
+#	animation_time = 3				# number of days to wait for the jump animation to be played
+#	prerequisites = {
+#		tech_gateway_activation
 #	}
+#	on_pre_explore = {					# an effect that is called just before the jump of a right click "explore" action of a fleet
 #
-#	on_success = anomaly.700
-#}
+#	}
+#	country_can_use = {					# trigger to evaluate if a country can use bypasses of this type. this: country, from: (optional) system owner; default: { always = yes }
+#	}
+#	on_action = "on_entering_bypass"	# The name of the on-action event that will be fired upon entering FTL (if set)
+#										# THIS = Fleet
+#										# FROM = System jumping to
+#										# FROMFROM = System jumped from
+# }
 
-
-battle_uninhabitable_category = {
-	desc = "battle_uninhabitable_category_desc"
-	picture = GFX_evt_small_space_battle
-	level = 4
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			uninhabitable_regular_planet = yes
-			has_any_strategic_resource = no
+gateway = {
+	name = GATEWAY_GALACTIC
+	is_pathfind = yes
+	uses_action = no
+	requires_exploration = no
+	always_active = no
+	windup_time = 0
+	winddown_time = 0
+	ftl_multiplier = 0			# 0 means instant
+	icon_frame = 25
+	remember_instances = no	# whether countries remember meeting a specific instance of that type, or if they just remember seeing the type in general
+	galactic_map_tooltip_header=GATEWAY_GALACTIC
+	galactic_map_tooltip_desc=GATEWAY_GALACTIC_DESC
+	connection_type = any_other
+	animation_time = 1
+	ftl_ship_effect = "gateway_ftl_ship_effect_entity"
+	ftl_bypass_effect = "gateway_ftl_bypass_effect_entity"
+	prerequisites = {
+		tech_gateway_activation
+	}
+	on_pre_explore = {
+		activate_gateway = fromfrom
+		if = {
+			limit = { num_active_gateways = 1 }
+			random_megastructure = {
+				limit = { is_megastructure_type = gateway_ruined }
+				upgrade_megastructure_to = gateway_restored
+				finish_upgrade = yes
+			}
 		}
 	}
 
-	on_success = anomaly.2530
+	respect_closed_borders = yes
+	block_access_if_hostile = yes
+
+	on_action = "on_entering_gateway"
 }
 
+wormhole = {
+	name = NATURAL_WORMHOLE_GALACTIC
+	is_pathfind = yes
+	uses_action = no
+	requires_exploration = yes
+	always_active = yes
+	windup_time = 0
+	winddown_time = 0
+	ftl_multiplier = 0
+	extends_sensors = yes
+	icon_frame = 12
+	remember_instances = yes
+	animation_time = 1
+	galactic_map_tooltip_header=NATURAL_WORMHOLE_GALACTIC
+	galactic_map_tooltip_desc=NATURAL_WORMHOLE_DESC
+	connection_type = one_to_one
+	ftl_ship_effect = "wormhole_ftl_ship_effect_entity"
+	ftl_bypass_effect = "wormhole_ftl_bypass_effect_entity"
+	can_bypass_be_locked = yes
 
-shipyard_uninhabitable_category = {
-	desc = "shipyard_uninhabitable_category_desc"
-	picture = GFX_evt_ruined_system
-	level = 4
+	prerequisites = {
+		tech_wormhole_stabilization
+	}
 
-	spawn_chance = {
-		modifier = {
-			add = 1
-			uninhabitable_regular_planet = yes
+	potential = {
+		always = yes
+	}
+	on_action = "on_entering_wormhole"
+}
+
+lgate = {
+	name = LGATE_GALACTIC
+	is_pathfind = yes
+	uses_action = no
+	always_active = no
+	windup_time = 0
+	winddown_time = 0
+	ftl_multiplier = 0			# 0 means instant
+	icon_frame = 30
+	remember_instances = no	# whether countries remember meeting a specific instance of that type, or if they just remember seeing the type in general
+	galactic_map_tooltip_header = LGATE_GALACTIC
+	galactic_map_tooltip_desc = LGATE_GALACTIC_DESC
+	connection_type = scripted_connection
+	animation_time = 1
+	ftl_ship_effect = "gateway_ftl_ship_effect_entity"
+	ftl_bypass_effect = "gateway_ftl_bypass_effect_entity"
+	can_bypass_be_locked = yes
+
+	country_can_use = {
+		custom_tooltip = {
+			fail_text = LGATE_COUNTRY_CANNOT_USE
+			has_global_flag = lgates_activated_globally
 		}
 	}
 
-	on_success = anomaly.2550
+	scripted_connection = {
+
+		# defines endpoints that can only reach the "nexus"
+		node = {
+			# system scope
+			has_star_flag = lgate
+		}
+
+		# defines endpoint(s) that can reach all "nodes" (but not other nexuses)
+		nexus = {
+			# system scope
+			has_star_flag = lcluster1
+		}
+	}
 }
 
+relay_bypass = {
+	name = HYPER_RELAY_GALACTIC
+	is_pathfind = yes
+	uses_action = no
+	always_active = yes
+	windup_time = 10
+	winddown_time = 0
+	icon_frame = 30
+	remember_instances = no
+	galactic_map_tooltip_header = HYPER_RELAY_GALACTIC
+	galactic_map_tooltip_desc = HYPER_RELAY_GALACTIC_DESC
+	connection_type = hyper_relay
+	animation_time = 1
+	ftl_ship_effect = "gateway_ftl_ship_effect_entity"
+	ftl_bypass_effect = "gateway_ftl_bypass_effect_entity"
 
-inhabited_toxic_category = {
-	desc = "inhabited_toxic_category_desc"
-	picture = GFX_evt_relic_world_street
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_toxic
-			has_any_strategic_resource = no
+	country_can_use = {
+		NOT = {
+			is_country_type = synth_queen_convoys
 		}
 	}
 
-	on_success = {
-		1 = anomaly.670
-		1 = anomaly.685
-	}
+	respect_closed_borders = yes
+	block_access_if_hostile = yes
 }
 
-
-writing_uninhabitable_category = {
-	desc = "writing_uninhabitable_category_desc"
-	picture = GFX_evt_ship_in_orbit
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			uninhabitable_regular_planet = yes
-			has_any_strategic_resource = no
-		}
+quantum_catapult = {
+	name = quantum_catapult_BYPASS
+	is_pathfind = no
+	uses_action = no
+	requires_exploration = no
+	always_active = yes
+	windup_time = 30
+	winddown_time = 360
+	ftl_multiplier = 0			# 0 means instant
+	icon_frame = 25
+	remember_instances = no	# whether countries remember meeting a specific instance of that type, or if they just remember seeing the type in general
+	galactic_map_tooltip_header=quantum_catapult_BYPASS
+	galactic_map_tooltip_desc=quantum_catapult_BYPASS_DESC
+	connection_type = to_any_system
+	animation_time = 1
+	ftl_ship_effect = "gateway_ftl_ship_effect_entity"
+	ftl_bypass_effect = "gateway_ftl_bypass_effect_entity"
+	prerequisites = {
+		tech_quantum_catapult
 	}
-
-	on_success = anomaly.635
-}
-
-
-beacon_uninhabitable_category = {
-	desc = "beacon_uninhabitable_category_desc"
-	picture = GFX_evt_ship_in_orbit
-	level = 1
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			uninhabitable_regular_planet = yes
-			has_any_strategic_resource = no
-		}
-	}
-
-	on_success = anomaly.705
-}
-
-
-mountain_uninhabitable_category = {
-	desc = "mountain_uninhabitable_category_desc"
-	picture = GFX_evt_ship_in_orbit_3
-	level = 3
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			uninhabitable_regular_planet = yes
-			has_any_strategic_resource = no
-		}
-	}
-
-	on_success = {
-		1 = anomaly.2520
-		1 = anomaly.6905
-	}
-}
-
-
-object_uninhabitable_category = {
-	desc = "object_uninhabitable_category_desc"
-	picture = GFX_evt_ship_in_orbit_2
-	level = 2
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			uninhabitable_regular_planet = yes
-			has_any_strategic_resource = no
-		}
-	}
-
-	on_success = anomaly.2540
-}
-
-
-signal_gasgiant_category = {
-	desc = "signal_gasgiant_category_desc"
-	picture = GFX_evt_atmospheric_flight
-	level = 5
-
-	spawn_chance = {
-		modifier = {
-			add = 1
-			is_planet_class = pc_gas_giant
-		}
-	}
-
-	max_once_global = yes
-
-	on_success = anomaly.5000
-}
-
-
-ship_gasgiant_category = {
-	desc = "ship_gasgiant_category_desc"
-	picture = GFX_evt_atmospheric_flight
-	level = 5
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_gas_giant
-		}
-	}
-
-	on_success = anomaly.2560
-}
-
-
-terminal_gasgiant_category = {
-	desc = "terminal_gasgiant_category_desc"
-	picture = GFX_evt_ship_in_orbit_3
-	level = 5
-	#risk = 30
-
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_planet_class = pc_gas_giant
-			is_moon = no
-		}
-	}
-
-	on_success = anomaly.2570
-}
-
-
-sol_wasteland_category = {
-	desc = "sol_wasteland_category_desc"
-	picture = GFX_evt_city_ruins
-	level = 1
-
-	#Spawn set via initialisers
-
-	on_success = galactic_features.104
-}
-
-living_metal_category = {
-	desc = "living_metal_category_desc"
-	picture = GFX_evt_cold_barren
-	level = 7
-
-	should_ai_and_humans_use = yes
-
-	spawn_chance = {
-		modifier = {
-			add = 0.1
+	country_can_use = {
+		custom_tooltip = {
+			fail_text = QUANTUM_CATAPULT_COUNTRY_CANNOT_USE
 			OR = {
-				is_planet_class = pc_barren
-				is_planet_class = pc_barren_cold
-				is_asteroid = yes
-			}
-			has_any_strategic_resource = no
-		}
-		modifier = {
-			factor = 0
-			OR = {
-				has_deposit_for = shipclass_mining_station
-				has_deposit_for = shipclass_research_station
+				NOT = { exists = from }
+				is_same_value = from
+				is_in_federation_with = from
+				is_overlord_to = from
+				from = { is_overlord_to = root }
 			}
 		}
 	}
-
-	on_success = anomaly.2576
+	on_action = "on_entering_quantum_catapult"
 }
 
-the_lonely_bot_category = {
-	desc = "the_lonely_bot_category_desc"
-	picture = "GFX_evt_alien_ruins"
+shroud_tunnel = {
+	name = SHROUD_TUNNEL_GALACTIC
+	is_pathfind = yes
+	requires_exploration = no
+	uses_action = yes #opt-in to risky Shroud transit
+	always_active = yes
+	windup_time = 40
+	winddown_time = 20
+	ftl_multiplier = 0 #instant
+	extends_sensors = no
+	icon_frame = 25
+	remember_instances = no
+	galactic_map_tooltip_header = SHROUD_TUNNEL_GALACTIC
+	galactic_map_tooltip_desc = SHROUD_TUNNEL_GALACTIC_DESC
+	system_view_tooltip_header = BYPASS_NAME_SHROUD_TUNNEL
+	connection_type = scripted_connection
+	can_bypass_be_locked = yes
 
-	max_once_global = yes
-
-	level = 3
-
-	spawn_chance = {
-		modifier = {
-			add = 0.1
-			colonizable_planet = yes
-			years_passed > 10
-		}
-		modifier = {
-			factor = 3
-			is_planet_class = pc_relic
-		}
-		modifier = {
-			factor = 0
-			OR = {
-				from.owner = { is_gestalt = yes }
-				is_artificial = yes
+	scripted_connection = {
+		node = { #system scope
+			starbase = {
+				has_starbase_building = shroud_beacon
 			}
+		}
+		nexus = { #system scope
+			has_star_flag = shroud_tunnel_nexus
 		}
 	}
 
-	on_success = anomaly.2580
-}
+	ftl_ship_effect	= "gateway_ftl_ship_effect_entity"
+	ftl_bypass_effect = "gateway_ftl_bypass_effect_entity"
+	animation_time = 3 # number of days to wait for the jump animation to be played
 
-# Fungal Emitters
-fungal_emitters_category = {
-	desc = "fungal_emitters_category_desc"
-	picture = GFX_evt_cold_barren
-	level = 4
-
-	spawn_chance = {
-		modifier = {
-			add = 30
-			is_planet_class = pc_barren
-			has_global_flag = fumongus_spawned
-			closest_system = {
-				limit = {
-					has_star_flag = fumongus_system
-				}
-				min_steps = 1
-				max_steps = 12
-			}
-		}
-	}
-
-	on_success = {
-		1 = {
-			modifier = {
-				factor = 0
-				owner = { has_global_flag = fumongus_resolved }
-			}
-			anomaly_event = anomaly.6755
-		}
-		1 = {
-			modifier = {
-				factor = 0
-				owner = {
-					NAND = {
-						has_global_flag = fumongus_resolved
-						has_global_flag = fumongus_active
+	country_can_use = { # this = country; from = system owner | default = yes
+		OR = {
+			has_technology = tech_psionic_theory
+			custom_tooltip = {
+				text = shroud_beacon_active_tooltip
+				has_country_flag = shroudwalker_enclave_bought_shroud_beacon
+					any_system_within_border = {
+					starbase = {
+						has_starbase_building = shroud_beacon
 					}
 				}
 			}
-			anomaly_event = anomaly.6760
-		}
-		1 = {
-			modifier = {
-				factor = 0
-				owner = {
-					NAND = {
-						has_global_flag = fumongus_dismantled
-						has_global_flag = fumongus_resolved
-					}
-				}
-			}
-			anomaly_event = anomaly.6765
 		}
 	}
+	on_action = "on_entering_shroud_tunnel" # To be fired upon entering FTL into this bypass | this = fleet; from = system being jumped to; fromfrom = system being jumped from
 }
 
-lost_soul_cat = {
-	desc = "lost_soul_cat_desc"
-	picture = GFX_evt_star_neutron
-	level = 2
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_asteroid = yes
-		}
+strange_wormhole = {
+	name = STRANGE_WORMHOLE
+	is_pathfind = yes
+	uses_action = no
+	requires_exploration = yes
+	always_active = yes
+	windup_time = 0
+	winddown_time = 0
+	ftl_multiplier = 0
+	extends_sensors = no
+	icon_frame = 12
+	remember_instances = yes
+	animation_time = 1
+	galactic_map_tooltip_header = STRANGE_WORMHOLE
+	galactic_map_tooltip_desc = STRANGE_WORMHOLE_DESC
+	system_view_tooltip_header = BYPASS_NAME_STRANGE_WORMHOLE
+	connection_type = one_to_one
+	ftl_ship_effect = "wormhole_ftl_ship_effect_entity"
+	ftl_bypass_effect = "wormhole_ftl_bypass_effect_entity"
+	prerequisites = {
+		tech_rift_sphere
 	}
-	on_success = anomaly.6786
-}
 
-on_solar_sails_cat = {
-	desc = "on_solar_sails_cat_desc"
-	picture = GFX_evt_star_neutron
-	level = 2
-	max_once_global = yes
-	spawn_chance = {
-		modifier = {
-			add = 0.1
-			from.leader = {
-				species = {
-					NOT = { has_trait = trait_aquatic }
-				}
+	potential = {
+		custom_tooltip = {
+			fail_text = STRANGE_WORMHOLE_ACCESS_DENIED
+			OR = {
+				has_country_flag = opened_wormhole_to_formless_system
+				NOT = { has_global_flag = strange_wormholes_locked }
 			}
 		}
-		modifier = {
-			add = 0.3
- 			from.leader = {
- 				species = { has_trait = trait_aquatic }
- 			}
- 		}
- 		modifier = {
- 			factor = 0
- 			from.owner = { is_gestalt = yes }
- 		}
+		custom_tooltip = {
+			fail_text = STRANGE_WORMHOLE_ACCESS_DENIED
+			NOT = { has_global_flag = strange_wormhole_closed }
+		}
 	}
-	on_success = anomaly.7020
+	on_action = "on_entering_strange_wormhole"
 }
 
-on_crashed_ship_cat = {
-	desc = "on_crashed_ship_desc"
-	picture = GFX_evt_physics_cache
-	level = 2
-	spawn_chance = {
-		modifier = {
-			add = 3
-			is_asteroid = yes
-		}
- 		modifier = {
- 			factor = 0
- 			from.owner = { is_gestalt = yes }
- 		}
+
+gateway_ness = {
+	name = GATEWAY_GALACTIC
+	is_pathfind = yes
+	uses_action = no
+	requires_exploration = no
+	always_active = no
+	windup_time = 0
+	winddown_time = 0
+	ftl_multiplier = 0			# 0 means instant
+	icon_frame = 25
+	remember_instances = no	# whether countries remember meeting a specific instance of that type, or if they just remember seeing the type in general
+	galactic_map_tooltip_header=GATEWAY_GALACTIC
+	galactic_map_tooltip_desc=GATEWAY_GALACTIC_DESC
+	connection_type = one_to_one
+	animation_time = 1
+	ftl_ship_effect = "gateway_ftl_ship_effect_entity"
+	ftl_bypass_effect = "gateway_ftl_bypass_effect_entity"
+	prerequisites = {
+		tech_gateway_activation
 	}
-	on_success = anomaly.7030
+	on_pre_explore = {
+		activate_gateway = fromfrom
+	}
+
+	respect_closed_borders = yes
+	block_access_if_hostile = yes
+}
+
+#Unique Wormholes for Starlit Citadel system initializer
+starlit_wormhole = {
+	name = STARLIT_WORMHOLE_GALACTIC
+	is_pathfind = yes
+	uses_action = no
+	requires_exploration = no
+	always_active = yes
+	windup_time = 0
+	winddown_time = 0
+	ftl_multiplier = 0
+	extends_sensors = yes
+	icon_frame = 12
+	remember_instances = no
+	animation_time = 1
+	galactic_map_tooltip_header = STARLIT_WORMHOLE_GALACTIC
+	galactic_map_tooltip_desc = STARLIT_WORMHOLE_DESC
+	connection_type = scripted_connection
+	ftl_ship_effect = "wormhole_ftl_ship_effect_entity"
+	ftl_bypass_effect = "wormhole_ftl_bypass_effect_entity"
+	can_bypass_be_locked = yes
+
+	prerequisites = {
+		tech_wormhole_stabilization
+	}
+
+	scripted_connection = {
+		node = { #system scope
+			has_star_flag = starlit_sealed_system_flag
+		}
+		nexus = { #system scope
+			has_star_flag = starlit_nexus_system
+		}
+	}
+
+	country_can_use = { # this = country; from = system owner | default = yes
+		OR = {
+			is_country_type = default
+			is_country_type = awakened_fallen_empire
+			is_country_type = abandoned_hatchery
+			is_crisis_faction = yes
+			has_global_flag = open_hatchery
+		}
+	}
+	on_action = "on_entering_wormhole"
 }

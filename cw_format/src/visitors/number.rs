@@ -11,9 +11,7 @@ impl<'a> NumberVisitor<'a> {
 }
 
 impl<'a> AstVisitor<'a> for NumberVisitor<'a> {
-    type Result = ();
-
-    fn visit_number(&mut self, node: &AstNumber<'a>) -> Self::Result {
+    fn visit_number(&mut self, node: &AstNumber<'a>) -> () {
         // TODO
         // if node.leading_newlines > 0 {
         //     self.output.push_str(&"\n".repeat(node.leading_newlines));
@@ -31,8 +29,8 @@ impl<'a> AstVisitor<'a> for NumberVisitor<'a> {
         }
 
         if let Some(trailing_comment) = node.trailing_comment.as_ref() {
-            self.output.push_str(trailing_comment.text);
-            self.output.push_str("\n");
+            self.output
+                .push_str(&format!(" #{}\n", trailing_comment.text));
         }
     }
 }

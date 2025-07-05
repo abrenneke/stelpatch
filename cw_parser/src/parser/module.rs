@@ -9,7 +9,7 @@ use winnow::{
 
 use crate::{
     AstBlockItem, AstComment, AstEntityItem, AstExpression, AstNode, Operator, expression,
-    script_value, with_opt_trailing_ws, ws_and_comments,
+    get_comments, opt_ws_and_comments, script_value, with_opt_trailing_ws, ws_and_comments,
 };
 
 use anyhow::anyhow;
@@ -21,7 +21,7 @@ pub struct AstModule<'a> {
     pub span: Range<usize>,
 
     pub leading_comments: Vec<AstComment<'a>>,
-    pub trailing_comment: Option<AstComment<'a>>,
+    pub trailing_comments: Vec<AstComment<'a>>,
 }
 
 pub type AstModuleResult<'a> = Result<AstModule<'a>, anyhow::Error>;
@@ -59,7 +59,7 @@ impl<'a> AstModule<'a> {
             items: Vec::new(),
             span: 0..0,
             leading_comments: vec![],
-            trailing_comment: None,
+            trailing_comments: vec![],
         }
     }
 
@@ -72,12 +72,14 @@ impl<'a> AstModule<'a> {
     pub fn parse_input(&mut self, input: &'a str) -> Result<(), anyhow::Error> {
         let input = LocatingSlice::new(input);
 
-        let (items, span) = module
+        let module = module
             .parse(input)
             .map_err(|e| anyhow!("Failed to parse module: {}", e))?;
 
-        self.items = items;
-        self.span = span;
+        self.items = module.items;
+        self.span = module.span;
+        self.leading_comments = module.leading_comments;
+        self.trailing_comments = module.trailing_comments;
 
         Ok(())
     }
@@ -138,26 +140,29 @@ impl<'a> AstNode<'a> for AstModule<'a> {
     }
 
     fn trailing_comment(&self) -> Option<&AstComment<'a>> {
-        self.trailing_comment.as_ref()
+        self.trailing_comments.last()
     }
 }
 
 /// A module for most intents and purposes is just an entity.
-pub fn module<'a>(
-    input: &mut LocatingSlice<&'a str>,
-) -> ModalResult<(Vec<AstEntityItem<'a>>, Range<usize>)> {
+pub fn module<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstModule<'a>> {
     opt(literal("\u{feff}")).parse_next(input)?;
+
+    let leading_comments = opt_ws_and_comments(input)?;
 
     let ((expressions, _), span): ((Vec<AstBlockItem>, _), _) = repeat_till(
         0..,
-        with_opt_trailing_ws(alt((
+        alt((
             expression
                 .map(AstBlockItem::Expression)
                 .context(StrContext::Label("module expression")),
             script_value
                 .map(AstBlockItem::ArrayItem)
                 .context(StrContext::Label("module script value")),
-        ))),
+            ws_and_comments
+                .map(AstBlockItem::Whitespace)
+                .context(StrContext::Label("module whitespace")),
+        )),
         eof,
     )
     .with_span()
@@ -167,6 +172,8 @@ pub fn module<'a>(
     let mut items = Vec::new();
 
     let span = 0..span.end;
+
+    let mut trailing_comments = Vec::new();
 
     for expression_or_value in expressions {
         match expression_or_value {
@@ -183,8 +190,17 @@ pub fn module<'a>(
                 items.push(AstEntityItem::Item(item));
             }
             AstBlockItem::Conditional(_) => {}
+            AstBlockItem::Whitespace(whitespace) => {
+                // For now... any out of place comments are just added to the end of the module
+                trailing_comments.extend(whitespace.iter().map(|w| w.clone()));
+            }
         }
     }
 
-    Ok((items, span))
+    Ok(AstModule {
+        items,
+        span,
+        leading_comments: get_comments(&leading_comments),
+        trailing_comments: get_comments(&trailing_comments),
+    })
 }

@@ -11,9 +11,7 @@ impl<'a> StringVisitor<'a> {
 }
 
 impl<'a> AstVisitor<'a> for StringVisitor<'a> {
-    type Result = ();
-
-    fn visit_string(&mut self, node: &AstString<'a>) -> Self::Result {
+    fn visit_string(&mut self, node: &AstString<'a>) -> () {
         if node.leading_newlines > 0 {
             self.output.push_str(&"\n".repeat(node.leading_newlines));
         }

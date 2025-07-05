@@ -13,9 +13,7 @@ impl<'a> ExpressionVisitor<'a> {
 }
 
 impl<'a> AstVisitor<'a> for ExpressionVisitor<'a> {
-    type Result = ();
-
-    fn visit_expression(&mut self, node: &cw_parser::AstExpression<'a>) -> Self::Result {
+    fn visit_expression(&mut self, node: &cw_parser::AstExpression<'a>) -> () {
         let mut visitor = StringVisitor::new(self.output);
         visitor.visit_string(&node.key);
 
@@ -25,5 +23,10 @@ impl<'a> AstVisitor<'a> for ExpressionVisitor<'a> {
 
         let mut value_visitor = ValueVisitor::new(self.output);
         value_visitor.visit_value(&node.value);
+
+        // Make sure the output ends with a newline
+        if !self.output.ends_with("\n") {
+            self.output.push_str("\n");
+        }
     }
 }

@@ -11,9 +11,7 @@ impl<'a> MathsVisitor<'a> {
 }
 
 impl<'a> AstVisitor<'a> for MathsVisitor<'a> {
-    type Result = ();
-
-    fn visit_maths(&mut self, node: &AstMaths<'a>) -> Self::Result {
+    fn visit_maths(&mut self, node: &AstMaths<'a>) -> () {
         self.output.push_str(&node.value.to_string());
     }
 }

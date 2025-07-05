@@ -184,9 +184,7 @@ struct ModDefinitionLoaderVisitor<'a> {
 }
 
 impl<'a, 'def> ModDefinitionAstVisitor<'a> for ModDefinitionLoaderVisitor<'def> {
-    type Result = ();
-
-    fn walk_expression(&mut self, node: &AstExpression<'a>) -> Self::Result {
+    fn walk_expression(&mut self, node: &AstExpression<'a>) -> () {
         match node.key.value {
             "version" => {
                 let version = node.value.as_string();

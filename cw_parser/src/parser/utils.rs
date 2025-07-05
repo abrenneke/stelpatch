@@ -101,7 +101,7 @@ pub(crate) fn get_comments<'a>(whitespace: &[CommentOrWhitespace<'a>]) -> Vec<As
 pub(crate) fn opt_trailing_comment<'a>(
     input: &mut LocatingSlice<&'a str>,
 ) -> ModalResult<Option<AstComment<'a>>> {
-    let (_, comments) = (take_while(0.., ' '), opt(comment)).parse_next(input)?;
+    let (_, comments) = (take_while(0.., [' ', '\t']), opt(comment)).parse_next(input)?;
     Ok(comments)
 }
 

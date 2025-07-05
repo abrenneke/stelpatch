@@ -168,13 +168,11 @@ impl<'a> PropertyVisitor<'a> {
 }
 
 impl<'a, 'b> cw_parser::AstVisitor<'b> for PropertyVisitor<'a> {
-    type Result = ();
-
-    fn visit_operator(&mut self, node: &cw_parser::AstOperator<'b>) -> Self::Result {
+    fn visit_operator(&mut self, node: &cw_parser::AstOperator<'b>) -> () {
         self.property.operator = node.operator.into();
     }
 
-    fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> Self::Result {
+    fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> () {
         let mut value = Value::default();
         let mut value_visitor = ValueVisitor::new(&mut value);
         value_visitor.visit_value(node);

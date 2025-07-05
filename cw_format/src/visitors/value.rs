@@ -13,9 +13,7 @@ impl<'a> ValueVisitor<'a> {
 }
 
 impl<'a> AstVisitor<'a> for ValueVisitor<'a> {
-    type Result = ();
-
-    fn visit_value(&mut self, node: &AstValue<'a>) -> Self::Result {
+    fn visit_value(&mut self, node: &AstValue<'a>) -> () {
         match node {
             AstValue::String(string) => {
                 let mut visitor = StringVisitor::new(self.output);

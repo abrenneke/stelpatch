@@ -105,6 +105,9 @@ pub(crate) fn conditional_block<'a>(
             }
             // Nested conditionals possible???
             AstBlockItem::Conditional(_) => {}
+            AstBlockItem::Whitespace(_) => {
+                // For now... out of place comments are ignored
+            }
         }
     }
 
