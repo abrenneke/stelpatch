@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use cw_parser::AstVisitor;
 
 use crate::{
@@ -15,25 +17,54 @@ impl<'a> EntityVisitor<'a> {
     }
 }
 
+const COMPACT_ENTITY_THRESHOLD: usize = 150;
+
+fn format_entity<'a>(output: &mut String, node: &cw_parser::AstEntity<'a>) -> () {
+    // Try short mode for single-value entities
+    if node.items.len() == 1 {
+        let mut buf = String::new();
+
+        buf.push_str("{ ");
+
+        let item = node.items.first().unwrap();
+
+        let mut visitor = ItemVisitor::new(&mut buf);
+        visitor.visit_entity_item(item);
+
+        buf.push_str(" }");
+
+        // If it's short enough, and there are no newlines, use short mode that's
+        // like { key = value } instead of {
+        //   key = value
+        // }
+        if buf.len() < COMPACT_ENTITY_THRESHOLD && buf.find('\n').is_none() {
+            output.push_str(&buf);
+            return;
+        }
+    }
+
+    output.push_str(&format!("{{"));
+
+    let mut buf = String::new();
+    for item in node.items.iter() {
+        let mut visitor = ItemVisitor::new(&mut buf);
+        visitor.visit_entity_item(item);
+    }
+
+    if !buf.is_empty() {
+        output.push_str(&format!("\n{}\n", &indent(&buf)));
+    }
+
+    output.push_str("}");
+}
+
 impl<'a> AstVisitor<'a> for EntityVisitor<'a> {
     fn visit_entity(&mut self, node: &cw_parser::AstEntity<'a>) -> () {
         for comment in node.leading_comments.iter() {
             self.output.push_str(&format!("#{}\n", comment.text));
         }
 
-        self.output.push_str(&format!("{{"));
-
-        let mut buf = String::new();
-        for item in node.items.iter() {
-            let mut visitor = ItemVisitor::new(&mut buf);
-            visitor.visit_entity_item(item);
-        }
-
-        if !buf.is_empty() {
-            self.output.push_str(&format!("\n{}\n", &indent(&buf)));
-        }
-
-        self.output.push_str("}");
+        format_entity(self.output, node);
 
         if let Some(trailing_comment) = node.trailing_comment.as_ref() {
             self.output
