@@ -1,8 +1,15 @@
 use cw_games::stellaris::BaseGame;
 use cw_model::LoadMode;
+use std::time::Instant;
 
 pub fn main() {
-    let loaded_mod = BaseGame::load_global_as_mod_definition(LoadMode::Serial);
+    println!("Starting to load Stellaris base game...");
+    let start_time = Instant::now();
+
+    let loaded_mod = BaseGame::load_global_as_mod_definition(LoadMode::Parallel);
+
+    let load_duration = start_time.elapsed();
+    println!("Loading completed in: {:?}", load_duration);
 
     let num_namespaces = loaded_mod.namespaces.len();
     let num_modules = loaded_mod

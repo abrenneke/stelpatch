@@ -94,14 +94,14 @@ pub(crate) fn conditional_block<'a>(
     for expression in expressions {
         match expression {
             AstBlockItem::Expression(expression) => {
-                items.push(AstEntityItem::Expression(AstExpression::new(
+                items.push(AstEntityItem::Expression(Box::new(AstExpression::new(
                     expression.key,
                     expression.operator,
                     expression.value,
-                )));
+                ))));
             }
             AstBlockItem::ArrayItem(value) => {
-                items.push(AstEntityItem::Item(value));
+                items.push(AstEntityItem::Item(Box::new(value)));
             }
             // Nested conditionals possible???
             AstBlockItem::Conditional(_) => {}

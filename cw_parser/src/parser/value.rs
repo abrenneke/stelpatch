@@ -13,7 +13,7 @@ pub enum AstValue<'a> {
     String(AstString<'a>),
     Number(AstNumber<'a>),
     Entity(AstEntity<'a>),
-    Color(AstColor<'a>),
+    Color(Box<AstColor<'a>>), // color is gigantic, so we box it
     Maths(AstMaths<'a>),
 }
 
@@ -37,7 +37,7 @@ impl<'a> From<AstEntity<'a>> for AstValue<'a> {
 
 impl<'a> From<AstColor<'a>> for AstValue<'a> {
     fn from(value: AstColor<'a>) -> Self {
-        Self::Color(value)
+        Self::Color(Box::new(value))
     }
 }
 
@@ -69,7 +69,7 @@ impl<'a> AstValue<'a> {
         a_span: Option<Range<usize>>,
         span: Range<usize>,
     ) -> Self {
-        Self::Color(AstColor::new(
+        Self::Color(Box::new(AstColor::new(
             color_type,
             color_type_span,
             r,
@@ -81,7 +81,7 @@ impl<'a> AstValue<'a> {
             a,
             a_span,
             span,
-        ))
+        )))
     }
 
     pub fn new_maths(value: &'a str, span: Range<usize>) -> Self {
@@ -188,7 +188,7 @@ impl<'a> AstNode<'a> for AstValue<'a> {
 
 pub(crate) fn script_value<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstValue<'a>> {
     alt((
-        color.map(AstValue::Color),
+        color.map(|c| AstValue::Color(Box::new(c))),
         entity.map(AstValue::Entity),
         number_val.map(AstValue::Number),
         quoted_or_unquoted_string.map(AstValue::String),

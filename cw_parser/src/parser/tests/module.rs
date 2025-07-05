@@ -19,7 +19,7 @@ fn module_with_entities() {
     assert_eq!(
         module.items,
         vec![
-            AstEntityItem::Expression(AstExpression::new(
+            AstEntityItem::Expression(Box::new(AstExpression::new(
                 AstString::new("entity1", false, 9..16),
                 AstOperator::new("=", 17..18).unwrap(),
                 AstValue::Entity(AstEntity::new(19..37).with_property(
@@ -27,8 +27,8 @@ fn module_with_entities() {
                     AstOperator::new("=", 27..28).unwrap(),
                     AstValue::new_string("value1", false, 29..35)
                 ))
-            )),
-            AstEntityItem::Expression(AstExpression::new(
+            ))),
+            AstEntityItem::Expression(Box::new(AstExpression::new(
                 AstString::new("entity2", false, 46..53),
                 AstOperator::new("=", 54..55).unwrap(),
                 AstValue::Entity(AstEntity::new(56..74).with_property(
@@ -36,7 +36,7 @@ fn module_with_entities() {
                     AstOperator::new("=", 64..65).unwrap(),
                     AstValue::new_string("value2", false, 66..72)
                 ))
-            )),
+            ))),
         ]
     );
 }
@@ -56,16 +56,16 @@ fn module_with_defines() {
     assert_eq!(
         module.items,
         vec![
-            AstEntityItem::Expression(AstExpression::new(
+            AstEntityItem::Expression(Box::new(AstExpression::new(
                 AstString::new("@MY_DEFINE", false, 9..19),
                 AstOperator::new("=", 20..21).unwrap(),
                 AstValue::Number(AstNumber::new("123", 22..25))
-            )),
-            AstEntityItem::Expression(AstExpression::new(
+            ))),
+            AstEntityItem::Expression(Box::new(AstExpression::new(
                 AstString::new("@ANOTHER_DEFINE", false, 34..49),
                 AstOperator::new("=", 50..51).unwrap(),
                 AstValue::String(AstString::new("hello", true, 52..59))
-            )),
+            ))),
         ]
     );
 }
@@ -88,17 +88,17 @@ fn module_with_properties() {
     assert_eq!(
         module.items,
         vec![
-            AstEntityItem::Expression(AstExpression::new(
+            AstEntityItem::Expression(Box::new(AstExpression::new(
                 AstString::new("@MY_DEFINE", false, 9..19),
                 AstOperator::new("=", 20..21).unwrap(),
                 AstValue::Number(AstNumber::new("123", 22..25))
-            )),
-            AstEntityItem::Expression(AstExpression::new(
+            ))),
+            AstEntityItem::Expression(Box::new(AstExpression::new(
                 AstString::new("my_var1", false, 34..41),
                 AstOperator::new("=", 42..43).unwrap(),
                 AstValue::String(AstString::new("value1", false, 44..50))
-            )),
-            AstEntityItem::Expression(AstExpression::new(
+            ))),
+            AstEntityItem::Expression(Box::new(AstExpression::new(
                 AstString::new("entity", false, 59..65),
                 AstOperator::new("=", 66..67).unwrap(),
                 AstValue::Entity(AstEntity::new(68..106).with_property(
@@ -106,7 +106,7 @@ fn module_with_properties() {
                     AstOperator::new("=", 88..89).unwrap(),
                     AstValue::new_string("value1", false, 90..96)
                 ))
-            )),
+            ))),
         ]
     );
 }
@@ -147,26 +147,26 @@ fn module_with_value_list() {
     assert_eq!(
         module.items,
         vec![
-            AstEntityItem::Item(AstValue::String(AstString::new(
+            AstEntityItem::Item(Box::new(AstValue::String(AstString::new(
                 "weapon_type_energy",
                 false,
                 13..31
-            ))),
-            AstEntityItem::Item(AstValue::String(AstString::new(
+            )))),
+            AstEntityItem::Item(Box::new(AstValue::String(AstString::new(
                 "weapon_type_kinetic",
                 false,
                 44..63
-            ))),
-            AstEntityItem::Item(AstValue::String(AstString::new(
+            )))),
+            AstEntityItem::Item(Box::new(AstValue::String(AstString::new(
                 "weapon_type_explosive",
                 false,
                 76..97
-            ))),
-            AstEntityItem::Item(AstValue::String(AstString::new(
+            )))),
+            AstEntityItem::Item(Box::new(AstValue::String(AstString::new(
                 "weapon_type_strike_craft",
                 false,
                 110..134
-            ))),
+            )))),
         ]
     );
 }
@@ -235,13 +235,13 @@ fn item_with_comments() {
     assert_eq!(
         module,
         AstModule {
-            items: vec![AstEntityItem::Item(AstValue::String(AstString {
+            items: vec![AstEntityItem::Item(Box::new(AstValue::String(AstString {
                 value: AstToken::new("my_var", 28..34),
                 is_quoted: false,
                 leading_newlines: 0,
                 leading_comments: vec![],
                 trailing_comment: Some(AstComment::new(" comment2", 35..45)),
-            }))],
+            })))],
             span: 0..92,
             leading_comments: vec![AstComment::new(" comment1", 9..19)],
             trailing_comments: vec![

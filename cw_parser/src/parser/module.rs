@@ -89,7 +89,9 @@ impl<'a> AstModule<'a> {
         self.items
             .iter()
             .filter_map(|item| match item {
-                AstEntityItem::Expression(prop) if prop.key.raw_value() == key => Some(prop),
+                AstEntityItem::Expression(prop) if prop.key.raw_value() == key => {
+                    Some(prop.as_ref())
+                }
                 _ => None,
             })
             .collect()
@@ -98,7 +100,7 @@ impl<'a> AstModule<'a> {
     /// Find the first property with the given key name
     pub fn find_property(&self, key: &str) -> Option<&AstExpression<'a>> {
         self.items.iter().find_map(|item| match item {
-            AstEntityItem::Expression(prop) if prop.key.raw_value() == key => Some(prop),
+            AstEntityItem::Expression(prop) if prop.key.raw_value() == key => Some(prop.as_ref()),
             _ => None,
         })
     }
@@ -106,7 +108,7 @@ impl<'a> AstModule<'a> {
     /// Get all properties in the module
     pub fn properties(&self) -> impl Iterator<Item = &AstExpression<'a>> {
         self.items.iter().filter_map(|item| match item {
-            AstEntityItem::Expression(prop) => Some(prop),
+            AstEntityItem::Expression(prop) => Some(prop.as_ref()),
             _ => None,
         })
     }
@@ -114,7 +116,7 @@ impl<'a> AstModule<'a> {
     /// Get all array items in the module
     pub fn array_items(&self) -> impl Iterator<Item = &crate::AstValue<'a>> {
         self.items.iter().filter_map(|item| match item {
-            AstEntityItem::Item(value) => Some(value),
+            AstEntityItem::Item(value) => Some(value.as_ref()),
             _ => None,
         })
     }
@@ -179,15 +181,15 @@ pub fn module<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstModule<'
         match expression_or_value {
             AstBlockItem::Expression(expression) => {
                 if expression.operator.operator == Operator::Equals {
-                    items.push(AstEntityItem::Expression(AstExpression::new(
+                    items.push(AstEntityItem::Expression(Box::new(AstExpression::new(
                         expression.key,
                         expression.operator,
                         expression.value,
-                    )));
+                    ))));
                 }
             }
             AstBlockItem::ArrayItem(item) => {
-                items.push(AstEntityItem::Item(item));
+                items.push(AstEntityItem::Item(Box::new(item)));
             }
             AstBlockItem::Conditional(_) => {}
             AstBlockItem::Whitespace(whitespace) => {

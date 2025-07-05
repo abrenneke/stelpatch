@@ -674,11 +674,11 @@ fn entity_with_dynamic_scripting() {
             .with_conditional_block(AstConditionalBlock::new(
                 false,
                 AstString::new("ALTERED_STABILITY", false, 130..147),
-                vec![AstEntityItem::Expression(AstExpression::new(
+                vec![AstEntityItem::Expression(Box::new(AstExpression::new(
                     AstString::new("subtract", false, 165..173),
                     AstOperator::equals(174..175),
                     AstValue::new_string("$ALTERED_STABILITY$", false, 176..195)
-                ))],
+                )))],
                 128..209
             ))
             .with_property(
