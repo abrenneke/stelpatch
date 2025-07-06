@@ -1,0 +1,1176 @@
+{
+  "properties": {
+    "ai_weight": {
+      "properties": {
+        "base": {
+          "type": "number"
+        },
+        "modifier": {
+          "properties": {
+            "NOT": {
+              "properties": {
+                "has_ethic": {
+                  "enum": [
+                    "ethic_fanatic_materialist",
+                    "ethic_fanatic_spiritualist",
+                    "ethic_fanatic_xenophile"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "OR": {
+              "properties": {
+                "AND": {
+                  "properties": {
+                    "OR": {
+                      "properties": {
+                        "has_ethic": {
+                          "enum": [
+                            "ethic_fanatic_militarist",
+                            "ethic_militarist"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "has_ai_personality_behaviour": {
+                      "enum": [
+                        "robot_liberator",
+                        "slaver"
+                      ],
+                      "type": "string"
+                    },
+                    "has_technology": {
+                      "enum": [
+                        "tech_droid_workers",
+                        "tech_gene_banks",
+                        "tech_neural_implants"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "NAND": {
+                  "properties": {
+                    "OR": {
+                      "properties": {
+                        "has_ethic": {
+                          "enum": [
+                            "ethic_fanatic_militarist",
+                            "ethic_militarist"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "has_ai_personality_behaviour": {
+                      "enum": [
+                        "robot_liberator"
+                      ],
+                      "type": "string"
+                    },
+                    "has_technology": {
+                      "enum": [
+                        "tech_droid_workers",
+                        "tech_gene_banks"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "NOT": {
+                  "properties": {
+                    "has_ai_personality_behaviour": {
+                      "enum": [
+                        "slaver"
+                      ],
+                      "type": "string"
+                    },
+                    "has_policy_flag": {
+                      "enum": [
+                        "robots_outlawed"
+                      ],
+                      "type": "string"
+                    },
+                    "has_technology": {
+                      "enum": [
+                        "tech_telepathy"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "has_technology": {
+                  "enum": [
+                    "tech_gene_seed_purification",
+                    "tech_telepathy"
+                  ],
+                  "type": "string"
+                },
+                "has_valid_civic": {
+                  "enum": [
+                    "civic_reanimated_armies"
+                  ],
+                  "type": "string"
+                },
+                "is_fallen_empire": {
+                  "enum": [
+                    "yes"
+                  ],
+                  "type": "string"
+                },
+                "is_pacifist": {
+                  "enum": [
+                    "yes"
+                  ],
+                  "type": "string"
+                },
+                "is_xenophile": {
+                  "enum": [
+                    "yes"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "check_variable": {
+              "properties": {
+                "value": {
+                  "type": "number"
+                },
+                "which": {
+                  "enum": [
+                    "imperial_legion_soldier_count"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "factor": {
+              "type": "number"
+            },
+            "has_ethic": {
+              "enum": [
+                "ethic_fanatic_xenophobe"
+              ],
+              "type": "string"
+            },
+            "has_origin": {
+              "enum": [
+                "origin_clone_army"
+              ],
+              "type": "string"
+            },
+            "has_technology": {
+              "enum": [
+                "tech_adaptive_combat_algorithms"
+              ],
+              "type": "string"
+            },
+            "is_fallen_empire": {
+              "enum": [
+                "no",
+                "yes"
+              ],
+              "type": "string"
+            },
+            "set": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "allow": {
+      "properties": {
+        "any_owned_pop_group": {
+          "properties": {
+            "is_pop_category": {
+              "enum": [
+                "slave"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "custom_tooltip": {
+          "properties": {
+            "OR": {
+              "properties": {
+                "AND": {
+                  "properties": {
+                    "exists": {
+                      "enum": [
+                        "orbital_defence"
+                      ],
+                      "type": "string"
+                    },
+                    "orbital_defence": {
+                      "properties": {
+                        "exists": {
+                          "enum": [
+                            "starbase"
+                          ],
+                          "type": "string"
+                        },
+                        "starbase": {
+                          "properties": {
+                            "has_starbase_building": {
+                              "enum": [
+                                "ring_slave_processing_facility"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "has_building": {
+                  "enum": [
+                    "building_slave_processing"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "fail_text": {
+              "enum": [
+                "requires_slave_processing_facility"
+              ],
+              "type": "string"
+            },
+            "owner": {
+              "properties": {
+                "NOT": {
+                  "properties": {
+                    "check_variable": {
+                      "properties": {
+                        "value": {
+                          "type": "number"
+                        },
+                        "which": {
+                          "enum": [
+                            "titanic_azizian_soldier_count",
+                            "titanic_life_soldier_count"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "check_variable": {
+                  "properties": {
+                    "value": {
+                      "type": "number"
+                    },
+                    "which": {
+                      "enum": [
+                        "imperial_legion_soldier_count"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "has_country_flag": {
+                  "enum": [
+                    "titanic_azizian_soldiers",
+                    "titanic_life_soldiers"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "planet": {
+              "properties": {
+                "has_planet_flag": {
+                  "enum": [
+                    "titanic_azizian_can_build",
+                    "titanic_life_can_build"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "text": {
+              "enum": [
+                "azizian_troop_limit_tooltip",
+                "imperial_legion_limit_tooltip",
+                "titanic_troop_limit_tooltip"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "owner": {
+          "properties": {
+            "NOT": {
+              "properties": {
+                "has_policy_flag": {
+                  "enum": [
+                    "robots_outlawed"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "army_modifier": {
+      "properties": {
+        "army_damage_empire_sprawl_penalty_mult": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "collateral_damage": {
+      "type": "number"
+    },
+    "damage": {
+      "type": "number"
+    },
+    "defensive": {
+      "enum": [
+        "no",
+        "yes"
+      ],
+      "type": "string"
+    },
+    "disband_if_species_lacks_rights": {
+      "enum": [
+        "no"
+      ],
+      "type": "string"
+    },
+    "has_morale": {
+      "enum": [
+        "no",
+        "yes"
+      ],
+      "type": "string"
+    },
+    "has_species": {
+      "enum": [
+        "no",
+        "yes"
+      ],
+      "type": "string"
+    },
+    "health": {
+      "type": "number"
+    },
+    "icon": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "enum": [
+                "GFX_army_type_defensive",
+                "GFX_army_type_machine_defensive",
+                "GFX_army_type_robot",
+                "GFX_army_type_undead",
+                "GFX_army_type_xenomorph",
+                "GFX_wilderness_army_type_defensive"
+              ],
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "enum": [
+                        "GFX_army_type_xenomorph"
+                      ],
+                      "type": "string"
+                    }
+                  ]
+                },
+                {
+                  "enum": [
+                    "GFX_army_type_machine_assault"
+                  ],
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "enum": [
+                "GFX_army_type_machine_assault"
+              ],
+              "type": "string"
+            }
+          ]
+        }
+      ]
+    },
+    "is_pop_spawned": {
+      "enum": [
+        "no",
+        "yes"
+      ],
+      "type": "string"
+    },
+    "morale": {
+      "type": "number"
+    },
+    "morale_damage": {
+      "type": "number"
+    },
+    "occupation": {
+      "enum": [
+        "yes"
+      ],
+      "type": "string"
+    },
+    "on_queued": {
+      "properties": {
+        "owner": {
+          "properties": {
+            "change_variable": {
+              "properties": {
+                "value": {
+                  "type": "number"
+                },
+                "which": {
+                  "enum": [
+                    "imperial_legion_soldier_count",
+                    "titanic_azizian_soldier_count",
+                    "titanic_life_soldier_count"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "on_unqueued": {
+      "properties": {
+        "owner": {
+          "properties": {
+            "change_variable": {
+              "properties": {
+                "value": {
+                  "type": "number"
+                },
+                "which": {
+                  "enum": [
+                    "imperial_legion_soldier_count",
+                    "titanic_azizian_soldier_count",
+                    "titanic_life_soldier_count"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "pop_limited": {
+      "enum": [
+        "no"
+      ],
+      "type": "string"
+    },
+    "potential": {
+      "properties": {
+        "OR": {
+          "properties": {
+            "AND": {
+              "properties": {
+                "OR": {
+                  "properties": {
+                    "AND": {
+                      "properties": {
+                        "has_building": {
+                          "enum": [
+                            "building_offspring_nest"
+                          ],
+                          "type": "string"
+                        },
+                        "num_assigned_jobs": {
+                          "properties": {
+                            "job": {
+                              "enum": [
+                                "spawning_drone"
+                              ],
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "has_deposit": {
+                      "enum": [
+                        "d_progenitor"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "exists": {
+                  "enum": [
+                    "planet.owner.overlord"
+                  ],
+                  "type": "string"
+                },
+                "has_holding": {
+                  "properties": {
+                    "holding": {
+                      "enum": [
+                        "holding_offspring_nest"
+                      ],
+                      "type": "string"
+                    },
+                    "owner": {
+                      "enum": [
+                        "planet.owner.overlord"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "planet.owner": {
+                  "properties": {
+                    "has_origin": {
+                      "enum": [
+                        "origin_progenitor_hive"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "always": {
+          "enum": [
+            "no"
+          ],
+          "type": "string"
+        },
+        "custom_tooltip": {
+          "properties": {
+            "planet": {
+              "properties": {
+                "has_planet_flag": {
+                  "enum": [
+                    "titanic_azizian_can_build",
+                    "titanic_life_can_build"
+                  ],
+                  "type": "string"
+                },
+                "is_capital": {
+                  "enum": [
+                    "yes"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "text": {
+              "enum": [
+                "azizian_troop_limit_tooltip",
+                "titanic_troop_limit_tooltip"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "exists": {
+          "enum": [
+            "owner"
+          ],
+          "type": "string"
+        },
+        "from": {
+          "properties": {
+            "NOR": {
+              "properties": {
+                "has_trait": {
+                  "enum": [
+                    "trait_limited_cybernetic",
+                    "trait_machine_unit",
+                    "trait_mechanical"
+                  ],
+                  "type": "string"
+                },
+                "is_sapient": {
+                  "enum": [
+                    "no"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "OR": {
+              "properties": {
+                "NOT": {
+                  "properties": {
+                    "host_has_dlc": {
+                      "enum": [
+                        "Utopia"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "OR": {
+                  "properties": {
+                    "has_trait": {
+                      "enum": [
+                        "trait_latent_psionic",
+                        "trait_psionic"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "has_trait": {
+              "enum": [
+                "trait_machine_unit",
+                "trait_mechanical"
+              ],
+              "type": "string"
+            },
+            "is_sapient": {
+              "enum": [
+                "no"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "owner": {
+          "properties": {
+            "OR": {
+              "properties": {
+                "has_valid_civic": {
+                  "enum": [
+                    "civic_machine_assimilator"
+                  ],
+                  "type": "string"
+                },
+                "is_machine_empire": {
+                  "enum": [
+                    "no"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "any_owned_pop_group": {
+              "properties": {
+                "is_pop_category": {
+                  "enum": [
+                    "slave"
+                  ],
+                  "type": "string"
+                },
+                "is_same_species": {
+                  "enum": [
+                    "from"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "is_gestalt": {
+              "enum": [
+                "no",
+                "yes"
+              ],
+              "type": "string"
+            },
+            "is_individual_machine": {
+              "enum": [
+                "yes"
+              ],
+              "type": "string"
+            },
+            "is_machine_empire": {
+              "enum": [
+                "no",
+                "yes"
+              ],
+              "type": "string"
+            },
+            "is_primitive": {
+              "enum": [
+                "no"
+              ],
+              "type": "string"
+            },
+            "is_sovereign_guardianship_empire": {
+              "enum": [
+                "yes"
+              ],
+              "type": "string"
+            },
+            "is_wilderness_empire": {
+              "enum": [
+                "yes"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "planet": {
+          "properties": {
+            "OR": {
+              "properties": {
+                "has_active_building": {
+                  "enum": [
+                    "building_dread_encampment"
+                  ],
+                  "type": "string"
+                },
+                "has_planet_flag": {
+                  "enum": [
+                    "active_dread_outpost"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "has_active_building": {
+              "enum": [
+                "building_dread_encampment"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "potential_country": {
+      "properties": {
+        "NOT": {
+          "properties": {
+            "has_country_flag": {
+              "enum": [
+                "humans_early_space_age",
+                "humans_late_medieval_age",
+                "humans_machine_age"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "OR": {
+          "properties": {
+            "has_active_tradition": {
+              "enum": [
+                "tr_cloning_somatic_synthesization",
+                "tr_cloning_somatic_synthesization_clone_army"
+              ],
+              "type": "string"
+            },
+            "has_civic": {
+              "enum": [
+                "civic_machine_assimilator"
+              ],
+              "type": "string"
+            },
+            "has_country_flag": {
+              "enum": [
+                "atomic_age",
+                "bronze_age",
+                "early_space_age",
+                "industrial_age",
+                "iron_age",
+                "late_medieval_age",
+                "machine_age",
+                "renaissance_age",
+                "steam_age"
+              ],
+              "type": "string"
+            },
+            "has_exploited_disconnected_drones": {
+              "enum": [
+                "yes"
+              ],
+              "type": "string"
+            },
+            "has_policy_flag": {
+              "enum": [
+                "slavery_allowed"
+              ],
+              "type": "string"
+            },
+            "has_valid_civic": {
+              "enum": [
+                "civic_machine_assimilator"
+              ],
+              "type": "string"
+            },
+            "is_machine_empire": {
+              "enum": [
+                "no"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "always": {
+          "enum": [
+            "no"
+          ],
+          "type": "string"
+        },
+        "has_astral_planes_dlc": {
+          "enum": [
+            "yes"
+          ],
+          "type": "string"
+        },
+        "has_country_flag": {
+          "enum": [
+            "titanic_azizian_soldiers",
+            "titanic_life_soldiers",
+            "unlocked_flamestorm_troopers",
+            "unlocked_warplings"
+          ],
+          "type": "string"
+        },
+        "has_relic": {
+          "enum": [
+            "r_war_forge"
+          ],
+          "type": "string"
+        },
+        "has_valid_civic": {
+          "enum": [
+            "civic_reanimated_armies"
+          ],
+          "type": "string"
+        },
+        "is_active_resolution": {
+          "enum": [
+            "resolution_emperor_imperial_legions"
+          ],
+          "type": "string"
+        },
+        "is_country_type": {
+          "enum": [
+            "swarm"
+          ],
+          "type": "string"
+        },
+        "is_galactic_emperor": {
+          "enum": [
+            "yes"
+          ],
+          "type": "string"
+        },
+        "is_individual_machine": {
+          "enum": [
+            "yes"
+          ],
+          "type": "string"
+        },
+        "is_machine_empire": {
+          "enum": [
+            "no",
+            "yes"
+          ],
+          "type": "string"
+        },
+        "is_primitive": {
+          "enum": [
+            "yes"
+          ],
+          "type": "string"
+        },
+        "is_wilderness_empire": {
+          "enum": [
+            "no"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "prerequisites": {
+      "properties": {
+        "_items": {
+          "items": {
+            "enum": [
+              "tech_adaptive_combat_algorithms",
+              "tech_assault_armies",
+              "tech_biomechanics",
+              "tech_droid_workers",
+              "tech_gene_banks",
+              "tech_gene_seed_purification",
+              "tech_morphogenetic_field_mastery",
+              "tech_neural_implants",
+              "tech_telepathy"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "rebel": {
+      "enum": [
+        "yes"
+      ],
+      "type": "string"
+    },
+    "resources": {
+      "properties": {
+        "category": {
+          "enum": [
+            "armies"
+          ],
+          "type": "string"
+        },
+        "cost": {
+          "properties": {
+            "alloys": {
+              "type": "number"
+            },
+            "astral_threads": {
+              "type": "number"
+            },
+            "energy": {
+              "type": "number"
+            },
+            "food": {
+              "type": "number"
+            },
+            "minerals": {
+              "type": "number"
+            },
+            "mult": {
+              "enum": [
+                "@mineral_to_food_cost_ratio"
+              ],
+              "type": "string"
+            },
+            "trigger": {
+              "properties": {
+                "from": {
+                  "properties": {
+                    "country_uses_bio_ships": {
+                      "enum": [
+                        "no",
+                        "yes"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "produces": {
+          "properties": {
+            "energy": {
+              "type": "number"
+            },
+            "trigger": {
+              "properties": {
+                "exists": {
+                  "enum": [
+                    "owner"
+                  ],
+                  "type": "string"
+                },
+                "owner": {
+                  "properties": {
+                    "has_active_tradition": {
+                      "enum": [
+                        "tr_unyielding_resistance_is_frugal"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "unity": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "upkeep": {
+          "properties": {
+            "astral_threads": {
+              "type": "number"
+            },
+            "energy": {
+              "type": "number"
+            },
+            "food": {
+              "type": "number"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "show_tech_unlock_if": {
+      "properties": {
+        "OR": {
+          "properties": {
+            "has_active_tradition": {
+              "enum": [
+                "tr_cloning_somatic_synthesization",
+                "tr_cloning_somatic_synthesization_clone_army"
+              ],
+              "type": "string"
+            },
+            "has_civic": {
+              "enum": [
+                "civic_machine_assimilator"
+              ],
+              "type": "string"
+            },
+            "has_valid_civic": {
+              "enum": [
+                "civic_machine_assimilator"
+              ],
+              "type": "string"
+            },
+            "is_machine_empire": {
+              "enum": [
+                "no"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "has_valid_civic": {
+          "enum": [
+            "civic_reanimated_armies"
+          ],
+          "type": "string"
+        },
+        "is_individual_machine": {
+          "enum": [
+            "yes"
+          ],
+          "type": "string"
+        },
+        "is_machine_empire": {
+          "enum": [
+            "yes"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "spawn_chance": {
+      "properties": {
+        "factor": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "time": {
+      "type": "number"
+    },
+    "use_armynames_from": {
+      "enum": [
+        "primitive_army",
+        "undead_army"
+      ],
+      "type": "string"
+    },
+    "war_exhaustion": {
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

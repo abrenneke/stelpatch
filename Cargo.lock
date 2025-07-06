@@ -470,6 +470,7 @@ dependencies = [
  "dirs",
  "lazy_static",
  "mimalloc",
+ "serde_json",
  "winreg",
 ]
 

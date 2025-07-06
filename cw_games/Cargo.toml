@@ -6,6 +6,9 @@ edition = "2024"
 [[bin]]
 name = "load_stellaris"
 
+[[bin]]
+name = "infer_types"
+
 [[bench]]
 harness = false
 name = "load_base_game"
@@ -17,6 +20,7 @@ cw_model = { path = "../cw_model" }
 dirs = "6.0.0"
 lazy_static = "1.5.0"
 mimalloc = "0.1.47"
+serde_json = "1.0"
 winreg = "0.55.0"
 
 [dev-dependencies]
