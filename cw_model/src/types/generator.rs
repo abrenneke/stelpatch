@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::types::{InferredType, PrimitiveType, TypeRegistry};
 
 /// Generator that outputs type definitions in various formats

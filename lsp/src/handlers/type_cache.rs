@@ -83,6 +83,7 @@ impl TypeCache {
     }
 
     /// Get the type registry for advanced queries
+    #[allow(dead_code)]
     pub fn get_registry(&self) -> &TypeRegistry {
         &self.registry
     }
@@ -289,22 +290,6 @@ fn format_type_description_with_depth(
         }
         InferredType::Unknown => "unknown".to_string(),
     }
-}
-
-/// Get type information for a property path
-/// This is the main public interface for the LSP hover functionality
-pub async fn get_type_info(namespace: &str, property_path: &str) -> Option<TypeInfo> {
-    if !TypeCache::is_initialized() {
-        // If cache isn't ready, return basic info
-        return Some(TypeInfo {
-            property_path: property_path.to_string(),
-            type_description: "Loading type information...".to_string(),
-            inferred_type: None,
-        });
-    }
-
-    let cache = TypeCache::get().unwrap();
-    cache.get_property_type(namespace, property_path)
 }
 
 /// Get type information for a namespace entity (top-level entity structure)

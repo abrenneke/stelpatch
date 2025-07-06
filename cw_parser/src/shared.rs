@@ -8,4 +8,4 @@ pub use comment::*;
 pub use span::*;
 pub use string::*;
 pub use token::*;
-pub use utils::*;
+pub(crate) use utils::*;

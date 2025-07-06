@@ -9,6 +9,7 @@ use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType};
 /// The order here determines the index used in semantic token data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
+#[allow(dead_code)]
 pub enum CwSemanticTokenType {
     Comment = 0,
     String = 1,
@@ -45,6 +46,7 @@ impl CwSemanticTokenType {
     }
 
     /// Convert to the LSP SemanticTokenType constant
+    #[allow(dead_code)]
     pub fn as_lsp_type(self) -> SemanticTokenType {
         match self {
             Self::Comment => SemanticTokenType::COMMENT,

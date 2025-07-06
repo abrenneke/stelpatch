@@ -173,7 +173,7 @@ pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstE
     .context(StrContext::Label("expression"))
     .parse_next(input)?;
 
-    let mut trailing_comment = opt_trailing_comment.parse_next(input)?;
+    let trailing_comment = opt_trailing_comment.parse_next(input)?;
 
     let span = start.start..span.end;
 
@@ -194,7 +194,7 @@ pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstE
             AstBlockItem::Conditional(conditional_block) => {
                 items.push(AstEntityItem::Conditional(Box::new(conditional_block)));
             }
-            AstBlockItem::Whitespace(whitespace) => {
+            AstBlockItem::Whitespace(_whitespace) => {
                 // For now... out of place comments are ignored
             }
         }

@@ -1,8 +1,4 @@
-use std::{
-    fs::File,
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::{fs::File, io::Read, path::Path};
 
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
@@ -83,6 +79,8 @@ pub fn load_playset(dir_path: &Path) -> Result<Vec<EnabledMod>> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     /// Gets /Users/Username/Documents/Paradox Interactive/Stellaris

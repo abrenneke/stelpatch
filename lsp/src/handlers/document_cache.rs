@@ -9,6 +9,8 @@ use tower_lsp::lsp_types::*;
 pub struct CachedDocument {
     document: AstModuleCell,
     semantic_tokens: Vec<SemanticToken>,
+
+    #[allow(dead_code)]
     version: Option<i32>,
 }
 
@@ -45,6 +47,7 @@ impl CachedDocument {
     }
 
     /// Check if this cache entry is valid for the given version
+    #[allow(dead_code)]
     pub fn is_valid_for_version(&self, version: Option<i32>) -> bool {
         self.version == version
     }
@@ -76,6 +79,7 @@ impl DocumentCache {
     }
 
     /// Remove a document from cache
+    #[allow(dead_code)]
     pub async fn remove_document(&self, uri: &str) {
         let mut cache = self.cache.write().await;
         cache.remove(uri);

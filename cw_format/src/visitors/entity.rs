@@ -1,5 +1,3 @@
-use std::ops::Index;
-
 use cw_parser::AstVisitor;
 
 use crate::{

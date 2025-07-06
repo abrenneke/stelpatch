@@ -9,7 +9,7 @@ use winnow::{
 
 use crate::{
     AstBlockItem, AstComment, AstEntityItem, AstExpression, AstNode, Operator, expression,
-    get_comments, opt_ws_and_comments, script_value, with_opt_trailing_ws, ws_and_comments,
+    get_comments, opt_ws_and_comments, script_value, ws_and_comments,
 };
 
 use crate::{CwParseError, ParseError};
