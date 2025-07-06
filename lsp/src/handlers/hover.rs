@@ -5,7 +5,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, jsonrpc::Result};
 
 use super::document_cache::DocumentCache;
-use super::type_cache::get_type_info;
+use super::type_cache::{get_entity_property_type, get_namespace_entity_type};
 use super::utils::{extract_namespace_from_uri, position_to_offset};
 use cw_parser::{AstEntity, AstExpression, AstNode, AstValue, AstVisitor};
 
@@ -128,22 +128,67 @@ pub async fn hover(
         // Extract namespace from URI to get type information
         let namespace = extract_namespace_from_uri(&uri);
 
-        let mut hover_content = format!("**Property:** `{}`", property_path);
+        // Check if this is a top-level key (entity name) or a nested property
+        let is_top_level_key = !property_path.contains('.');
+
+        let mut hover_content = if is_top_level_key {
+            format!("**Entity:** `{}`", property_path)
+        } else {
+            format!("**Property:** `{}`", property_path)
+        };
 
         // Add type information if we can determine the namespace
         if let Some(namespace) = namespace {
             // Only try to get type info if the type cache is initialized
             if crate::handlers::type_cache::TypeCache::is_initialized() {
-                if let Some(type_info) = get_type_info(&namespace, &property_path).await {
-                    hover_content
-                        .push_str(&format!("\n\n**Type:** {}", type_info.type_description));
-
-                    // Add namespace info
-                    hover_content.push_str(&format!("\n\n**Namespace:** `{}`", namespace));
+                if is_top_level_key {
+                    // For top-level keys, show the namespace type (the structure of entities in this namespace)
+                    if let Some(type_info) = get_namespace_entity_type(&namespace).await {
+                        // Use YAML for complex object structures
+                        hover_content.push_str(&format!(
+                            "\n\n**Type:**\n```yaml\n{}\n```",
+                            type_info.type_description
+                        ));
+                    } else {
+                        hover_content.push_str("\n\n*Type information not available*");
+                    }
                 } else {
-                    hover_content.push_str(&format!("\n\n**Namespace:** `{}`", namespace));
-                    hover_content.push_str("\n\n*Type information not available*");
+                    // For nested properties, strip the entity name and look up the property path
+                    let property_parts: Vec<&str> = property_path.split('.').collect();
+                    if property_parts.len() > 1 {
+                        // Skip the first part (entity name) and join the rest
+                        let actual_property_path = property_parts[1..].join(".");
+                        if let Some(type_info) =
+                            get_entity_property_type(&namespace, &actual_property_path).await
+                        {
+                            // For simple types and unions, use TypeScript syntax; for complex objects, use YAML
+                            if type_info.type_description.contains('\n') {
+                                hover_content.push_str(&format!(
+                                    "\n\n**Type:**\n```yaml\n{}\n```",
+                                    type_info.type_description
+                                ));
+                            } else if type_info.type_description.contains('|') {
+                                // Union types look better with TypeScript syntax
+                                hover_content.push_str(&format!(
+                                    "\n\n**Type:**\n```typescript\n{}\n```",
+                                    type_info.type_description
+                                ));
+                            } else {
+                                hover_content.push_str(&format!(
+                                    "\n\n**Type:** `{}`",
+                                    type_info.type_description
+                                ));
+                            }
+                        } else {
+                            hover_content.push_str("\n\n*Type information not available*");
+                        }
+                    } else {
+                        hover_content.push_str("\n\n*Invalid property path*");
+                    }
                 }
+
+                // Add namespace info
+                hover_content.push_str(&format!("\n\n**Namespace:** `{}`", namespace));
             } else {
                 hover_content.push_str(&format!("\n\n**Namespace:** `{}`", namespace));
                 hover_content.push_str("\n\n*Type information loading...*");

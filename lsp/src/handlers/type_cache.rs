@@ -1,5 +1,7 @@
 use cw_games::stellaris::BaseGame;
-use cw_model::{InferredType, LoadMode, TypeInferenceConfig, TypeInferenceEngine, TypeRegistry};
+use cw_model::{
+    InferredType, LoadMode, PrimitiveType, TypeInferenceConfig, TypeInferenceEngine, TypeRegistry,
+};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
@@ -145,79 +147,147 @@ pub struct TypeInfo {
 
 /// Format a type description for display in hover tooltips
 fn format_type_description(inferred_type: &InferredType) -> String {
+    format_type_description_with_depth(inferred_type, 0, 12)
+}
+
+/// Format a type description with depth control and max lines
+fn format_type_description_with_depth(
+    inferred_type: &InferredType,
+    depth: usize,
+    max_lines: usize,
+) -> String {
+    if depth > 4 {
+        return "...".to_string();
+    }
+
     match inferred_type {
-        InferredType::Literal(lit) => format!("Literal: `{}`", lit),
+        InferredType::Literal(lit) => format!("\"{}\"", lit),
         InferredType::LiteralUnion(literals) => {
             let mut sorted: Vec<_> = literals.iter().collect();
             sorted.sort();
-            if sorted.len() <= 5 {
-                format!(
-                    "Union: {}",
-                    sorted
-                        .iter()
-                        .map(|s| format!("`{}`", s))
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                )
-            } else {
-                format!(
-                    "Union: {} options including {}",
-                    literals.len(),
-                    sorted
-                        .iter()
-                        .take(3)
-                        .map(|s| format!("`{}`", s))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-        }
-        InferredType::Primitive(prim) => format!("Type: {:?}", prim),
-        InferredType::PrimitiveUnion(prims) => {
-            format!(
-                "Union: {}",
-                prims
+            if sorted.len() <= 8 {
+                sorted
                     .iter()
-                    .map(|p| format!("{:?}", p))
+                    .map(|s| format!("\"{}\"", s))
                     .collect::<Vec<_>>()
                     .join(" | ")
-            )
-        }
-        InferredType::Object(obj) => {
-            if obj.is_empty() {
-                "Object: {}".to_string()
             } else {
-                let property_count = obj.len();
-                let sample_props: Vec<_> = obj.keys().take(3).cloned().collect();
-                if property_count <= 3 {
-                    format!("Object: {{ {} }}", sample_props.join(", "))
-                } else {
-                    format!(
-                        "Object: {} properties including {{ {} }}",
-                        property_count,
-                        sample_props.join(", ")
-                    )
-                }
+                format!(
+                    "{} | /* ... ({} more) */",
+                    sorted
+                        .iter()
+                        .take(5)
+                        .map(|s| format!("\"{}\"", s))
+                        .collect::<Vec<_>>()
+                        .join(" | "),
+                    literals.len() - 5
+                )
             }
         }
+        InferredType::Primitive(prim) => match prim {
+            PrimitiveType::String => "string".to_string(),
+            PrimitiveType::Number => "number".to_string(),
+            PrimitiveType::Boolean => "boolean".to_string(),
+            PrimitiveType::Color => "color".to_string(),
+            PrimitiveType::Maths => "maths".to_string(),
+        },
+        InferredType::PrimitiveUnion(prims) => prims
+            .iter()
+            .map(|p| match p {
+                PrimitiveType::String => "string".to_string(),
+                PrimitiveType::Number => "number".to_string(),
+                PrimitiveType::Boolean => "boolean".to_string(),
+                PrimitiveType::Color => "color".to_string(),
+                PrimitiveType::Maths => "maths".to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join(" | "),
+        InferredType::Object(obj) => {
+            if obj.is_empty() {
+                return "Entity: {}".to_string();
+            }
+
+            let mut properties: Vec<_> = obj.iter().collect();
+            properties.sort_by_key(|(k, _)| k.as_str());
+
+            let mut lines = vec!["Entity:".to_string()];
+            let mut line_count = 0;
+            let mut properties_processed = 0;
+
+            for (key, value_type) in properties {
+                if line_count >= max_lines {
+                    lines.push(format!(
+                        "  # ... ({} more properties)",
+                        obj.len() - properties_processed
+                    ));
+                    break;
+                }
+
+                let formatted_value = format_type_description_with_depth(
+                    value_type,
+                    depth + 1,
+                    max_lines - line_count,
+                );
+
+                // Handle multi-line types (nested objects)
+                if formatted_value.contains('\n') {
+                    // For nested objects, show them with proper indentation
+                    lines.push(format!("  {}:", key));
+                    let nested_lines: Vec<&str> = formatted_value.lines().collect();
+                    let mut lines_added = 1; // Count the "key:" line
+
+                    for line in nested_lines {
+                        if line.starts_with("Entity:") {
+                            // Skip the "Entity:" line for nested objects
+                            continue;
+                        }
+                        if line_count + lines_added >= max_lines {
+                            lines.push("    # ... (truncated)".to_string());
+                            break;
+                        }
+                        lines.push(format!("    {}", line));
+                        lines_added += 1;
+                    }
+                    line_count += lines_added;
+                } else {
+                    lines.push(format!("  {}: {}", key, formatted_value));
+                    line_count += 1;
+                }
+                properties_processed += 1;
+            }
+
+            lines.join("\n")
+        }
         InferredType::Array(element_type) => {
-            format!("Array<{}>", format_type_description(element_type))
+            let element_desc =
+                format_type_description_with_depth(element_type, depth + 1, max_lines);
+            if element_desc.contains('\n') {
+                format!("array[object]")
+            } else {
+                format!("array[{}]", element_desc)
+            }
         }
         InferredType::Union(types) => {
             if types.len() <= 3 {
+                types
+                    .iter()
+                    .map(|t| format_type_description_with_depth(t, depth + 1, max_lines))
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            } else {
                 format!(
-                    "Union: {}",
+                    "{} | /* ... ({} more types) */",
                     types
                         .iter()
-                        .map(format_type_description)
+                        .take(2)
+                        .map(|t| format_type_description_with_depth(t, depth + 1, max_lines))
                         .collect::<Vec<_>>()
-                        .join(" | ")
+                        .join(" | "),
+                    types.len() - 2
                 )
-            } else {
-                format!("Union: {} types", types.len())
             }
         }
-        InferredType::Unknown => "Unknown (too deeply nested)".to_string(),
+        InferredType::Unknown => "unknown".to_string(),
     }
 }
 
@@ -226,6 +296,47 @@ fn format_type_description(inferred_type: &InferredType) -> String {
 pub async fn get_type_info(namespace: &str, property_path: &str) -> Option<TypeInfo> {
     if !TypeCache::is_initialized() {
         // If cache isn't ready, return basic info
+        return Some(TypeInfo {
+            property_path: property_path.to_string(),
+            type_description: "Loading type information...".to_string(),
+            inferred_type: None,
+        });
+    }
+
+    let cache = TypeCache::get().unwrap();
+    cache.get_property_type(namespace, property_path)
+}
+
+/// Get type information for a namespace entity (top-level entity structure)
+pub async fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
+    if !TypeCache::is_initialized() {
+        return Some(TypeInfo {
+            property_path: "entity".to_string(),
+            type_description: "Loading type information...".to_string(),
+            inferred_type: None,
+        });
+    }
+
+    let cache = TypeCache::get().unwrap();
+    if let Some(namespace_type) = cache.get_namespace_type(namespace) {
+        Some(TypeInfo {
+            property_path: "entity".to_string(),
+            type_description: format_type_description(namespace_type),
+            inferred_type: Some(namespace_type.clone()),
+        })
+    } else {
+        Some(TypeInfo {
+            property_path: "entity".to_string(),
+            type_description: "No type information available for this namespace".to_string(),
+            inferred_type: None,
+        })
+    }
+}
+
+/// Get type information for a property within a namespace entity
+/// The property_path should be just the property path without the entity name
+pub async fn get_entity_property_type(namespace: &str, property_path: &str) -> Option<TypeInfo> {
+    if !TypeCache::is_initialized() {
         return Some(TypeInfo {
             property_path: property_path.to_string(),
             type_description: "Loading type information...".to_string(),
