@@ -5,7 +5,8 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, jsonrpc::Result};
 
 use super::document_cache::DocumentCache;
-use super::utils::position_to_offset;
+use super::type_cache::get_type_info;
+use super::utils::{extract_namespace_from_uri, position_to_offset};
 use cw_parser::{AstEntity, AstExpression, AstNode, AstValue, AstVisitor};
 
 /// A visitor that builds property paths for hover functionality
@@ -124,13 +125,38 @@ pub async fn hover(
     }
 
     if let Some(property_path) = builder.found_property {
-        // Create hover content
-        let hover_text = format!("`{}`", property_path);
+        // Extract namespace from URI to get type information
+        let namespace = extract_namespace_from_uri(&uri);
+
+        let mut hover_content = format!("**Property:** `{}`", property_path);
+
+        // Add type information if we can determine the namespace
+        if let Some(namespace) = namespace {
+            // Only try to get type info if the type cache is initialized
+            if crate::handlers::type_cache::TypeCache::is_initialized() {
+                if let Some(type_info) = get_type_info(&namespace, &property_path).await {
+                    hover_content
+                        .push_str(&format!("\n\n**Type:** {}", type_info.type_description));
+
+                    // Add namespace info
+                    hover_content.push_str(&format!("\n\n**Namespace:** `{}`", namespace));
+                } else {
+                    hover_content.push_str(&format!("\n\n**Namespace:** `{}`", namespace));
+                    hover_content.push_str("\n\n*Type information not available*");
+                }
+            } else {
+                hover_content.push_str(&format!("\n\n**Namespace:** `{}`", namespace));
+                hover_content.push_str("\n\n*Type information loading...*");
+            }
+        } else {
+            hover_content
+                .push_str("\n\n*Not a Stellaris config file (no common/ directory found)*");
+        }
 
         let hover = Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: hover_text,
+                value: hover_content,
             }),
             range: None, // We could calculate the exact range if needed
         };

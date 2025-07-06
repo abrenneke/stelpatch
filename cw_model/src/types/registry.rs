@@ -66,6 +66,22 @@ impl TypeRegistry {
 
     /// Merge two types into a single type
     pub fn merge_types(&self, existing: InferredType, new: InferredType) -> InferredType {
+        self.merge_types_with_depth(existing, new, 0)
+    }
+
+    /// Merge two types into a single type with depth tracking to prevent stack overflow
+    fn merge_types_with_depth(
+        &self,
+        existing: InferredType,
+        new: InferredType,
+        depth: usize,
+    ) -> InferredType {
+        // Check depth limit to prevent stack overflow
+        if depth > self.config.max_depth {
+            // Return Unknown when depth limit is reached to avoid stack overflow
+            return InferredType::Unknown;
+        }
+
         match (existing, new) {
             (InferredType::Unknown, t) | (t, InferredType::Unknown) => t,
 
@@ -119,24 +135,43 @@ impl TypeRegistry {
             (InferredType::Object(mut a), InferredType::Object(b)) if self.config.merge_objects => {
                 for (key, value) in b {
                     let existing = a.entry(key).or_insert(Box::new(InferredType::Unknown));
-                    let existing_clone = (*existing).clone();
-                    let merged = self.merge_types(*existing_clone, *value);
+                    let existing_clone = (**existing).clone();
+                    let merged = self.merge_types_with_depth(existing_clone, *value, depth + 1);
                     *existing = Box::new(merged);
                 }
                 InferredType::Object(a)
             }
 
             (InferredType::Array(a), InferredType::Array(b)) => {
-                let merged = self.merge_types(*a, *b);
+                let merged = self.merge_types_with_depth(*a, *b, depth + 1);
                 InferredType::Array(Box::new(merged))
             }
 
             // Convert to union if types are incompatible
             (a, b) if a != b => {
-                let mut union = Vec::new();
-                union.push(a);
-                union.push(b);
-                InferredType::Union(union)
+                // Flatten unions to avoid nested Union types
+                let mut union_types = Vec::new();
+
+                // Add types from first argument
+                match a {
+                    InferredType::Union(types) => union_types.extend(types),
+                    other => union_types.push(other),
+                }
+
+                // Add types from second argument
+                match b {
+                    InferredType::Union(types) => union_types.extend(types),
+                    other => union_types.push(other),
+                }
+
+                // Remove duplicates (simple approach - just dedup without sorting)
+                union_types.dedup();
+
+                if union_types.len() == 1 {
+                    union_types.into_iter().next().unwrap()
+                } else {
+                    InferredType::Union(union_types)
+                }
             }
 
             (a, _) => a,

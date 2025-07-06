@@ -921,7 +921,10 @@ synth_queen_spawn = {
 						file = "00_solid.dds"
 					}
 					colors = {
-						"grey""grey""null""null"
+						"grey"
+						"grey"
+						"null"
+						"null"
 					}
 				}
 				effect = {
@@ -1588,7 +1591,8 @@ synth_queen_create_war_fleet = {
 }
 
 synth_queen_spawn_history_projects = {
-	optimize_memory# Ensure we got the target
+	optimize_memory
+	# Ensure we got the target
 	if = {
 		limit = {
 			NOT = {
@@ -1857,7 +1861,10 @@ synth_queen_create_convoy_fleet = {
 				file = "00_solid.dds"
 			}
 			colors = {
-				"dark_blue""dark_blue""null""null"
+				"dark_blue"
+				"dark_blue"
+				"null"
+				"null"
 			}
 		}
 		effect = {
@@ -2011,7 +2018,10 @@ synth_queen_create_outpost = {
 				file = "flag_BG_13.dds"
 			}
 			colors = {
-				"burgundy""burgundy""null""null"
+				"burgundy"
+				"burgundy"
+				"null"
+				"null"
 			}
 		}
 		effect = {
@@ -2230,7 +2240,10 @@ synth_queen_create_mini_outpost = {
 				file = "flag_BG_13.dds"
 			}
 			colors = {
-				"burgundy""burgundy""null""null"
+				"burgundy"
+				"burgundy"
+				"null"
+				"null"
 			}
 		}
 		effect = {

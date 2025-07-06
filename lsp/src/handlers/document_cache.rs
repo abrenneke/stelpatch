@@ -36,7 +36,7 @@ impl CachedDocument {
         })
     }
 
-    pub fn borrow_ast<'a>(&'a self) -> Result<&'a AstModule<'a>, &'a anyhow::Error> {
+    pub fn borrow_ast<'a>(&'a self) -> Result<&'a AstModule<'a>, &'a cw_parser::CwParseError> {
         self.document.borrow_dependent().as_ref()
     }
 

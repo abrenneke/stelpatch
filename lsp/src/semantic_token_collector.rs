@@ -182,9 +182,13 @@ pub async fn generate_semantic_tokens(content: &str) -> Vec<SemanticToken> {
     let mut module = AstModule::new();
 
     // Parse the input first
-    if let Err(_) = module.parse_input(content) {
-        // Return empty tokens on parse error
-        return vec![];
+    if let Err(error) = module.parse_input(content) {
+        // Log the parsing error for debugging
+        eprintln!("Parse error in semantic tokens: {}", error);
+
+        // Try to provide basic tokens even if full parsing fails
+        // This gives users some syntax highlighting even when there are errors
+        return generate_basic_tokens(content).await;
     }
 
     // Create a visitor to collect semantic tokens
@@ -194,4 +198,125 @@ pub async fn generate_semantic_tokens(content: &str) -> Vec<SemanticToken> {
     // Visit the parsed module
     collector.visit_module(&module);
     collector.build_tokens()
+}
+
+/// Generate basic semantic tokens when full parsing fails
+/// This provides minimal syntax highlighting for common patterns
+async fn generate_basic_tokens(content: &str) -> Vec<SemanticToken> {
+    let mut tokens = Vec::new();
+
+    // Simple regex-based tokenization for basic syntax highlighting
+    // This is a fallback when the full parser fails
+    let lines: Vec<&str> = content.lines().collect();
+
+    for (line_num, line) in lines.iter().enumerate() {
+        // Match quoted strings
+        if let Some(string_tokens) = match_quoted_strings(line, line_num) {
+            tokens.extend(string_tokens);
+        }
+
+        // Match numbers
+        if let Some(number_tokens) = match_numbers(line, line_num) {
+            tokens.extend(number_tokens);
+        }
+
+        // Match comments
+        if let Some(comment_tokens) = match_comments(line, line_num) {
+            tokens.extend(comment_tokens);
+        }
+    }
+
+    tokens
+}
+
+/// Match quoted strings in a line
+fn match_quoted_strings(line: &str, line_num: usize) -> Option<Vec<SemanticToken>> {
+    let mut tokens = Vec::new();
+
+    // Simple manual string matching
+    let mut chars = line.char_indices().peekable();
+    while let Some((start, ch)) = chars.next() {
+        if ch == '"' {
+            // Find the end quote
+            let mut end = start + 1;
+            while let Some((pos, c)) = chars.next() {
+                end = pos + c.len_utf8();
+                if c == '"' {
+                    break;
+                }
+            }
+
+            tokens.push(SemanticToken {
+                delta_line: line_num as u32,
+                delta_start: start as u32,
+                length: (end - start) as u32,
+                token_type: CwSemanticTokenType::String.as_u32(),
+                token_modifiers_bitset: 0,
+            });
+        }
+    }
+
+    if tokens.is_empty() {
+        None
+    } else {
+        Some(tokens)
+    }
+}
+
+/// Match numbers in a line
+fn match_numbers(line: &str, line_num: usize) -> Option<Vec<SemanticToken>> {
+    let mut tokens = Vec::new();
+
+    // Simple manual number matching
+    let mut chars = line.char_indices().peekable();
+    while let Some((start, ch)) = chars.next() {
+        if ch.is_ascii_digit() {
+            let mut end = start + ch.len_utf8();
+            let mut has_dot = false;
+
+            // Continue while we have digits or one decimal point
+            while let Some((pos, c)) = chars.peek() {
+                if c.is_ascii_digit() {
+                    end = *pos + c.len_utf8();
+                    chars.next();
+                } else if *c == '.' && !has_dot {
+                    has_dot = true;
+                    end = *pos + c.len_utf8();
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+
+            tokens.push(SemanticToken {
+                delta_line: line_num as u32,
+                delta_start: start as u32,
+                length: (end - start) as u32,
+                token_type: CwSemanticTokenType::Number.as_u32(),
+                token_modifiers_bitset: 0,
+            });
+        }
+    }
+
+    if tokens.is_empty() {
+        None
+    } else {
+        Some(tokens)
+    }
+}
+
+/// Match comments in a line
+fn match_comments(line: &str, line_num: usize) -> Option<Vec<SemanticToken>> {
+    // Simple comment detection
+    if let Some(comment_start) = line.find('#') {
+        Some(vec![SemanticToken {
+            delta_line: line_num as u32,
+            delta_start: comment_start as u32,
+            length: (line.len() - comment_start) as u32,
+            token_type: CwSemanticTokenType::Comment.as_u32(),
+            token_modifiers_bitset: 0,
+        }])
+    } else {
+        None
+    }
 }

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { workspace, ExtensionContext, window, OutputChannel, commands } from 'vscode';
+import { workspace, ExtensionContext, window, OutputChannel, commands, TextDocument, languages } from 'vscode';
 
 import {
 	LanguageClient,
@@ -16,6 +16,24 @@ console.log('🔍 CW LSP Extension: Module loaded!');
 let client: LanguageClient;
 let outputChannel: OutputChannel;
 
+/**
+ * Check if a file path contains a 'common' directory, indicating it's a Stellaris config file
+ */
+function isStellarisFile(filePath: string): boolean {
+	const normalizedPath = path.normalize(filePath).replace(/\\/g, '/');
+	return normalizedPath.includes('/common/') && filePath.endsWith('.txt');
+}
+
+/**
+ * Automatically set the language for .txt files in common directories
+ */
+function setLanguageForDocument(document: TextDocument) {
+	if (document.languageId === 'plaintext' && isStellarisFile(document.uri.fsPath)) {
+		log(`🎯 Auto-detecting Stellaris file: ${document.uri.fsPath}`);
+		languages.setTextDocumentLanguage(document, 'stellaris');
+	}
+}
+
 export function activate(context: ExtensionContext) {
 	// Debug: Check if activate function is called
 	console.log('🚀 CW LSP Extension: ACTIVATE FUNCTION CALLED!');
@@ -26,6 +44,27 @@ export function activate(context: ExtensionContext) {
 	
 	log('🚀 CW LSP Extension activating...');
 	log(`Extension path: ${context.extensionPath}`);
+
+	// Set up automatic language detection for currently open documents
+	if (workspace.textDocuments) {
+		for (const document of workspace.textDocuments) {
+			setLanguageForDocument(document);
+		}
+	}
+
+	// Listen for when documents are opened
+	const onDidOpenTextDocument = workspace.onDidOpenTextDocument((document) => {
+		setLanguageForDocument(document);
+	});
+
+	// Listen for when documents are saved (in case they were renamed)
+	const onDidSaveTextDocument = workspace.onDidSaveTextDocument((document) => {
+		setLanguageForDocument(document);
+	});
+
+	// Add event listeners to context subscriptions
+	context.subscriptions.push(onDidOpenTextDocument);
+	context.subscriptions.push(onDidSaveTextDocument);
 	
 	// The server is implemented as a separate cargo project
 	const serverCommand = 'cargo';

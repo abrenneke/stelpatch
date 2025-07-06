@@ -12,7 +12,8 @@ use crate::{
     get_comments, opt_ws_and_comments, script_value, with_opt_trailing_ws, ws_and_comments,
 };
 
-use anyhow::anyhow;
+use crate::{CwParseError, ParseError};
+
 use self_cell::self_cell;
 
 #[derive(Debug, PartialEq)]
@@ -24,7 +25,7 @@ pub struct AstModule<'a> {
     pub trailing_comments: Vec<AstComment<'a>>,
 }
 
-pub type AstModuleResult<'a> = Result<AstModule<'a>, anyhow::Error>;
+pub type AstModuleResult<'a> = Result<AstModule<'a>, CwParseError>;
 
 self_cell!(
     pub struct AstModuleCell {
@@ -63,18 +64,18 @@ impl<'a> AstModule<'a> {
         }
     }
 
-    pub fn from_input(input: &'a str) -> Result<Self, anyhow::Error> {
+    pub fn from_input(input: &'a str) -> Result<Self, CwParseError> {
         let mut module = Self::new();
         module.parse_input(input)?;
         Ok(module)
     }
 
-    pub fn parse_input(&mut self, input: &'a str) -> Result<(), anyhow::Error> {
-        let input = LocatingSlice::new(input);
+    pub fn parse_input(&mut self, input: &'a str) -> Result<(), CwParseError> {
+        let mut input_slice = LocatingSlice::new(input);
 
         let module = module
-            .parse(input)
-            .map_err(|e| anyhow!("Failed to parse module: {}", e))?;
+            .parse_next(&mut input_slice)
+            .map_err(|e| ParseError::from_winnow_error_with_slice(e, input_slice, input))?;
 
         self.items = module.items;
         self.span = module.span;

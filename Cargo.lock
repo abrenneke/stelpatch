@@ -480,6 +480,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cw_format",
+ "cw_games",
+ "cw_model",
  "cw_parser",
  "dashmap 6.1.0",
  "self_cell",

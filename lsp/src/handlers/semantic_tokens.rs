@@ -33,6 +33,7 @@ pub async fn semantic_tokens_full(
             data: token_data,
         })))
     } else {
+        eprintln!("No content found for URI: {}", uri);
         Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
             result_id: None,
             data: vec![],

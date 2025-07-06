@@ -12,6 +12,9 @@ pub struct TypeInferenceConfig {
 
     /// Whether to prefer arrays over single values when multiple values are present
     pub prefer_arrays: bool,
+
+    /// Maximum depth for type inference to prevent stack overflow
+    pub max_depth: usize,
 }
 
 impl Default for TypeInferenceConfig {
@@ -21,6 +24,7 @@ impl Default for TypeInferenceConfig {
             infer_booleans: true,
             merge_objects: true,
             prefer_arrays: false,
+            max_depth: 100, // Prevent stack overflow with deep nesting
         }
     }
 }

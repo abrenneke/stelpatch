@@ -31,13 +31,13 @@ impl TypeInferenceEngine {
             for property in property_list.iter() {
                 // Each top-level key represents an entity instance
                 // We want to merge all these entities into one type
-                all_entities.push(self.infer_from_value(&property.value));
+                all_entities.push(self.infer_from_value(&property.value, 0));
             }
         }
 
         // Process module-level values
         for value in &module.values {
-            all_entities.push(self.infer_from_value(value));
+            all_entities.push(self.infer_from_value(value, 0));
         }
 
         // Merge all entities into a single type for this namespace
@@ -60,8 +60,13 @@ impl TypeInferenceEngine {
         }
     }
 
-    /// Infer type from a single value
-    fn infer_from_value(&self, value: &Value) -> InferredType {
+    /// Infer type from a single value with depth tracking to prevent stack overflow
+    fn infer_from_value(&self, value: &Value, depth: usize) -> InferredType {
+        // Check depth limit to prevent stack overflow
+        if depth > self.registry.config.max_depth {
+            return InferredType::Unknown;
+        }
+
         match value {
             Value::String(s) => {
                 if self.registry.config.infer_booleans {
@@ -84,7 +89,7 @@ impl TypeInferenceEngine {
                     let mut types = Vec::new();
 
                     for property in property_list.iter() {
-                        types.push(self.infer_from_value(&property.value));
+                        types.push(self.infer_from_value(&property.value, depth + 1));
                     }
 
                     let merged_type = if types.len() == 1 {
@@ -111,7 +116,7 @@ impl TypeInferenceEngine {
                 if !entity.items.is_empty() {
                     let mut item_types = Vec::new();
                     for item in &entity.items {
-                        item_types.push(self.infer_from_value(item));
+                        item_types.push(self.infer_from_value(item, depth + 1));
                     }
 
                     let merged_item_type = item_types

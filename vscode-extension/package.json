@@ -18,7 +18,6 @@
           "stellaris"
         ],
         "extensions": [
-          ".txt",
           ".mod",
           ".gui",
           ".gfx"

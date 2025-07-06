@@ -1,3 +1,4 @@
+use super::diagnostics;
 use super::document_cache::DocumentCache;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -26,6 +27,9 @@ pub async fn did_open(
     client
         .log_message(MessageType::INFO, format!("Document opened: {}", uri))
         .await;
+
+    // Generate diagnostics for the opened document
+    diagnostics::generate_diagnostics(client, documents, document_cache, &uri).await;
 }
 
 pub async fn did_change(
@@ -51,5 +55,8 @@ pub async fn did_change(
         client
             .log_message(MessageType::INFO, format!("Document changed: {}", uri))
             .await;
+
+        // Generate diagnostics for the changed document
+        diagnostics::generate_diagnostics(client, documents, document_cache, &uri).await;
     }
 }

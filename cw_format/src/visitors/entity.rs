@@ -49,6 +49,12 @@ fn format_entity<'a>(output: &mut String, node: &cw_parser::AstEntity<'a>) -> ()
     for item in node.items.iter() {
         let mut visitor = ItemVisitor::new(&mut buf);
         visitor.visit_entity_item(item);
+
+        // It might end with a newline because of the item, but it might not, so make sure there's
+        // always a newline at the end of each item
+        if !buf.ends_with('\n') {
+            buf.push('\n');
+        }
     }
 
     if !buf.is_empty() {

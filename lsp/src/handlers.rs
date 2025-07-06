@@ -4,12 +4,14 @@ use tower_lsp::lsp_types::*;
 
 use crate::CwLspServer;
 
+mod diagnostics;
 mod document;
 pub mod document_cache;
 mod formatting;
 mod hover;
 mod semantic_tokens;
 mod server_lifecycle;
+pub mod type_cache;
 pub mod utils;
 
 #[tower_lsp::async_trait]
