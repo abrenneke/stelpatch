@@ -72,7 +72,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use winnow::{LocatingSlice, Parser};
 
-    use crate::{AstMaths, parser::inline_maths};
+    use crate::{AstMaths, cw::inline_maths};
 
     #[test]
     fn inline_maths_test() {

@@ -8,6 +8,13 @@ pub async fn initialize(_params: InitializeParams) -> Result<InitializeResult> {
         capabilities: ServerCapabilities {
             text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
+            completion_provider: Some(CompletionOptions {
+                resolve_provider: Some(false),
+                trigger_characters: Some(vec!["\"".to_string(), " ".to_string()]),
+                all_commit_characters: None,
+                work_done_progress_options: WorkDoneProgressOptions::default(),
+                completion_item: None,
+            }),
             semantic_tokens_provider: Some(
                 SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
                     work_done_progress_options: WorkDoneProgressOptions::default(),

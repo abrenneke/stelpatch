@@ -3,10 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use cw_parser::{
-    ModDefinitionAstVisitor,
-    mod_definition_parser::{AstExpression, AstModDefinitionCell},
-};
+use cw_parser::mod_definition::{AstExpression, AstModDefinitionCell, ModDefinitionAstVisitor};
 use walkdir::WalkDir;
 
 // Define the ModDefinition struct to hold the parsed values

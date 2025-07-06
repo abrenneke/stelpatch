@@ -4,6 +4,7 @@ use tower_lsp::lsp_types::*;
 
 use crate::CwLspServer;
 
+mod completion;
 mod diagnostics;
 mod document;
 pub mod document_cache;
@@ -64,6 +65,10 @@ impl LanguageServer for CwLspServer {
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         hover::hover(&self.client, &self.documents, &self.document_cache, params).await
+    }
+
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        completion::completion(&self.client, &self.documents, &self.document_cache, params).await
     }
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {

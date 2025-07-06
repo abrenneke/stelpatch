@@ -106,7 +106,7 @@ pub(crate) fn mod_definition<'a>(
 mod tests {
     use crate::{
         AstString, AstToken,
-        mod_definition_parser::{array::AstArrayValue, value::AstValue},
+        mod_definition::{array::AstArrayValue, value::AstValue},
     };
     use pretty_assertions::assert_eq;
 

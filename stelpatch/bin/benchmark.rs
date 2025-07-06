@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use clap::{command, Parser};
+use clap::{Parser, command};
 use lasso::ThreadedRodeo;
 use stelpatch::playset::{base_game::BaseGame, game_mod::LoadMode};
 

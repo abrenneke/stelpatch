@@ -1,6 +1,6 @@
 use crate::{
     AstString, AstToken,
-    mod_definition_parser::{AstArrayValue, AstExpression, AstModDefinition, AstValue},
+    mod_definition::{AstArrayValue, AstExpression, AstModDefinition, AstValue},
 };
 
 /// Visitor trait for traversing the mod definition AST

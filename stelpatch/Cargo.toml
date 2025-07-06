@@ -7,14 +7,6 @@ edition = "2024"
 name = "stelpatch"
 path = "src/lib.rs"
 
-[[bin]]
-name = "moddiff"
-path = "bin/moddiff.rs"
-
-[[bin]]
-name = "benchmark"
-path = "bin/benchmark.rs"
-
 [dependencies]
 anyhow = "1.0.70"
 bincode = "2.0.1"

@@ -116,7 +116,10 @@ export function activate(context: ExtensionContext) {
 	// Options to control the language client
 	const clientOptions: LanguageClientOptions = {
 		// Register the server for Stellaris documents
-		documentSelector: [{ scheme: 'file', language: 'stellaris' }],
+		documentSelector: [
+			{ scheme: 'file', language: 'stellaris' },
+			{ scheme: 'file', language: 'plaintext', pattern: '**/common/**/*.txt' }
+		],
 		synchronize: {
 			// Notify the server about file changes to files contained in the workspace
 			fileEvents: workspace.createFileSystemWatcher('**/.clientrc')

@@ -2,7 +2,7 @@ use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrCont
 
 use super::array::array_value;
 use super::string::string_value;
-use crate::{AstComment, AstNode, AstString, mod_definition_parser::array::AstArrayValue};
+use crate::{AstComment, AstNode, AstString, mod_definition::array::AstArrayValue};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum AstValue<'a> {

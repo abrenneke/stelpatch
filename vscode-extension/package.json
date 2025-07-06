@@ -20,7 +20,8 @@
         "extensions": [
           ".mod",
           ".gui",
-          ".gfx"
+          ".gfx",
+          ".txt"
         ],
         "configuration": "./language-configuration.json"
       }

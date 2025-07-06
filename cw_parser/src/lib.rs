@@ -1,10 +1,10 @@
+pub mod cw;
+pub mod cwt;
 mod errors;
-pub mod mod_definition_parser;
-mod mod_definition_visitor;
-mod parser;
-mod visitor;
+pub mod mod_definition;
+mod shared;
 
+pub use cw::*;
+pub use cwt::*;
 pub use errors::*;
-pub use mod_definition_visitor::*;
-pub use parser::*;
-pub use visitor::*;
+pub use shared::*;
