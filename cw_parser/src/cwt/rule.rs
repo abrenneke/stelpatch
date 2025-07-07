@@ -5,8 +5,8 @@ use winnow::{
 };
 
 use crate::{
-    AstComment, AstCwtIdentifier, AstNode, AstString, quoted_or_unquoted_string,
-    with_opt_trailing_ws,
+    AstComment, AstCwtCommentOption, AstCwtIdentifier, AstNode, AstString,
+    quoted_or_unquoted_string, with_opt_trailing_ws,
 };
 
 use super::{AstCwtComment, CwtValue, cwt_identifier, cwt_value};
@@ -54,8 +54,8 @@ pub struct AstCwtRule<'a> {
     pub key: AstCwtRuleKey<'a>,
     pub operator: CwtOperator,
     pub value: CwtValue<'a>,
-    pub options: Vec<CwtOption<'a>>,
-    pub documentation: Option<AstCwtComment<'a>>,
+    pub options: Vec<AstCwtCommentOption<'a>>,
+    pub documentation: Vec<AstCwtComment<'a>>,
     pub span: Range<usize>,
 }
 
@@ -66,46 +66,6 @@ pub enum CwtOperator {
     Equals,
     /// Comparable trigger ==
     ComparableEquals,
-}
-
-/// CWT option directives (from ## comments)
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CwtOption<'a> {
-    pub option_type: CwtOptionType<'a>,
-    pub span: Range<usize>,
-}
-
-/// Types of CWT option directives
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CwtOptionType<'a> {
-    /// Cardinality constraint: cardinality = min..max
-    Cardinality { min: u32, max: CwtCardinalityMax },
-    /// Soft cardinality constraint: cardinality = ~min..max
-    SoftCardinality { min: u32, max: CwtCardinalityMax },
-    /// Push scope: push_scope = scope_name
-    PushScope { scope: &'a str },
-    /// Replace scope: replace_scope = { this = scope1 root = scope2 }
-    ReplaceScope {
-        replacements: Vec<CwtScopeReplacement<'a>>,
-    },
-    /// Severity level: severity = level
-    Severity { level: CwtSeverityLevel },
-    /// Scope constraint: scope = scope_name or scope = { scope1 scope2 }
-    Scope { scopes: Vec<&'a str> },
-    /// Type key filter: type_key_filter = filter_value
-    TypeKeyFilter { filter: &'a str },
-    /// Required option: required
-    Required,
-    /// Primary option: primary
-    Primary,
-    /// Display name: display_name = "name"
-    DisplayName { name: &'a str },
-    /// Abbreviation: abbreviation = "abbr"
-    Abbreviation { abbr: &'a str },
-    /// Starts with: starts_with = "prefix"
-    StartsWith { prefix: &'a str },
-    /// Graph related types: graph_related_types = { type1 type2 }
-    GraphRelatedTypes { types: Vec<&'a str> },
 }
 
 /// Cardinality maximum value
@@ -138,8 +98,8 @@ impl<'a> AstCwtRule<'a> {
         key: AstCwtRuleKey<'a>,
         operator: CwtOperator,
         value: CwtValue<'a>,
-        options: Vec<CwtOption<'a>>,
-        documentation: Option<AstCwtComment<'a>>,
+        options: Vec<AstCwtCommentOption<'a>>,
+        documentation: Vec<AstCwtComment<'a>>,
     ) -> Self {
         let span = key.span_range().start..value.span_range().end;
         Self {
@@ -150,41 +110,6 @@ impl<'a> AstCwtRule<'a> {
             documentation,
             span,
         }
-    }
-
-    /// Check if this rule has a specific option
-    pub fn has_option(&self, option_type: &str) -> bool {
-        self.options.iter().any(|opt| {
-            matches!(
-                (&opt.option_type, option_type),
-                (CwtOptionType::Cardinality { .. }, "cardinality")
-                    | (CwtOptionType::SoftCardinality { .. }, "cardinality")
-                    | (CwtOptionType::PushScope { .. }, "push_scope")
-                    | (CwtOptionType::ReplaceScope { .. }, "replace_scope")
-                    | (CwtOptionType::Severity { .. }, "severity")
-                    | (CwtOptionType::Scope { .. }, "scope")
-                    | (CwtOptionType::TypeKeyFilter { .. }, "type_key_filter")
-                    | (CwtOptionType::Required, "required")
-                    | (CwtOptionType::Primary, "primary")
-                    | (CwtOptionType::DisplayName { .. }, "display_name")
-                    | (CwtOptionType::Abbreviation { .. }, "abbreviation")
-                    | (CwtOptionType::StartsWith { .. }, "starts_with")
-                    | (
-                        CwtOptionType::GraphRelatedTypes { .. },
-                        "graph_related_types"
-                    )
-            )
-        })
-    }
-
-    /// Get the cardinality option if present
-    pub fn get_cardinality(&self) -> Option<&CwtOption<'a>> {
-        self.options.iter().find(|opt| {
-            matches!(
-                opt.option_type,
-                CwtOptionType::Cardinality { .. } | CwtOptionType::SoftCardinality { .. }
-            )
-        })
     }
 
     /// Check if this rule is comparable (uses == operator)
@@ -207,20 +132,6 @@ impl<'a> AstNode<'a> for AstCwtRule<'a> {
     }
 }
 
-impl<'a> AstNode<'a> for CwtOption<'a> {
-    fn span_range(&self) -> Range<usize> {
-        self.span.clone()
-    }
-
-    fn leading_comments(&self) -> &[AstComment<'a>] {
-        &[]
-    }
-
-    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
-        None
-    }
-}
-
 /// Parse a CWT rule
 pub(crate) fn cwt_rule<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstCwtRule<'a>> {
     let ((identifier, operator, value), span) = (
@@ -240,7 +151,7 @@ pub(crate) fn cwt_rule<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<As
         operator,
         value,
         options: vec![], // Options are parsed separately and attached
-        documentation: None,
+        documentation: vec![],
         span,
     })
 }

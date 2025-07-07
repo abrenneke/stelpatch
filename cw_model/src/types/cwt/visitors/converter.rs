@@ -195,7 +195,7 @@ impl CwtConverter {
         base_type: InferredType,
         cardinality: &super::super::options::CardinalityConstraint,
     ) -> InferredType {
-        if cardinality.max == Some(1) && cardinality.min == 0 {
+        if cardinality.max == Some(1) && cardinality.min == Some(0) {
             // Optional type - use constrained type with cardinality
             InferredType::Constrained(ConstrainedType {
                 base_type: Box::new(base_type),

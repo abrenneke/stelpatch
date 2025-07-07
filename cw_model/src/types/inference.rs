@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+use crate::SeverityLevel;
+
 /// Represents a rich type system that can express all CWT type concepts
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum InferredType {
@@ -291,7 +293,7 @@ pub struct ConstrainedType {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cardinality {
     /// Minimum occurrences
-    pub min: u32,
+    pub min: Option<u32>,
 
     /// Maximum occurrences (None = infinity)
     pub max: Option<u32>,
@@ -380,15 +382,6 @@ pub enum CwtOption {
     TypePerFile,
 }
 
-/// Severity levels for validation
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum SeverityLevel {
-    Error,
-    Warning,
-    Information,
-    Hint,
-}
-
 // Convenience constructors and methods
 impl InferredType {
     /// Create a simple primitive type
@@ -430,7 +423,7 @@ impl InferredType {
         Self::Constrained(ConstrainedType {
             base_type: Box::new(self),
             cardinality: Some(Cardinality {
-                min,
+                min: Some(min),
                 max,
                 soft: false,
             }),
@@ -454,7 +447,7 @@ impl InferredType {
         Self::Array(ArrayType {
             element_type: Box::new(element_type),
             cardinality: Cardinality {
-                min: 0,
+                min: Some(0),
                 max: None,
                 soft: false,
             },
@@ -509,7 +502,7 @@ impl PropertyDefinition {
 
 impl Cardinality {
     /// Create a cardinality constraint
-    pub fn new(min: u32, max: Option<u32>) -> Self {
+    pub fn new(min: Option<u32>, max: Option<u32>) -> Self {
         Self {
             min,
             max,
@@ -518,7 +511,7 @@ impl Cardinality {
     }
 
     /// Create a soft cardinality constraint
-    pub fn soft(min: u32, max: Option<u32>) -> Self {
+    pub fn soft(min: Option<u32>, max: Option<u32>) -> Self {
         Self {
             min,
             max,
@@ -528,22 +521,22 @@ impl Cardinality {
 
     /// Required exactly once
     pub fn required() -> Self {
-        Self::new(1, Some(1))
+        Self::new(Some(1), Some(1))
     }
 
     /// Optional (0 or 1)
     pub fn optional() -> Self {
-        Self::new(0, Some(1))
+        Self::new(Some(0), Some(1))
     }
 
     /// Required at least once
     pub fn required_repeating() -> Self {
-        Self::new(1, None)
+        Self::new(Some(1), None)
     }
 
     /// Optional repeating
     pub fn optional_repeating() -> Self {
-        Self::new(0, None)
+        Self::new(Some(0), None)
     }
 }
 

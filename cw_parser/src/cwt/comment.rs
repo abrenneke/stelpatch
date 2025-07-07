@@ -11,29 +11,29 @@ use crate::{AstComment, AstNode, eol};
 
 /// CWT option value expressions
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CwtOptionExpression {
+pub enum CwtOptionExpression<'a> {
     /// Simple identifier: `country`, `required`
-    Identifier(String),
+    Identifier(&'a str),
     /// String literal: `"Fancy name"`
-    String(String),
+    String(&'a str),
     /// Range expression: `0..1`, `~1..2`
     Range {
-        min: CwtCommentRangeBound,
-        max: CwtCommentRangeBound,
+        min: CwtCommentRangeBound<'a>,
+        max: CwtCommentRangeBound<'a>,
         lenient: bool, // true for ~1..2
     },
     /// List expression: `{ country planet }`
-    List(Vec<CwtOptionExpression>),
+    List(Vec<CwtOptionExpression<'a>>),
     /// Assignment expression: `this = planet`
     Assignment {
-        key: String,
-        value: Box<CwtOptionExpression>,
+        key: &'a str,
+        value: Box<CwtOptionExpression<'a>>,
     },
     /// Multiple assignments: `this = planet root = ship`
-    Assignments(Vec<CwtOptionExpression>),
+    Assignments(Vec<CwtOptionExpression<'a>>),
 }
 
-impl CwtOptionExpression {
+impl<'a> CwtOptionExpression<'a> {
     /// Check if this is an identifier
     pub fn is_identifier(&self) -> bool {
         matches!(self, CwtOptionExpression::Identifier(_))
@@ -80,6 +80,14 @@ impl CwtOptionExpression {
         }
     }
 
+    pub fn as_string_or_identifier(&self) -> Option<&str> {
+        match self {
+            CwtOptionExpression::Identifier(s) => Some(s),
+            CwtOptionExpression::String(s) => Some(s),
+            _ => None,
+        }
+    }
+
     /// Get the range data if this is a range expression
     pub fn as_range(&self) -> Option<(&CwtCommentRangeBound, &CwtCommentRangeBound, bool)> {
         match self {
@@ -115,12 +123,12 @@ impl CwtOptionExpression {
 
 /// Range bound for cardinality expressions
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CwtCommentRangeBound {
-    Number(String),
+pub enum CwtCommentRangeBound<'a> {
+    Number(&'a str),
     Infinity,
 }
 
-impl CwtCommentRangeBound {
+impl<'a> CwtCommentRangeBound<'a> {
     /// Check if this is a number
     pub fn is_number(&self) -> bool {
         matches!(self, CwtCommentRangeBound::Number(_))
@@ -150,14 +158,14 @@ impl CwtCommentRangeBound {
 
 /// A single CWT option within an option comment
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CwtCommentOption {
-    pub key: String,
-    pub value: CwtOptionExpression,
+pub struct AstCwtCommentOption<'a> {
+    pub key: &'a str,
+    pub value: CwtOptionExpression<'a>,
 }
 
-impl CwtCommentOption {
+impl<'a> AstCwtCommentOption<'a> {
     /// Create a new option
-    pub fn new(key: String, value: CwtOptionExpression) -> Self {
+    pub fn new(key: &'a str, value: CwtOptionExpression<'a>) -> Self {
         Self { key, value }
     }
 
@@ -169,12 +177,12 @@ impl CwtCommentOption {
 
 /// Structured data for CWT option comments, preserving order and structure
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CwtOptionData {
+pub struct CwtOptionData<'a> {
     /// The options in order as they appear in the comment
-    pub options: Vec<CwtCommentOption>,
+    pub options: Vec<AstCwtCommentOption<'a>>,
 }
 
-impl CwtOptionData {
+impl<'a> CwtOptionData<'a> {
     /// Create new empty option data
     pub fn new() -> Self {
         Self {
@@ -183,17 +191,17 @@ impl CwtOptionData {
     }
 
     /// Add an option
-    pub fn add_option(&mut self, option: CwtCommentOption) {
+    pub fn add_option(&mut self, option: AstCwtCommentOption<'a>) {
         self.options.push(option);
     }
 
     /// Get an option by key (first match)
-    pub fn get_option(&self, key: &str) -> Option<&CwtCommentOption> {
+    pub fn get_option(&self, key: &str) -> Option<&AstCwtCommentOption<'a>> {
         self.options.iter().find(|opt| opt.has_key(key))
     }
 
     /// Get all options with the given key
-    pub fn get_options(&self, key: &str) -> Vec<&CwtCommentOption> {
+    pub fn get_options(&self, key: &str) -> Vec<&AstCwtCommentOption<'a>> {
         self.options.iter().filter(|opt| opt.has_key(key)).collect()
     }
 
@@ -203,27 +211,27 @@ impl CwtOptionData {
     }
 
     /// Get the cardinality option if present
-    pub fn get_cardinality(&self) -> Option<&CwtOptionExpression> {
+    pub fn get_cardinality(&self) -> Option<&CwtOptionExpression<'a>> {
         self.get_option("cardinality").map(|opt| &opt.value)
     }
 
     /// Get the scope option if present
-    pub fn get_scope(&self) -> Option<&CwtOptionExpression> {
+    pub fn get_scope(&self) -> Option<&CwtOptionExpression<'a>> {
         self.get_option("scope").map(|opt| &opt.value)
     }
 
     /// Get the push_scope option if present
-    pub fn get_push_scope(&self) -> Option<&CwtOptionExpression> {
+    pub fn get_push_scope(&self) -> Option<&CwtOptionExpression<'a>> {
         self.get_option("push_scope").map(|opt| &opt.value)
     }
 
     /// Get the replace_scope option if present
-    pub fn get_replace_scope(&self) -> Option<&CwtOptionExpression> {
+    pub fn get_replace_scope(&self) -> Option<&CwtOptionExpression<'a>> {
         self.get_option("replace_scope").map(|opt| &opt.value)
     }
 
     /// Get the severity option if present
-    pub fn get_severity(&self) -> Option<&CwtOptionExpression> {
+    pub fn get_severity(&self) -> Option<&CwtOptionExpression<'a>> {
         self.get_option("severity").map(|opt| &opt.value)
     }
 
@@ -238,7 +246,7 @@ impl CwtOptionData {
     }
 }
 
-impl Default for CwtOptionData {
+impl<'a> Default for CwtOptionData<'a> {
     fn default() -> Self {
         Self::new()
     }
@@ -246,11 +254,11 @@ impl Default for CwtOptionData {
 
 /// CWT-specific comment types
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CwtCommentType {
+pub enum CwtCommentType<'a> {
     /// Regular comment (#)
     Regular,
     /// Option comment (##) with structured data
-    Option(CwtOptionData),
+    Option(CwtOptionData<'a>),
     /// Documentation comment (###)
     Documentation,
 }
@@ -259,12 +267,12 @@ pub enum CwtCommentType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstCwtComment<'a> {
     pub text: &'a str,
-    pub comment_type: CwtCommentType,
+    pub comment_type: CwtCommentType<'a>,
     pub span: Range<usize>,
 }
 
 impl<'a> AstCwtComment<'a> {
-    pub fn new(text: &'a str, comment_type: CwtCommentType, span: Range<usize>) -> Self {
+    pub fn new(text: &'a str, comment_type: CwtCommentType<'a>, span: Range<usize>) -> Self {
         Self {
             text,
             comment_type,
@@ -288,7 +296,7 @@ impl<'a> AstCwtComment<'a> {
     }
 
     /// Get the option data if this is an option comment
-    pub fn option_data(&self) -> Option<&CwtOptionData> {
+    pub fn option_data(&self) -> Option<&CwtOptionData<'a>> {
         match &self.comment_type {
             CwtCommentType::Option(data) => Some(data),
             _ => None,
@@ -380,7 +388,7 @@ pub(crate) fn cwt_comment<'a>(
 }
 
 /// Parse structured data from option comment text
-fn parse_option_comment_data(text: &str) -> CwtOptionData {
+fn parse_option_comment_data<'a>(text: &'a str) -> CwtOptionData<'a> {
     let mut data = CwtOptionData::new();
     let text = text.trim();
 
@@ -390,16 +398,16 @@ fn parse_option_comment_data(text: &str) -> CwtOptionData {
 
     // Look for key = value patterns
     if let Some(eq_pos) = text.find('=') {
-        let key = text[..eq_pos].trim().to_string();
+        let key = text[..eq_pos].trim();
         let value_text = text[eq_pos + 1..].trim();
 
         let value = parse_option_expression(value_text);
-        data.add_option(CwtCommentOption::new(key, value));
+        data.add_option(AstCwtCommentOption::new(&key, value));
     } else {
         // Flag with no value: required, primary
-        data.add_option(CwtCommentOption::new(
-            text.to_string(),
-            CwtOptionExpression::Identifier(text.to_string()),
+        data.add_option(AstCwtCommentOption::new(
+            &text,
+            CwtOptionExpression::Identifier(text),
         ));
     }
 
@@ -407,7 +415,7 @@ fn parse_option_comment_data(text: &str) -> CwtOptionData {
 }
 
 /// Parse a CWT option expression from text
-fn parse_option_expression(text: &str) -> CwtOptionExpression {
+fn parse_option_expression<'a>(text: &'a str) -> CwtOptionExpression<'a> {
     let text = text.trim();
 
     // Try to parse as range first
@@ -429,7 +437,7 @@ fn parse_option_expression(text: &str) -> CwtOptionExpression {
     // Try to parse as quoted string
     if text.starts_with('"') && text.ends_with('"') {
         let inner = text.trim_matches('"');
-        return CwtOptionExpression::String(inner.to_string());
+        return CwtOptionExpression::String(inner);
     }
 
     // Try to parse as multiple assignments (contains multiple = signs)
@@ -442,18 +450,18 @@ fn parse_option_expression(text: &str) -> CwtOptionExpression {
 
     // Try to parse as single assignment
     if let Some(eq_pos) = text.find('=') {
-        let key = text[..eq_pos].trim().to_string();
+        let key = text[..eq_pos].trim();
         let value_text = text[eq_pos + 1..].trim();
         let value = Box::new(parse_option_expression(value_text));
         return CwtOptionExpression::Assignment { key, value };
     }
 
     // Default to identifier
-    CwtOptionExpression::Identifier(text.to_string())
+    CwtOptionExpression::Identifier(text)
 }
 
 /// Parse a range expression like "0..1" or "~1..2"
-fn parse_range_expression(text: &str) -> Option<CwtOptionExpression> {
+fn parse_range_expression<'a>(text: &'a str) -> Option<CwtOptionExpression<'a>> {
     let text = text.trim();
 
     // Check for lenient cardinality (~)
@@ -478,11 +486,11 @@ fn parse_range_expression(text: &str) -> Option<CwtOptionExpression> {
 }
 
 /// Parse a range bound (number or "inf")
-fn parse_range_bound(text: &str) -> Option<CwtCommentRangeBound> {
+fn parse_range_bound<'a>(text: &'a str) -> Option<CwtCommentRangeBound<'a>> {
     if text == "inf" {
         Some(CwtCommentRangeBound::Infinity)
     } else {
-        Some(CwtCommentRangeBound::Number(text.to_string()))
+        Some(CwtCommentRangeBound::Number(text))
     }
 }
 
@@ -495,13 +503,13 @@ fn parse_list_contents(text: &str) -> Vec<CwtOptionExpression> {
     while i < parts.len() {
         // Check if this is an assignment (key = value)
         if i + 2 < parts.len() && parts[i + 1] == "=" {
-            let key = parts[i].to_string();
-            let value = Box::new(CwtOptionExpression::Identifier(parts[i + 2].to_string()));
+            let key = parts[i];
+            let value = Box::new(CwtOptionExpression::Identifier(parts[i + 2]));
             items.push(CwtOptionExpression::Assignment { key, value });
             i += 3;
         } else {
             // Just a regular identifier
-            items.push(CwtOptionExpression::Identifier(parts[i].to_string()));
+            items.push(CwtOptionExpression::Identifier(parts[i]));
             i += 1;
         }
     }
@@ -517,8 +525,8 @@ fn parse_multiple_assignments(text: &str) -> Vec<CwtOptionExpression> {
     let mut i = 0;
     while i + 2 < parts.len() {
         if parts[i + 1] == "=" {
-            let key = parts[i].to_string();
-            let value = Box::new(CwtOptionExpression::Identifier(parts[i + 2].to_string()));
+            let key = parts[i];
+            let value = Box::new(CwtOptionExpression::Identifier(parts[i + 2]));
             assignments.push(CwtOptionExpression::Assignment { key, value });
             i += 3;
         } else {
@@ -545,8 +553,8 @@ mod tests {
         assert_eq!(option.key, "cardinality");
 
         if let CwtOptionExpression::Range { min, max, lenient } = &option.value {
-            assert_eq!(min, &CwtCommentRangeBound::Number("0".to_string()));
-            assert_eq!(max, &CwtCommentRangeBound::Number("1".to_string()));
+            assert_eq!(min, &CwtCommentRangeBound::Number("0"));
+            assert_eq!(max, &CwtCommentRangeBound::Number("1"));
             assert!(!lenient);
         } else {
             panic!("Expected range expression");
@@ -562,8 +570,8 @@ mod tests {
         assert_eq!(option.key, "cardinality");
 
         if let CwtOptionExpression::Range { min, max, lenient } = &option.value {
-            assert_eq!(min, &CwtCommentRangeBound::Number("1".to_string()));
-            assert_eq!(max, &CwtCommentRangeBound::Number("2".to_string()));
+            assert_eq!(min, &CwtCommentRangeBound::Number("1"));
+            assert_eq!(max, &CwtCommentRangeBound::Number("2"));
             assert!(lenient);
         } else {
             panic!("Expected range expression");
@@ -590,7 +598,7 @@ mod tests {
                 lenient: _,
             } = &option.value
             {
-                assert_eq!(min, &CwtCommentRangeBound::Number(min_val.to_string()));
+                assert_eq!(min, &CwtCommentRangeBound::Number(&min_val.to_string()));
                 if expect_inf {
                     assert_eq!(max, &CwtCommentRangeBound::Infinity);
                 }
@@ -618,8 +626,8 @@ mod tests {
                 lenient: _,
             } = &option.value
             {
-                assert_eq!(min, &CwtCommentRangeBound::Number(min_val.to_string()));
-                assert_eq!(max, &CwtCommentRangeBound::Number(max_val.to_string()));
+                assert_eq!(min, &CwtCommentRangeBound::Number(&min_val.to_string()));
+                assert_eq!(max, &CwtCommentRangeBound::Number(&max_val.to_string()));
             } else {
                 panic!("Expected range expression for: {}", input);
             }
@@ -819,7 +827,7 @@ mod tests {
 
     #[test]
     fn test_range_bound_helpers() {
-        let number_bound = CwtCommentRangeBound::Number("42".to_string());
+        let number_bound = CwtCommentRangeBound::Number("42");
         let inf_bound = CwtCommentRangeBound::Infinity;
 
         // Test type checking
@@ -841,17 +849,17 @@ mod tests {
 
     #[test]
     fn test_expression_type_checking() {
-        let identifier = CwtOptionExpression::Identifier("test".to_string());
-        let string_expr = CwtOptionExpression::String("test".to_string());
+        let identifier = CwtOptionExpression::Identifier("test");
+        let string_expr = CwtOptionExpression::String("test");
         let range_expr = CwtOptionExpression::Range {
-            min: CwtCommentRangeBound::Number("0".to_string()),
-            max: CwtCommentRangeBound::Number("1".to_string()),
+            min: CwtCommentRangeBound::Number("0"),
+            max: CwtCommentRangeBound::Number("1"),
             lenient: false,
         };
         let list_expr = CwtOptionExpression::List(vec![]);
         let assignment_expr = CwtOptionExpression::Assignment {
-            key: "key".to_string(),
-            value: Box::new(CwtOptionExpression::Identifier("value".to_string())),
+            key: "key",
+            value: Box::new(CwtOptionExpression::Identifier("value")),
         };
 
         // Test type checking methods
@@ -871,17 +879,17 @@ mod tests {
 
     #[test]
     fn test_expression_value_extraction() {
-        let identifier = CwtOptionExpression::Identifier("test".to_string());
-        let string_expr = CwtOptionExpression::String("test".to_string());
+        let identifier = CwtOptionExpression::Identifier("test");
+        let string_expr = CwtOptionExpression::String("test");
         let range_expr = CwtOptionExpression::Range {
-            min: CwtCommentRangeBound::Number("0".to_string()),
-            max: CwtCommentRangeBound::Number("1".to_string()),
+            min: CwtCommentRangeBound::Number("0"),
+            max: CwtCommentRangeBound::Number("1"),
             lenient: false,
         };
         let list_expr = CwtOptionExpression::List(vec![]);
         let assignment_expr = CwtOptionExpression::Assignment {
-            key: "key".to_string(),
-            value: Box::new(CwtOptionExpression::Identifier("value".to_string())),
+            key: "key",
+            value: Box::new(CwtOptionExpression::Identifier("value")),
         };
 
         // Test value extraction

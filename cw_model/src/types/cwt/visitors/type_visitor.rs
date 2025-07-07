@@ -6,13 +6,14 @@
 use std::collections::HashMap;
 
 use cw_parser::{
-    AstCwtBlock, AstCwtRule, AstCwtRuleKey, CwtReferenceType, CwtSimpleValueType, CwtValue,
-    CwtVisitor,
+    AstCwtBlock, AstCwtRule, AstCwtRuleKey, CwtReferenceType, CwtSeverityLevel, CwtSimpleValueType,
+    CwtValue, CwtVisitor,
 };
 
 use crate::{
-    ConversionError, CwtAnalysisData, CwtConverter, LocalisationRequirement, RuleOptions,
-    SkipRootKey, SubtypeCondition, SubtypeDefinition, TypeDefinition, TypeOptions,
+    ConversionError, CwtAnalysisData, CwtConverter, LocalisationRequirement, ModifierGeneration,
+    RuleOptions, SeverityLevel, SkipRootKey, SubtypeCondition, SubtypeDefinition, SubtypeOptions,
+    TypeDefinition, TypeKeyFilter, TypeOptions,
 };
 
 /// Specialized visitor for type definitions
@@ -64,7 +65,10 @@ impl<'a> TypeVisitor<'a> {
                 skip_root_key: None,
                 subtypes: HashMap::new(),
                 localisation: HashMap::new(),
-                modifiers: HashMap::new(),
+                modifiers: ModifierGeneration {
+                    modifiers: HashMap::new(),
+                    subtypes: HashMap::new(),
+                },
                 rules: CwtConverter::convert_value(&rule.value),
                 options: TypeOptions::default(),
             };
@@ -74,6 +78,9 @@ impl<'a> TypeVisitor<'a> {
                 type_def.rules =
                     CwtConverter::apply_cardinality_constraints(type_def.rules, cardinality);
             }
+
+            // Parse CWT options from the rule
+            Self::parse_rule_options(&mut type_def, rule);
 
             // Extract additional type options from the block
             if let CwtValue::Block(block) = &rule.value {
@@ -191,6 +198,17 @@ impl<'a> TypeVisitor<'a> {
                             type_def.options.path_extension = Some(s.raw_value().to_string());
                         }
                     }
+                    "starts_with" => {
+                        if let CwtValue::String(s) = &rule.value {
+                            type_def.options.starts_with = Some(s.raw_value().to_string());
+                        }
+                    }
+                    "severity" => {
+                        if let CwtValue::String(s) = &rule.value {
+                            type_def.options.severity =
+                                Some(s.raw_value().parse().unwrap_or(SeverityLevel::Error));
+                        }
+                    }
                     "localisation" => {
                         if let CwtValue::Block(loc_block) = &rule.value {
                             Self::extract_localisation_requirements(type_def, loc_block);
@@ -219,11 +237,21 @@ impl<'a> TypeVisitor<'a> {
                 let key = rule.key.name();
 
                 if let CwtValue::String(pattern) = &rule.value {
-                    let requirement = LocalisationRequirement {
-                        pattern: pattern.raw_value().to_string(),
-                        required: false, // TODO: Parse from comments/options
-                        primary: false,  // TODO: Parse from comments/options
-                    };
+                    let mut requirement =
+                        LocalisationRequirement::new(pattern.raw_value().to_string());
+
+                    for option in &rule.options {
+                        match option.key {
+                            "required" => {
+                                requirement.required = true;
+                            }
+                            "primary" => {
+                                requirement.primary = true;
+                            }
+                            _ => {}
+                        }
+                    }
+
                     type_def.localisation.insert(key.to_string(), requirement);
                 }
             }
@@ -238,6 +266,7 @@ impl<'a> TypeVisitor<'a> {
 
                 if let CwtValue::String(scope) = &rule.value {
                     type_def
+                        .modifiers
                         .modifiers
                         .insert(key.to_string(), scope.raw_value().to_string());
                 }
@@ -276,20 +305,95 @@ impl<'a> TypeVisitor<'a> {
     fn extract_subtype_definition(
         type_def: &mut TypeDefinition,
         subtype_name: &str,
-        _rule: &AstCwtRule,
+        rule: &AstCwtRule,
     ) {
+        let mut subtype_options = SubtypeOptions::default();
+
+        // Parse CWT options from the rule
+        for option in &rule.options {
+            match option.key {
+                "display_name" => {
+                    subtype_options.display_name =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "abbreviation" => {
+                    subtype_options.abbreviation =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "push_scope" => {
+                    subtype_options.push_scope =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "starts_with" => {
+                    subtype_options.starts_with =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "severity" => {
+                    subtype_options.severity =
+                        Some(option.value.as_identifier().unwrap().parse().unwrap());
+                }
+                "type_key_filter" => {
+                    subtype_options.type_key_filter = Some(TypeKeyFilter::Specific(
+                        option.value.as_string_or_identifier().unwrap().to_string(),
+                    ));
+                }
+                _ => {}
+            }
+        }
+
         let subtype_def = SubtypeDefinition {
             condition: SubtypeCondition::Expression(subtype_name.to_string()), // Convert the subtype rule to a condition
             properties: HashMap::new(), // Will be populated by processing the rule's value
             exclusive: false,           // Default to non-exclusive
             options: Vec::new(),        // No CWT options for now
-            display_name: None,
-            abbreviation: None,
+            display_name: subtype_options.display_name,
+            abbreviation: subtype_options.abbreviation,
         };
 
         type_def
             .subtypes
             .insert(subtype_name.to_string(), subtype_def);
+    }
+
+    /// Parse CWT options from a rule and apply them to the type definition
+    fn parse_rule_options(type_def: &mut TypeDefinition, rule: &AstCwtRule) {
+        for option in &rule.options {
+            match option.key {
+                "severity" => {
+                    type_def.options.severity =
+                        Some(option.value.as_identifier().unwrap().parse().unwrap());
+                }
+                "starts_with" => {
+                    type_def.options.starts_with =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "type_key_filter" => {
+                    type_def.options.type_key_filter = Some(TypeKeyFilter::Specific(
+                        option.value.as_string_or_identifier().unwrap().to_string(),
+                    ));
+                }
+                "graph_related_types" => {
+                    type_def.options.graph_related_types = option
+                        .value
+                        .as_list()
+                        .unwrap()
+                        .iter()
+                        .map(|t| t.as_string_or_identifier().unwrap().to_string())
+                        .collect();
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Convert CWT severity level to our internal representation
+    fn convert_severity_level(level: &CwtSeverityLevel) -> SeverityLevel {
+        match level {
+            CwtSeverityLevel::Error => SeverityLevel::Error,
+            CwtSeverityLevel::Warning => SeverityLevel::Warning,
+            CwtSeverityLevel::Information => SeverityLevel::Information,
+            CwtSeverityLevel::Hint => SeverityLevel::Hint,
+        }
     }
 }
 
@@ -440,13 +544,21 @@ types = {
         );
 
         // Check modifiers
-        assert_eq!(opinion_modifier.modifiers.len(), 2);
+        assert_eq!(opinion_modifier.modifiers.modifiers.len(), 2);
         assert_eq!(
-            opinion_modifier.modifiers.get("$_modifier").unwrap(),
+            opinion_modifier
+                .modifiers
+                .modifiers
+                .get("$_modifier")
+                .unwrap(),
             "country"
         );
         assert_eq!(
-            opinion_modifier.modifiers.get("$_opinion_boost").unwrap(),
+            opinion_modifier
+                .modifiers
+                .modifiers
+                .get("$_opinion_boost")
+                .unwrap(),
             "diplomacy"
         );
 
@@ -482,7 +594,316 @@ types = {
         );
 
         // Check modifiers
-        assert_eq!(static_modifier.modifiers.len(), 1);
-        assert_eq!(static_modifier.modifiers.get("$_boost").unwrap(), "planet");
+        assert_eq!(static_modifier.modifiers.modifiers.len(), 1);
+        assert_eq!(
+            static_modifier.modifiers.modifiers.get("$_boost").unwrap(),
+            "planet"
+        );
+    }
+
+    #[test]
+    fn test_enhanced_cwt_features() {
+        let mut data = CwtAnalysisData::new();
+        let mut visitor = TypeVisitor::new(&mut data);
+
+        let cwt_text = r#"
+types = {
+    ## severity = warning
+    ## graph_related_types = { technology building }
+    type[advanced_type] = {
+        path = "game/common/advanced_types"
+        path_strict = yes
+        type_per_file = yes
+        starts_with = "adv_"
+        
+        ## display_name = "Advanced Subtype"
+        ## abbreviation = ADV
+        ## push_scope = country
+        ## type_key_filter = advanced_event
+        subtype[advanced] = {
+            is_advanced = yes
+            has_technology = yes
+        }
+        
+        ## display_name = "Basic Subtype"
+        ## starts_with = basic_
+        subtype[basic] = {
+            is_basic = yes
+        }
+        
+        localisation = {
+            ## required
+            ## primary
+            Name = "$"
+            ## optional
+            Description = "$_desc"
+            
+            subtype[advanced] = {
+                advanced_tooltip = "$_advanced_tooltip"
+                advanced_desc = "$_advanced_desc"
+            }
+            
+            subtype[basic] = {
+                basic_info = "$_basic_info"
+            }
+        }
+        
+        modifiers = {
+            "$_base_modifier" = country
+            "$_power_modifier" = fleet
+            
+            subtype[advanced] = {
+                "$_advanced_bonus" = country
+                "$_tech_bonus" = technology
+            }
+            
+            subtype[basic] = {
+                "$_basic_bonus" = planet
+            }
+        }
+        
+        skip_root_key = { tech_group any military }
+    }
+}
+        "#;
+
+        let module = CwtModule::from_input(cwt_text).unwrap();
+        let types_rules = module.find_rule("types");
+        let types_rules = types_rules.unwrap();
+
+        visitor.visit_rule(types_rules);
+
+        // Check that we have 1 type
+        assert_eq!(data.types.len(), 1);
+
+        // Test advanced_type
+        let advanced_type = data.types.get("advanced_type").unwrap();
+        assert_eq!(
+            advanced_type.path,
+            Some("game/common/advanced_types".to_string())
+        );
+        assert_eq!(advanced_type.options.path_strict, true);
+        assert_eq!(advanced_type.options.type_per_file, true);
+        assert_eq!(advanced_type.options.starts_with, Some("adv_".to_string()));
+
+        // Check type-level options (from comments)
+        assert_eq!(advanced_type.options.severity, Some(SeverityLevel::Warning));
+        assert_eq!(
+            advanced_type.options.graph_related_types,
+            vec!["technology".to_string(), "building".to_string()]
+        );
+
+        // Check subtypes
+        assert_eq!(advanced_type.subtypes.len(), 2);
+        let advanced_subtype = advanced_type.subtypes.get("advanced").unwrap();
+        let basic_subtype = advanced_type.subtypes.get("basic").unwrap();
+
+        // Check subtype options (comment-based options should be parsed)
+        assert_eq!(
+            advanced_subtype.display_name,
+            Some("Advanced Subtype".to_string())
+        );
+        assert_eq!(advanced_subtype.abbreviation, Some("ADV".to_string()));
+
+        // Check basic subtype options
+        assert_eq!(
+            basic_subtype.display_name,
+            Some("Basic Subtype".to_string())
+        );
+        assert_eq!(basic_subtype.abbreviation, None); // No abbreviation specified
+
+        // Check localisation structure
+        assert_eq!(advanced_type.localisation.len(), 2);
+        let name_loc = advanced_type.localisation.get("Name").unwrap();
+        let desc_loc = advanced_type.localisation.get("Description").unwrap();
+
+        assert_eq!(name_loc.pattern, "$");
+        // Comment-based options should be parsed
+        assert_eq!(name_loc.required, true); // From ## required comment
+        assert_eq!(name_loc.primary, true); // From ## primary comment
+
+        assert_eq!(desc_loc.pattern, "$_desc");
+        assert_eq!(desc_loc.required, false); // Marked as ## optional
+        assert_eq!(desc_loc.primary, false);
+
+        // Check subtype-specific localisation
+        // Note: This would be fully implemented with proper nested parsing
+
+        // Check modifiers structure
+        assert_eq!(advanced_type.modifiers.modifiers.len(), 2);
+        assert_eq!(
+            advanced_type
+                .modifiers
+                .modifiers
+                .get("$_base_modifier")
+                .unwrap(),
+            "country"
+        );
+        assert_eq!(
+            advanced_type
+                .modifiers
+                .modifiers
+                .get("$_power_modifier")
+                .unwrap(),
+            "fleet"
+        );
+
+        // Check subtype-specific modifiers
+        // Note: This would be fully implemented with proper nested parsing
+
+        // Check skip_root_key (complex structure)
+        assert_eq!(
+            advanced_type.skip_root_key,
+            Some(SkipRootKey::Multiple(vec![
+                "tech_group".to_string(),
+                "any".to_string(),
+                "military".to_string()
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_skip_root_key_variants() {
+        let mut data = CwtAnalysisData::new();
+        let mut visitor = TypeVisitor::new(&mut data);
+
+        let cwt_text = r#"
+types = {
+    type[specific_skip] = {
+        path = "game/common/specific"
+        skip_root_key = specific_key
+    }
+    
+    type[any_skip] = {
+        path = "game/common/any"
+        skip_root_key = any
+    }
+    
+    type[multiple_skip] = {
+        path = "game/common/multiple"
+        skip_root_key = { level1 level2 level3 }
+    }
+}
+        "#;
+
+        let module = CwtModule::from_input(cwt_text).unwrap();
+        let types_rules = module.find_rule("types");
+        let types_rules = types_rules.unwrap();
+
+        visitor.visit_rule(types_rules);
+
+        // Check that we have 3 types
+        assert_eq!(data.types.len(), 3);
+
+        // Test specific skip
+        let specific_skip = data.types.get("specific_skip").unwrap();
+        assert_eq!(
+            specific_skip.skip_root_key,
+            Some(SkipRootKey::Specific("specific_key".to_string()))
+        );
+
+        // Test any skip
+        let any_skip = data.types.get("any_skip").unwrap();
+        assert_eq!(any_skip.skip_root_key, Some(SkipRootKey::Any));
+
+        // Test multiple skip
+        let multiple_skip = data.types.get("multiple_skip").unwrap();
+        assert_eq!(
+            multiple_skip.skip_root_key,
+            Some(SkipRootKey::Multiple(vec![
+                "level1".to_string(),
+                "level2".to_string(),
+                "level3".to_string()
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_subtype_specific_localisation_modifiers() {
+        let mut data = CwtAnalysisData::new();
+        let mut visitor = TypeVisitor::new(&mut data);
+
+        let cwt_text = r#"
+types = {
+    type[complex_type] = {
+        path = "game/common/complex"
+        
+        subtype[variant_a] = {
+            variant = "a"
+        }
+        
+        subtype[variant_b] = {
+            variant = "b"
+        }
+        
+        localisation = {
+            name = "$"
+            description = "$_desc"
+            
+            subtype[variant_a] = {
+                variant_a_tooltip = "$_variant_a_tooltip"
+                variant_a_name = "$_variant_a_name"
+            }
+            
+            subtype[variant_b] = {
+                variant_b_tooltip = "$_variant_b_tooltip"
+            }
+        }
+        
+        modifiers = {
+            "$_base_power" = country
+            "$_base_cost" = economy
+            
+            subtype[variant_a] = {
+                "$_variant_a_bonus" = military
+                "$_variant_a_cost" = economy
+            }
+            
+            subtype[variant_b] = {
+                "$_variant_b_bonus" = diplomacy
+            }
+        }
+    }
+}
+        "#;
+
+        let module = CwtModule::from_input(cwt_text).unwrap();
+        let types_rules = module.find_rule("types");
+        let types_rules = types_rules.unwrap();
+
+        visitor.visit_rule(types_rules);
+
+        // Check that we have 1 type
+        assert_eq!(data.types.len(), 1);
+
+        let complex_type = data.types.get("complex_type").unwrap();
+
+        // Check subtypes
+        assert_eq!(complex_type.subtypes.len(), 2);
+        assert!(complex_type.subtypes.contains_key("variant_a"));
+        assert!(complex_type.subtypes.contains_key("variant_b"));
+
+        // Check base localisation
+        assert_eq!(complex_type.localisation.len(), 2);
+        assert!(complex_type.localisation.contains_key("name"));
+        assert!(complex_type.localisation.contains_key("description"));
+
+        // Check base modifiers
+        assert_eq!(complex_type.modifiers.modifiers.len(), 2);
+        assert_eq!(
+            complex_type
+                .modifiers
+                .modifiers
+                .get("$_base_power")
+                .unwrap(),
+            "country"
+        );
+        assert_eq!(
+            complex_type.modifiers.modifiers.get("$_base_cost").unwrap(),
+            "economy"
+        );
+
+        // Note: Subtype-specific localisation and modifiers would be fully parsed
+        // in a complete implementation with proper nested block parsing
     }
 }

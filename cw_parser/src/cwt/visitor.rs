@@ -1,6 +1,7 @@
 use crate::{
-    AstComment, AstCwtBlock, AstCwtExpression, AstCwtIdentifier, AstCwtRule, AstCwtRuleKey,
-    AstString, AstCwtComment, CwtModule, CwtOperator, CwtOption, CwtSimpleValue, CwtValue,
+    AstComment, AstCwtBlock, AstCwtComment, AstCwtCommentOption, AstCwtExpression,
+    AstCwtIdentifier, AstCwtRule, AstCwtRuleKey, AstString, CwtModule, CwtOperator, CwtSimpleValue,
+    CwtValue,
 };
 
 /// Visitor trait for traversing the CWT AST
@@ -37,7 +38,7 @@ pub trait CwtVisitor<'a> {
         self.walk_rule_key(node)
     }
 
-    fn visit_option(&mut self, node: &CwtOption<'a>) -> () {
+    fn visit_option(&mut self, node: &AstCwtCommentOption<'a>) -> () {
         self.walk_option(node)
     }
 
@@ -49,7 +50,7 @@ pub trait CwtVisitor<'a> {
         self.walk_string(node)
     }
 
-    fn visit_cwt_comment(&mut self, node: &AstCwtComment<'a>) -> () {
+    fn visit_cwt_doc_comment(&mut self, node: &AstCwtComment<'a>) -> () {
         self.walk_cwt_comment(node)
     }
 
@@ -61,7 +62,7 @@ pub trait CwtVisitor<'a> {
     fn walk_module(&mut self, node: &CwtModule<'a>) -> () {
         // Visit leading comments
         for comment in &node.leading_comments {
-            self.visit_cwt_comment(comment);
+            self.visit_cwt_doc_comment(comment);
         }
 
         // Visit all expressions in the module
@@ -71,7 +72,7 @@ pub trait CwtVisitor<'a> {
 
         // Visit trailing comments
         for comment in &node.trailing_comments {
-            self.visit_cwt_comment(comment);
+            self.visit_cwt_doc_comment(comment);
         }
     }
 
@@ -86,8 +87,8 @@ pub trait CwtVisitor<'a> {
 
     fn walk_rule(&mut self, node: &AstCwtRule<'a>) -> () {
         // Visit documentation comment if present
-        if let Some(doc) = &node.documentation {
-            self.visit_cwt_comment(doc);
+        for doc in &node.documentation {
+            self.visit_cwt_doc_comment(doc);
         }
 
         // Visit key
@@ -108,7 +109,7 @@ pub trait CwtVisitor<'a> {
     fn walk_block(&mut self, node: &AstCwtBlock<'a>) -> () {
         // Visit leading comments
         for comment in &node.leading_comments {
-            self.visit_cwt_comment(comment);
+            self.visit_cwt_doc_comment(comment);
         }
 
         // Visit all expressions in the block
@@ -118,14 +119,14 @@ pub trait CwtVisitor<'a> {
 
         // Visit trailing comments
         for comment in &node.trailing_comments {
-            self.visit_cwt_comment(comment);
+            self.visit_cwt_doc_comment(comment);
         }
     }
 
     fn walk_identifier(&mut self, node: &AstCwtIdentifier<'a>) -> () {
         // Visit leading comments
         for comment in &node.leading_comments {
-            self.visit_cwt_comment(comment);
+            self.visit_cwt_doc_comment(comment);
         }
 
         // Visit the identifier name
@@ -156,7 +157,7 @@ pub trait CwtVisitor<'a> {
     // Terminal node defaults - these should be implemented based on visitor needs
     fn walk_simple_value(&mut self, _node: &CwtSimpleValue<'a>) -> () {}
 
-    fn walk_option(&mut self, _node: &CwtOption<'a>) -> () {}
+    fn walk_option(&mut self, _node: &AstCwtCommentOption<'a>) -> () {}
 
     fn walk_operator(&mut self, _node: &CwtOperator) -> () {}
 

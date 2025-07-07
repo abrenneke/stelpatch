@@ -5,7 +5,8 @@ use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrCont
 use crate::{AstComment, AstNode, AstString, quoted_or_unquoted_string};
 
 use super::{
-    AstCwtBlock, AstCwtIdentifier, AstCwtRule, cwt_block, cwt_identifier, cwt_rule,
+    AstCwtBlock, AstCwtComment, AstCwtCommentOption, AstCwtIdentifier, AstCwtRule,
+    CwtCardinalityMax, CwtCommentRangeBound, CwtCommentType, cwt_block, cwt_identifier, cwt_rule,
     get_cwt_comments, opt_cwt_ws_and_comments,
 };
 
@@ -67,10 +68,10 @@ pub(crate) fn cwt_expression<'a>(
             block.leading_comments.extend(leading_comments);
         }
         AstCwtExpression::Rule(rule) => {
-            // For rules, we store the first comment as documentation
-            if let Some(first_comment) = leading_comments.into_iter().next() {
-                rule.documentation = Some(first_comment);
-            }
+            // Process options from comment data and attach to rule
+            let (options, documentation) = process_option_comments(leading_comments);
+            rule.options.extend(options);
+            rule.documentation = documentation;
         }
         AstCwtExpression::Identifier(identifier) => {
             identifier.leading_comments = leading_comments;
@@ -81,4 +82,31 @@ pub(crate) fn cwt_expression<'a>(
     }
 
     Ok(entity)
+}
+
+/// Convert option comments to CwtOption structs
+fn process_option_comments<'a>(
+    comments: Vec<AstCwtComment<'a>>,
+) -> (Vec<AstCwtCommentOption<'a>>, Vec<AstCwtComment<'a>>) {
+    let mut options = Vec::new();
+    let mut documentation = Vec::new();
+
+    for comment in comments.into_iter() {
+        match comment.comment_type {
+            CwtCommentType::Option(option_data) => {
+                // Process each option in the comment
+                for comment_option in option_data.options.into_iter() {
+                    options.push(comment_option);
+                }
+            }
+            CwtCommentType::Regular => {
+                // These don't contain options
+            }
+            CwtCommentType::Documentation => {
+                documentation.push(comment.clone());
+            }
+        }
+    }
+
+    (options, documentation)
 }

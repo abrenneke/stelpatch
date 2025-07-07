@@ -133,7 +133,7 @@ impl ConversionUtils {
         base_type: InferredType,
         cardinality: &CardinalityConstraint,
     ) -> InferredType {
-        if cardinality.max == Some(1) && cardinality.min == 0 {
+        if cardinality.max == Some(1) && cardinality.min == Some(0) {
             // Optional type - use constrained type with cardinality
             InferredType::Constrained(ConstrainedType {
                 base_type: Box::new(base_type),
@@ -182,7 +182,7 @@ mod tests {
     #[test]
     fn test_cardinality_constraints() {
         let cardinality = CardinalityConstraint {
-            min: 0,
+            min: Some(0),
             max: Some(1),
             is_warning: false,
         };
@@ -194,7 +194,7 @@ mod tests {
             InferredType::Constrained(constraint) => {
                 assert!(constraint.cardinality.is_some());
                 let card = constraint.cardinality.as_ref().unwrap();
-                assert_eq!(card.min, 0);
+                assert_eq!(card.min, Some(0));
                 assert_eq!(card.max, Some(1));
             }
             _ => panic!("Expected constrained type"),

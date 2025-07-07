@@ -3,7 +3,7 @@
 //! This module contains structures and utilities for handling CWT rule options,
 //! cardinality constraints, and other rule-specific configuration.
 
-use cw_parser::cwt::{AstCwtRule, CwtCardinalityMax, CwtOptionType};
+use cw_parser::{CwtCommentRangeBound, CwtOptionExpression, cwt::AstCwtRule};
 use std::collections::HashMap;
 
 /// Options that can be applied to CWT rules
@@ -24,8 +24,8 @@ pub struct RuleOptions {
 /// Cardinality constraint for CWT rules
 #[derive(Debug, Clone)]
 pub struct CardinalityConstraint {
-    pub min: u32,
-    pub max: Option<u32>, // None means infinite
+    pub min: Option<u32>, // None means -inf
+    pub max: Option<u32>, // None means inf
     pub is_warning: bool, // ~ prefix means warning-only
 }
 
@@ -41,40 +41,44 @@ impl RuleOptions {
 
         // Process all CWT options from the parsed AST
         for cwt_option in &rule.options {
-            match &cwt_option.option_type {
-                CwtOptionType::Cardinality { min, max } => {
+            match cwt_option.key {
+                "cardinality" => {
+                    let (min, max, is_warning) = cwt_option.value.as_range().unwrap();
                     options.cardinality = Some(CardinalityConstraint {
-                        min: *min,
-                        max: match max {
-                            CwtCardinalityMax::Number(n) => Some(*n),
-                            CwtCardinalityMax::Infinity => None,
+                        min: match min {
+                            CwtCommentRangeBound::Number(n) => Some(n.parse().unwrap()),
+                            CwtCommentRangeBound::Infinity => None,
                         },
-                        is_warning: false,
+                        max: match max {
+                            CwtCommentRangeBound::Number(n) => Some(n.parse().unwrap()),
+                            CwtCommentRangeBound::Infinity => None,
+                        },
+                        is_warning,
                     });
                 }
-                CwtOptionType::SoftCardinality { min, max } => {
-                    options.cardinality = Some(CardinalityConstraint {
-                        min: *min,
-                        max: match max {
-                            CwtCardinalityMax::Number(n) => Some(*n),
-                            CwtCardinalityMax::Infinity => None,
-                        },
-                        is_warning: true,
-                    });
-                }
-                CwtOptionType::PushScope { scope } => {
+                "push_scope" => {
+                    let scope = cwt_option.value.as_identifier().unwrap();
                     options.push_scope = Some(scope.to_string());
                 }
-                CwtOptionType::ReplaceScope { replacements } => {
+                "replace_scope" => {
+                    let replacements = cwt_option.value.as_assignments().unwrap();
                     let mut replace_map = HashMap::new();
                     for replacement in replacements {
-                        replace_map
-                            .insert(replacement.from.to_string(), replacement.to.to_string());
+                        let (from, to) = replacement.as_assignment().unwrap();
+                        replace_map.insert(from.to_string(), to.as_string().unwrap().to_string());
                     }
                     options.replace_scope = Some(replace_map);
                 }
-                CwtOptionType::Scope { scopes } => {
-                    options.scope = Some(scopes.iter().map(|s| s.to_string()).collect());
+                "scope" => {
+                    let scopes = match &cwt_option.value {
+                        CwtOptionExpression::List(scopes) => scopes
+                            .iter()
+                            .map(|s| s.as_string().unwrap().to_string())
+                            .collect(),
+                        CwtOptionExpression::String(scope) => vec![scope.to_string()],
+                        _ => vec![],
+                    };
+                    options.scope = Some(scopes);
                 }
                 _ => {
                     // Handle other option types as needed
@@ -83,14 +87,20 @@ impl RuleOptions {
         }
 
         // Extract documentation from the rule
-        if let Some(doc) = &rule.documentation {
-            options.documentation = Some(doc.text.to_string());
+        if !rule.documentation.is_empty() {
+            options.documentation = Some(
+                rule.documentation
+                    .iter()
+                    .map(|d| d.text.to_string())
+                    .collect::<Vec<String>>()
+                    .join("\n"),
+            );
         }
 
         // Default cardinality if none specified
         if options.cardinality.is_none() {
             options.cardinality = Some(CardinalityConstraint {
-                min: 1,
+                min: Some(1),
                 max: Some(1),
                 is_warning: false,
             });
@@ -129,7 +139,7 @@ impl CardinalityConstraint {
     /// Create a new cardinality constraint
     pub fn new(min: u32, max: Option<u32>) -> Self {
         Self {
-            min,
+            min: Some(min),
             max,
             is_warning: false,
         }
@@ -138,7 +148,7 @@ impl CardinalityConstraint {
     /// Create a soft cardinality constraint (warning-only)
     pub fn new_soft(min: u32, max: Option<u32>) -> Self {
         Self {
-            min,
+            min: Some(min),
             max,
             is_warning: true,
         }
@@ -147,7 +157,7 @@ impl CardinalityConstraint {
     /// Create an optional cardinality constraint (0..1)
     pub fn optional() -> Self {
         Self {
-            min: 0,
+            min: Some(0),
             max: Some(1),
             is_warning: false,
         }
@@ -156,7 +166,7 @@ impl CardinalityConstraint {
     /// Create a required cardinality constraint (1..1)
     pub fn required() -> Self {
         Self {
-            min: 1,
+            min: Some(1),
             max: Some(1),
             is_warning: false,
         }
@@ -165,7 +175,7 @@ impl CardinalityConstraint {
     /// Create an array cardinality constraint (0..*)
     pub fn array() -> Self {
         Self {
-            min: 0,
+            min: Some(0),
             max: None,
             is_warning: false,
         }
@@ -174,7 +184,7 @@ impl CardinalityConstraint {
     /// Create a non-empty array cardinality constraint (1..*)
     pub fn non_empty_array() -> Self {
         Self {
-            min: 1,
+            min: Some(1),
             max: None,
             is_warning: false,
         }
@@ -182,7 +192,7 @@ impl CardinalityConstraint {
 
     /// Check if this constraint allows zero occurrences
     pub fn allows_zero(&self) -> bool {
-        self.min == 0
+        self.min == Some(0)
     }
 
     /// Check if this constraint allows multiple occurrences
@@ -192,17 +202,17 @@ impl CardinalityConstraint {
 
     /// Check if this constraint is satisfied by the given count
     pub fn is_satisfied(&self, count: u32) -> bool {
-        count >= self.min && (self.max.is_none() || count <= self.max.unwrap())
+        count >= self.min.unwrap() && (self.max.is_none() || count <= self.max.unwrap())
     }
 
     /// Check if this constraint is optional (0..1)
     pub fn is_optional(&self) -> bool {
-        self.min == 0 && self.max == Some(1)
+        self.min == Some(0) && self.max == Some(1)
     }
 
     /// Check if this constraint is required (1..1)
     pub fn is_required(&self) -> bool {
-        self.min == 1 && self.max == Some(1)
+        self.min == Some(1) && self.max == Some(1)
     }
 
     /// Check if this constraint is an array (allows multiple)
@@ -214,10 +224,12 @@ impl CardinalityConstraint {
 impl std::fmt::Display for CardinalityConstraint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let prefix = if self.is_warning { "~" } else { "" };
-        match self.max {
-            Some(max) if max == self.min => write!(f, "{}[{}]", prefix, self.min),
-            Some(max) => write!(f, "{}[{}..{}]", prefix, self.min, max),
-            None => write!(f, "{}[{}..*]", prefix, self.min),
+        match (self.min, self.max) {
+            (Some(min), Some(max)) if min == max => write!(f, "{}{}", prefix, min),
+            (Some(min), Some(max)) => write!(f, "{}{min}..{max}", prefix),
+            (Some(min), None) => write!(f, "{}{min}..inf", prefix),
+            (None, Some(max)) => write!(f, "{}-inf..{max}", prefix),
+            (None, None) => write!(f, "{}-inf..inf", prefix),
         }
     }
 }
@@ -270,15 +282,15 @@ mod tests {
     #[test]
     fn test_cardinality_constraint_display() {
         let optional = CardinalityConstraint::optional();
-        assert_eq!(optional.to_string(), "[0..1]");
+        assert_eq!(optional.to_string(), "0..1");
 
         let required = CardinalityConstraint::required();
-        assert_eq!(required.to_string(), "[1]");
+        assert_eq!(required.to_string(), "1");
 
         let array = CardinalityConstraint::array();
-        assert_eq!(array.to_string(), "[0..*]");
+        assert_eq!(array.to_string(), "0..inf");
 
         let soft_required = CardinalityConstraint::new_soft(1, Some(1));
-        assert_eq!(soft_required.to_string(), "~[1]");
+        assert_eq!(soft_required.to_string(), "~1");
     }
 }
