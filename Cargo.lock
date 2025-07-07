@@ -467,6 +467,7 @@ dependencies = [
  "anyhow",
  "criterion",
  "cw_model",
+ "cw_parser",
  "dirs",
  "lazy_static",
  "mimalloc",

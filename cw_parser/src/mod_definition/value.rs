@@ -1,8 +1,7 @@
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrContext};
 
 use super::array::array_value;
-use super::string::string_value;
-use crate::{AstComment, AstNode, AstString, mod_definition::array::AstArrayValue};
+use crate::{AstComment, AstNode, AstString, mod_definition::array::AstArrayValue, quoted_string};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum AstValue<'a> {
@@ -51,7 +50,7 @@ impl<'a> AstValue<'a> {
 
 pub(crate) fn value<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstValue<'a>> {
     alt((
-        string_value.map(AstValue::String),
+        quoted_string.map(AstValue::String),
         array_value.map(AstValue::Array),
     ))
     .context(StrContext::Label("value"))
