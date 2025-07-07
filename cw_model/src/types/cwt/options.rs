@@ -61,17 +61,20 @@ impl RuleOptions {
                     options.push_scope = Some(scope.to_string());
                 }
                 "replace_scope" => {
-                    let replacements = cwt_option.value.as_assignments().unwrap();
+                    let replacements = cwt_option.value.as_list().unwrap();
                     let mut replace_map = HashMap::new();
                     for replacement in replacements {
                         let (from, to) = replacement.as_assignment().unwrap();
-                        replace_map.insert(from.to_string(), to.as_string().unwrap().to_string());
+                        replace_map.insert(
+                            from.to_string(),
+                            to.as_string_or_identifier().unwrap().to_string(),
+                        );
                     }
                     options.replace_scope = Some(replace_map);
                 }
                 "scope" => {
                     let scopes = match &cwt_option.value {
-                        CwtOptionExpression::List(scopes) => scopes
+                        CwtOptionExpression::Block(scopes) => scopes
                             .iter()
                             .map(|s| s.as_string().unwrap().to_string())
                             .collect(),

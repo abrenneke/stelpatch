@@ -6,8 +6,10 @@
 use super::super::super::inference::*;
 use super::super::conversion::ConversionError;
 use super::super::definitions::*;
-use super::{AliasVisitor, EnumVisitor, TypeVisitor, ValueSetVisitor};
-use cw_parser::cwt::{AstCwtRule, CwtModule, CwtReferenceType, AstCwtRuleKey, CwtValue, CwtVisitor};
+use super::{AliasVisitor, EnumVisitor, RuleVisitor, TypeVisitor, ValueSetVisitor};
+use cw_parser::cwt::{
+    AstCwtRule, AstCwtRuleKey, CwtModule, CwtReferenceType, CwtValue, CwtVisitor,
+};
 use std::collections::{HashMap, HashSet};
 
 /// Master data structure that owns all CWT analysis results
@@ -23,6 +25,8 @@ pub struct CwtAnalysisData {
     pub aliases: HashMap<String, AliasDefinition>,
     /// Known single aliases registry
     pub single_aliases: HashMap<String, InferredType>,
+    /// Regular rule definitions (entity validation rules)
+    pub rules: HashMap<String, InferredType>,
     /// Errors encountered during conversion
     pub errors: Vec<ConversionError>,
 }
@@ -40,6 +44,7 @@ impl CwtAnalysisData {
         self.value_sets.clear();
         self.aliases.clear();
         self.single_aliases.clear();
+        self.rules.clear();
         self.errors.clear();
     }
 
@@ -55,6 +60,7 @@ impl CwtAnalysisData {
             + self.value_sets.len()
             + self.aliases.len()
             + self.single_aliases.len()
+            + self.rules.len()
     }
 }
 
@@ -160,9 +166,9 @@ impl<'a> CwtRegistryVisitor<'a> {
             let mut alias_visitor = AliasVisitor::new(self.data);
             alias_visitor.visit_rule(rule);
         } else {
-            // Default handling - treat as type definition
-            let mut type_visitor = TypeVisitor::new(self.data);
-            type_visitor.visit_rule(rule);
+            // Default handling - treat as regular rule definition
+            let mut rule_visitor = RuleVisitor::new(self.data);
+            rule_visitor.visit_rule(rule);
         }
     }
 }
@@ -214,9 +220,9 @@ impl<'a> CwtVisitor<'a> for CwtRegistryVisitor<'a> {
                             alias_visitor.visit_rule(rule);
                         }
                         _ => {
-                            // Default handling - treat as type definition
-                            let mut type_visitor = TypeVisitor::new(self.data);
-                            type_visitor.visit_rule(rule);
+                            // Default handling - treat as regular rule definition
+                            let mut rule_visitor = RuleVisitor::new(self.data);
+                            rule_visitor.visit_rule(rule);
                         }
                     }
                 } else {

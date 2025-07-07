@@ -22,15 +22,13 @@ pub enum CwtOptionExpression<'a> {
         max: CwtCommentRangeBound<'a>,
         lenient: bool, // true for ~1..2
     },
-    /// List expression: `{ country planet }`
-    List(Vec<CwtOptionExpression<'a>>),
+    /// List expression: `{ country planet }` or `{ this = planet root = ship }` (two assignment expressions)
+    Block(Vec<CwtOptionExpression<'a>>),
     /// Assignment expression: `this = planet`
     Assignment {
         key: &'a str,
         value: Box<CwtOptionExpression<'a>>,
     },
-    /// Multiple assignments: `this = planet root = ship`
-    Assignments(Vec<CwtOptionExpression<'a>>),
 }
 
 impl<'a> CwtOptionExpression<'a> {
@@ -51,17 +49,12 @@ impl<'a> CwtOptionExpression<'a> {
 
     /// Check if this is a list expression
     pub fn is_list(&self) -> bool {
-        matches!(self, CwtOptionExpression::List(_))
+        matches!(self, CwtOptionExpression::Block(_))
     }
 
     /// Check if this is an assignment expression
     pub fn is_assignment(&self) -> bool {
         matches!(self, CwtOptionExpression::Assignment { .. })
-    }
-
-    /// Check if this is multiple assignments
-    pub fn is_assignments(&self) -> bool {
-        matches!(self, CwtOptionExpression::Assignments(_))
     }
 
     /// Get the identifier value if this is an identifier
@@ -99,7 +92,7 @@ impl<'a> CwtOptionExpression<'a> {
     /// Get the list items if this is a list expression
     pub fn as_list(&self) -> Option<&[CwtOptionExpression<'a>]> {
         match self {
-            CwtOptionExpression::List(items) => Some(items),
+            CwtOptionExpression::Block(items) => Some(items),
             _ => None,
         }
     }
@@ -108,14 +101,6 @@ impl<'a> CwtOptionExpression<'a> {
     pub fn as_assignment(&self) -> Option<(&'a str, &CwtOptionExpression<'a>)> {
         match self {
             CwtOptionExpression::Assignment { key, value } => Some((key, value)),
-            _ => None,
-        }
-    }
-
-    /// Get the assignments if this is multiple assignments
-    pub fn as_assignments(&self) -> Option<&[CwtOptionExpression<'a>]> {
-        match self {
-            CwtOptionExpression::Assignments(assignments) => Some(assignments),
             _ => None,
         }
     }
@@ -452,25 +437,17 @@ fn parse_option_expression<'a>(text: &'a str) -> CwtOptionExpression<'a> {
     if text.starts_with('{') && text.ends_with('}') {
         let inner = text.trim_start_matches('{').trim_end_matches('}').trim();
         if inner.is_empty() {
-            return CwtOptionExpression::List(vec![]);
+            return CwtOptionExpression::Block(vec![]);
         }
 
         let items = parse_list_contents(inner);
-        return CwtOptionExpression::List(items);
+        return CwtOptionExpression::Block(items);
     }
 
     // Try to parse as quoted string
     if text.starts_with('"') && text.ends_with('"') {
         let inner = text.trim_matches('"');
         return CwtOptionExpression::String(inner);
-    }
-
-    // Try to parse as multiple assignments (contains multiple = signs)
-    if text.matches('=').count() > 1 {
-        let assignments = parse_multiple_assignments(text);
-        if assignments.len() > 1 {
-            return CwtOptionExpression::Assignments(assignments);
-        }
     }
 
     // Try to parse as single assignment
@@ -669,7 +646,7 @@ mod tests {
         let option = &data.options[0];
         assert_eq!(option.key, "scope");
 
-        if let CwtOptionExpression::List(items) = &option.value {
+        if let CwtOptionExpression::Block(items) = &option.value {
             assert_eq!(items.len(), 2);
             assert_eq!(items[0].as_identifier(), Some("country"));
             assert_eq!(items[1].as_identifier(), Some("planet"));
@@ -694,7 +671,7 @@ mod tests {
             let data = parse_option_comment_data(input);
             let option = &data.options[0];
 
-            if let CwtOptionExpression::List(items) = &option.value {
+            if let CwtOptionExpression::Block(items) = &option.value {
                 assert_eq!(items.len(), expected_count, "Failed for: {}", input);
             } else {
                 panic!("Expected list expression for: {}", input);
@@ -781,7 +758,7 @@ mod tests {
         let option = &data.options[0];
 
         assert_eq!(option.key, "replace_scope");
-        if let CwtOptionExpression::List(items) = &option.value {
+        if let CwtOptionExpression::Block(items) = &option.value {
             // Should now parse as two assignments
             assert_eq!(items.len(), 2);
 
@@ -881,7 +858,7 @@ mod tests {
             max: CwtCommentRangeBound::Number("1"),
             lenient: false,
         };
-        let list_expr = CwtOptionExpression::List(vec![]);
+        let list_expr = CwtOptionExpression::Block(vec![]);
         let assignment_expr = CwtOptionExpression::Assignment {
             key: "key",
             value: Box::new(CwtOptionExpression::Identifier("value")),
@@ -911,7 +888,7 @@ mod tests {
             max: CwtCommentRangeBound::Number("1"),
             lenient: false,
         };
-        let list_expr = CwtOptionExpression::List(vec![]);
+        let list_expr = CwtOptionExpression::Block(vec![]);
         let assignment_expr = CwtOptionExpression::Assignment {
             key: "key",
             value: Box::new(CwtOptionExpression::Identifier("value")),
@@ -1032,7 +1009,7 @@ mod tests {
         let data = parse_option_comment_data(&large_list);
         let option = &data.options[0];
 
-        if let CwtOptionExpression::List(items) = &option.value {
+        if let CwtOptionExpression::Block(items) = &option.value {
             assert_eq!(items.len(), 100);
             assert_eq!(items[0].as_identifier(), Some("item_0"));
             assert_eq!(items[99].as_identifier(), Some("item_99"));
@@ -1052,6 +1029,6 @@ mod tests {
         assert_eq!(option.key, "replace_scope");
 
         // Should parse as some kind of structured expression
-        assert!(option.value.is_list() || option.value.is_assignments());
+        assert!(option.value.is_list());
     }
 }

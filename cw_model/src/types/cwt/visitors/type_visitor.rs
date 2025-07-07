@@ -344,34 +344,35 @@ impl<'a> TypeVisitor<'a> {
                     if let CwtValue::String(pattern) = &loc_rule.value {
                         let pattern_str = pattern.raw_value().to_string();
 
-                        // Find or create the base localisation requirement
-                        let base_requirement = type_def
-                            .localisation
-                            .entry(loc_key.to_string())
-                            .or_insert_with(|| LocalisationRequirement::new("$".to_string()));
+                        // Only add to existing base localisation requirements
+                        if let Some(base_requirement) =
+                            type_def.localisation.get_mut(&loc_key.to_string())
+                        {
+                            // Add to subtype-specific localisation for existing base requirement
+                            let subtype_map = base_requirement
+                                .subtypes
+                                .entry(subtype_name.to_string())
+                                .or_insert_with(HashMap::new);
 
-                        // Add to subtype-specific localisation
-                        let subtype_map = base_requirement
-                            .subtypes
-                            .entry(subtype_name.to_string())
-                            .or_insert_with(HashMap::new);
+                            subtype_map.insert(loc_key.to_string(), pattern_str);
 
-                        subtype_map.insert(loc_key.to_string(), pattern_str);
-
-                        // Check for required/primary flags on subtype localisation
-                        for option in &loc_rule.options {
-                            match option.key {
-                                "required" => {
-                                    // Mark this subtype localisation as required
-                                    // This could be stored in a more complex structure if needed
+                            // Check for required/primary flags on subtype localisation
+                            for option in &loc_rule.options {
+                                match option.key {
+                                    "required" => {
+                                        // Mark this subtype localisation as required
+                                        // This could be stored in a more complex structure if needed
+                                    }
+                                    "primary" => {
+                                        // Mark this subtype localisation as primary
+                                        // This could be stored in a more complex structure if needed
+                                    }
+                                    _ => {}
                                 }
-                                "primary" => {
-                                    // Mark this subtype localisation as primary
-                                    // This could be stored in a more complex structure if needed
-                                }
-                                _ => {}
                             }
                         }
+                        // If no base requirement exists, this is a subtype-only localisation
+                        // We don't add it to the base localisation map
                     }
                 }
             }
@@ -566,12 +567,12 @@ impl<'a> TypeVisitor<'a> {
                         (CwtOptionExpression::Identifier(id), true) => {
                             Some(TypeKeyFilter::Not(id.to_string()))
                         }
-                        (CwtOptionExpression::List(list), false) => Some(TypeKeyFilter::OneOf(
+                        (CwtOptionExpression::Block(list), false) => Some(TypeKeyFilter::OneOf(
                             list.iter()
                                 .map(|t| t.as_string_or_identifier().unwrap().to_string())
                                 .collect(),
                         )),
-                        (CwtOptionExpression::List(list), true) => Some(TypeKeyFilter::Not(
+                        (CwtOptionExpression::Block(list), true) => Some(TypeKeyFilter::Not(
                             list.iter()
                                 .map(|t| t.as_string_or_identifier().unwrap().to_string())
                                 .collect(),

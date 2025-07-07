@@ -153,16 +153,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Print converted type statistics
         println!("\n=== CONVERTED TYPE STATISTICS ===");
-        println!("Types defined: {}", converter.types.len());
-        println!("Enums defined: {}", converter.enums.len());
-        println!("Value sets defined: {}", converter.value_sets.len());
-        println!("Aliases defined: {}", converter.aliases.len());
-        println!("Single aliases defined: {}", converter.single_aliases.len());
+        println!("Types defined: {}", converter.get_types().len());
+        println!("Enums defined: {}", converter.get_enums().len());
+        println!("Value sets defined: {}", converter.get_value_sets().len());
+        println!("Aliases defined: {}", converter.get_aliases().len());
+        println!(
+            "Single aliases defined: {}",
+            converter.get_single_aliases().len()
+        );
 
         // Print detailed type information
-        if !converter.types.is_empty() {
+        if !converter.get_types().is_empty() {
             println!("\n=== TYPE DEFINITIONS ===");
-            for (name, type_def) in &converter.types {
+            for (name, type_def) in converter.get_types() {
                 println!("  Type: {}", name);
                 if let Some(path) = &type_def.path {
                     println!("    Path: {}", path);
@@ -182,8 +185,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         type_def.localisation.len()
                     );
                 }
-                if !type_def.modifiers.is_empty() {
-                    println!("    Modifier generation: {}", type_def.modifiers.len());
+                if !type_def.modifiers.modifiers.is_empty()
+                    || !type_def.modifiers.subtypes.is_empty()
+                {
+                    println!(
+                        "    Modifier generation: {} patterns, {} subtypes",
+                        type_def.modifiers.modifiers.len(),
+                        type_def.modifiers.subtypes.len()
+                    );
                 }
                 println!("    Rules: {:?}", type_def.rules);
                 println!();
@@ -191,9 +200,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Print detailed enum information
-        if !converter.enums.is_empty() {
+        if !converter.get_enums().is_empty() {
             println!("\n=== ENUM DEFINITIONS ===");
-            for (name, enum_def) in &converter.enums {
+            for (name, enum_def) in converter.get_enums() {
                 println!("  Enum: {}", name);
                 if !enum_def.values.is_empty() {
                     println!("    Values: {:?}", enum_def.values);
@@ -209,9 +218,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Print value sets
-        if !converter.value_sets.is_empty() {
+        if !converter.get_value_sets().is_empty() {
             println!("\n=== VALUE SETS ===");
-            for (name, values) in &converter.value_sets {
+            for (name, values) in converter.get_value_sets() {
                 println!("  Value set: {}", name);
                 println!("    Values: {:?}", values);
                 println!();
@@ -219,9 +228,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Print aliases
-        if !converter.aliases.is_empty() {
+        if !converter.get_aliases().is_empty() {
             println!("\n=== ALIASES ===");
-            for (name, alias) in &converter.aliases {
+            for (name, alias) in converter.get_aliases() {
                 println!("  Alias: {}", name);
                 println!("    Category: {}", alias.category);
                 println!("    Name: {}", alias.name);
@@ -231,9 +240,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Print single aliases
-        if !converter.single_aliases.is_empty() {
+        if !converter.get_single_aliases().is_empty() {
             println!("\n=== SINGLE ALIASES ===");
-            for (name, alias_type) in &converter.single_aliases {
+            for (name, alias_type) in converter.get_single_aliases() {
                 println!("  Single alias: {}", name);
                 println!("    Type: {:?}", alias_type);
                 println!();

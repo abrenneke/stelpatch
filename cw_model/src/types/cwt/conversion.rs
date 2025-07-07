@@ -19,6 +19,7 @@ pub enum ConversionError {
     MissingReference(String),
     InvalidTypeDefinition(String),
     InvalidComplexEnum(String),
+    InvalidRuleDefinition(String),
 }
 
 impl std::fmt::Display for ConversionError {
@@ -40,6 +41,9 @@ impl std::fmt::Display for ConversionError {
             }
             ConversionError::InvalidComplexEnum(enum_name) => {
                 write!(f, "Invalid complex enum: {}", enum_name)
+            }
+            ConversionError::InvalidRuleDefinition(rule_name) => {
+                write!(f, "Invalid rule definition: {}", rule_name)
             }
         }
     }
