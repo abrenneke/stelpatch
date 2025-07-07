@@ -10,7 +10,7 @@ use winnow::{
 use crate::{AstComment, AstNode, CwParseError, ParseError, opt_ws_and_comments};
 
 use super::{
-    AstCwtBlock, AstCwtExpression, AstCwtRule, CwtComment, cwt_expression, get_cwt_comments,
+    AstCwtBlock, AstCwtComment, AstCwtExpression, AstCwtRule, cwt_expression, get_cwt_comments,
     opt_cwt_ws_and_comments,
 };
 
@@ -21,8 +21,8 @@ use self_cell::self_cell;
 pub struct CwtModule<'a> {
     pub items: Vec<AstCwtExpression<'a>>,
     pub span: Range<usize>,
-    pub leading_comments: Vec<CwtComment<'a>>,
-    pub trailing_comments: Vec<CwtComment<'a>>,
+    pub leading_comments: Vec<AstCwtComment<'a>>,
+    pub trailing_comments: Vec<AstCwtComment<'a>>,
 }
 
 pub type CwtModuleResult<'a> = Result<CwtModule<'a>, CwParseError>;

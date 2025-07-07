@@ -1,6 +1,6 @@
 use crate::{
-    AstComment, AstCwtBlock, AstCwtExpression, AstCwtIdentifier, AstCwtRule, AstString, CwtComment,
-    CwtModule, CwtOperator, CwtOption, CwtRuleKey, CwtSimpleValue, CwtValue,
+    AstComment, AstCwtBlock, AstCwtExpression, AstCwtIdentifier, AstCwtRule, AstCwtRuleKey,
+    AstString, AstCwtComment, CwtModule, CwtOperator, CwtOption, CwtSimpleValue, CwtValue,
 };
 
 /// Visitor trait for traversing the CWT AST
@@ -33,7 +33,7 @@ pub trait CwtVisitor<'a> {
         self.walk_simple_value(node)
     }
 
-    fn visit_rule_key(&mut self, node: &CwtRuleKey<'a>) -> () {
+    fn visit_rule_key(&mut self, node: &AstCwtRuleKey<'a>) -> () {
         self.walk_rule_key(node)
     }
 
@@ -49,7 +49,7 @@ pub trait CwtVisitor<'a> {
         self.walk_string(node)
     }
 
-    fn visit_cwt_comment(&mut self, node: &CwtComment<'a>) -> () {
+    fn visit_cwt_comment(&mut self, node: &AstCwtComment<'a>) -> () {
         self.walk_cwt_comment(node)
     }
 
@@ -146,10 +146,10 @@ pub trait CwtVisitor<'a> {
         }
     }
 
-    fn walk_rule_key(&mut self, node: &CwtRuleKey<'a>) -> () {
+    fn walk_rule_key(&mut self, node: &AstCwtRuleKey<'a>) -> () {
         match node {
-            CwtRuleKey::Identifier(identifier) => self.visit_identifier(identifier),
-            CwtRuleKey::String(string) => self.visit_string(string),
+            AstCwtRuleKey::Identifier(identifier) => self.visit_identifier(identifier),
+            AstCwtRuleKey::String(string) => self.visit_string(string),
         }
     }
 
@@ -162,7 +162,7 @@ pub trait CwtVisitor<'a> {
 
     fn walk_string(&mut self, _node: &AstString<'a>) -> () {}
 
-    fn walk_cwt_comment(&mut self, _node: &CwtComment<'a>) -> () {}
+    fn walk_cwt_comment(&mut self, _node: &AstCwtComment<'a>) -> () {}
 
     fn walk_ast_comment(&mut self, _node: &AstComment<'a>) -> () {}
 }

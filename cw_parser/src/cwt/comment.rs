@@ -257,13 +257,13 @@ pub enum CwtCommentType {
 
 /// AST representation of a CWT comment with type information
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CwtComment<'a> {
+pub struct AstCwtComment<'a> {
     pub text: &'a str,
     pub comment_type: CwtCommentType,
     pub span: Range<usize>,
 }
 
-impl<'a> CwtComment<'a> {
+impl<'a> AstCwtComment<'a> {
     pub fn new(text: &'a str, comment_type: CwtCommentType, span: Range<usize>) -> Self {
         Self {
             text,
@@ -296,7 +296,7 @@ impl<'a> CwtComment<'a> {
     }
 }
 
-impl<'a> AstNode<'a> for CwtComment<'a> {
+impl<'a> AstNode<'a> for AstCwtComment<'a> {
     fn span_range(&self) -> Range<usize> {
         self.span.clone()
     }
@@ -313,7 +313,7 @@ impl<'a> AstNode<'a> for CwtComment<'a> {
 /// CWT-specific comment or whitespace
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CwtCommentOrWhitespace<'a> {
-    Comment(CwtComment<'a>),
+    Comment(AstCwtComment<'a>),
     Whitespace { blank_lines: usize },
 }
 
@@ -344,7 +344,7 @@ pub(crate) fn opt_cwt_ws_and_comments<'a>(
 /// Extract just the comments from a mixed collection of comments and whitespace
 pub(crate) fn get_cwt_comments<'a>(
     whitespace: &[CwtCommentOrWhitespace<'a>],
-) -> Vec<CwtComment<'a>> {
+) -> Vec<AstCwtComment<'a>> {
     whitespace
         .iter()
         .filter_map(|c| match c {
@@ -355,7 +355,9 @@ pub(crate) fn get_cwt_comments<'a>(
 }
 
 /// Parse a CWT comment with type detection
-pub(crate) fn cwt_comment<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<CwtComment<'a>> {
+pub(crate) fn cwt_comment<'a>(
+    input: &mut LocatingSlice<&'a str>,
+) -> ModalResult<AstCwtComment<'a>> {
     let ((comment_prefix, comment_text), span) = alt((
         // Documentation comment (###)
         ("###", till_line_ending).map(|(_, text)| (CwtCommentType::Documentation, text)),
@@ -374,7 +376,7 @@ pub(crate) fn cwt_comment<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult
     // Consume the newline but don't count it for the comment text
     opt(eol).parse_next(input)?;
 
-    Ok(CwtComment::new(comment_text, comment_prefix, span))
+    Ok(AstCwtComment::new(comment_text, comment_prefix, span))
 }
 
 /// Parse structured data from option comment text

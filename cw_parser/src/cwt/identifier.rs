@@ -9,7 +9,7 @@ use winnow::{
 
 use crate::{AstComment, AstNode, AstString, opt_trailing_comment, quoted_or_unquoted_string};
 
-use super::{CwtComment, CwtReferenceType};
+use super::{AstCwtComment, CwtReferenceType};
 
 /// Standalone identifier
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,7 +19,7 @@ pub struct AstCwtIdentifier<'a> {
     pub span: Range<usize>,
     /// Is there a ! prepended to the name?
     pub is_not: bool,
-    pub leading_comments: Vec<CwtComment<'a>>,
+    pub leading_comments: Vec<AstCwtComment<'a>>,
     pub trailing_comment: Option<AstComment<'a>>,
 }
 

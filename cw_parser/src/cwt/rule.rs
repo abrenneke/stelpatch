@@ -9,53 +9,53 @@ use crate::{
     with_opt_trailing_ws,
 };
 
-use super::{CwtComment, CwtValue, cwt_identifier, cwt_value};
+use super::{AstCwtComment, CwtValue, cwt_identifier, cwt_value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CwtRuleKey<'a> {
+pub enum AstCwtRuleKey<'a> {
     Identifier(AstCwtIdentifier<'a>),
     String(AstString<'a>),
 }
 
-impl<'a> CwtRuleKey<'a> {
+impl<'a> AstCwtRuleKey<'a> {
     pub fn name(&self) -> &str {
         match self {
-            CwtRuleKey::Identifier(id) => id.name.raw_value(),
-            CwtRuleKey::String(s) => s.raw_value(),
+            AstCwtRuleKey::Identifier(id) => id.name.raw_value(),
+            AstCwtRuleKey::String(s) => s.raw_value(),
         }
     }
 }
 
-impl<'a> AstNode<'a> for CwtRuleKey<'a> {
+impl<'a> AstNode<'a> for AstCwtRuleKey<'a> {
     fn span_range(&self) -> Range<usize> {
         match self {
-            CwtRuleKey::Identifier(id) => id.span_range(),
-            CwtRuleKey::String(s) => s.span_range(),
+            AstCwtRuleKey::Identifier(id) => id.span_range(),
+            AstCwtRuleKey::String(s) => s.span_range(),
         }
     }
 
     fn leading_comments(&self) -> &[AstComment<'a>] {
         match self {
-            CwtRuleKey::Identifier(id) => id.leading_comments(),
-            CwtRuleKey::String(s) => s.leading_comments(),
+            AstCwtRuleKey::Identifier(id) => id.leading_comments(),
+            AstCwtRuleKey::String(s) => s.leading_comments(),
         }
     }
 
     fn trailing_comment(&self) -> Option<&AstComment<'a>> {
         match self {
-            CwtRuleKey::Identifier(id) => id.trailing_comment(),
-            CwtRuleKey::String(s) => s.trailing_comment(),
+            AstCwtRuleKey::Identifier(id) => id.trailing_comment(),
+            AstCwtRuleKey::String(s) => s.trailing_comment(),
         }
     }
 }
 /// CWT rule with optional option directives
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstCwtRule<'a> {
-    pub key: CwtRuleKey<'a>,
+    pub key: AstCwtRuleKey<'a>,
     pub operator: CwtOperator,
     pub value: CwtValue<'a>,
     pub options: Vec<CwtOption<'a>>,
-    pub documentation: Option<CwtComment<'a>>,
+    pub documentation: Option<AstCwtComment<'a>>,
     pub span: Range<usize>,
 }
 
@@ -135,11 +135,11 @@ pub enum CwtSeverityLevel {
 
 impl<'a> AstCwtRule<'a> {
     pub fn new(
-        key: CwtRuleKey<'a>,
+        key: AstCwtRuleKey<'a>,
         operator: CwtOperator,
         value: CwtValue<'a>,
         options: Vec<CwtOption<'a>>,
-        documentation: Option<CwtComment<'a>>,
+        documentation: Option<AstCwtComment<'a>>,
     ) -> Self {
         let span = key.span_range().start..value.span_range().end;
         Self {
@@ -225,8 +225,8 @@ impl<'a> AstNode<'a> for CwtOption<'a> {
 pub(crate) fn cwt_rule<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstCwtRule<'a>> {
     let ((identifier, operator, value), span) = (
         with_opt_trailing_ws(alt((
-            cwt_identifier.map(CwtRuleKey::Identifier),
-            quoted_or_unquoted_string.map(CwtRuleKey::String),
+            cwt_identifier.map(AstCwtRuleKey::Identifier),
+            quoted_or_unquoted_string.map(AstCwtRuleKey::String),
         ))),
         with_opt_trailing_ws(cwt_operator),
         cwt_value,

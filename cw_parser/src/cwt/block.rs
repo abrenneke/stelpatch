@@ -4,15 +4,15 @@ use winnow::{LocatingSlice, ModalResult, Parser, combinator::repeat_till, error:
 
 use crate::{AstComment, AstNode, opt_ws_and_comments};
 
-use super::{AstCwtExpression, AstCwtRule, CwtComment, cwt_expression};
+use super::{AstCwtComment, AstCwtExpression, AstCwtRule, cwt_expression};
 
 /// Block entity containing rules and sub-entities
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstCwtBlock<'a> {
     pub items: Vec<AstCwtExpression<'a>>,
     pub span: Range<usize>,
-    pub leading_comments: Vec<CwtComment<'a>>,
-    pub trailing_comments: Vec<CwtComment<'a>>,
+    pub leading_comments: Vec<AstCwtComment<'a>>,
+    pub trailing_comments: Vec<AstCwtComment<'a>>,
 }
 
 impl<'a> AstCwtBlock<'a> {
@@ -30,12 +30,12 @@ impl<'a> AstCwtBlock<'a> {
         self
     }
 
-    pub fn with_leading_comment(mut self, comment: CwtComment<'a>) -> Self {
+    pub fn with_leading_comment(mut self, comment: AstCwtComment<'a>) -> Self {
         self.leading_comments.push(comment);
         self
     }
 
-    pub fn with_trailing_comment(mut self, comment: CwtComment<'a>) -> Self {
+    pub fn with_trailing_comment(mut self, comment: AstCwtComment<'a>) -> Self {
         self.trailing_comments.push(comment);
         self
     }
@@ -143,7 +143,7 @@ mod tests {
     #[test]
     fn test_cwt_block_with_comments() {
         let mut block = AstCwtBlock::new(0..10);
-        let comment = CwtComment::new("# Test comment", CwtCommentType::Regular, 0..14);
+        let comment = AstCwtComment::new("# Test comment", CwtCommentType::Regular, 0..14);
 
         block = block
             .with_leading_comment(comment.clone())
