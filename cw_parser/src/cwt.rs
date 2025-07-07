@@ -1,13 +1,17 @@
+mod block;
 mod comment;
-mod entity;
+mod expression;
 mod identifier;
 mod module;
 mod rule;
 mod value;
+mod visitor;
 
-pub(crate) use comment::*;
-pub use entity::*;
+pub use block::*;
+pub use comment::*;
+pub use expression::*;
 pub use identifier::*;
 pub use module::*;
 pub use rule::*;
 pub use value::*;
+pub use visitor::*;

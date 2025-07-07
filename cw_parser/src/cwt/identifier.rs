@@ -13,7 +13,7 @@ use super::{CwtComment, CwtReferenceType};
 
 /// Standalone identifier
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CwtIdentifier<'a> {
+pub struct AstCwtIdentifier<'a> {
     pub identifier_type: CwtReferenceType<'a>,
     pub name: AstString<'a>,
     pub span: Range<usize>,
@@ -23,7 +23,7 @@ pub struct CwtIdentifier<'a> {
     pub trailing_comment: Option<AstComment<'a>>,
 }
 
-impl<'a> CwtIdentifier<'a> {
+impl<'a> AstCwtIdentifier<'a> {
     /// Check if this is a type key identifier
     pub fn is_type_key(&self) -> bool {
         self.identifier_type.is_type_ref()
@@ -45,7 +45,7 @@ impl<'a> CwtIdentifier<'a> {
     }
 }
 
-impl<'a> AstNode<'a> for CwtIdentifier<'a> {
+impl<'a> AstNode<'a> for AstCwtIdentifier<'a> {
     fn span_range(&self) -> Range<usize> {
         self.span.clone()
     }
@@ -70,7 +70,7 @@ pub(crate) fn quoted_or_unquoted_string_with_not<'a>(
 /// Parse a standalone identifier
 pub(crate) fn cwt_identifier<'a>(
     input: &mut LocatingSlice<&'a str>,
-) -> ModalResult<CwtIdentifier<'a>> {
+) -> ModalResult<AstCwtIdentifier<'a>> {
     let ((name, identifier_type), span) = alt((
         // Type key identifier: <identifier>
         delimited("<", quoted_or_unquoted_string_with_not, ">")
@@ -149,7 +149,7 @@ pub(crate) fn cwt_identifier<'a>(
 
     let trailing_comment = opt_trailing_comment.parse_next(input)?;
 
-    Ok(CwtIdentifier {
+    Ok(AstCwtIdentifier {
         identifier_type,
         name: name.0,
         is_not: name.1,

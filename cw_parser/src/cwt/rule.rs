@@ -5,14 +5,15 @@ use winnow::{
 };
 
 use crate::{
-    AstComment, AstNode, AstString, CwtIdentifier, quoted_or_unquoted_string, with_opt_trailing_ws,
+    AstComment, AstCwtIdentifier, AstNode, AstString, quoted_or_unquoted_string,
+    with_opt_trailing_ws,
 };
 
 use super::{CwtComment, CwtValue, cwt_identifier, cwt_value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CwtRuleKey<'a> {
-    Identifier(CwtIdentifier<'a>),
+    Identifier(AstCwtIdentifier<'a>),
     String(AstString<'a>),
 }
 
@@ -49,7 +50,7 @@ impl<'a> AstNode<'a> for CwtRuleKey<'a> {
 }
 /// CWT rule with optional option directives
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CwtRule<'a> {
+pub struct AstCwtRule<'a> {
     pub key: CwtRuleKey<'a>,
     pub operator: CwtOperator,
     pub value: CwtValue<'a>,
@@ -132,7 +133,7 @@ pub enum CwtSeverityLevel {
     Hint,
 }
 
-impl<'a> CwtRule<'a> {
+impl<'a> AstCwtRule<'a> {
     pub fn new(
         key: CwtRuleKey<'a>,
         operator: CwtOperator,
@@ -192,7 +193,7 @@ impl<'a> CwtRule<'a> {
     }
 }
 
-impl<'a> AstNode<'a> for CwtRule<'a> {
+impl<'a> AstNode<'a> for AstCwtRule<'a> {
     fn span_range(&self) -> Range<usize> {
         self.span.clone()
     }
@@ -221,7 +222,7 @@ impl<'a> AstNode<'a> for CwtOption<'a> {
 }
 
 /// Parse a CWT rule
-pub(crate) fn cwt_rule<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<CwtRule<'a>> {
+pub(crate) fn cwt_rule<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstCwtRule<'a>> {
     let ((identifier, operator, value), span) = (
         with_opt_trailing_ws(alt((
             cwt_identifier.map(CwtRuleKey::Identifier),
@@ -234,7 +235,7 @@ pub(crate) fn cwt_rule<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<Cw
         .context(StrContext::Label("cwt_rule"))
         .parse_next(input)?;
 
-    Ok(CwtRule {
+    Ok(AstCwtRule {
         key: identifier,
         operator,
         value,

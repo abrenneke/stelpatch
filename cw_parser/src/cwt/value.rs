@@ -10,7 +10,7 @@ use winnow::{
 
 use crate::{AstComment, AstNode, AstString, quoted_or_unquoted_string};
 
-use super::{CwtBlock, CwtIdentifier, cwt_block, cwt_identifier};
+use super::{AstCwtBlock, AstCwtIdentifier, cwt_block, cwt_identifier};
 
 /// CWT value types
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,9 +18,9 @@ pub enum CwtValue<'a> {
     /// Simple rule types: bool, int, float, scalar, etc.
     Simple(CwtSimpleValue<'a>),
     /// Identifier types: regular, <type_key>, enum[key], scope[key], etc.
-    Identifier(CwtIdentifier<'a>),
+    Identifier(AstCwtIdentifier<'a>),
     /// Block value: { ... }
-    Block(CwtBlock<'a>),
+    Block(AstCwtBlock<'a>),
     /// A quoted or unquoted string by itself, for e.g. enum values
     String(AstString<'a>),
 }
@@ -148,11 +148,11 @@ impl<'a> CwtValue<'a> {
         })
     }
 
-    pub fn new_identifier(identifier: CwtIdentifier<'a>) -> Self {
+    pub fn new_identifier(identifier: AstCwtIdentifier<'a>) -> Self {
         Self::Identifier(identifier)
     }
 
-    pub fn new_block(block: CwtBlock<'a>) -> Self {
+    pub fn new_block(block: AstCwtBlock<'a>) -> Self {
         Self::Block(block)
     }
 
@@ -180,7 +180,7 @@ impl<'a> CwtValue<'a> {
     }
 
     /// Try to get the value as an identifier value
-    pub fn as_identifier(&self) -> Option<&CwtIdentifier<'a>> {
+    pub fn as_identifier(&self) -> Option<&AstCwtIdentifier<'a>> {
         match self {
             Self::Identifier(i) => Some(i),
             _ => None,
@@ -188,7 +188,7 @@ impl<'a> CwtValue<'a> {
     }
 
     /// Try to get the value as a block value
-    pub fn as_block(&self) -> Option<&CwtBlock<'a>> {
+    pub fn as_block(&self) -> Option<&AstCwtBlock<'a>> {
         match self {
             Self::Block(b) => Some(b),
             _ => None,
@@ -670,7 +670,7 @@ mod tests {
         assert!(simple.as_identifier().is_none());
 
         // Test identifier value methods
-        let identifier_val = CwtValue::new_identifier(CwtIdentifier {
+        let identifier_val = CwtValue::new_identifier(AstCwtIdentifier {
             identifier_type: CwtReferenceType::TypeRef,
             name: AstString::new("test", false, 0..6),
             span: 0..6,
@@ -692,7 +692,7 @@ mod tests {
         assert_eq!(simple.leading_comments().len(), 0);
         assert!(simple.trailing_comment().is_none());
 
-        let identifier_val = CwtValue::new_identifier(CwtIdentifier {
+        let identifier_val = CwtValue::new_identifier(AstCwtIdentifier {
             identifier_type: CwtReferenceType::TypeRef,
             name: AstString::new("test", false, 10..16),
             span: 10..16,

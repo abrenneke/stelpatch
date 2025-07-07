@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::types::{InferredType, PrimitiveType, TypeInferenceConfig};
+use crate::types::{
+    ArrayType, Cardinality, InferredType, ObjectType, PrimitiveType, PropertyDefinition,
+    TypeInferenceConfig,
+};
 
 /// Registry that stores and manages all inferred types
 #[derive(Debug, Clone)]
@@ -133,22 +136,84 @@ impl TypeRegistry {
             }
 
             (InferredType::Object(mut a), InferredType::Object(b)) if self.config.merge_objects => {
-                for (key, value) in b {
-                    let existing = a.entry(key).or_insert(Box::new(InferredType::Unknown));
-                    let existing_clone = (**existing).clone();
-                    let merged = self.merge_types_with_depth(existing_clone, *value, depth + 1);
-                    *existing = Box::new(merged);
+                // Merge properties
+                for (key, prop_def) in b.properties {
+                    let existing_prop = a
+                        .properties
+                        .entry(key)
+                        .or_insert(PropertyDefinition::simple(InferredType::Unknown));
+                    let existing_clone = (*existing_prop.property_type).clone();
+                    let merged = self.merge_types_with_depth(
+                        existing_clone,
+                        *prop_def.property_type,
+                        depth + 1,
+                    );
+                    existing_prop.property_type = Box::new(merged);
                 }
+
+                // Merge subtypes
+                for (key, subtype) in b.subtypes {
+                    a.subtypes.insert(key, subtype);
+                }
+
+                // Merge other properties
+                if a.localisation.is_none() {
+                    a.localisation = b.localisation;
+                }
+                if a.modifiers.is_none() {
+                    a.modifiers = b.modifiers;
+                }
+                a.extensible = a.extensible || b.extensible;
+
                 InferredType::Object(a)
             }
 
             (InferredType::Array(a), InferredType::Array(b)) => {
-                let merged = self.merge_types_with_depth(*a, *b, depth + 1);
-                InferredType::Array(Box::new(merged))
+                let merged =
+                    self.merge_types_with_depth(*a.element_type, *b.element_type, depth + 1);
+                InferredType::Array(ArrayType {
+                    element_type: Box::new(merged),
+                    cardinality: Cardinality::optional_repeating(), // Use a reasonable default
+                })
+            }
+
+            // Handle same types
+            (a, b) if std::mem::discriminant(&a) == std::mem::discriminant(&b) => {
+                // For types that are the same variant but potentially different content
+                match (a, b) {
+                    (InferredType::Reference(ref_a), InferredType::Reference(ref_b)) => {
+                        // If references are the same, keep one; otherwise create union
+                        if ref_a == ref_b {
+                            InferredType::Reference(ref_a)
+                        } else {
+                            InferredType::Union(vec![
+                                InferredType::Reference(ref_a),
+                                InferredType::Reference(ref_b),
+                            ])
+                        }
+                    }
+                    (InferredType::Constrained(c_a), InferredType::Constrained(c_b)) => {
+                        // Merge the base types
+                        let merged_base =
+                            self.merge_types_with_depth(*c_a.base_type, *c_b.base_type, depth + 1);
+                        InferredType::Constrained(crate::types::ConstrainedType {
+                            base_type: Box::new(merged_base),
+                            cardinality: c_a.cardinality.or(c_b.cardinality),
+                            range: c_a.range.or(c_b.range),
+                            options: [c_a.options, c_b.options].concat(),
+                        })
+                    }
+                    (InferredType::Comparable(c_a), InferredType::Comparable(c_b)) => {
+                        let merged_base = self.merge_types_with_depth(*c_a, *c_b, depth + 1);
+                        InferredType::Comparable(Box::new(merged_base))
+                    }
+                    // For other same-discriminant cases, just return the first one
+                    (a, _) => a,
+                }
             }
 
             // Convert to union if types are incompatible
-            (a, b) if a != b => {
+            (a, b) => {
                 // Flatten unions to avoid nested Union types
                 let mut union_types = Vec::new();
 
@@ -173,8 +238,6 @@ impl TypeRegistry {
                     InferredType::Union(union_types)
                 }
             }
-
-            (a, _) => a,
         }
     }
 }

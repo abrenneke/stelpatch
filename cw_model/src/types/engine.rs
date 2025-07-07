@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::types::{InferredType, PrimitiveType, TypeInferenceConfig, TypeRegistry};
+use crate::types::{
+    ArrayType, Cardinality, InferredType, ObjectType, PrimitiveType, PropertyDefinition,
+    TypeInferenceConfig, TypeRegistry,
+};
 use crate::{Module, Value};
 
 /// Engine that processes modules and entities to infer types
@@ -79,10 +82,17 @@ impl TypeInferenceEngine {
                 }
             }
 
-            Value::Number(_) => InferredType::Primitive(PrimitiveType::Number),
+            Value::Number(n) => {
+                // Try to determine if it's an integer or float by parsing the string
+                if n.contains('.') || n.contains('e') || n.contains('E') {
+                    InferredType::Primitive(PrimitiveType::Float)
+                } else {
+                    InferredType::Primitive(PrimitiveType::Integer)
+                }
+            }
 
             Value::Entity(entity) => {
-                let mut object_type = HashMap::new();
+                let mut properties = HashMap::new();
 
                 // Process entity properties
                 for (key, property_list) in &entity.properties.kv {
@@ -100,7 +110,10 @@ impl TypeInferenceEngine {
                             .into_iter()
                             .reduce(|acc, t| self.registry.merge_types(acc, t))
                             .unwrap();
-                        InferredType::Array(Box::new(element_type))
+                        InferredType::Array(ArrayType {
+                            element_type: Box::new(element_type),
+                            cardinality: Cardinality::optional_repeating(),
+                        })
                     } else {
                         // Merge all types
                         types
@@ -109,7 +122,7 @@ impl TypeInferenceEngine {
                             .unwrap()
                     };
 
-                    object_type.insert(key.clone(), Box::new(merged_type));
+                    properties.insert(key.clone(), PropertyDefinition::simple(merged_type));
                 }
 
                 // Process entity items (array-like values)
@@ -125,13 +138,22 @@ impl TypeInferenceEngine {
                         .unwrap();
 
                     // Add items as a special property
-                    object_type.insert(
+                    properties.insert(
                         "_items".to_string(),
-                        Box::new(InferredType::Array(Box::new(merged_item_type))),
+                        PropertyDefinition::simple(InferredType::Array(ArrayType {
+                            element_type: Box::new(merged_item_type),
+                            cardinality: Cardinality::optional_repeating(),
+                        })),
                     );
                 }
 
-                InferredType::Object(object_type)
+                InferredType::Object(ObjectType {
+                    properties,
+                    subtypes: HashMap::new(),
+                    extensible: true,
+                    localisation: None,
+                    modifiers: None,
+                })
             }
 
             Value::Color(_) => InferredType::Primitive(PrimitiveType::Color),

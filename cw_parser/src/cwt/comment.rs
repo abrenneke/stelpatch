@@ -18,8 +18,8 @@ pub enum CwtOptionExpression {
     String(String),
     /// Range expression: `0..1`, `~1..2`
     Range {
-        min: CwtRangeBound,
-        max: CwtRangeBound,
+        min: CwtCommentRangeBound,
+        max: CwtCommentRangeBound,
         lenient: bool, // true for ~1..2
     },
     /// List expression: `{ country planet }`
@@ -81,7 +81,7 @@ impl CwtOptionExpression {
     }
 
     /// Get the range data if this is a range expression
-    pub fn as_range(&self) -> Option<(&CwtRangeBound, &CwtRangeBound, bool)> {
+    pub fn as_range(&self) -> Option<(&CwtCommentRangeBound, &CwtCommentRangeBound, bool)> {
         match self {
             CwtOptionExpression::Range { min, max, lenient } => Some((min, max, *lenient)),
             _ => None,
@@ -115,35 +115,35 @@ impl CwtOptionExpression {
 
 /// Range bound for cardinality expressions
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CwtRangeBound {
-    Number(u32),
+pub enum CwtCommentRangeBound {
+    Number(String),
     Infinity,
 }
 
-impl CwtRangeBound {
+impl CwtCommentRangeBound {
     /// Check if this is a number
     pub fn is_number(&self) -> bool {
-        matches!(self, CwtRangeBound::Number(_))
+        matches!(self, CwtCommentRangeBound::Number(_))
     }
 
     /// Check if this is infinity
     pub fn is_infinity(&self) -> bool {
-        matches!(self, CwtRangeBound::Infinity)
+        matches!(self, CwtCommentRangeBound::Infinity)
     }
 
     /// Get the number value if this is a number
-    pub fn as_number(&self) -> Option<u32> {
+    pub fn as_number(&self) -> Option<&str> {
         match self {
-            CwtRangeBound::Number(n) => Some(*n),
+            CwtCommentRangeBound::Number(n) => Some(n),
             _ => None,
         }
     }
 
     /// Convert to a comparable value for ordering (infinity is treated as u32::MAX)
-    pub fn to_comparable(&self) -> u32 {
+    pub fn to_comparable(&self) -> &str {
         match self {
-            CwtRangeBound::Number(n) => *n,
-            CwtRangeBound::Infinity => u32::MAX,
+            CwtCommentRangeBound::Number(n) => n,
+            CwtCommentRangeBound::Infinity => "inf",
         }
     }
 }
@@ -476,11 +476,11 @@ fn parse_range_expression(text: &str) -> Option<CwtOptionExpression> {
 }
 
 /// Parse a range bound (number or "inf")
-fn parse_range_bound(text: &str) -> Option<CwtRangeBound> {
+fn parse_range_bound(text: &str) -> Option<CwtCommentRangeBound> {
     if text == "inf" {
-        Some(CwtRangeBound::Infinity)
+        Some(CwtCommentRangeBound::Infinity)
     } else {
-        text.parse::<u32>().ok().map(CwtRangeBound::Number)
+        Some(CwtCommentRangeBound::Number(text.to_string()))
     }
 }
 
@@ -543,8 +543,8 @@ mod tests {
         assert_eq!(option.key, "cardinality");
 
         if let CwtOptionExpression::Range { min, max, lenient } = &option.value {
-            assert_eq!(min, &CwtRangeBound::Number(0));
-            assert_eq!(max, &CwtRangeBound::Number(1));
+            assert_eq!(min, &CwtCommentRangeBound::Number("0".to_string()));
+            assert_eq!(max, &CwtCommentRangeBound::Number("1".to_string()));
             assert!(!lenient);
         } else {
             panic!("Expected range expression");
@@ -560,8 +560,8 @@ mod tests {
         assert_eq!(option.key, "cardinality");
 
         if let CwtOptionExpression::Range { min, max, lenient } = &option.value {
-            assert_eq!(min, &CwtRangeBound::Number(1));
-            assert_eq!(max, &CwtRangeBound::Number(2));
+            assert_eq!(min, &CwtCommentRangeBound::Number("1".to_string()));
+            assert_eq!(max, &CwtCommentRangeBound::Number("2".to_string()));
             assert!(lenient);
         } else {
             panic!("Expected range expression");
@@ -588,9 +588,9 @@ mod tests {
                 lenient: _,
             } = &option.value
             {
-                assert_eq!(min, &CwtRangeBound::Number(min_val));
+                assert_eq!(min, &CwtCommentRangeBound::Number(min_val.to_string()));
                 if expect_inf {
-                    assert_eq!(max, &CwtRangeBound::Infinity);
+                    assert_eq!(max, &CwtCommentRangeBound::Infinity);
                 }
             } else {
                 panic!("Expected range expression for: {}", input);
@@ -616,8 +616,8 @@ mod tests {
                 lenient: _,
             } = &option.value
             {
-                assert_eq!(min, &CwtRangeBound::Number(min_val));
-                assert_eq!(max, &CwtRangeBound::Number(max_val));
+                assert_eq!(min, &CwtCommentRangeBound::Number(min_val.to_string()));
+                assert_eq!(max, &CwtCommentRangeBound::Number(max_val.to_string()));
             } else {
                 panic!("Expected range expression for: {}", input);
             }
@@ -817,8 +817,8 @@ mod tests {
 
     #[test]
     fn test_range_bound_helpers() {
-        let number_bound = CwtRangeBound::Number(42);
-        let inf_bound = CwtRangeBound::Infinity;
+        let number_bound = CwtCommentRangeBound::Number("42".to_string());
+        let inf_bound = CwtCommentRangeBound::Infinity;
 
         // Test type checking
         assert!(number_bound.is_number());
@@ -827,12 +827,12 @@ mod tests {
         assert!(inf_bound.is_infinity());
 
         // Test value extraction
-        assert_eq!(number_bound.as_number(), Some(42));
+        assert_eq!(number_bound.as_number(), Some("42"));
         assert_eq!(inf_bound.as_number(), None);
 
         // Test comparable values
-        assert_eq!(number_bound.to_comparable(), 42);
-        assert_eq!(inf_bound.to_comparable(), u32::MAX);
+        assert_eq!(number_bound.to_comparable(), "42");
+        assert_eq!(inf_bound.to_comparable(), "inf");
     }
 
     // === Expression Helper Tests ===
@@ -842,8 +842,8 @@ mod tests {
         let identifier = CwtOptionExpression::Identifier("test".to_string());
         let string_expr = CwtOptionExpression::String("test".to_string());
         let range_expr = CwtOptionExpression::Range {
-            min: CwtRangeBound::Number(0),
-            max: CwtRangeBound::Number(1),
+            min: CwtCommentRangeBound::Number("0".to_string()),
+            max: CwtCommentRangeBound::Number("1".to_string()),
             lenient: false,
         };
         let list_expr = CwtOptionExpression::List(vec![]);
@@ -872,8 +872,8 @@ mod tests {
         let identifier = CwtOptionExpression::Identifier("test".to_string());
         let string_expr = CwtOptionExpression::String("test".to_string());
         let range_expr = CwtOptionExpression::Range {
-            min: CwtRangeBound::Number(0),
-            max: CwtRangeBound::Number(1),
+            min: CwtCommentRangeBound::Number("0".to_string()),
+            max: CwtCommentRangeBound::Number("1".to_string()),
             lenient: false,
         };
         let list_expr = CwtOptionExpression::List(vec![]);

@@ -1,5 +1,6 @@
+use cw_model::types::CwtAnalyzer;
 use cw_parser::CwtModuleCell;
-use cw_parser::cwt::CwtModule;
+
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -74,17 +75,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let total_duration = start_time.elapsed();
+    let parse_duration = start_time.elapsed();
 
-    println!("\n=== SUMMARY ===");
+    println!("\n=== PARSING SUMMARY ===");
     println!("Total files processed: {}", cwt_files.len());
     println!("Successfully parsed: {}", modules.len());
     println!("Parse errors: {}", parse_errors.len());
-    println!("Total time: {:.2?}", total_duration);
+    println!("Parse time: {:.2?}", parse_duration);
 
     if !modules.is_empty() {
-        let avg_time = total_duration / modules.len() as u32;
-        println!("Average time per file: {:.2?}", avg_time);
+        let avg_time = parse_duration / modules.len() as u32;
+        println!("Average parse time per file: {:.2?}", avg_time);
     }
 
     // Print statistics about the parsed modules
@@ -92,31 +93,160 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\n=== MODULE STATISTICS ===");
         let mut total_items = 0;
         let mut total_rules = 0;
-        let mut total_blocks = 0;
 
         for (file_path, module) in &modules {
             let module = module.borrow_dependent().as_ref().unwrap();
 
             let items = module.items.len();
             let rules = module.rules().count();
-            let blocks = module.blocks().count();
 
             total_items += items;
             total_rules += rules;
-            total_blocks += blocks;
 
             println!(
-                "  {}: {} items ({} rules, {} blocks)",
+                "  {}: {} items ({} rules)",
                 file_path.file_name().unwrap_or_default().to_string_lossy(),
                 items,
                 rules,
-                blocks
             );
         }
 
         println!("Total items: {}", total_items);
         println!("Total rules: {}", total_rules);
-        println!("Total blocks: {}", total_blocks);
+    }
+
+    // Convert the parsed modules using CwtConverter
+    if !modules.is_empty() {
+        println!("\n=== CONVERTING TO INFERRED TYPES ===");
+        let convert_start = Instant::now();
+
+        let mut converter = CwtAnalyzer::new();
+        let mut conversion_errors = Vec::new();
+
+        for (file_path, module) in &modules {
+            print!(
+                "Converting {}... ",
+                file_path.file_name().unwrap_or_default().to_string_lossy()
+            );
+
+            let module = module.borrow_dependent().as_ref().unwrap();
+            let file_convert_start = Instant::now();
+
+            match converter.convert_module(module) {
+                Ok(()) => {
+                    let convert_duration = file_convert_start.elapsed();
+                    println!("✓ ({:.2?})", convert_duration);
+                }
+                Err(errors) => {
+                    let convert_duration = file_convert_start.elapsed();
+                    println!("✗ ({:.2?}) - {} errors", convert_duration, errors.len());
+                    conversion_errors.extend(errors.into_iter().map(|e| (file_path.clone(), e)));
+                }
+            }
+        }
+
+        let convert_duration = convert_start.elapsed();
+
+        println!("\n=== CONVERSION SUMMARY ===");
+        println!("Conversion time: {:.2?}", convert_duration);
+        println!("Conversion errors: {}", conversion_errors.len());
+
+        // Print converted type statistics
+        println!("\n=== CONVERTED TYPE STATISTICS ===");
+        println!("Types defined: {}", converter.types.len());
+        println!("Enums defined: {}", converter.enums.len());
+        println!("Value sets defined: {}", converter.value_sets.len());
+        println!("Aliases defined: {}", converter.aliases.len());
+        println!("Single aliases defined: {}", converter.single_aliases.len());
+
+        // Print detailed type information
+        if !converter.types.is_empty() {
+            println!("\n=== TYPE DEFINITIONS ===");
+            for (name, type_def) in &converter.types {
+                println!("  Type: {}", name);
+                if let Some(path) = &type_def.path {
+                    println!("    Path: {}", path);
+                }
+                if let Some(name_field) = &type_def.name_field {
+                    println!("    Name field: {}", name_field);
+                }
+                if !type_def.subtypes.is_empty() {
+                    println!("    Subtypes: {}", type_def.subtypes.len());
+                    for (subtype_name, _) in &type_def.subtypes {
+                        println!("      - {}", subtype_name);
+                    }
+                }
+                if !type_def.localisation.is_empty() {
+                    println!(
+                        "    Localisation requirements: {}",
+                        type_def.localisation.len()
+                    );
+                }
+                if !type_def.modifiers.is_empty() {
+                    println!("    Modifier generation: {}", type_def.modifiers.len());
+                }
+                println!("    Rules: {:?}", type_def.rules);
+                println!();
+            }
+        }
+
+        // Print detailed enum information
+        if !converter.enums.is_empty() {
+            println!("\n=== ENUM DEFINITIONS ===");
+            for (name, enum_def) in &converter.enums {
+                println!("  Enum: {}", name);
+                if !enum_def.values.is_empty() {
+                    println!("    Values: {:?}", enum_def.values);
+                }
+                if let Some(complex) = &enum_def.complex {
+                    println!("    Complex enum:");
+                    println!("      Path: {}", complex.path);
+                    println!("      Start from root: {}", complex.start_from_root);
+                    println!("      Name structure: {:?}", complex.name_structure);
+                }
+                println!();
+            }
+        }
+
+        // Print value sets
+        if !converter.value_sets.is_empty() {
+            println!("\n=== VALUE SETS ===");
+            for (name, values) in &converter.value_sets {
+                println!("  Value set: {}", name);
+                println!("    Values: {:?}", values);
+                println!();
+            }
+        }
+
+        // Print aliases
+        if !converter.aliases.is_empty() {
+            println!("\n=== ALIASES ===");
+            for (name, alias) in &converter.aliases {
+                println!("  Alias: {}", name);
+                println!("    Category: {}", alias.category);
+                println!("    Name: {}", alias.name);
+                println!("    Rules: {:?}", alias.rules);
+                println!();
+            }
+        }
+
+        // Print single aliases
+        if !converter.single_aliases.is_empty() {
+            println!("\n=== SINGLE ALIASES ===");
+            for (name, alias_type) in &converter.single_aliases {
+                println!("  Single alias: {}", name);
+                println!("    Type: {:?}", alias_type);
+                println!();
+            }
+        }
+
+        // Print conversion errors if any
+        if !conversion_errors.is_empty() {
+            println!("\n=== CONVERSION ERRORS ===");
+            for (file_path, error) in &conversion_errors {
+                println!("  {}: {}", file_path.display(), error);
+            }
+        }
     }
 
     // Print parse errors if any
@@ -126,6 +256,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  {}: {}", file_path.display(), error);
         }
     }
+
+    let total_duration = start_time.elapsed();
+    println!("\n=== TOTAL SUMMARY ===");
+    println!("Total time: {:.2?}", total_duration);
 
     Ok(())
 }

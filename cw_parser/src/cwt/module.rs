@@ -10,9 +10,8 @@ use winnow::{
 use crate::{AstComment, AstNode, CwParseError, ParseError, opt_ws_and_comments};
 
 use super::{
-    CwtAliasDefinition, CwtBlock, CwtComment, CwtComplexEnumDefinition, CwtEntity,
-    CwtEnumDefinition, CwtRule, CwtSingleAliasDefinition, CwtTypeDefinition, cwt_entity,
-    get_cwt_comments, opt_cwt_ws_and_comments,
+    AstCwtBlock, AstCwtExpression, AstCwtRule, CwtComment, cwt_expression, get_cwt_comments,
+    opt_cwt_ws_and_comments,
 };
 
 use self_cell::self_cell;
@@ -20,7 +19,7 @@ use self_cell::self_cell;
 /// CWT module representing a complete CWT file
 #[derive(Debug, PartialEq)]
 pub struct CwtModule<'a> {
-    pub items: Vec<CwtEntity<'a>>,
+    pub items: Vec<AstCwtExpression<'a>>,
     pub span: Range<usize>,
     pub leading_comments: Vec<CwtComment<'a>>,
     pub trailing_comments: Vec<CwtComment<'a>>,
@@ -87,36 +86,36 @@ impl<'a> CwtModule<'a> {
     }
 
     /// Find all rules with the given key name
-    pub fn find_rules(&self, key: &str) -> Vec<&CwtRule<'a>> {
+    pub fn find_rules(&self, key: &str) -> Vec<&AstCwtRule<'a>> {
         self.items
             .iter()
             .filter_map(|item| match item {
-                CwtEntity::Rule(rule) if rule.key.name() == key => Some(rule),
+                AstCwtExpression::Rule(rule) if rule.key.name() == key => Some(rule),
                 _ => None,
             })
             .collect()
     }
 
     /// Find the first rule with the given key name
-    pub fn find_rule(&self, key: &str) -> Option<&CwtRule<'a>> {
+    pub fn find_rule(&self, key: &str) -> Option<&AstCwtRule<'a>> {
         self.items.iter().find_map(|item| match item {
-            CwtEntity::Rule(rule) if rule.key.name() == key => Some(rule),
+            AstCwtExpression::Rule(rule) if rule.key.name() == key => Some(rule),
             _ => None,
         })
     }
 
     /// Get all rules in the module
-    pub fn rules(&self) -> impl Iterator<Item = &CwtRule<'a>> {
+    pub fn rules(&self) -> impl Iterator<Item = &AstCwtRule<'a>> {
         self.items.iter().filter_map(|item| match item {
-            CwtEntity::Rule(rule) => Some(rule),
+            AstCwtExpression::Rule(rule) => Some(rule),
             _ => None,
         })
     }
 
     /// Get all blocks in the module
-    pub fn blocks(&self) -> impl Iterator<Item = &CwtBlock<'a>> {
+    pub fn blocks(&self) -> impl Iterator<Item = &AstCwtBlock<'a>> {
         self.items.iter().filter_map(|item| match item {
-            CwtEntity::Block(block) => Some(block),
+            AstCwtExpression::Block(block) => Some(block),
             _ => None,
         })
     }
@@ -163,8 +162,8 @@ pub(crate) fn cwt_module<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<
     let leading_comments = get_cwt_comments(&leading_comments_data);
 
     // Parse all entities (each entity parser will handle its own leading comments)
-    let ((entities, _), span): ((Vec<CwtEntity<'a>>, _), _) =
-        repeat_till(0.., cwt_entity, (opt_ws_and_comments, eof))
+    let ((entities, _), span): ((Vec<AstCwtExpression<'a>>, _), _) =
+        repeat_till(0.., cwt_expression, (opt_ws_and_comments, eof))
             .with_span()
             .context(StrContext::Label("cwt_module"))
             .parse_next(input)?;
@@ -181,8 +180,6 @@ pub(crate) fn cwt_module<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<
 
 #[cfg(test)]
 mod tests {
-    use crate::CwtValue;
-
     use super::*;
     use pretty_assertions::assert_eq;
     use winnow::{LocatingSlice, Parser};

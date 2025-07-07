@@ -105,8 +105,8 @@ impl TypeCache {
 
             match current_type {
                 InferredType::Object(obj) => {
-                    if let Some(boxed_type) = obj.get(*part) {
-                        current_type = boxed_type.as_ref();
+                    if let Some(property_def) = obj.properties.get(*part) {
+                        current_type = property_def.property_type.as_ref();
                     } else {
                         return Some(TypeInfo {
                             property_path: current_path,
@@ -187,45 +187,95 @@ fn format_type_description_with_depth(
         }
         InferredType::Primitive(prim) => match prim {
             PrimitiveType::String => "string".to_string(),
-            PrimitiveType::Number => "number".to_string(),
+            PrimitiveType::Integer => "integer".to_string(),
+            PrimitiveType::Float => "float".to_string(),
             PrimitiveType::Boolean => "boolean".to_string(),
             PrimitiveType::Color => "color".to_string(),
             PrimitiveType::Maths => "maths".to_string(),
+            PrimitiveType::Scalar => "scalar".to_string(),
+            PrimitiveType::PercentageField => "percentage".to_string(),
+            PrimitiveType::Localisation => "localisation".to_string(),
+            PrimitiveType::LocalisationSynced => "localisation_synced".to_string(),
+            PrimitiveType::LocalisationInline => "localisation_inline".to_string(),
+            PrimitiveType::DateField => "date".to_string(),
+            PrimitiveType::VariableField => "variable".to_string(),
+            PrimitiveType::IntVariableField => "int_variable".to_string(),
+            PrimitiveType::ValueField => "value".to_string(),
+            PrimitiveType::IntValueField => "int_value".to_string(),
+            PrimitiveType::ScopeField => "scope".to_string(),
+            PrimitiveType::Filepath => "filepath".to_string(),
+            PrimitiveType::Icon => "icon".to_string(),
         },
         InferredType::PrimitiveUnion(prims) => prims
             .iter()
             .map(|p| match p {
                 PrimitiveType::String => "string".to_string(),
-                PrimitiveType::Number => "number".to_string(),
+                PrimitiveType::Integer => "integer".to_string(),
+                PrimitiveType::Float => "float".to_string(),
                 PrimitiveType::Boolean => "boolean".to_string(),
                 PrimitiveType::Color => "color".to_string(),
                 PrimitiveType::Maths => "maths".to_string(),
+                PrimitiveType::Scalar => "scalar".to_string(),
+                PrimitiveType::PercentageField => "percentage".to_string(),
+                PrimitiveType::Localisation => "localisation".to_string(),
+                PrimitiveType::LocalisationSynced => "localisation_synced".to_string(),
+                PrimitiveType::LocalisationInline => "localisation_inline".to_string(),
+                PrimitiveType::DateField => "date".to_string(),
+                PrimitiveType::VariableField => "variable".to_string(),
+                PrimitiveType::IntVariableField => "int_variable".to_string(),
+                PrimitiveType::ValueField => "value".to_string(),
+                PrimitiveType::IntValueField => "int_value".to_string(),
+                PrimitiveType::ScopeField => "scope".to_string(),
+                PrimitiveType::Filepath => "filepath".to_string(),
+                PrimitiveType::Icon => "icon".to_string(),
             })
             .collect::<Vec<_>>()
             .join(" | "),
+        InferredType::Reference(ref_type) => {
+            format!(
+                "reference[{}]",
+                match ref_type {
+                    cw_model::types::ReferenceType::TypeRef { type_key, .. } => type_key,
+                    cw_model::types::ReferenceType::Enum { key } => key,
+                    cw_model::types::ReferenceType::Scope { key } => key,
+                    cw_model::types::ReferenceType::Value { key } => key,
+                    cw_model::types::ReferenceType::ValueSet { key } => key,
+                    _ => "unknown",
+                }
+            )
+        }
+        InferredType::Constrained(constrained) => {
+            format_type_description_with_depth(&constrained.base_type, depth + 1, max_lines)
+        }
+        InferredType::Comparable(comparable) => {
+            format!(
+                "comparable[{}]",
+                format_type_description_with_depth(comparable, depth + 1, max_lines)
+            )
+        }
         InferredType::Object(obj) => {
-            if obj.is_empty() {
+            if obj.properties.is_empty() {
                 return "Entity: {}".to_string();
             }
 
-            let mut properties: Vec<_> = obj.iter().collect();
+            let mut properties: Vec<_> = obj.properties.iter().collect();
             properties.sort_by_key(|(k, _)| k.as_str());
 
             let mut lines = vec!["Entity:".to_string()];
             let mut line_count = 0;
             let mut properties_processed = 0;
 
-            for (key, value_type) in properties {
+            for (key, property_def) in properties {
                 if line_count >= max_lines {
                     lines.push(format!(
                         "  # ... ({} more properties)",
-                        obj.len() - properties_processed
+                        obj.properties.len() - properties_processed
                     ));
                     break;
                 }
 
                 let formatted_value = format_type_description_with_depth(
-                    value_type,
+                    &property_def.property_type,
                     depth + 1,
                     max_lines - line_count,
                 );
@@ -259,9 +309,9 @@ fn format_type_description_with_depth(
 
             lines.join("\n")
         }
-        InferredType::Array(element_type) => {
+        InferredType::Array(array_type) => {
             let element_desc =
-                format_type_description_with_depth(element_type, depth + 1, max_lines);
+                format_type_description_with_depth(&array_type.element_type, depth + 1, max_lines);
             if element_desc.contains('\n') {
                 format!("array[object]")
             } else {
