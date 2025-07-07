@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 
 use cw_parser::{
-    AstCwtBlock, AstCwtRule, AstCwtRuleKey, CwtReferenceType, CwtSeverityLevel, CwtSimpleValueType,
-    CwtValue, CwtVisitor,
+    AstCwtBlock, AstCwtRule, AstCwtRuleKey, CwtOperator, CwtOptionExpression, CwtReferenceType,
+    CwtSeverityLevel, CwtSimpleValueType, CwtValue, CwtVisitor,
 };
 
 use crate::{
@@ -276,8 +276,12 @@ impl<'a> TypeVisitor<'a> {
 
     /// Extract skip_root_key configuration
     fn extract_skip_root_key(type_def: &mut TypeDefinition, rule: &AstCwtRule) {
-        match &rule.value {
-            CwtValue::String(s) => {
+        match (&rule.operator, &rule.value) {
+            (CwtOperator::NotEquals, CwtValue::String(s)) => {
+                // skip_root_key != tech_group -> SkipRootKey::Except(["tech_group"])
+                type_def.skip_root_key = Some(SkipRootKey::Except(vec![s.raw_value().to_string()]));
+            }
+            (CwtOperator::Equals, CwtValue::String(s)) => {
                 let value = s.raw_value();
                 if value == "any" {
                     type_def.skip_root_key = Some(SkipRootKey::Any);
@@ -285,7 +289,7 @@ impl<'a> TypeVisitor<'a> {
                     type_def.skip_root_key = Some(SkipRootKey::Specific(value.to_string()));
                 }
             }
-            CwtValue::Block(block) => {
+            (CwtOperator::Equals, CwtValue::Block(block)) => {
                 // Handle more complex skip_root_key configurations
                 let mut keys = Vec::new();
                 for item in &block.items {
@@ -368,9 +372,25 @@ impl<'a> TypeVisitor<'a> {
                         Some(option.value.as_string_or_identifier().unwrap().to_string());
                 }
                 "type_key_filter" => {
-                    type_def.options.type_key_filter = Some(TypeKeyFilter::Specific(
-                        option.value.as_string_or_identifier().unwrap().to_string(),
-                    ));
+                    type_def.options.type_key_filter = match (&option.value, option.is_ne) {
+                        (CwtOptionExpression::Identifier(id), false) => {
+                            Some(TypeKeyFilter::Specific(id.to_string()))
+                        }
+                        (CwtOptionExpression::Identifier(id), true) => {
+                            Some(TypeKeyFilter::Not(id.to_string()))
+                        }
+                        (CwtOptionExpression::List(list), false) => Some(TypeKeyFilter::OneOf(
+                            list.iter()
+                                .map(|t| t.as_string_or_identifier().unwrap().to_string())
+                                .collect(),
+                        )),
+                        (CwtOptionExpression::List(list), true) => Some(TypeKeyFilter::Not(
+                            list.iter()
+                                .map(|t| t.as_string_or_identifier().unwrap().to_string())
+                                .collect(),
+                        )),
+                        _ => None,
+                    };
                 }
                 "graph_related_types" => {
                     type_def.options.graph_related_types = option
@@ -905,5 +925,216 @@ types = {
 
         // Note: Subtype-specific localisation and modifiers would be fully parsed
         // in a complete implementation with proper nested block parsing
+    }
+
+    #[test]
+    fn test_missing_advanced_cwt_features() {
+        let mut data = CwtAnalysisData::new();
+        let mut visitor = TypeVisitor::new(&mut data);
+
+        let cwt_text = r#"
+types = {
+    ## type_key_filter <> country_event
+    type[exclude_country_events] = {
+        path = "game/common/exclude_events"
+        skip_root_key != tech_group
+    }
+    
+    ## type_key_filter = { military_event diplomatic_event }
+    type[multiple_key_filter] = {
+        path = "game/common/multiple_filter"
+    }
+    
+    type[nested_subtype_features] = {
+        path = "game/common/nested_features"
+        
+        ## display_name = "Advanced Subtype"
+        ## starts_with = advanced_
+        subtype[advanced] = {
+            is_advanced = yes
+            complexity = high
+        }
+        
+        ## display_name = "Basic Subtype"
+        subtype[basic] = {
+            is_basic = yes
+        }
+        
+        localisation = {
+            ## required
+            name = "$"
+            description = "$_desc"
+            
+            subtype[advanced] = {
+                ## required
+                advanced_tooltip = "$_advanced_tooltip"
+                advanced_name = "$_advanced_name"
+                ## optional
+                advanced_help = "$_advanced_help"
+            }
+            
+            subtype[basic] = {
+                basic_tooltip = "$_basic_tooltip"
+                ## primary
+                basic_name = "$_basic_name"
+            }
+        }
+        
+        modifiers = {
+            "$_base_power" = country
+            "$_base_cost" = economy
+            
+            subtype[advanced] = {
+                "$_advanced_bonus" = military
+                "$_advanced_cost_mult" = economy
+                "$_tech_requirement" = technology
+            }
+            
+            subtype[basic] = {
+                "$_basic_bonus" = planet
+                "$_basic_upkeep" = economy
+            }
+        }
+    }
+}
+        "#;
+
+        let module = CwtModule::from_input(cwt_text).unwrap();
+        let types_rules = module.find_rule("types");
+        let types_rules = types_rules.unwrap();
+
+        visitor.visit_rule(types_rules);
+
+        // Check that we have the expected types
+        assert_eq!(data.types.len(), 3);
+
+        // Test 1: Complex type key filter with <> (not-equal)
+        let exclude_events = data.types.get("exclude_country_events").unwrap();
+        if let Some(filter) = &exclude_events.options.type_key_filter {
+            match filter {
+                TypeKeyFilter::Not(key) => {
+                    assert_eq!(key, "country_event");
+                    println!("✓ type_key_filter <> pattern working correctly");
+                }
+                _ => {
+                    println!("✗ type_key_filter <> pattern not working, got {:?}", filter);
+                }
+            }
+        } else {
+            println!("✗ type_key_filter <> pattern not parsed");
+        }
+
+        // Test 2: Multiple type key filter values
+        let multiple_filter = data.types.get("multiple_key_filter").unwrap();
+        if let Some(filter) = &multiple_filter.options.type_key_filter {
+            match filter {
+                TypeKeyFilter::OneOf(keys) => {
+                    assert_eq!(keys.len(), 2);
+                    assert!(keys.contains(&"military_event".to_string()));
+                    assert!(keys.contains(&"diplomatic_event".to_string()));
+                    println!("✓ type_key_filter list pattern working correctly");
+                }
+                _ => {
+                    println!(
+                        "✗ type_key_filter list pattern not working, got {:?}",
+                        filter
+                    );
+                }
+            }
+        } else {
+            println!("✗ type_key_filter list pattern not parsed");
+        }
+
+        // Test 3: Skip root key != pattern (should now work!)
+        if let Some(skip) = &exclude_events.skip_root_key {
+            match skip {
+                SkipRootKey::Except(keys) => {
+                    assert_eq!(keys.len(), 1);
+                    assert_eq!(keys[0], "tech_group");
+                    println!("✓ skip_root_key != pattern working correctly");
+                }
+                _ => {
+                    println!(
+                        "✗ skip_root_key != pattern not working correctly, got {:?}",
+                        skip
+                    );
+                }
+            }
+        } else {
+            println!("✗ skip_root_key != pattern not parsed");
+        }
+
+        // Test 4: Subtype-specific localisation (still missing)
+        let nested_features = data.types.get("nested_subtype_features").unwrap();
+
+        // Base localisation should be parsed
+        assert_eq!(nested_features.localisation.len(), 2);
+        assert!(nested_features.localisation.contains_key("name"));
+        assert!(nested_features.localisation.contains_key("description"));
+
+        let name_loc = nested_features.localisation.get("name").unwrap();
+        assert_eq!(name_loc.required, true);
+        assert_eq!(name_loc.pattern, "$");
+
+        // Check if subtype-specific localisation is parsed
+        if !name_loc.subtypes.is_empty() {
+            let advanced_subtype_loc = name_loc.subtypes.get("advanced");
+            if let Some(advanced_loc) = advanced_subtype_loc {
+                assert!(advanced_loc.contains_key("advanced_tooltip"));
+                assert!(advanced_loc.contains_key("advanced_name"));
+                assert!(advanced_loc.contains_key("advanced_help"));
+                println!("✓ Subtype-specific localisation working correctly");
+            } else {
+                println!("✗ Subtype-specific localisation not parsed for advanced subtype");
+            }
+        } else {
+            println!("✗ Subtype-specific localisation not parsed at all");
+        }
+
+        // Test 5: Subtype-specific modifiers (still missing)
+        assert_eq!(nested_features.modifiers.modifiers.len(), 2);
+        assert!(
+            nested_features
+                .modifiers
+                .modifiers
+                .contains_key("$_base_power")
+        );
+        assert!(
+            nested_features
+                .modifiers
+                .modifiers
+                .contains_key("$_base_cost")
+        );
+
+        if !nested_features.modifiers.subtypes.is_empty() {
+            let advanced_subtype_mods = nested_features.modifiers.subtypes.get("advanced");
+            if let Some(advanced_mods) = advanced_subtype_mods {
+                assert!(advanced_mods.contains_key("$_advanced_bonus"));
+                assert!(advanced_mods.contains_key("$_advanced_cost_mult"));
+                assert!(advanced_mods.contains_key("$_tech_requirement"));
+                println!("✓ Subtype-specific modifiers working correctly");
+            } else {
+                println!("✗ Subtype-specific modifiers not parsed for advanced subtype");
+            }
+        } else {
+            println!("✗ Subtype-specific modifiers not parsed at all");
+        }
+
+        // Test 6: Subtype comment options
+        let advanced_subtype = nested_features.subtypes.get("advanced").unwrap();
+        if advanced_subtype.display_name.is_some() {
+            assert_eq!(
+                advanced_subtype.display_name.as_ref().unwrap(),
+                "Advanced Subtype"
+            );
+            println!("✓ Subtype display_name working correctly");
+        } else {
+            println!("✗ Subtype display_name not parsed");
+        }
+
+        println!("\n=== REMAINING MISSING FEATURES ===");
+        println!("1. Subtype-specific localisation and modifiers (nested parsing)");
+        println!("2. Multiple skip_root_key entries on same type");
+        println!("3. Subtype starts_with pattern matching in conditions");
     }
 }

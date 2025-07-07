@@ -65,7 +65,7 @@ impl<'a> CwtOptionExpression<'a> {
     }
 
     /// Get the identifier value if this is an identifier
-    pub fn as_identifier(&self) -> Option<&str> {
+    pub fn as_identifier(&self) -> Option<&'a str> {
         match self {
             CwtOptionExpression::Identifier(s) => Some(s),
             _ => None,
@@ -73,14 +73,14 @@ impl<'a> CwtOptionExpression<'a> {
     }
 
     /// Get the string value if this is a string literal
-    pub fn as_string(&self) -> Option<&str> {
+    pub fn as_string(&self) -> Option<&'a str> {
         match self {
             CwtOptionExpression::String(s) => Some(s),
             _ => None,
         }
     }
 
-    pub fn as_string_or_identifier(&self) -> Option<&str> {
+    pub fn as_string_or_identifier(&self) -> Option<&'a str> {
         match self {
             CwtOptionExpression::Identifier(s) => Some(s),
             CwtOptionExpression::String(s) => Some(s),
@@ -89,7 +89,7 @@ impl<'a> CwtOptionExpression<'a> {
     }
 
     /// Get the range data if this is a range expression
-    pub fn as_range(&self) -> Option<(&CwtCommentRangeBound, &CwtCommentRangeBound, bool)> {
+    pub fn as_range(&self) -> Option<(&CwtCommentRangeBound<'a>, &CwtCommentRangeBound<'a>, bool)> {
         match self {
             CwtOptionExpression::Range { min, max, lenient } => Some((min, max, *lenient)),
             _ => None,
@@ -97,7 +97,7 @@ impl<'a> CwtOptionExpression<'a> {
     }
 
     /// Get the list items if this is a list expression
-    pub fn as_list(&self) -> Option<&[CwtOptionExpression]> {
+    pub fn as_list(&self) -> Option<&[CwtOptionExpression<'a>]> {
         match self {
             CwtOptionExpression::List(items) => Some(items),
             _ => None,
@@ -105,7 +105,7 @@ impl<'a> CwtOptionExpression<'a> {
     }
 
     /// Get the assignment data if this is an assignment expression
-    pub fn as_assignment(&self) -> Option<(&str, &CwtOptionExpression)> {
+    pub fn as_assignment(&self) -> Option<(&'a str, &CwtOptionExpression<'a>)> {
         match self {
             CwtOptionExpression::Assignment { key, value } => Some((key, value)),
             _ => None,
@@ -113,7 +113,7 @@ impl<'a> CwtOptionExpression<'a> {
     }
 
     /// Get the assignments if this is multiple assignments
-    pub fn as_assignments(&self) -> Option<&[CwtOptionExpression]> {
+    pub fn as_assignments(&self) -> Option<&[CwtOptionExpression<'a>]> {
         match self {
             CwtOptionExpression::Assignments(assignments) => Some(assignments),
             _ => None,
@@ -140,7 +140,7 @@ impl<'a> CwtCommentRangeBound<'a> {
     }
 
     /// Get the number value if this is a number
-    pub fn as_number(&self) -> Option<&str> {
+    pub fn as_number(&self) -> Option<&'a str> {
         match self {
             CwtCommentRangeBound::Number(n) => Some(n),
             _ => None,
@@ -148,7 +148,7 @@ impl<'a> CwtCommentRangeBound<'a> {
     }
 
     /// Convert to a comparable value for ordering (infinity is treated as u32::MAX)
-    pub fn to_comparable(&self) -> &str {
+    pub fn to_comparable(&self) -> &'a str {
         match self {
             CwtCommentRangeBound::Number(n) => n,
             CwtCommentRangeBound::Infinity => "inf",
@@ -160,13 +160,26 @@ impl<'a> CwtCommentRangeBound<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstCwtCommentOption<'a> {
     pub key: &'a str,
+    pub is_ne: bool,
     pub value: CwtOptionExpression<'a>,
 }
 
 impl<'a> AstCwtCommentOption<'a> {
     /// Create a new option
     pub fn new(key: &'a str, value: CwtOptionExpression<'a>) -> Self {
-        Self { key, value }
+        Self {
+            key,
+            value,
+            is_ne: false,
+        }
+    }
+
+    pub fn new_ne(key: &'a str, value: CwtOptionExpression<'a>) -> Self {
+        Self {
+            key,
+            value,
+            is_ne: true,
+        }
     }
 
     /// Check if this option has the given key
@@ -403,6 +416,18 @@ fn parse_option_comment_data<'a>(text: &'a str) -> CwtOptionData<'a> {
 
         let value = parse_option_expression(value_text);
         data.add_option(AstCwtCommentOption::new(&key, value));
+    } else if let Some(ne_pos) = text.find("<>") {
+        let key = text[..ne_pos].trim();
+        let value_text = text[ne_pos + 2..].trim();
+
+        let value = parse_option_expression(value_text);
+        data.add_option(AstCwtCommentOption::new_ne(&key, value));
+    } else if let Some(ne_pos) = text.find("!=") {
+        let key = text[..ne_pos].trim();
+        let value_text = text[ne_pos + 2..].trim();
+
+        let value = parse_option_expression(value_text);
+        data.add_option(AstCwtCommentOption::new_ne(&key, value));
     } else {
         // Flag with no value: required, primary
         data.add_option(AstCwtCommentOption::new(
@@ -495,7 +520,7 @@ fn parse_range_bound<'a>(text: &'a str) -> Option<CwtCommentRangeBound<'a>> {
 }
 
 /// Parse the contents of a list, handling assignments and identifiers
-fn parse_list_contents(text: &str) -> Vec<CwtOptionExpression> {
+fn parse_list_contents<'a>(text: &'a str) -> Vec<CwtOptionExpression<'a>> {
     let mut items = Vec::new();
     let parts: Vec<&str> = text.split_whitespace().collect();
 
@@ -518,7 +543,7 @@ fn parse_list_contents(text: &str) -> Vec<CwtOptionExpression> {
 }
 
 /// Parse multiple assignments like "this = planet root = ship"
-fn parse_multiple_assignments(text: &str) -> Vec<CwtOptionExpression> {
+fn parse_multiple_assignments<'a>(text: &'a str) -> Vec<CwtOptionExpression<'a>> {
     let mut assignments = Vec::new();
     let parts: Vec<&str> = text.split_whitespace().collect();
 

@@ -66,6 +66,8 @@ pub enum CwtOperator {
     Equals,
     /// Comparable trigger ==
     ComparableEquals,
+    /// Not Equals !=
+    NotEquals,
 }
 
 /// Cardinality maximum value
@@ -161,6 +163,7 @@ pub(crate) fn cwt_operator<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResul
     alt((
         literal("==").value(CwtOperator::ComparableEquals),
         literal("=").value(CwtOperator::Equals),
+        literal("!=").value(CwtOperator::NotEquals),
     ))
     .context(StrContext::Label("cwt_operator"))
     .parse_next(input)
