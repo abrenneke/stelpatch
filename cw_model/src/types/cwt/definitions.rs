@@ -5,6 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::ModifierGeneration;
+
 use super::super::inference::{InferredType, SubtypeDefinition};
 use std::{
     collections::{HashMap, HashSet},
@@ -192,15 +194,6 @@ pub struct AliasDefinition {
     pub name: String,
     /// Alias rules
     pub rules: InferredType,
-}
-
-/// Enhanced modifier generation for types
-#[derive(Debug, Clone)]
-pub struct ModifierGeneration {
-    /// Base modifier patterns with their scope categories
-    pub modifiers: HashMap<String, String>,
-    /// Subtype-specific modifier generation
-    pub subtypes: HashMap<String, HashMap<String, String>>,
 }
 
 impl TypeDefinition {
