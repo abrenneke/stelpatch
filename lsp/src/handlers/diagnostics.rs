@@ -1,13 +1,17 @@
-use cw_parser::AstModule;
+use cw_model::CwtType;
+use cw_parser::{AstEntityItem, AstModule, AstNode, AstValue};
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::Client;
 use tower_lsp::lsp_types::*;
 
 use super::document_cache::DocumentCache;
+use super::type_cache::TypeCache;
+use super::utils::extract_namespace_from_uri;
 
-/// Generate diagnostics for a document by attempting to parse it
+/// Generate diagnostics for a document by attempting to parse it and type-check it
 pub async fn generate_diagnostics(
     client: &Client,
     documents: &Arc<RwLock<HashMap<String, String>>>,
@@ -16,7 +20,22 @@ pub async fn generate_diagnostics(
 ) {
     let documents_guard = documents.read().await;
     if let Some(content) = documents_guard.get(uri) {
-        let diagnostics = parse_and_generate_diagnostics(content).await;
+        let mut diagnostics = Vec::new();
+
+        // First, try to parse the content
+        let mut module = AstModule::new();
+        match module.parse_input(content) {
+            Ok(()) => {
+                // If parsing succeeds, do type checking
+                let type_diagnostics = generate_type_diagnostics(&module, uri, content).await;
+                diagnostics.extend(type_diagnostics);
+            }
+            Err(error) => {
+                // If parsing fails, add parsing error
+                let diagnostic = create_diagnostic_from_parse_error(&error, content);
+                diagnostics.push(diagnostic);
+            }
+        }
 
         // Publish diagnostics to the client
         client
@@ -25,19 +44,214 @@ pub async fn generate_diagnostics(
     }
 }
 
-/// Parse content and generate diagnostics for any parsing errors
-async fn parse_and_generate_diagnostics(content: &str) -> Vec<Diagnostic> {
+/// Generate type-checking diagnostics for a successfully parsed document
+async fn generate_type_diagnostics(
+    module: &AstModule<'_>,
+    uri: &str,
+    content: &str,
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
-    // Try to parse the content
-    let mut module = AstModule::new();
-    if let Err(error) = module.parse_input(content) {
-        // Convert parsing error to LSP diagnostic
-        let diagnostic = create_diagnostic_from_parse_error(&error, content);
-        diagnostics.push(diagnostic);
+    // Check if type cache is initialized
+    if !TypeCache::is_initialized() {
+        eprintln!(
+            "DEBUG: TypeCache not initialized, skipping diagnostics for {}",
+            uri
+        );
+        return diagnostics;
+    }
+
+    // Extract namespace from URI
+    let namespace = match extract_namespace_from_uri(uri) {
+        Some(ns) => {
+            eprintln!("DEBUG: Extracted namespace '{}' from URI {}", ns, uri);
+            ns
+        }
+        None => {
+            eprintln!(
+                "DEBUG: Could not extract namespace from URI {}, skipping diagnostics",
+                uri
+            );
+            return diagnostics;
+        }
+    };
+
+    // Get type information for this namespace
+    let type_info = match super::type_cache::get_namespace_entity_type(&namespace).await {
+        Some(info) => {
+            eprintln!("DEBUG: Retrieved type info for namespace '{}'", namespace);
+            info
+        }
+        None => {
+            eprintln!(
+                "DEBUG: No type info available for namespace '{}'",
+                namespace
+            );
+            return diagnostics;
+        }
+    };
+
+    let namespace_type = match &type_info.cwt_type {
+        Some(t) => {
+            eprintln!("DEBUG: Found concrete type for namespace '{}'", namespace);
+            t
+        }
+        None => {
+            eprintln!(
+                "DEBUG: No concrete type available for namespace '{}'",
+                namespace
+            );
+            return diagnostics;
+        }
+    };
+
+    eprintln!(
+        "DEBUG: Starting validation for {} items in namespace '{}'",
+        module.items.len(),
+        namespace
+    );
+
+    // Validate each entity in the module
+    for item in &module.items {
+        if let AstEntityItem::Expression(expr) = item {
+            let entity_name = expr.key.raw_value();
+
+            eprintln!(
+                "DEBUG: Validating entity '{}' in namespace '{}'",
+                entity_name, namespace
+            );
+
+            // Top-level keys are entity names - they can be anything, so don't validate them
+            // Instead, validate their VALUES against the namespace structure
+            let entity_diagnostics =
+                validate_entity_value(&expr.value, namespace_type, content, &namespace, 0);
+            diagnostics.extend(entity_diagnostics);
+        }
+    }
+
+    eprintln!(
+        "DEBUG: Generated {} diagnostics for namespace '{}'",
+        diagnostics.len(),
+        namespace
+    );
+    diagnostics
+}
+
+/// Validate an entity value against the expected type structure
+fn validate_entity_value(
+    value: &AstValue<'_>,
+    expected_type: &CwtType,
+    content: &str,
+    namespace: &str,
+    depth: usize,
+) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+
+    // Prevent infinite recursion
+    if depth > 10 {
+        eprintln!("DEBUG: Max recursion depth reached at depth {}", depth);
+        return diagnostics;
+    }
+
+    match value {
+        AstValue::Entity(entity) => {
+            eprintln!(
+                "DEBUG: Validating entity with {} items at depth {}",
+                entity.items.len(),
+                depth
+            );
+
+            // Validate each property in the entity
+            for item in &entity.items {
+                if let AstEntityItem::Expression(expr) = item {
+                    let key_name = expr.key.raw_value();
+
+                    // Check if this key is valid for the expected type
+                    if !is_key_valid(expected_type, key_name) {
+                        eprintln!("DEBUG: Found invalid key '{}' at depth {}", key_name, depth);
+                        let diagnostic = create_unexpected_key_diagnostic(
+                            expr.key.span_range(),
+                            key_name,
+                            namespace,
+                            content,
+                        );
+                        diagnostics.push(diagnostic);
+                    } else {
+                        eprintln!("DEBUG: Key '{}' is valid at depth {}", key_name, depth);
+
+                        // For nested entities, validate recursively but keep using the same type
+                        // This avoids the complex type resolution that was causing infinite loops
+                        let nested_diagnostics = validate_entity_value(
+                            &expr.value,
+                            expected_type,
+                            content,
+                            namespace,
+                            depth + 1,
+                        );
+                        diagnostics.extend(nested_diagnostics);
+                    }
+                }
+            }
+        }
+        _ => {
+            eprintln!("DEBUG: Non-entity value at depth {}", depth);
+            // For non-entity values (strings, numbers, etc.), no validation needed
+        }
     }
 
     diagnostics
+}
+
+/// Check if a key is valid for the given type
+fn is_key_valid(inferred_type: &CwtType, key_name: &str) -> bool {
+    match inferred_type {
+        CwtType::Block(obj) => {
+            // Check if the key is in the known properties
+            obj.properties.contains_key(key_name)
+        }
+        CwtType::Union(types) => {
+            // For union types, key is valid if it's valid in any of the union members
+            types.iter().any(|t| is_key_valid(t, key_name))
+        }
+        CwtType::Reference(_) => {
+            // For references, try to resolve them but don't get stuck in infinite loops
+            if let Some(cache) = TypeCache::get() {
+                let resolved_type = cache.resolve_type(inferred_type);
+                // Only recurse if we got a different type (avoid infinite loops)
+                if !std::ptr::eq(inferred_type, &resolved_type) {
+                    return is_key_valid(&resolved_type, key_name);
+                }
+            }
+            // If we can't resolve the reference safely, be permissive
+            true
+        }
+        _ => {
+            // For other types, be permissive to avoid false positives
+            true
+        }
+    }
+}
+
+/// Create a diagnostic for an unexpected key
+fn create_unexpected_key_diagnostic(
+    span: Range<usize>,
+    key_name: &str,
+    namespace: &str,
+    content: &str,
+) -> Diagnostic {
+    let range = span_to_lsp_range(span, content);
+
+    Diagnostic {
+        range,
+        severity: Some(DiagnosticSeverity::WARNING),
+        code: Some(NumberOrString::String("unexpected-key".to_string())),
+        code_description: None,
+        source: Some("cw-type-checker".to_string()),
+        message: format!("Unexpected key '{}' in {} entity", key_name, namespace),
+        related_information: None,
+        tags: None,
+        data: None,
+    }
 }
 
 /// Create an LSP diagnostic from a parsing error
@@ -56,7 +270,7 @@ fn create_diagnostic_from_parse_error(
             let span_length = (parse_error.span.end - parse_error.span.start) as u32;
             let end_character = start_character + span_length.max(1);
 
-            let range = Range {
+            let range = tower_lsp::lsp_types::Range {
                 start: Position {
                     line: start_line,
                     character: start_character,
@@ -71,7 +285,7 @@ fn create_diagnostic_from_parse_error(
         }
         cw_parser::CwParseError::Other(msg) => {
             // For non-parse errors, default to start of document
-            let range = Range {
+            let range = tower_lsp::lsp_types::Range {
                 start: Position {
                     line: 0,
                     character: 0,
@@ -96,5 +310,40 @@ fn create_diagnostic_from_parse_error(
         related_information: None,
         tags: None,
         data: None,
+    }
+}
+
+/// Convert a byte span to an LSP range
+fn span_to_lsp_range(span: Range<usize>, content: &str) -> tower_lsp::lsp_types::Range {
+    let start_position = offset_to_position(content, span.start);
+    let end_position = offset_to_position(content, span.end);
+
+    tower_lsp::lsp_types::Range {
+        start: start_position,
+        end: end_position,
+    }
+}
+
+/// Convert byte offset to LSP position
+fn offset_to_position(content: &str, offset: usize) -> Position {
+    let mut line = 0;
+    let mut character = 0;
+
+    for (i, ch) in content.char_indices() {
+        if i >= offset {
+            break;
+        }
+
+        if ch == '\n' {
+            line += 1;
+            character = 0;
+        } else {
+            character += 1;
+        }
+    }
+
+    Position {
+        line: line as u32,
+        character: character as u32,
     }
 }

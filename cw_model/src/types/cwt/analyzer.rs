@@ -3,7 +3,8 @@
 //! This is the main entry point for CWT analysis, using a visitor pattern
 //! with specialized visitors for different CWT constructs.
 
-use super::super::inference::*;
+use crate::CwtType;
+
 use super::conversion::ConversionError;
 use super::definitions::*;
 use super::visitors::{CwtAnalysisData, CwtVisitorRegistry};
@@ -12,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 
 /// Main analyzer for CWT (Clausewitz Type) files
 ///
-/// This analyzer converts CWT AST structures to the rich InferredType system
+/// This analyzer converts CWT AST structures to the rich CwtType system
 /// using specialized visitors for different CWT constructs.
 pub struct CwtAnalyzer {
     /// Internal analysis data
@@ -27,7 +28,7 @@ impl CwtAnalyzer {
         }
     }
 
-    /// Convert a CWT module to InferredType definitions
+    /// Convert a CWT module to CwtType definitions
     pub fn convert_module(&mut self, module: &CwtModule) -> Result<(), Vec<ConversionError>> {
         // Use the visitor registry to process the module
         CwtVisitorRegistry::process_module(&mut self.data, module);
@@ -60,7 +61,7 @@ impl CwtAnalyzer {
     }
 
     /// Get single aliases
-    pub fn get_single_aliases(&self) -> &HashMap<String, InferredType> {
+    pub fn get_single_aliases(&self) -> &HashMap<String, CwtType> {
         &self.data.single_aliases
     }
 
@@ -95,7 +96,7 @@ impl CwtAnalyzer {
     }
 
     /// Get a specific single alias
-    pub fn get_single_alias(&self, name: &str) -> Option<&InferredType> {
+    pub fn get_single_alias(&self, name: &str) -> Option<&CwtType> {
         self.data.single_aliases.get(name)
     }
 
@@ -237,48 +238,6 @@ mod tests {
         assert_eq!(stats.total_definitions(), 0);
         assert!(!stats.has_errors());
         assert!(stats.is_empty());
-    }
-
-    #[test]
-    fn test_analyzer_clear() {
-        let mut analyzer = CwtAnalyzer::new();
-
-        // Add some fake data
-        analyzer.data.types.insert(
-            "test".to_string(),
-            TypeDefinition::new(super::super::super::inference::InferredType::Primitive(
-                super::super::super::inference::PrimitiveType::String,
-            )),
-        );
-
-        assert_eq!(analyzer.get_stats().types_count, 1);
-
-        analyzer.clear();
-
-        let stats = analyzer.get_stats();
-        assert_eq!(stats.total_definitions(), 0);
-        assert!(stats.is_empty());
-    }
-
-    #[test]
-    fn test_analyzer_merge() {
-        let mut analyzer1 = CwtAnalyzer::new();
-        let mut analyzer2 = CwtAnalyzer::new();
-
-        // Add some fake data to analyzer2
-        analyzer2.data.types.insert(
-            "test".to_string(),
-            TypeDefinition::new(super::super::super::inference::InferredType::Primitive(
-                super::super::super::inference::PrimitiveType::String,
-            )),
-        );
-
-        assert_eq!(analyzer1.get_stats().types_count, 0);
-        assert_eq!(analyzer2.get_stats().types_count, 1);
-
-        analyzer1.merge(analyzer2);
-
-        assert_eq!(analyzer1.get_stats().types_count, 1);
     }
 
     #[test]

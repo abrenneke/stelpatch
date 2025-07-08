@@ -5,7 +5,7 @@
 
 use cw_parser::{AstCwtRule, AstCwtRuleKey, CwtVisitor};
 
-use crate::{ConversionError, CwtAnalysisData, CwtConverter, RuleOptions};
+use crate::{ConversionError, CwtAnalysisData, CwtConverter, RuleOptions, TypeDefinition};
 
 /// Specialized visitor for regular rule definitions
 pub struct RuleVisitor<'a> {
@@ -48,13 +48,9 @@ impl<'a> RuleVisitor<'a> {
             // Convert the rule definition to an inferred type
             let mut rule_type = CwtConverter::convert_value(&rule.value);
 
-            // Apply cardinality constraints if present
-            if let Some(cardinality) = &options.cardinality {
-                rule_type = CwtConverter::apply_cardinality_constraints(rule_type, cardinality);
-            }
-
-            // Store the rule definition
-            self.data.rules.insert(name, rule_type);
+            // Store the rule definition as a TypeDefinition (merge with existing if present)
+            let type_def = TypeDefinition::new(rule_type);
+            self.data.insert_or_merge_type(name, type_def);
         } else {
             let key_name = match &rule.key {
                 AstCwtRuleKey::Identifier(identifier) => identifier.name.raw_value(),
@@ -133,10 +129,10 @@ asteroid_belt_type = {
         let module = CwtModule::from_input(cwt_text).unwrap();
         visitor.visit_module(&module);
 
-        // Check that we have 2 rules
-        assert_eq!(data.rules.len(), 2);
-        assert!(data.rules.contains_key("ambient_object"));
-        assert!(data.rules.contains_key("asteroid_belt_type"));
+        // Check that we have 2 types (formerly rules)
+        assert_eq!(data.types.len(), 2);
+        assert!(data.types.contains_key("ambient_object"));
+        assert!(data.types.contains_key("asteroid_belt_type"));
     }
 
     #[test]
@@ -158,9 +154,9 @@ attitude = {
         let module = CwtModule::from_input(cwt_text).unwrap();
         visitor.visit_module(&module);
 
-        // Check that we have 1 rule
-        assert_eq!(data.rules.len(), 1);
-        assert!(data.rules.contains_key("attitude"));
+        // Check that we have 1 type (formerly rule)
+        assert_eq!(data.types.len(), 1);
+        assert!(data.types.contains_key("attitude"));
     }
 
     #[test]
@@ -190,11 +186,11 @@ ambient_object = {
         let module = CwtModule::from_input(cwt_text).unwrap();
         visitor.visit_module(&module);
 
-        // Check that we only have the ambient_object rule, not the special sections
-        assert_eq!(data.rules.len(), 1);
-        assert!(data.rules.contains_key("ambient_object"));
-        assert!(!data.rules.contains_key("types"));
-        assert!(!data.rules.contains_key("enums"));
+        // Check that we only have the ambient_object type, not the special sections
+        assert_eq!(data.types.len(), 1);
+        assert!(data.types.contains_key("ambient_object"));
+        assert!(!data.types.contains_key("types"));
+        assert!(!data.types.contains_key("enums"));
     }
 
     #[test]
@@ -212,8 +208,8 @@ ambient_object = {
         let module = CwtModule::from_input(cwt_text).unwrap();
         visitor.visit_module(&module);
 
-        // Check that we have 1 rule with string key
-        assert_eq!(data.rules.len(), 1);
-        assert!(data.rules.contains_key("string_key_rule"));
+        // Check that we have 1 type with string key
+        assert_eq!(data.types.len(), 1);
+        assert!(data.types.contains_key("string_key_rule"));
     }
 }

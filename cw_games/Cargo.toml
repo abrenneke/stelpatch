@@ -7,9 +7,6 @@ edition = "2024"
 name = "load_stellaris"
 
 [[bin]]
-name = "infer_types"
-
-[[bin]]
 name = "load_cwts"
 
 [[bench]]

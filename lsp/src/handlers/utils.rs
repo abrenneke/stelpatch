@@ -5,42 +5,16 @@ pub fn position_to_offset(text: &str, position: Position) -> usize {
     let lines: Vec<&str> = text.lines().collect();
     let mut offset = 0;
 
-    eprintln!(
-        "position_to_offset: position={:?}, total_lines={}",
-        position,
-        lines.len()
-    );
-
     for (line_idx, line) in lines.iter().enumerate() {
         if line_idx < position.line as usize {
-            eprintln!(
-                "  Line {}: '{}' (len={}), offset before: {}, offset after: {}",
-                line_idx,
-                line,
-                line.len(),
-                offset,
-                offset + line.len() + 1
-            );
             offset += line.len() + 1; // +1 for newline character
         } else {
-            eprintln!(
-                "  Target line {}: '{}', adding character offset: {}, final offset: {}",
-                line_idx,
-                line,
-                position.character,
-                offset + position.character as usize
-            );
             offset += position.character as usize;
             break;
         }
     }
 
     let final_offset = offset.min(text.len());
-    eprintln!(
-        "  Final offset: {} (clamped to text len: {})",
-        final_offset,
-        text.len()
-    );
     final_offset
 }
 

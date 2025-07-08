@@ -157,6 +157,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Enums defined: {}", converter.get_enums().len());
         println!("Value sets defined: {}", converter.get_value_sets().len());
         println!("Aliases defined: {}", converter.get_aliases().len());
+        println!("Rules defined: {}", converter.get_types().len());
         println!(
             "Single aliases defined: {}",
             converter.get_single_aliases().len()
@@ -245,6 +246,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for (name, alias_type) in converter.get_single_aliases() {
                 println!("  Single alias: {}", name);
                 println!("    Type: {:?}", alias_type);
+                println!();
+            }
+        }
+
+        // Print rules
+        if !converter.get_types().is_empty() {
+            println!("\n=== RULES ===");
+            for (name, rule) in converter.get_types() {
+                println!("  Rule: {}", name);
+                println!("    Definition: {:?}", rule);
                 println!();
             }
         }

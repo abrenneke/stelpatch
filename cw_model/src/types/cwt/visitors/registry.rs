@@ -3,7 +3,8 @@
 //! This module provides the main coordinator for all CWT visitors, determining which
 //! visitor should handle each rule based on its type and context.
 
-use super::super::super::inference::*;
+use crate::CwtType;
+
 use super::super::conversion::ConversionError;
 use super::super::definitions::*;
 use super::{AliasVisitor, EnumVisitor, RuleVisitor, TypeVisitor, ValueSetVisitor};
@@ -24,9 +25,7 @@ pub struct CwtAnalysisData {
     /// Known aliases registry
     pub aliases: HashMap<String, AliasDefinition>,
     /// Known single aliases registry
-    pub single_aliases: HashMap<String, InferredType>,
-    /// Regular rule definitions (entity validation rules)
-    pub rules: HashMap<String, InferredType>,
+    pub single_aliases: HashMap<String, CwtType>,
     /// Errors encountered during conversion
     pub errors: Vec<ConversionError>,
 }
@@ -44,7 +43,6 @@ impl CwtAnalysisData {
         self.value_sets.clear();
         self.aliases.clear();
         self.single_aliases.clear();
-        self.rules.clear();
         self.errors.clear();
     }
 
@@ -60,7 +58,15 @@ impl CwtAnalysisData {
             + self.value_sets.len()
             + self.aliases.len()
             + self.single_aliases.len()
-            + self.rules.len()
+    }
+
+    /// Insert or merge a type definition
+    pub fn insert_or_merge_type(&mut self, name: String, type_def: TypeDefinition) {
+        if let Some(existing) = self.types.get_mut(&name) {
+            existing.merge_with(type_def);
+        } else {
+            self.types.insert(name, type_def);
+        }
     }
 }
 
@@ -141,36 +147,6 @@ impl<'a> CwtRegistryVisitor<'a> {
             }
         }
     }
-
-    /// Handle legacy string-based rules
-    fn handle_legacy_rule(&mut self, rule: &AstCwtRule) {
-        let key = rule.key.name();
-
-        // Handle legacy string-based format
-        if key.starts_with("type[") && key.ends_with("]") {
-            let mut type_visitor = TypeVisitor::new(self.data);
-            type_visitor.visit_rule(rule);
-        } else if key.starts_with("enum[") && key.ends_with("]") {
-            let mut enum_visitor = EnumVisitor::new(self.data);
-            enum_visitor.visit_rule(rule);
-        } else if key.starts_with("complex_enum[") && key.ends_with("]") {
-            let mut enum_visitor = EnumVisitor::new(self.data);
-            enum_visitor.visit_rule(rule);
-        } else if key.starts_with("value_set[") && key.ends_with("]") {
-            let mut value_set_visitor = ValueSetVisitor::new(self.data);
-            value_set_visitor.visit_rule(rule);
-        } else if key.starts_with("alias[") && key.ends_with("]") {
-            let mut alias_visitor = AliasVisitor::new(self.data);
-            alias_visitor.visit_rule(rule);
-        } else if key.starts_with("single_alias[") && key.ends_with("]") {
-            let mut alias_visitor = AliasVisitor::new(self.data);
-            alias_visitor.visit_rule(rule);
-        } else {
-            // Default handling - treat as regular rule definition
-            let mut rule_visitor = RuleVisitor::new(self.data);
-            rule_visitor.visit_rule(rule);
-        }
-    }
 }
 
 impl<'a> CwtVisitor<'a> for CwtRegistryVisitor<'a> {
@@ -193,41 +169,45 @@ impl<'a> CwtVisitor<'a> for CwtRegistryVisitor<'a> {
             }
             _ => {
                 // Check for typed identifiers in the rule key
-                if let AstCwtRuleKey::Identifier(identifier) = &rule.key {
-                    match &identifier.identifier_type {
-                        CwtReferenceType::Type => {
-                            let mut type_visitor = TypeVisitor::new(self.data);
-                            type_visitor.visit_rule(rule);
-                        }
-                        CwtReferenceType::Enum => {
-                            let mut enum_visitor = EnumVisitor::new(self.data);
-                            enum_visitor.visit_rule(rule);
-                        }
-                        CwtReferenceType::ComplexEnum => {
-                            let mut enum_visitor = EnumVisitor::new(self.data);
-                            enum_visitor.visit_rule(rule);
-                        }
-                        CwtReferenceType::ValueSet => {
-                            let mut value_set_visitor = ValueSetVisitor::new(self.data);
-                            value_set_visitor.visit_rule(rule);
-                        }
-                        CwtReferenceType::Alias => {
-                            let mut alias_visitor = AliasVisitor::new(self.data);
-                            alias_visitor.visit_rule(rule);
-                        }
-                        CwtReferenceType::SingleAlias => {
-                            let mut alias_visitor = AliasVisitor::new(self.data);
-                            alias_visitor.visit_rule(rule);
-                        }
-                        _ => {
-                            // Default handling - treat as regular rule definition
-                            let mut rule_visitor = RuleVisitor::new(self.data);
-                            rule_visitor.visit_rule(rule);
+                match &rule.key {
+                    AstCwtRuleKey::Identifier(identifier) => {
+                        match &identifier.identifier_type {
+                            CwtReferenceType::Type => {
+                                let mut type_visitor = TypeVisitor::new(self.data);
+                                type_visitor.visit_rule(rule);
+                            }
+                            CwtReferenceType::Enum => {
+                                let mut enum_visitor = EnumVisitor::new(self.data);
+                                enum_visitor.visit_rule(rule);
+                            }
+                            CwtReferenceType::ComplexEnum => {
+                                let mut enum_visitor = EnumVisitor::new(self.data);
+                                enum_visitor.visit_rule(rule);
+                            }
+                            CwtReferenceType::ValueSet => {
+                                let mut value_set_visitor = ValueSetVisitor::new(self.data);
+                                value_set_visitor.visit_rule(rule);
+                            }
+                            CwtReferenceType::Alias => {
+                                let mut alias_visitor = AliasVisitor::new(self.data);
+                                alias_visitor.visit_rule(rule);
+                            }
+                            CwtReferenceType::SingleAlias => {
+                                let mut alias_visitor = AliasVisitor::new(self.data);
+                                alias_visitor.visit_rule(rule);
+                            }
+                            _ => {
+                                // Default handling - treat as regular rule definition
+                                let mut rule_visitor = RuleVisitor::new(self.data);
+                                rule_visitor.visit_rule(rule);
+                            }
                         }
                     }
-                } else {
-                    // Handle string keys or legacy format
-                    self.handle_legacy_rule(rule);
+                    AstCwtRuleKey::String(_) => {
+                        // Default handling - treat as regular rule definition
+                        let mut rule_visitor = RuleVisitor::new(self.data);
+                        rule_visitor.visit_rule(rule);
+                    }
                 }
             }
         }

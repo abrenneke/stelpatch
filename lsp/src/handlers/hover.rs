@@ -131,71 +131,40 @@ pub async fn hover(
         // Check if this is a top-level key (entity name) or a nested property
         let is_top_level_key = !property_path.contains('.');
 
-        let mut hover_content = if is_top_level_key {
-            format!("**Entity:** `{}`", property_path)
-        } else {
-            format!("**Property:** `{}`", property_path)
-        };
+        // Build the base hover content
+        let mut hover_content = String::new();
 
         // Add type information if we can determine the namespace
         if let Some(namespace) = namespace {
             // Only try to get type info if the type cache is initialized
             if crate::handlers::type_cache::TypeCache::is_initialized() {
-                if is_top_level_key {
+                let type_info = if is_top_level_key {
                     // For top-level keys, show the namespace type (the structure of entities in this namespace)
-                    if let Some(type_info) = get_namespace_entity_type(&namespace).await {
-                        // Use YAML for complex object structures
-                        hover_content.push_str(&format!(
-                            "\n\n**Type:**\n```yaml\n{}\n```",
-                            type_info.type_description
-                        ));
-                    } else {
-                        hover_content.push_str("\n\n*Type information not available*");
-                    }
+                    get_namespace_entity_type(&namespace).await
                 } else {
                     // For nested properties, strip the entity name and look up the property path
                     let property_parts: Vec<&str> = property_path.split('.').collect();
                     if property_parts.len() > 1 {
                         // Skip the first part (entity name) and join the rest
                         let actual_property_path = property_parts[1..].join(".");
-                        if let Some(type_info) =
-                            get_entity_property_type(&namespace, &actual_property_path).await
-                        {
-                            // For simple types and unions, use TypeScript syntax; for complex objects, use YAML
-                            if type_info.type_description.contains('\n') {
-                                hover_content.push_str(&format!(
-                                    "\n\n**Type:**\n```yaml\n{}\n```",
-                                    type_info.type_description
-                                ));
-                            } else if type_info.type_description.contains('|') {
-                                // Union types look better with TypeScript syntax
-                                hover_content.push_str(&format!(
-                                    "\n\n**Type:**\n```typescript\n{}\n```",
-                                    type_info.type_description
-                                ));
-                            } else {
-                                hover_content.push_str(&format!(
-                                    "\n\n**Type:** `{}`",
-                                    type_info.type_description
-                                ));
-                            }
-                        } else {
-                            hover_content.push_str("\n\n*Type information not available*");
-                        }
+                        get_entity_property_type(&namespace, &actual_property_path).await
                     } else {
-                        hover_content.push_str("\n\n*Invalid property path*");
+                        None
+                    }
+                };
+
+                if let Some(type_info) = type_info {
+                    // Add type information in a clean format
+                    hover_content.push_str(&format!("```\n{}\n```", type_info.type_description));
+
+                    // Add brief documentation if available
+                    if let Some(documentation) = &type_info.documentation {
+                        if !documentation.trim().is_empty() {
+                            hover_content.push_str(&format!("\n\n{}", documentation.trim()));
+                        }
                     }
                 }
-
-                // Add namespace info
-                hover_content.push_str(&format!("\n\n**Namespace:** `{}`", namespace));
-            } else {
-                hover_content.push_str(&format!("\n\n**Namespace:** `{}`", namespace));
-                hover_content.push_str("\n\n*Type information loading...*");
             }
-        } else {
-            hover_content
-                .push_str("\n\n*Not a Stellaris config file (no common/ directory found)*");
         }
 
         let hover = Hover {

@@ -1,62 +1,55 @@
-//! Core converter for CWT values to InferredType
+//! Core converter for CWT values to CwtType
 //!
-//! This module provides utilities for converting CWT AST values to our InferredType system.
+//! This module provides utilities for converting CWT AST values to our CwtType system.
 
-use super::super::super::inference::*;
 use cw_parser::cwt::{
-    AstCwtBlock, AstCwtIdentifier, CwtRange, CwtReferenceType, CwtSimpleValue, CwtSimpleValueType,
-    CwtValue,
+    AstCwtBlock, AstCwtIdentifier, CwtReferenceType, CwtSimpleValue, CwtSimpleValueType, CwtValue,
 };
 use std::collections::HashMap;
 
-/// Converter for CWT values to InferredType
+use crate::{BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
+
+/// Converter for CWT values to CwtType
 pub struct CwtConverter;
 
 impl CwtConverter {
     /// Convert a CWT simple value to our type system
-    pub fn convert_simple_value(simple: &CwtSimpleValue) -> InferredType {
+    pub fn convert_simple_value(simple: &CwtSimpleValue) -> CwtType {
         let primitive_type = match simple.value_type {
-            CwtSimpleValueType::Bool => PrimitiveType::Boolean,
-            CwtSimpleValueType::Int => PrimitiveType::Integer,
-            CwtSimpleValueType::Float => PrimitiveType::Float,
-            CwtSimpleValueType::Scalar => PrimitiveType::Scalar,
-            CwtSimpleValueType::PercentageField => PrimitiveType::PercentageField,
-            CwtSimpleValueType::Localisation => PrimitiveType::Localisation,
-            CwtSimpleValueType::LocalisationSynced => PrimitiveType::LocalisationSynced,
-            CwtSimpleValueType::LocalisationInline => PrimitiveType::LocalisationInline,
-            CwtSimpleValueType::DateField => PrimitiveType::DateField,
-            CwtSimpleValueType::VariableField => PrimitiveType::VariableField,
-            CwtSimpleValueType::IntVariableField => PrimitiveType::IntVariableField,
-            CwtSimpleValueType::ValueField => PrimitiveType::ValueField,
-            CwtSimpleValueType::IntValueField => PrimitiveType::IntValueField,
-            CwtSimpleValueType::ScopeField => PrimitiveType::ScopeField,
-            CwtSimpleValueType::Filepath => PrimitiveType::Filepath,
-            CwtSimpleValueType::Icon => PrimitiveType::Icon,
+            CwtSimpleValueType::Bool => SimpleType::Bool,
+            CwtSimpleValueType::Int => SimpleType::Int,
+            CwtSimpleValueType::Float => SimpleType::Float,
+            CwtSimpleValueType::Scalar => SimpleType::Scalar,
+            CwtSimpleValueType::PercentageField => SimpleType::PercentageField,
+            CwtSimpleValueType::Localisation => SimpleType::Localisation,
+            CwtSimpleValueType::LocalisationSynced => SimpleType::LocalisationSynced,
+            CwtSimpleValueType::LocalisationInline => SimpleType::LocalisationInline,
+            CwtSimpleValueType::DateField => SimpleType::DateField,
+            CwtSimpleValueType::VariableField => SimpleType::VariableField,
+            CwtSimpleValueType::IntVariableField => SimpleType::IntVariableField,
+            CwtSimpleValueType::ValueField => SimpleType::ValueField,
+            CwtSimpleValueType::IntValueField => SimpleType::IntValueField,
+            CwtSimpleValueType::ScopeField => SimpleType::ScopeField,
+            CwtSimpleValueType::Filepath => SimpleType::Filepath,
+            CwtSimpleValueType::Icon => SimpleType::Icon,
         };
 
-        let mut base_type = InferredType::Primitive(primitive_type);
-
-        // Apply range constraints if present
-        if let Some(range) = &simple.range {
-            base_type = Self::apply_range_constraints(base_type, range);
-        }
-
-        base_type
+        CwtType::Simple(primitive_type)
     }
 
     /// Convert a CWT identifier to our type system
-    pub fn convert_identifier(identifier: &AstCwtIdentifier) -> InferredType {
+    pub fn convert_identifier(identifier: &AstCwtIdentifier) -> CwtType {
         let reference_type = match &identifier.identifier_type {
-            CwtReferenceType::TypeRef => ReferenceType::TypeRef {
-                type_key: identifier.name.raw_value().to_string(),
-                prefix: None,
-                suffix: None,
+            CwtReferenceType::TypeRef => ReferenceType::Type {
+                key: identifier.name.raw_value().to_string(),
             },
-            CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => ReferenceType::TypeRef {
-                type_key: identifier.name.raw_value().to_string(),
-                prefix: Some(prefix.to_string()),
-                suffix: Some(suffix.to_string()),
-            },
+            CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => {
+                ReferenceType::TypeWithAffix {
+                    key: identifier.name.raw_value().to_string(),
+                    prefix: Some(prefix.to_string()),
+                    suffix: Some(suffix.to_string()),
+                }
+            }
             CwtReferenceType::Enum => ReferenceType::Enum {
                 key: identifier.name.raw_value().to_string(),
             },
@@ -69,30 +62,55 @@ impl CwtConverter {
             CwtReferenceType::ValueSet => ReferenceType::ValueSet {
                 key: identifier.name.raw_value().to_string(),
             },
-            _ => ReferenceType::TypeRef {
-                type_key: identifier.name.raw_value().to_string(),
-                prefix: None,
-                suffix: None,
+            _ => ReferenceType::Type {
+                key: identifier.name.raw_value().to_string(),
             },
         };
 
-        InferredType::Reference(reference_type)
+        CwtType::Reference(reference_type)
     }
 
     /// Convert a CWT block to our type system
-    pub fn convert_block(block: &AstCwtBlock) -> InferredType {
+    pub fn convert_block(block: &AstCwtBlock) -> CwtType {
         let mut properties = HashMap::new();
+        let mut is_alias_context = false;
+        let mut alias_type_key = None;
 
-        // Process all items in the block
+        // First pass: check for alias patterns
+        for item in &block.items {
+            if let cw_parser::cwt::AstCwtExpression::Rule(rule) = item {
+                if Self::is_alias_pattern(rule) {
+                    // Extract the alias type from the pattern
+                    if let Some(extracted_type) = Self::extract_alias_type(rule) {
+                        is_alias_context = true;
+                        alias_type_key = Some(extracted_type);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // If this is an alias context, return a reference to the alias type directly
+        if is_alias_context {
+            if let Some(type_key) = alias_type_key {
+                return CwtType::Reference(ReferenceType::AliasName { key: type_key });
+            }
+        }
+
+        // Process all items in the block normally
         for item in &block.items {
             match item {
                 cw_parser::cwt::AstCwtExpression::Rule(rule) => {
+                    // Skip alias patterns since we've already handled them
+                    if Self::is_alias_pattern(rule) {
+                        continue;
+                    }
+
                     let key = rule.key.name();
                     let value_type = Self::convert_value(&rule.value);
-                    let property_def = PropertyDefinition {
-                        property_type: Box::new(value_type),
-                        cardinality: None, // Will be set by visitor with rule options
-                        options: Vec::new(),
+                    let property_def = Property {
+                        property_type: value_type,
+                        options: CwtOptions::default(),
                         documentation: None,
                     };
                     properties.insert(key.to_string(), property_def);
@@ -100,10 +118,9 @@ impl CwtConverter {
                 cw_parser::cwt::AstCwtExpression::String(s) => {
                     // Handle string literals in blocks
                     let value = s.raw_value().to_string();
-                    let property_def = PropertyDefinition {
-                        property_type: Box::new(InferredType::Literal(value.clone())),
-                        cardinality: None,
-                        options: Vec::new(),
+                    let property_def = Property {
+                        property_type: CwtType::Literal(value.clone()),
+                        options: CwtOptions::default(),
                         documentation: None,
                     };
                     properties.insert(value, property_def);
@@ -111,10 +128,9 @@ impl CwtConverter {
                 cw_parser::cwt::AstCwtExpression::Identifier(id) => {
                     // Handle identifiers in blocks
                     let value = id.name.raw_value().to_string();
-                    let property_def = PropertyDefinition {
-                        property_type: Box::new(InferredType::Literal(value.clone())),
-                        cardinality: None,
-                        options: Vec::new(),
+                    let property_def = Property {
+                        property_type: CwtType::Literal(value.clone()),
+                        options: CwtOptions::default(),
                         documentation: None,
                     };
                     properties.insert(value, property_def);
@@ -125,92 +141,48 @@ impl CwtConverter {
             }
         }
 
-        InferredType::Object(ObjectType {
+        CwtType::Block(BlockType {
             properties,
             subtypes: HashMap::new(),
-            extensible: true,
             localisation: None,
             modifiers: None,
         })
     }
 
     /// Convert a CWT value to our type system
-    pub fn convert_value(value: &CwtValue) -> InferredType {
+    pub fn convert_value(value: &CwtValue) -> CwtType {
         match value {
             CwtValue::Simple(simple) => Self::convert_simple_value(simple),
             CwtValue::Identifier(identifier) => Self::convert_identifier(identifier),
             CwtValue::Block(block) => Self::convert_block(block),
-            CwtValue::String(s) => InferredType::Literal(s.raw_value().to_string()),
+            CwtValue::String(s) => CwtType::Literal(s.raw_value().to_string()),
         }
     }
 
-    /// Apply range constraints to a type
-    fn apply_range_constraints(base_type: InferredType, range: &CwtRange) -> InferredType {
-        let inference_range = Range {
-            min: match &range.min {
-                cw_parser::cwt::CwtRangeBound::Int(s) => {
-                    RangeBound::Integer(s.parse().unwrap_or(0))
+    /// Check if a rule is an alias pattern (alias_name[X] = alias_match_left[X])
+    fn is_alias_pattern(rule: &cw_parser::cwt::AstCwtRule) -> bool {
+        // Check if the key is alias_name[something]
+        if let cw_parser::cwt::AstCwtRuleKey::Identifier(key_id) = &rule.key {
+            if matches!(key_id.identifier_type, CwtReferenceType::AliasName) {
+                // Check if the value is alias_match_left[something]
+                if let CwtValue::Identifier(value_id) = &rule.value {
+                    if matches!(value_id.identifier_type, CwtReferenceType::AliasMatchLeft) {
+                        // Both key and value should reference the same type
+                        return key_id.name.raw_value() == value_id.name.raw_value();
+                    }
                 }
-                cw_parser::cwt::CwtRangeBound::Float(s) => {
-                    RangeBound::Float(s.parse().unwrap_or(0.0))
-                }
-                cw_parser::cwt::CwtRangeBound::Infinity(false) => RangeBound::NegInfinity,
-                cw_parser::cwt::CwtRangeBound::Infinity(true) => RangeBound::PosInfinity,
-            },
-            max: match &range.max {
-                cw_parser::cwt::CwtRangeBound::Int(s) => {
-                    RangeBound::Integer(s.parse().unwrap_or(0))
-                }
-                cw_parser::cwt::CwtRangeBound::Float(s) => {
-                    RangeBound::Float(s.parse().unwrap_or(0.0))
-                }
-                cw_parser::cwt::CwtRangeBound::Infinity(false) => RangeBound::NegInfinity,
-                cw_parser::cwt::CwtRangeBound::Infinity(true) => RangeBound::PosInfinity,
-            },
-        };
-
-        match base_type {
-            InferredType::Primitive(PrimitiveType::Integer) => {
-                InferredType::Constrained(ConstrainedType {
-                    base_type: Box::new(base_type),
-                    range: Some(inference_range),
-                    cardinality: None,
-                    options: Vec::new(),
-                })
             }
-            InferredType::Primitive(PrimitiveType::Float) => {
-                InferredType::Constrained(ConstrainedType {
-                    base_type: Box::new(base_type),
-                    range: Some(inference_range),
-                    cardinality: None,
-                    options: Vec::new(),
-                })
-            }
-            _ => base_type,
         }
+        false
     }
 
-    /// Apply cardinality constraints to a type
-    pub fn apply_cardinality_constraints(
-        base_type: InferredType,
-        cardinality: &super::super::options::CardinalityConstraint,
-    ) -> InferredType {
-        if cardinality.max == Some(1) && cardinality.min == Some(0) {
-            // Optional type - use constrained type with cardinality
-            InferredType::Constrained(ConstrainedType {
-                base_type: Box::new(base_type),
-                cardinality: Some(Cardinality::optional()),
-                range: None,
-                options: Vec::new(),
-            })
-        } else if cardinality.max.is_none() || cardinality.max.unwrap() > 1 {
-            // Array type
-            InferredType::Array(ArrayType {
-                element_type: Box::new(base_type),
-                cardinality: Cardinality::new(cardinality.min, cardinality.max),
-            })
-        } else {
-            base_type
+    /// Extract the alias type from an alias pattern
+    fn extract_alias_type(rule: &cw_parser::cwt::AstCwtRule) -> Option<String> {
+        if let cw_parser::cwt::AstCwtRuleKey::Identifier(key_id) = &rule.key {
+            if matches!(key_id.identifier_type, CwtReferenceType::AliasName) {
+                return Some(key_id.name.raw_value().to_string());
+            }
         }
+        None
     }
 }

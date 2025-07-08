@@ -1,11 +1,11 @@
 //! Conversion utilities and error types for CWT analysis
 //!
 //! This module contains utilities for converting between CWT AST types and our
-//! InferredType system, as well as error types for conversion failures.
+//! CwtType system, as well as error types for conversion failures.
 
-use super::super::inference::*;
-use super::options::CardinalityConstraint;
-use cw_parser::cwt::{CwtRange, CwtSimpleValue, CwtSimpleValueType};
+use crate::{CwtType, SimpleType};
+
+use cw_parser::cwt::{CwtSimpleValue, CwtSimpleValueType};
 
 /// Errors that can occur during CWT conversion
 #[derive(Debug, Clone, PartialEq)]
@@ -56,152 +56,26 @@ pub struct ConversionUtils;
 
 impl ConversionUtils {
     /// Convert a CWT simple value to our type system
-    pub fn convert_simple_value(simple: &CwtSimpleValue) -> InferredType {
+    pub fn convert_simple_value(simple: &CwtSimpleValue) -> CwtType {
         let primitive_type = match simple.value_type {
-            CwtSimpleValueType::Bool => PrimitiveType::Boolean,
-            CwtSimpleValueType::Int => PrimitiveType::Integer,
-            CwtSimpleValueType::Float => PrimitiveType::Float,
-            CwtSimpleValueType::Scalar => PrimitiveType::Scalar,
-            CwtSimpleValueType::PercentageField => PrimitiveType::PercentageField,
-            CwtSimpleValueType::Localisation => PrimitiveType::Localisation,
-            CwtSimpleValueType::LocalisationSynced => PrimitiveType::LocalisationSynced,
-            CwtSimpleValueType::LocalisationInline => PrimitiveType::LocalisationInline,
-            CwtSimpleValueType::DateField => PrimitiveType::DateField,
-            CwtSimpleValueType::VariableField => PrimitiveType::VariableField,
-            CwtSimpleValueType::IntVariableField => PrimitiveType::IntVariableField,
-            CwtSimpleValueType::ValueField => PrimitiveType::ValueField,
-            CwtSimpleValueType::IntValueField => PrimitiveType::IntValueField,
-            CwtSimpleValueType::ScopeField => PrimitiveType::ScopeField,
-            CwtSimpleValueType::Filepath => PrimitiveType::Filepath,
-            CwtSimpleValueType::Icon => PrimitiveType::Icon,
+            CwtSimpleValueType::Bool => SimpleType::Bool,
+            CwtSimpleValueType::Int => SimpleType::Int,
+            CwtSimpleValueType::Float => SimpleType::Float,
+            CwtSimpleValueType::Scalar => SimpleType::Scalar,
+            CwtSimpleValueType::PercentageField => SimpleType::PercentageField,
+            CwtSimpleValueType::Localisation => SimpleType::Localisation,
+            CwtSimpleValueType::LocalisationSynced => SimpleType::LocalisationSynced,
+            CwtSimpleValueType::LocalisationInline => SimpleType::LocalisationInline,
+            CwtSimpleValueType::DateField => SimpleType::DateField,
+            CwtSimpleValueType::VariableField => SimpleType::VariableField,
+            CwtSimpleValueType::IntVariableField => SimpleType::IntVariableField,
+            CwtSimpleValueType::ValueField => SimpleType::ValueField,
+            CwtSimpleValueType::IntValueField => SimpleType::IntValueField,
+            CwtSimpleValueType::ScopeField => SimpleType::ScopeField,
+            CwtSimpleValueType::Filepath => SimpleType::Filepath,
+            CwtSimpleValueType::Icon => SimpleType::Icon,
         };
 
-        let mut base_type = InferredType::Primitive(primitive_type);
-
-        // Apply range constraints if present
-        if let Some(range) = &simple.range {
-            base_type = Self::apply_range_constraints(base_type, range);
-        }
-
-        base_type
-    }
-
-    /// Apply range constraints to a type
-    pub fn apply_range_constraints(base_type: InferredType, range: &CwtRange) -> InferredType {
-        let inference_range = Range {
-            min: match &range.min {
-                cw_parser::cwt::CwtRangeBound::Int(s) => {
-                    RangeBound::Integer(s.parse().unwrap_or(0))
-                }
-                cw_parser::cwt::CwtRangeBound::Float(s) => {
-                    RangeBound::Float(s.parse().unwrap_or(0.0))
-                }
-                cw_parser::cwt::CwtRangeBound::Infinity(false) => RangeBound::NegInfinity,
-                cw_parser::cwt::CwtRangeBound::Infinity(true) => RangeBound::PosInfinity,
-            },
-            max: match &range.max {
-                cw_parser::cwt::CwtRangeBound::Int(s) => {
-                    RangeBound::Integer(s.parse().unwrap_or(0))
-                }
-                cw_parser::cwt::CwtRangeBound::Float(s) => {
-                    RangeBound::Float(s.parse().unwrap_or(0.0))
-                }
-                cw_parser::cwt::CwtRangeBound::Infinity(false) => RangeBound::NegInfinity,
-                cw_parser::cwt::CwtRangeBound::Infinity(true) => RangeBound::PosInfinity,
-            },
-        };
-
-        match base_type {
-            InferredType::Primitive(PrimitiveType::Integer) => {
-                InferredType::Constrained(ConstrainedType {
-                    base_type: Box::new(base_type),
-                    range: Some(inference_range),
-                    cardinality: None,
-                    options: Vec::new(),
-                })
-            }
-            InferredType::Primitive(PrimitiveType::Float) => {
-                InferredType::Constrained(ConstrainedType {
-                    base_type: Box::new(base_type),
-                    range: Some(inference_range),
-                    cardinality: None,
-                    options: Vec::new(),
-                })
-            }
-            _ => base_type,
-        }
-    }
-
-    /// Apply cardinality constraints to a type
-    pub fn apply_cardinality_constraints(
-        base_type: InferredType,
-        cardinality: &CardinalityConstraint,
-    ) -> InferredType {
-        if cardinality.max == Some(1) && cardinality.min == Some(0) {
-            // Optional type - use constrained type with cardinality
-            InferredType::Constrained(ConstrainedType {
-                base_type: Box::new(base_type),
-                cardinality: Some(Cardinality::optional()),
-                range: None,
-                options: Vec::new(),
-            })
-        } else if cardinality.max.is_none() || cardinality.max.unwrap() > 1 {
-            // Array type
-            InferredType::Array(ArrayType {
-                element_type: Box::new(base_type),
-                cardinality: Cardinality::new(cardinality.min, cardinality.max),
-            })
-        } else {
-            base_type
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_range_constraints() {
-        let range = cw_parser::cwt::CwtRange {
-            min: cw_parser::cwt::CwtRangeBound::Int("0"),
-            max: cw_parser::cwt::CwtRangeBound::Int("10"),
-            span: 0..10,
-        };
-        let base_type = InferredType::Primitive(PrimitiveType::Integer);
-
-        let constrained = ConversionUtils::apply_range_constraints(base_type, &range);
-
-        match constrained {
-            InferredType::Constrained(constraint) => {
-                assert!(constraint.range.is_some());
-                let range_constraint = constraint.range.as_ref().unwrap();
-                assert_eq!(range_constraint.min, RangeBound::Integer(0));
-                assert_eq!(range_constraint.max, RangeBound::Integer(10));
-            }
-            _ => panic!("Expected constrained type"),
-        }
-    }
-
-    #[test]
-    fn test_cardinality_constraints() {
-        let cardinality = CardinalityConstraint {
-            min: Some(0),
-            max: Some(1),
-            is_warning: false,
-        };
-        let base_type = InferredType::Primitive(PrimitiveType::Integer);
-
-        let constrained = ConversionUtils::apply_cardinality_constraints(base_type, &cardinality);
-
-        match constrained {
-            InferredType::Constrained(constraint) => {
-                assert!(constraint.cardinality.is_some());
-                let card = constraint.cardinality.as_ref().unwrap();
-                assert_eq!(card.min, Some(0));
-                assert_eq!(card.max, Some(1));
-            }
-            _ => panic!("Expected constrained type"),
-        }
+        CwtType::Simple(primitive_type)
     }
 }

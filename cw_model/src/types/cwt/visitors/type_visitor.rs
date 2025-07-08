@@ -10,11 +10,10 @@ use cw_parser::{
     CwtSimpleValueType, CwtValue, CwtVisitor,
 };
 
-use crate::types::inference::{InferredType, PrimitiveType, PropertyDefinition};
 use crate::{
-    ConversionError, CwtAnalysisData, CwtConverter, LocalisationRequirement, ModifierGeneration,
-    RuleOptions, SeverityLevel, SkipRootKey, SubtypeCondition, SubtypeDefinition, SubtypeOptions,
-    TypeDefinition, TypeKeyFilter, TypeOptions,
+    ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, CwtType, LocalisationRequirement,
+    ModifierSpec, Property, RuleOptions, SeverityLevel, SimpleType, SkipRootKey, Subtype,
+    SubtypeCondition, TypeDefinition, TypeKeyFilter, TypeOptions,
 };
 
 /// Specialized visitor for type definitions
@@ -66,19 +65,13 @@ impl<'a> TypeVisitor<'a> {
                 skip_root_key: None,
                 subtypes: HashMap::new(),
                 localisation: HashMap::new(),
-                modifiers: ModifierGeneration {
+                modifiers: ModifierSpec {
                     modifiers: HashMap::new(),
                     subtypes: HashMap::new(),
                 },
                 rules: CwtConverter::convert_value(&rule.value),
                 options: TypeOptions::default(),
             };
-
-            // Apply cardinality constraints if present
-            if let Some(cardinality) = &options.cardinality {
-                type_def.rules =
-                    CwtConverter::apply_cardinality_constraints(type_def.rules, cardinality);
-            }
 
             // Parse CWT options from the rule
             Self::parse_rule_options(&mut type_def, rule);
@@ -88,8 +81,8 @@ impl<'a> TypeVisitor<'a> {
                 self.extract_type_options(&mut type_def, block);
             }
 
-            // Store the type definition
-            self.data.types.insert(name, type_def);
+            // Store the type definition (merge with existing if present)
+            self.data.insert_or_merge_type(name, type_def);
         } else {
             let key_name = match &rule.key {
                 AstCwtRuleKey::Identifier(identifier) => identifier.name.raw_value(),
@@ -439,7 +432,7 @@ impl<'a> TypeVisitor<'a> {
         subtype_name: &str,
         rule: &AstCwtRule,
     ) {
-        let mut subtype_options = SubtypeOptions::default();
+        let mut subtype_options = CwtOptions::default();
 
         // Parse CWT options from the rule
         for option in &rule.options {
@@ -482,13 +475,13 @@ impl<'a> TypeVisitor<'a> {
         } else if let Some(type_key_filter) = &subtype_options.type_key_filter {
             // Create a type key filter condition
             match type_key_filter {
-                TypeKeyFilter::Specific(key) => SubtypeCondition::TypeKeyFilter {
+                TypeKeyFilter::Specific(key) => SubtypeCondition::KeyMatches {
                     filter: key.clone(),
                 },
-                TypeKeyFilter::Not(key) => SubtypeCondition::TypeKeyFilter {
+                TypeKeyFilter::Not(key) => SubtypeCondition::KeyMatches {
                     filter: format!("!{}", key),
                 },
-                TypeKeyFilter::OneOf(keys) => SubtypeCondition::TypeKeyFilter {
+                TypeKeyFilter::OneOf(keys) => SubtypeCondition::KeyMatches {
                     filter: keys.join("|"),
                 },
             }
@@ -507,39 +500,30 @@ impl<'a> TypeVisitor<'a> {
                     let property_type = match &prop_rule.value {
                         CwtValue::String(s) => {
                             // If the value is a string, create a literal type
-                            InferredType::Literal(s.raw_value().to_string())
+                            CwtType::Literal(s.raw_value().to_string())
                         }
                         CwtValue::Simple(simple) => {
                             // Handle simple values like booleans
                             match simple.value_type {
-                                CwtSimpleValueType::Bool => {
-                                    InferredType::Primitive(PrimitiveType::Boolean)
-                                }
-                                CwtSimpleValueType::Float => {
-                                    InferredType::Primitive(PrimitiveType::Float)
-                                }
-                                CwtSimpleValueType::Int => {
-                                    InferredType::Primitive(PrimitiveType::Integer)
-                                }
-                                _ => InferredType::Unknown,
+                                CwtSimpleValueType::Bool => CwtType::Simple(SimpleType::Bool),
+                                CwtSimpleValueType::Float => CwtType::Simple(SimpleType::Float),
+                                CwtSimpleValueType::Int => CwtType::Simple(SimpleType::Int),
+                                _ => CwtType::Unknown,
                             }
                         }
-                        _ => InferredType::Unknown,
+                        _ => CwtType::Unknown,
                     };
 
-                    let prop_def = PropertyDefinition::simple(property_type);
+                    let prop_def = Property::simple(property_type);
                     properties.insert(prop_key.to_string(), prop_def);
                 }
             }
         }
 
-        let subtype_def = SubtypeDefinition {
+        let subtype_def = Subtype {
             condition,
             properties,
-            exclusive: false,    // Could be determined from options or properties
-            options: Vec::new(), // Could store CWT options here if needed
-            display_name: subtype_options.display_name,
-            abbreviation: subtype_options.abbreviation,
+            options: subtype_options, // Could store CWT options here if needed
         };
 
         type_def
@@ -898,17 +882,20 @@ types = {
 
         // Check subtype options (comment-based options should be parsed)
         assert_eq!(
-            advanced_subtype.display_name,
+            advanced_subtype.options.display_name,
             Some("Advanced Subtype".to_string())
         );
-        assert_eq!(advanced_subtype.abbreviation, Some("ADV".to_string()));
+        assert_eq!(
+            advanced_subtype.options.abbreviation,
+            Some("ADV".to_string())
+        );
 
         // Check basic subtype options
         assert_eq!(
-            basic_subtype.display_name,
+            basic_subtype.options.display_name,
             Some("Basic Subtype".to_string())
         );
-        assert_eq!(basic_subtype.abbreviation, None); // No abbreviation specified
+        assert_eq!(basic_subtype.options.abbreviation, None); // No abbreviation specified
 
         // Check localisation structure
         assert_eq!(advanced_type.localisation.len(), 2);
