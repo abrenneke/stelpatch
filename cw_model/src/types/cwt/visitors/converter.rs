@@ -5,9 +5,9 @@
 use cw_parser::cwt::{
     AstCwtBlock, AstCwtIdentifier, CwtReferenceType, CwtSimpleValue, CwtSimpleValueType, CwtValue,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use crate::{ArrayType, BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
+use crate::{BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
 
 /// Converter for CWT values to CwtType
 pub struct CwtConverter;

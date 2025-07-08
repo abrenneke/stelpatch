@@ -2,12 +2,11 @@ use std::ops::Range;
 
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrContext};
 
-use crate::{AstComment, AstNode, AstString, CwtValue, cwt_value, quoted_or_unquoted_string};
+use crate::{AstComment, AstNode, CwtValue, cwt_value};
 
 use super::{
-    AstCwtBlock, AstCwtComment, AstCwtCommentOption, AstCwtIdentifier, AstCwtRule,
-    CwtCardinalityMax, CwtCommentRangeBound, CwtCommentType, cwt_block, cwt_identifier, cwt_rule,
-    get_cwt_comments, opt_cwt_ws_and_comments,
+    AstCwtBlock, AstCwtComment, AstCwtCommentOption, AstCwtIdentifier, AstCwtRule, CwtCommentType,
+    cwt_block, cwt_identifier, cwt_rule, get_cwt_comments, opt_cwt_ws_and_comments,
 };
 
 /// CWT entity types
@@ -76,7 +75,7 @@ pub(crate) fn cwt_expression<'a>(
         AstCwtExpression::Identifier(identifier) => {
             identifier.leading_comments = leading_comments;
         }
-        AstCwtExpression::Value(value) => {
+        AstCwtExpression::Value(_value) => {
             // TODO: Handle leading comments for values
         }
     }

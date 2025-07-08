@@ -6,6 +6,8 @@
 use cw_parser::{CwtCommentRangeBound, CwtOptionExpression, cwt::AstCwtRule};
 use std::collections::HashMap;
 
+use crate::TypeKeyFilter;
+
 /// Options that can be applied to CWT rules
 #[derive(Debug, Clone, Default)]
 pub struct RuleOptions {
@@ -19,6 +21,14 @@ pub struct RuleOptions {
     pub replace_scope: Option<HashMap<String, String>>,
     /// Documentation comment
     pub documentation: Option<String>,
+    /// Severity
+    pub severity: Option<String>,
+    /// Starts with
+    pub starts_with: Option<String>,
+    /// Type key filter
+    pub type_key_filter: Option<TypeKeyFilter>,
+    /// Graph related types
+    pub graph_related_types: Vec<String>,
 }
 
 /// Cardinality constraint for CWT rules
@@ -83,9 +93,50 @@ impl RuleOptions {
                     };
                     options.scope = Some(scopes);
                 }
-                _ => {
-                    // Handle other option types as needed
+                "severity" => {
+                    options.severity =
+                        Some(cwt_option.value.as_identifier().unwrap().parse().unwrap());
                 }
+                "starts_with" => {
+                    options.starts_with = Some(
+                        cwt_option
+                            .value
+                            .as_string_or_identifier()
+                            .unwrap()
+                            .to_string(),
+                    );
+                }
+                "type_key_filter" => {
+                    options.type_key_filter = match (&cwt_option.value, cwt_option.is_ne) {
+                        (CwtOptionExpression::Identifier(id), false) => {
+                            Some(TypeKeyFilter::Specific(id.to_string()))
+                        }
+                        (CwtOptionExpression::Identifier(id), true) => {
+                            Some(TypeKeyFilter::Not(id.to_string()))
+                        }
+                        (CwtOptionExpression::Block(list), false) => Some(TypeKeyFilter::OneOf(
+                            list.iter()
+                                .map(|t| t.as_string_or_identifier().unwrap().to_string())
+                                .collect(),
+                        )),
+                        (CwtOptionExpression::Block(list), true) => Some(TypeKeyFilter::Not(
+                            list.iter()
+                                .map(|t| t.as_string_or_identifier().unwrap().to_string())
+                                .collect(),
+                        )),
+                        _ => None,
+                    };
+                }
+                "graph_related_types" => {
+                    options.graph_related_types = cwt_option
+                        .value
+                        .as_list()
+                        .unwrap()
+                        .iter()
+                        .map(|t| t.as_string_or_identifier().unwrap().to_string())
+                        .collect();
+                }
+                _ => {}
             }
         }
 

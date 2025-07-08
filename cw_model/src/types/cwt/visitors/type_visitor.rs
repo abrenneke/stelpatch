@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 
 use cw_parser::{
-    AstCwtBlock, AstCwtIdentifierOrString, AstCwtRule, CwtOperator, CwtOptionExpression,
-    CwtReferenceType, CwtSimpleValueType, CwtValue, CwtVisitor,
+    AstCwtBlock, AstCwtIdentifierOrString, AstCwtRule, CwtOperator, CwtReferenceType,
+    CwtSimpleValueType, CwtValue, CwtVisitor,
 };
 
 use crate::{
@@ -71,10 +71,8 @@ impl<'a> TypeVisitor<'a> {
                 },
                 rules: CwtConverter::convert_value(&rule.value),
                 options: TypeOptions::default(),
+                rule_options: options,
             };
-
-            // Parse CWT options from the rule
-            Self::parse_rule_options(&mut type_def, rule);
 
             // Extract additional type options from the block
             if let CwtValue::Block(block) = &rule.value {
@@ -534,53 +532,6 @@ impl<'a> TypeVisitor<'a> {
         type_def
             .subtypes
             .insert(subtype_name.to_string(), subtype_def);
-    }
-
-    /// Parse CWT options from a rule and apply them to the type definition
-    fn parse_rule_options(type_def: &mut TypeDefinition, rule: &AstCwtRule) {
-        for option in &rule.options {
-            match option.key {
-                "severity" => {
-                    type_def.options.severity =
-                        Some(option.value.as_identifier().unwrap().parse().unwrap());
-                }
-                "starts_with" => {
-                    type_def.options.starts_with =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
-                }
-                "type_key_filter" => {
-                    type_def.options.type_key_filter = match (&option.value, option.is_ne) {
-                        (CwtOptionExpression::Identifier(id), false) => {
-                            Some(TypeKeyFilter::Specific(id.to_string()))
-                        }
-                        (CwtOptionExpression::Identifier(id), true) => {
-                            Some(TypeKeyFilter::Not(id.to_string()))
-                        }
-                        (CwtOptionExpression::Block(list), false) => Some(TypeKeyFilter::OneOf(
-                            list.iter()
-                                .map(|t| t.as_string_or_identifier().unwrap().to_string())
-                                .collect(),
-                        )),
-                        (CwtOptionExpression::Block(list), true) => Some(TypeKeyFilter::Not(
-                            list.iter()
-                                .map(|t| t.as_string_or_identifier().unwrap().to_string())
-                                .collect(),
-                        )),
-                        _ => None,
-                    };
-                }
-                "graph_related_types" => {
-                    type_def.options.graph_related_types = option
-                        .value
-                        .as_list()
-                        .unwrap()
-                        .iter()
-                        .map(|t| t.as_string_or_identifier().unwrap().to_string())
-                        .collect();
-                }
-                _ => {}
-            }
-        }
     }
 }
 

@@ -3,7 +3,7 @@
 //! This visitor handles the processing of regular CWT rule definitions that define
 //! validation structure for game entities (e.g., ambient_object, asteroid_belt_type).
 
-use cw_parser::{AstCwtRule, AstCwtIdentifierOrString, CwtVisitor};
+use cw_parser::{AstCwtIdentifierOrString, AstCwtRule, CwtVisitor};
 
 use crate::{ConversionError, CwtAnalysisData, CwtConverter, RuleOptions, TypeDefinition};
 
@@ -38,7 +38,7 @@ impl<'a> RuleVisitor<'a> {
 
         if let Some(name) = rule_name {
             // Skip special section names that are handled by other visitors
-            if self.is_special_section(&name) {
+            if name == "types" || name == "enums" {
                 return;
             }
 
@@ -46,10 +46,11 @@ impl<'a> RuleVisitor<'a> {
             let options = RuleOptions::from_rule(rule);
 
             // Convert the rule definition to an inferred type
-            let mut rule_type = CwtConverter::convert_value(&rule.value);
+            let rule_type = CwtConverter::convert_value(&rule.value);
 
             // Store the rule definition as a TypeDefinition (merge with existing if present)
-            let type_def = TypeDefinition::new(rule_type);
+            let mut type_def = TypeDefinition::new(rule_type);
+            type_def.rule_options = options;
             self.data.insert_or_merge_type(name, type_def);
         } else {
             let key_name = match &rule.key {
@@ -78,17 +79,6 @@ impl<'a> RuleVisitor<'a> {
                 Some(string.raw_value().to_string())
             }
         }
-    }
-
-    /// Check if a rule name is a special section handled by other visitors
-    fn is_special_section(&self, name: &str) -> bool {
-        matches!(name, "types" | "enums" | "values" | "aliases")
-            || name.starts_with("type[")
-            || name.starts_with("enum[")
-            || name.starts_with("complex_enum[")
-            || name.starts_with("value_set[")
-            || name.starts_with("alias[")
-            || name.starts_with("single_alias[")
     }
 }
 

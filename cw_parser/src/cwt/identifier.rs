@@ -2,10 +2,9 @@ use std::ops::Range;
 
 use winnow::{
     LocatingSlice, ModalResult, Parser,
-    ascii::alpha1,
     combinator::{alt, delimited, opt},
     error::{ErrMode, StrContext},
-    token::{literal, take_while},
+    token::take_while,
 };
 
 use crate::{AstComment, AstNode, AstString, opt_trailing_comment, quoted_or_unquoted_string};

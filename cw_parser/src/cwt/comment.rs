@@ -519,26 +519,6 @@ fn parse_list_contents<'a>(text: &'a str) -> Vec<CwtOptionExpression<'a>> {
     items
 }
 
-/// Parse multiple assignments like "this = planet root = ship"
-fn parse_multiple_assignments<'a>(text: &'a str) -> Vec<CwtOptionExpression<'a>> {
-    let mut assignments = Vec::new();
-    let parts: Vec<&str> = text.split_whitespace().collect();
-
-    let mut i = 0;
-    while i + 2 < parts.len() {
-        if parts[i + 1] == "=" {
-            let key = parts[i];
-            let value = Box::new(CwtOptionExpression::Identifier(parts[i + 2]));
-            assignments.push(CwtOptionExpression::Assignment { key, value });
-            i += 3;
-        } else {
-            i += 1;
-        }
-    }
-
-    assignments
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

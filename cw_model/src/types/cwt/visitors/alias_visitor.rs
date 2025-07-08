@@ -33,32 +33,13 @@ impl<'a> AliasVisitor<'a> {
 
     /// Process an alias definition rule
     fn process_alias_definition(&mut self, rule: &AstCwtRule) {
-        let alias_name = self.extract_alias_name(rule);
         let is_single = self.is_single_alias(rule);
 
-        if let Some(name) = alias_name {
-            if is_single {
-                self.process_single_alias(rule);
-            } else {
-                self.process_regular_alias(rule);
-            }
+        if is_single {
+            self.process_single_alias(rule);
         } else {
-            self.data.errors.push(ConversionError::InvalidAliasFormat);
+            self.process_regular_alias(rule);
         }
-    }
-
-    /// Extract the alias name from a rule
-    fn extract_alias_name(&self, rule: &AstCwtRule) -> Option<String> {
-        if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
-            if matches!(
-                identifier.identifier_type,
-                CwtReferenceType::Alias | CwtReferenceType::SingleAlias
-            ) {
-                return Some(identifier.name.raw_value().to_string());
-            }
-        }
-
-        None
     }
 
     /// Check if this is a single alias

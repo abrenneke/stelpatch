@@ -10,7 +10,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{CwtType, ModifierSpec, Subtype};
+use crate::{CwtType, ModifierSpec, RuleOptions, Subtype};
 
 /// Definition of a CWT type
 #[derive(Debug, Clone)]
@@ -31,6 +31,8 @@ pub struct TypeDefinition {
     pub rules: CwtType,
     /// Type-specific options
     pub options: TypeOptions,
+    /// Rule options
+    pub rule_options: RuleOptions,
 }
 
 /// Options for types
@@ -223,6 +225,7 @@ impl TypeDefinition {
             },
             rules,
             options: TypeOptions::default(),
+            rule_options: RuleOptions::default(),
         }
     }
 
