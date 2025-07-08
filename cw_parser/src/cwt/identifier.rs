@@ -2,9 +2,10 @@ use std::ops::Range;
 
 use winnow::{
     LocatingSlice, ModalResult, Parser,
+    ascii::alpha1,
     combinator::{alt, delimited, opt},
-    error::StrContext,
-    token::{literal, take_until},
+    error::{ErrMode, StrContext},
+    token::{literal, take_while},
 };
 
 use crate::{AstComment, AstNode, AstString, opt_trailing_comment, quoted_or_unquoted_string};
@@ -15,12 +16,102 @@ use super::{AstCwtComment, CwtReferenceType};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstCwtIdentifier<'a> {
     pub identifier_type: CwtReferenceType<'a>,
-    pub name: AstString<'a>,
+    pub before_identifier: Option<Box<AstCwtIdentifier<'a>>>,
+    pub name: Box<AstCwtIdentifierKey<'a>>,
     pub span: Range<usize>,
     /// Is there a ! prepended to the name?
     pub is_not: bool,
     pub leading_comments: Vec<AstCwtComment<'a>>,
     pub trailing_comment: Option<AstComment<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AstCwtIdentifierOrString<'a> {
+    Identifier(AstCwtIdentifier<'a>),
+    String(AstString<'a>),
+}
+
+impl<'a> AstCwtIdentifierOrString<'a> {
+    pub fn name(&self) -> &str {
+        match self {
+            AstCwtIdentifierOrString::Identifier(id) => id.name.raw_value(),
+            AstCwtIdentifierOrString::String(s) => s.raw_value(),
+        }
+    }
+
+    pub fn as_identifier(&self) -> Option<&AstCwtIdentifier<'a>> {
+        match self {
+            AstCwtIdentifierOrString::Identifier(id) => Some(id),
+            AstCwtIdentifierOrString::String(_) => None,
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&AstString<'a>> {
+        match self {
+            AstCwtIdentifierOrString::Identifier(_) => None,
+            AstCwtIdentifierOrString::String(s) => Some(s),
+        }
+    }
+}
+
+impl<'a> AstNode<'a> for AstCwtIdentifierOrString<'a> {
+    fn span_range(&self) -> Range<usize> {
+        match self {
+            AstCwtIdentifierOrString::Identifier(id) => id.span_range(),
+            AstCwtIdentifierOrString::String(s) => s.span_range(),
+        }
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        match self {
+            AstCwtIdentifierOrString::Identifier(id) => id.leading_comments(),
+            AstCwtIdentifierOrString::String(s) => s.leading_comments(),
+        }
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        match self {
+            AstCwtIdentifierOrString::Identifier(id) => id.trailing_comment(),
+            AstCwtIdentifierOrString::String(s) => s.trailing_comment(),
+        }
+    }
+}
+
+/// Keys of identifiers can be complex, e.g. `alias[scope:enum[value]]`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AstCwtIdentifierKey<'a> {
+    /// The part before a colon, if any
+    pub scope: Option<AstString<'a>>,
+
+    /// The main key
+    pub key: AstCwtIdentifierOrString<'a>,
+}
+
+impl<'a> AstCwtIdentifierKey<'a> {
+    pub fn new(scope: Option<AstString<'a>>, key: AstCwtIdentifierOrString<'a>) -> Self {
+        Self { scope, key }
+    }
+
+    pub fn raw_value(&self) -> &'a str {
+        match &self.key {
+            AstCwtIdentifierOrString::Identifier(id) => id.name.raw_value(),
+            AstCwtIdentifierOrString::String(s) => s.raw_value(),
+        }
+    }
+}
+
+impl<'a> AstNode<'a> for AstCwtIdentifierKey<'a> {
+    fn span_range(&self) -> Range<usize> {
+        self.key.span_range()
+    }
+
+    fn leading_comments(&self) -> &[AstComment<'a>] {
+        self.key.leading_comments()
+    }
+
+    fn trailing_comment(&self) -> Option<&AstComment<'a>> {
+        self.key.trailing_comment()
+    }
 }
 
 impl<'a> AstCwtIdentifier<'a> {
@@ -31,12 +122,13 @@ impl<'a> AstCwtIdentifier<'a> {
 
     pub fn new(
         identifier_type: CwtReferenceType<'a>,
-        name: AstString<'a>,
+        name: AstCwtIdentifierKey<'a>,
         span: Range<usize>,
     ) -> Self {
         Self {
             identifier_type,
-            name,
+            name: Box::new(name),
+            before_identifier: None,
             is_not: false,
             span,
             leading_comments: Vec::new(),
@@ -59,89 +151,101 @@ impl<'a> AstNode<'a> for AstCwtIdentifier<'a> {
     }
 }
 
-pub(crate) fn quoted_or_unquoted_string_with_not<'a>(
-    input: &mut LocatingSlice<&'a str>,
-) -> ModalResult<(AstString<'a>, bool)> {
-    let is_not = opt(literal("!")).parse_next(input)?;
-    let name = quoted_or_unquoted_string.parse_next(input)?;
-    Ok((name, is_not.is_some()))
+fn is_valid_scope_char(c: char) -> bool {
+    c.is_ascii_alphanumeric()
+        || match c {
+            '_' => true,
+            _ => false,
+        }
 }
 
-/// Parse a standalone identifier
+fn scope<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstString<'a>> {
+    let ((scope, span), _) =
+        (take_while(1.., is_valid_scope_char).with_span(), ":").parse_next(input)?;
+    Ok(AstString::new(scope, false, span))
+}
+
+/// Helper function to create a parser for standard `prefix[content]` patterns
+fn identifier_parser<'a>(
+    prefix: &'static str,
+    reference_type: CwtReferenceType<'a>,
+) -> impl Parser<
+    LocatingSlice<&'a str>,
+    (
+        AstCwtIdentifierOrString<'a>,
+        Option<AstString<'a>>,
+        bool,
+        CwtReferenceType<'a>,
+    ),
+    ErrMode<winnow::error::ContextError>,
+> {
+    move |input: &mut LocatingSlice<&'a str>| {
+        let (_, _, is_not, scope, key, _) = (
+            prefix,
+            "[",
+            opt("!"),
+            opt(scope),
+            cwt_identifier_or_string,
+            "]",
+        )
+            .parse_next(input)?;
+        Ok((key, scope, is_not.is_some(), reference_type.clone()))
+    }
+}
+
 pub(crate) fn cwt_identifier<'a>(
     input: &mut LocatingSlice<&'a str>,
 ) -> ModalResult<AstCwtIdentifier<'a>> {
-    let ((name, identifier_type), span) = alt((
+    // Wonky, probably wrong, syntax, but we need to parse it
+    let (before_part, mut after_part) =
+        (opt((cwt_identifier_part, '.')), cwt_identifier_part).parse_next(input)?;
+
+    let before_part = if let Some((before_part, _)) = before_part {
+        Some(Box::new(before_part))
+    } else {
+        None
+    };
+
+    after_part.before_identifier = before_part;
+
+    Ok(after_part)
+}
+
+/// Parse a standalone identifier
+pub(crate) fn cwt_identifier_part<'a>(
+    input: &mut LocatingSlice<&'a str>,
+) -> ModalResult<AstCwtIdentifier<'a>> {
+    let ((key, scope, is_not, identifier_type), span) = alt((
         // Type key identifier: <identifier>
-        delimited("<", quoted_or_unquoted_string_with_not, ">")
-            .map(|name| (name, CwtReferenceType::TypeRef)),
-        // Value set identifier: value_set[identifier]
-        delimited("value_set[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::ValueSet)),
-        // Value identifier: value[identifier]
-        delimited("value[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::Value)),
-        // Enum identifier: enum[identifier]
-        delimited("enum[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::Enum)),
-        // Scope identifier: scope[identifier]
-        delimited("scope[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::Scope)),
-        // Alias identifier: alias[identifier]
-        delimited("alias[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::Alias)),
-        // Alias name identifier: alias_name[identifier]
-        delimited("alias_name[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::AliasName)),
-        // Alias match left identifier: alias_match_left[identifier]
-        delimited("alias_match_left[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::AliasMatchLeft)),
-        // Single alias right identifier: single_alias_right[identifier]
-        delimited(
-            "single_alias_right[",
-            quoted_or_unquoted_string_with_not,
-            "]",
-        )
-        .map(|name| (name, CwtReferenceType::SingleAlias)),
-        // Alias keys field identifier: alias_keys_field[identifier]
-        delimited("alias_keys_field[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::AliasKeysField)),
-        // Scope group identifier: scope_group[identifier]
-        delimited("scope_group[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::ScopeGroup)),
-        // Colour identifier: colour[hsv|rgb]
-        delimited("colour[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::Colour)),
-        // Stellaris name format identifier: stellaris_name_format[key]
-        delimited(
-            "stellaris_name_format[",
-            quoted_or_unquoted_string_with_not,
-            "]",
-        )
-        .map(|name| (name, CwtReferenceType::StellarisNameFormat)),
-        // Type identifier: type[identifier]
-        delimited("type[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::Type)),
-        // Subtype identifier: subtype[name]
-        delimited("subtype[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::Subtype)),
-        // Complex enum identifier: complex_enum[identifier]
-        delimited("complex_enum[", quoted_or_unquoted_string_with_not, "]")
-            .map(|name| (name, CwtReferenceType::ComplexEnum)),
-        // Icon identifier: icon[path] - paths can contain slashes
-        ("icon[", take_until(1.., "]").with_span(), "]").map(|(_, (path, path_span), _)| {
+        delimited("<", (opt("!"), quoted_or_unquoted_string), ">").map(|(is_not, name)| {
             (
-                (AstString::new(path, false, path_span), false),
-                CwtReferenceType::Icon,
+                AstCwtIdentifierOrString::String(name),
+                None,
+                is_not.is_some(),
+                CwtReferenceType::TypeRef,
             )
         }),
-        // Filepath identifier: filepath[path]
-        ("filepath[", take_until(1.., "]").with_span(), "]").map(|(_, (path, path_span), _)| {
-            (
-                (AstString::new(path, false, path_span), false),
-                CwtReferenceType::Filepath,
-            )
-        }),
+        identifier_parser("alias", CwtReferenceType::Alias),
+        identifier_parser("icon", CwtReferenceType::Icon),
+        identifier_parser("filepath", CwtReferenceType::Filepath),
+        // Standard bracket identifiers
+        identifier_parser("value_set", CwtReferenceType::ValueSet),
+        identifier_parser("value", CwtReferenceType::Value),
+        identifier_parser("enum", CwtReferenceType::Enum),
+        identifier_parser("scope", CwtReferenceType::Scope),
+        identifier_parser("alias_name", CwtReferenceType::AliasName),
+        identifier_parser("alias_match_left", CwtReferenceType::AliasMatchLeft),
+        identifier_parser("single_alias_right", CwtReferenceType::SingleAlias),
+        identifier_parser("alias_keys_field", CwtReferenceType::AliasKeysField),
+        identifier_parser("scope_group", CwtReferenceType::ScopeGroup),
+        identifier_parser("colour", CwtReferenceType::Colour),
+        identifier_parser(
+            "stellaris_name_format",
+            CwtReferenceType::StellarisNameFormat,
+        ),
+        identifier_parser("type", CwtReferenceType::Type),
+        identifier_parser("subtype", CwtReferenceType::Subtype),
+        identifier_parser("complex_enum", CwtReferenceType::ComplexEnum),
     ))
     .with_span()
     .context(StrContext::Label("cwt_identifier"))
@@ -151,12 +255,23 @@ pub(crate) fn cwt_identifier<'a>(
 
     Ok(AstCwtIdentifier {
         identifier_type,
-        name: name.0,
-        is_not: name.1,
+        name: Box::new(AstCwtIdentifierKey::new(scope, key)),
+        before_identifier: None,
+        is_not,
         span,
         leading_comments: Vec::new(), // Will be populated by cwt_entity
         trailing_comment,
     })
+}
+
+pub(crate) fn cwt_identifier_or_string<'a>(
+    input: &mut LocatingSlice<&'a str>,
+) -> ModalResult<AstCwtIdentifierOrString<'a>> {
+    alt((
+        cwt_identifier.map(AstCwtIdentifierOrString::Identifier),
+        quoted_or_unquoted_string.map(AstCwtIdentifierOrString::String),
+    ))
+    .parse_next(input)
 }
 
 #[cfg(test)]
@@ -255,5 +370,20 @@ mod tests {
             }
             _ => panic!("Expected ScopeGroup identifier type"),
         }
+    }
+
+    #[test]
+    fn scope_with_colon() {
+        let mut input = LocatingSlice::new("alias[modifier_rule:foo]");
+        let result = cwt_identifier.parse_next(&mut input).unwrap();
+
+        assert_eq!(result.name.scope.unwrap().raw_value(), "modifier_rule");
+        assert_eq!(result.name.key.as_string().unwrap().raw_value(), "foo");
+    }
+
+    #[test]
+    fn nested() {
+        let mut input = LocatingSlice::new("alias[modifier_rule:enum[complex_maths_enum]]");
+        let _result = cwt_identifier.parse_next(&mut input).unwrap();
     }
 }

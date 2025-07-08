@@ -9,7 +9,7 @@ use super::super::conversion::ConversionError;
 use super::super::definitions::*;
 use super::{AliasVisitor, EnumVisitor, RuleVisitor, TypeVisitor, ValueSetVisitor};
 use cw_parser::cwt::{
-    AstCwtRule, AstCwtRuleKey, CwtModule, CwtReferenceType, CwtValue, CwtVisitor,
+    AstCwtIdentifierOrString, AstCwtRule, CwtModule, CwtReferenceType, CwtValue, CwtVisitor,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -119,34 +119,6 @@ impl<'a> CwtRegistryVisitor<'a> {
             }
         }
     }
-
-    /// Handle a values section
-    fn handle_values_section(&mut self, rule: &AstCwtRule) {
-        if let CwtValue::Block(block) = &rule.value {
-            let mut value_set_visitor = ValueSetVisitor::new(self.data);
-            value_set_visitor.set_in_values_section(true);
-
-            for item in &block.items {
-                if let cw_parser::cwt::AstCwtExpression::Rule(child_rule) = item {
-                    value_set_visitor.visit_rule(child_rule);
-                }
-            }
-        }
-    }
-
-    /// Handle an aliases section
-    fn handle_aliases_section(&mut self, rule: &AstCwtRule) {
-        if let CwtValue::Block(block) = &rule.value {
-            let mut alias_visitor = AliasVisitor::new(self.data);
-            alias_visitor.set_in_aliases_section(true);
-
-            for item in &block.items {
-                if let cw_parser::cwt::AstCwtExpression::Rule(child_rule) = item {
-                    alias_visitor.visit_rule(child_rule);
-                }
-            }
-        }
-    }
 }
 
 impl<'a> CwtVisitor<'a> for CwtRegistryVisitor<'a> {
@@ -161,16 +133,10 @@ impl<'a> CwtVisitor<'a> for CwtRegistryVisitor<'a> {
             "enums" => {
                 self.handle_enums_section(rule);
             }
-            "values" => {
-                self.handle_values_section(rule);
-            }
-            "aliases" => {
-                self.handle_aliases_section(rule);
-            }
             _ => {
                 // Check for typed identifiers in the rule key
                 match &rule.key {
-                    AstCwtRuleKey::Identifier(identifier) => {
+                    AstCwtIdentifierOrString::Identifier(identifier) => {
                         match &identifier.identifier_type {
                             CwtReferenceType::Type => {
                                 let mut type_visitor = TypeVisitor::new(self.data);
@@ -203,7 +169,7 @@ impl<'a> CwtVisitor<'a> for CwtRegistryVisitor<'a> {
                             }
                         }
                     }
-                    AstCwtRuleKey::String(_) => {
+                    AstCwtIdentifierOrString::String(_) => {
                         // Default handling - treat as regular rule definition
                         let mut rule_visitor = RuleVisitor::new(self.data);
                         rule_visitor.visit_rule(rule);

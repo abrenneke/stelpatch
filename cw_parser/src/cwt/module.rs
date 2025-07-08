@@ -507,4 +507,34 @@ planet_class = {
         let input = "alias[trigger:pop_amount] == int_value_field";
         let _result = CwtModule::from_input(input).unwrap();
     }
+
+    #[test]
+    fn test_color_stuff() {
+        let input = r#"
+alias[subsystem_color:color] = {
+	alpha = {
+		float[0.0..255.0]
+	}
+}
+"#;
+
+        let _result = CwtModule::from_input(input).unwrap();
+    }
+
+    #[test]
+    fn test_job_2() {
+        let input = r#"
+## push_scope = pop_group
+job = {
+	icon = filepath[gfx/interface/icons/jobs/job_,.dds]
+}"#;
+
+        let _result = CwtModule::from_input(input).unwrap();
+    }
+
+    #[test]
+    fn test_nested_identifier() {
+        let input = "alias[modifier_rule:enum[complex_maths_enum]] = value_field";
+        let _result = CwtModule::from_input(input).unwrap();
+    }
 }

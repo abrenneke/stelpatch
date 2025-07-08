@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 
 use cw_parser::{
-    AstCwtBlock, AstCwtRule, AstCwtRuleKey, CwtOperator, CwtOptionExpression, CwtReferenceType,
-    CwtSimpleValueType, CwtValue, CwtVisitor,
+    AstCwtBlock, AstCwtIdentifierOrString, AstCwtRule, CwtOperator, CwtOptionExpression,
+    CwtReferenceType, CwtSimpleValueType, CwtValue, CwtVisitor,
 };
 
 use crate::{
@@ -39,11 +39,11 @@ impl<'a> TypeVisitor<'a> {
     /// Check if this visitor can handle the given rule
     fn can_handle_rule(&self, rule: &AstCwtRule) -> bool {
         match &rule.key {
-            AstCwtRuleKey::Identifier(identifier) => {
+            AstCwtIdentifierOrString::Identifier(identifier) => {
                 // Check for typed identifiers
                 matches!(identifier.identifier_type, CwtReferenceType::Type)
             }
-            AstCwtRuleKey::String(_) => {
+            AstCwtIdentifierOrString::String(_) => {
                 // String keys are only used for enum variant lists, not type definitions
                 false
             }
@@ -85,8 +85,8 @@ impl<'a> TypeVisitor<'a> {
             self.data.insert_or_merge_type(name, type_def);
         } else {
             let key_name = match &rule.key {
-                AstCwtRuleKey::Identifier(identifier) => identifier.name.raw_value(),
-                AstCwtRuleKey::String(_) => {
+                AstCwtIdentifierOrString::Identifier(identifier) => identifier.name.raw_value(),
+                AstCwtIdentifierOrString::String(_) => {
                     panic!("String keys should not be used for type definitions")
                 }
             };
@@ -103,14 +103,14 @@ impl<'a> TypeVisitor<'a> {
     /// Extract the type name from a rule
     fn extract_type_name(&self, rule: &AstCwtRule) -> Option<String> {
         match &rule.key {
-            AstCwtRuleKey::Identifier(identifier) => {
+            AstCwtIdentifierOrString::Identifier(identifier) => {
                 if matches!(identifier.identifier_type, CwtReferenceType::Type) {
                     Some(identifier.name.raw_value().to_string())
                 } else {
                     None
                 }
             }
-            AstCwtRuleKey::String(_) => {
+            AstCwtIdentifierOrString::String(_) => {
                 // String keys are only used for enum variant lists, not type definitions
                 panic!("String keys should not be used for type definitions")
             }
@@ -124,7 +124,7 @@ impl<'a> TypeVisitor<'a> {
         for item in &block.items {
             if let cw_parser::cwt::AstCwtExpression::Rule(rule) = item {
                 // Check if this is a subtype rule
-                if let AstCwtRuleKey::Identifier(identifier) = &rule.key {
+                if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
                     if matches!(identifier.identifier_type, CwtReferenceType::Subtype) {
                         let subtype_name = identifier.name.raw_value();
                         Self::extract_subtype_definition(type_def, subtype_name, rule);
@@ -256,8 +256,13 @@ impl<'a> TypeVisitor<'a> {
                 (CwtOperator::Equals, CwtValue::Block(block)) => {
                     // Handle block configurations
                     for item in &block.items {
-                        if let cw_parser::cwt::AstCwtExpression::String(s) = item {
-                            multiple_keys.push(s.raw_value().to_string());
+                        if let cw_parser::cwt::AstCwtExpression::Value(v) = item {
+                            match v {
+                                CwtValue::String(s) => {
+                                    multiple_keys.push(s.raw_value().to_string());
+                                }
+                                _ => {}
+                            }
                         }
                     }
                 }
@@ -293,7 +298,7 @@ impl<'a> TypeVisitor<'a> {
                 let key = rule.key.name();
 
                 // Check if this is a subtype rule within localisation
-                if let AstCwtRuleKey::Identifier(identifier) = &rule.key {
+                if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
                     if matches!(identifier.identifier_type, CwtReferenceType::Subtype) {
                         let subtype_name = identifier.name.raw_value();
                         Self::extract_subtype_localisation(type_def, subtype_name, rule);
@@ -379,7 +384,7 @@ impl<'a> TypeVisitor<'a> {
                 let key = rule.key.name();
 
                 // Check if this is a subtype rule within modifiers
-                if let AstCwtRuleKey::Identifier(identifier) = &rule.key {
+                if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
                     if matches!(identifier.identifier_type, CwtReferenceType::Subtype) {
                         let subtype_name = identifier.name.raw_value();
                         Self::extract_subtype_modifiers(type_def, subtype_name, rule);

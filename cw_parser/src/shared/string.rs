@@ -97,7 +97,7 @@ fn is_valid_identifier_start_char(c: char) -> bool {
 fn is_valid_identifier_char<'a>(c: char) -> bool {
     c.is_ascii_alphanumeric()
         || match c {
-            '_' | ':' | '.' | '@' | '-' | '|' | '/' | '$' | '\'' => true,
+            '_' | ':' | '.' | ',' | '@' | '-' | '|' | '/' | '$' | '\'' => true,
             _ => false,
         }
 }

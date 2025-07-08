@@ -3,8 +3,27 @@ use cw_parser::CwtModuleCell;
 
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
+
+fn find_cwt_files_recursive(dir_path: &Path) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let mut cwt_files = Vec::new();
+
+    for entry in fs::read_dir(dir_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() && path.extension().map_or(false, |ext| ext == "cwt") {
+            cwt_files.push(path);
+        } else if path.is_dir() {
+            // Recursively search subdirectories
+            let mut sub_files = find_cwt_files_recursive(&path)?;
+            cwt_files.append(&mut sub_files);
+        }
+    }
+
+    Ok(cwt_files)
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -28,22 +47,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    println!("Loading CWT files from: {}", directory_path);
+    println!("Loading CWT files recursively from: {}", directory_path);
     let start_time = Instant::now();
 
-    let mut cwt_files = Vec::new();
     let mut modules = Vec::new();
     let mut parse_errors = Vec::new();
 
-    // Find all .cwt files in the directory
-    for entry in fs::read_dir(dir_path)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.is_file() && path.extension().map_or(false, |ext| ext == "cwt") {
-            cwt_files.push(path);
-        }
-    }
+    // Find all .cwt files recursively in the directory
+    let cwt_files = find_cwt_files_recursive(dir_path)?;
 
     println!("Found {} CWT files", cwt_files.len());
 
@@ -89,7 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Print statistics about the parsed modules
-    if !modules.is_empty() {
+    if !modules.is_empty() && parse_errors.is_empty() {
         println!("\n=== MODULE STATISTICS ===");
         let mut total_items = 0;
         let mut total_rules = 0;
@@ -116,7 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Convert the parsed modules using CwtConverter
-    if !modules.is_empty() {
+    if !modules.is_empty() && parse_errors.is_empty() {
         println!("\n=== CONVERTING TO INFERRED TYPES ===");
         let convert_start = Instant::now();
 

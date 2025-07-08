@@ -1,7 +1,7 @@
 use crate::{
     AstComment, AstCwtBlock, AstCwtComment, AstCwtCommentOption, AstCwtExpression,
-    AstCwtIdentifier, AstCwtRule, AstCwtRuleKey, AstString, CwtModule, CwtOperator, CwtSimpleValue,
-    CwtValue,
+    AstCwtIdentifier, AstCwtIdentifierKey, AstCwtIdentifierOrString, AstCwtRule, AstString,
+    CwtModule, CwtOperator, CwtSimpleValue, CwtValue,
 };
 
 /// Visitor trait for traversing the CWT AST
@@ -34,7 +34,7 @@ pub trait CwtVisitor<'a> {
         self.walk_simple_value(node)
     }
 
-    fn visit_rule_key(&mut self, node: &AstCwtRuleKey<'a>) -> () {
+    fn visit_rule_key(&mut self, node: &AstCwtIdentifierOrString<'a>) -> () {
         self.walk_rule_key(node)
     }
 
@@ -81,7 +81,7 @@ pub trait CwtVisitor<'a> {
             AstCwtExpression::Rule(rule) => self.visit_rule(rule),
             AstCwtExpression::Block(block) => self.visit_block(block),
             AstCwtExpression::Identifier(identifier) => self.visit_identifier(identifier),
-            AstCwtExpression::String(string) => self.visit_string(string),
+            AstCwtExpression::Value(value) => self.visit_value(value),
         }
     }
 
@@ -130,12 +130,20 @@ pub trait CwtVisitor<'a> {
         }
 
         // Visit the identifier name
-        self.visit_string(&node.name);
+        self.walk_identifier_key(&node.name);
 
         // Visit trailing comment if present
         if let Some(comment) = &node.trailing_comment {
             self.visit_ast_comment(comment);
         }
+    }
+
+    fn walk_identifier_key(&mut self, node: &AstCwtIdentifierKey<'a>) -> () {
+        if let Some(scope) = &node.scope {
+            self.walk_string(scope);
+        }
+
+        self.walk_rule_key(&node.key);
     }
 
     fn walk_value(&mut self, node: &CwtValue<'a>) -> () {
@@ -147,10 +155,10 @@ pub trait CwtVisitor<'a> {
         }
     }
 
-    fn walk_rule_key(&mut self, node: &AstCwtRuleKey<'a>) -> () {
+    fn walk_rule_key(&mut self, node: &AstCwtIdentifierOrString<'a>) -> () {
         match node {
-            AstCwtRuleKey::Identifier(identifier) => self.visit_identifier(identifier),
-            AstCwtRuleKey::String(string) => self.visit_string(string),
+            AstCwtIdentifierOrString::Identifier(identifier) => self.visit_identifier(identifier),
+            AstCwtIdentifierOrString::String(string) => self.visit_string(string),
         }
     }
 

@@ -3,7 +3,7 @@
 //! This visitor handles the processing of regular CWT rule definitions that define
 //! validation structure for game entities (e.g., ambient_object, asteroid_belt_type).
 
-use cw_parser::{AstCwtRule, AstCwtRuleKey, CwtVisitor};
+use cw_parser::{AstCwtRule, AstCwtIdentifierOrString, CwtVisitor};
 
 use crate::{ConversionError, CwtAnalysisData, CwtConverter, RuleOptions, TypeDefinition};
 
@@ -21,11 +21,11 @@ impl<'a> RuleVisitor<'a> {
     /// Check if this visitor can handle the given rule
     fn can_handle_rule(&self, rule: &AstCwtRule) -> bool {
         match &rule.key {
-            AstCwtRuleKey::Identifier(_) => {
+            AstCwtIdentifierOrString::Identifier(_) => {
                 // Don't handle typed identifiers - those are handled by specialized visitors
                 false
             }
-            AstCwtRuleKey::String(_) => {
+            AstCwtIdentifierOrString::String(_) => {
                 // Handle string-based rule keys (regular rule definitions)
                 true
             }
@@ -53,8 +53,8 @@ impl<'a> RuleVisitor<'a> {
             self.data.insert_or_merge_type(name, type_def);
         } else {
             let key_name = match &rule.key {
-                AstCwtRuleKey::Identifier(identifier) => identifier.name.raw_value(),
-                AstCwtRuleKey::String(string) => string.raw_value(),
+                AstCwtIdentifierOrString::Identifier(identifier) => identifier.name.raw_value(),
+                AstCwtIdentifierOrString::String(string) => string.raw_value(),
             };
 
             self.data
@@ -69,11 +69,11 @@ impl<'a> RuleVisitor<'a> {
     /// Extract the rule name from a rule
     fn extract_rule_name(&self, rule: &AstCwtRule) -> Option<String> {
         match &rule.key {
-            AstCwtRuleKey::Identifier(_) => {
+            AstCwtIdentifierOrString::Identifier(_) => {
                 // Don't handle typed identifiers - those are handled by specialized visitors
                 None
             }
-            AstCwtRuleKey::String(string) => {
+            AstCwtIdentifierOrString::String(string) => {
                 // Handle string-based rule keys (regular rule definitions)
                 Some(string.raw_value().to_string())
             }

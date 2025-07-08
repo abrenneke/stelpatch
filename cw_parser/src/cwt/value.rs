@@ -334,7 +334,7 @@ pub(crate) fn range_bound<'a>(
 
 #[cfg(test)]
 mod tests {
-    use crate::AstString;
+    use crate::{AstCwtIdentifierKey, AstCwtIdentifierOrString, AstString};
 
     use super::*;
     use pretty_assertions::assert_eq;
@@ -672,7 +672,11 @@ mod tests {
         // Test identifier value methods
         let identifier_val = CwtValue::new_identifier(AstCwtIdentifier {
             identifier_type: CwtReferenceType::TypeRef,
-            name: AstString::new("test", false, 0..6),
+            name: Box::new(AstCwtIdentifierKey::new(
+                None,
+                AstCwtIdentifierOrString::String(AstString::new("test", false, 0..6)),
+            )),
+            before_identifier: None,
             span: 0..6,
             leading_comments: Vec::new(),
             trailing_comment: None,
@@ -694,7 +698,11 @@ mod tests {
 
         let identifier_val = CwtValue::new_identifier(AstCwtIdentifier {
             identifier_type: CwtReferenceType::TypeRef,
-            name: AstString::new("test", false, 10..16),
+            name: Box::new(AstCwtIdentifierKey::new(
+                None,
+                AstCwtIdentifierOrString::String(AstString::new("test", false, 10..16)),
+            )),
+            before_identifier: None,
             span: 10..16,
             leading_comments: Vec::new(),
             trailing_comment: None,
@@ -776,6 +784,24 @@ mod tests {
                     assert_eq!(identifier.name.raw_value(), "trigger");
                 }
                 _ => panic!("Expected AliasMatchLeft type"),
+            }
+        }
+    }
+
+    #[test]
+    fn range_decimals() {
+        let result = parse_test!(cwt_value, "float[0.0..255.0]");
+        assert!(result.is_simple());
+        if let CwtValue::Simple(simple) = result {
+            assert_eq!(simple.value_type, CwtSimpleValueType::Float);
+            assert!(simple.range.is_some());
+            let range = simple.range.unwrap();
+            match (&range.min, &range.max) {
+                (CwtRangeBound::Float(min), CwtRangeBound::Float(max)) => {
+                    assert_eq!(*min, "0.0");
+                    assert_eq!(*max, "255.0");
+                }
+                _ => panic!("Expected float range"),
             }
         }
     }

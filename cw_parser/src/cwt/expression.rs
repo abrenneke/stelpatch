@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrContext};
 
-use crate::{AstComment, AstNode, AstString, quoted_or_unquoted_string};
+use crate::{AstComment, AstNode, AstString, CwtValue, cwt_value, quoted_or_unquoted_string};
 
 use super::{
     AstCwtBlock, AstCwtComment, AstCwtCommentOption, AstCwtIdentifier, AstCwtRule,
@@ -19,8 +19,8 @@ pub enum AstCwtExpression<'a> {
     Block(AstCwtBlock<'a>),
     /// Standalone identifier: <identifier>
     Identifier(AstCwtIdentifier<'a>),
-    /// A quoted or unquoted string by itself, for e.g. enum values
-    String(AstString<'a>),
+    /// Value like in an enum: float[0.0..255.0]
+    Value(CwtValue<'a>),
 }
 
 impl<'a> AstNode<'a> for AstCwtExpression<'a> {
@@ -29,7 +29,7 @@ impl<'a> AstNode<'a> for AstCwtExpression<'a> {
             AstCwtExpression::Rule(rule) => rule.span.clone(),
             AstCwtExpression::Block(block) => block.span.clone(),
             AstCwtExpression::Identifier(identifier) => identifier.span.clone(),
-            AstCwtExpression::String(string) => string.span_range(),
+            AstCwtExpression::Value(value) => value.span_range(),
         }
     }
 
@@ -57,7 +57,7 @@ pub(crate) fn cwt_expression<'a>(
         cwt_block.map(AstCwtExpression::Block),
         cwt_rule.map(AstCwtExpression::Rule),
         cwt_identifier.map(AstCwtExpression::Identifier),
-        quoted_or_unquoted_string.map(AstCwtExpression::String),
+        cwt_value.map(AstCwtExpression::Value),
     ))
     .context(StrContext::Label("cwt_entity"))
     .parse_next(input)?;
@@ -76,8 +76,8 @@ pub(crate) fn cwt_expression<'a>(
         AstCwtExpression::Identifier(identifier) => {
             identifier.leading_comments = leading_comments;
         }
-        AstCwtExpression::String(string) => {
-            // TODO: Handle leading comments for strings
+        AstCwtExpression::Value(value) => {
+            // TODO: Handle leading comments for values
         }
     }
 

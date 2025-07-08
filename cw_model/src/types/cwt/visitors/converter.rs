@@ -5,9 +5,9 @@
 use cw_parser::cwt::{
     AstCwtBlock, AstCwtIdentifier, CwtReferenceType, CwtSimpleValue, CwtSimpleValueType, CwtValue,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::{BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
+use crate::{ArrayType, BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
 
 /// Converter for CWT values to CwtType
 pub struct CwtConverter;
@@ -73,6 +73,7 @@ impl CwtConverter {
     /// Convert a CWT block to our type system
     pub fn convert_block(block: &AstCwtBlock) -> CwtType {
         let mut properties = HashMap::new();
+        let mut union_values = Vec::new();
         let mut is_alias_context = false;
         let mut alias_type_key = None;
 
@@ -115,15 +116,9 @@ impl CwtConverter {
                     };
                     properties.insert(key.to_string(), property_def);
                 }
-                cw_parser::cwt::AstCwtExpression::String(s) => {
-                    // Handle string literals in blocks
-                    let value = s.raw_value().to_string();
-                    let property_def = Property {
-                        property_type: CwtType::Literal(value.clone()),
-                        options: CwtOptions::default(),
-                        documentation: None,
-                    };
-                    properties.insert(value, property_def);
+                cw_parser::cwt::AstCwtExpression::Value(value) => {
+                    let value_type = Self::convert_value(value);
+                    union_values.push(value_type);
                 }
                 cw_parser::cwt::AstCwtExpression::Identifier(id) => {
                     // Handle identifiers in blocks
@@ -139,6 +134,10 @@ impl CwtConverter {
                     // Handle other expression types as needed
                 }
             }
+        }
+
+        if !union_values.is_empty() {
+            return CwtType::Union(union_values);
         }
 
         CwtType::Block(BlockType {
@@ -162,7 +161,7 @@ impl CwtConverter {
     /// Check if a rule is an alias pattern (alias_name[X] = alias_match_left[X])
     fn is_alias_pattern(rule: &cw_parser::cwt::AstCwtRule) -> bool {
         // Check if the key is alias_name[something]
-        if let cw_parser::cwt::AstCwtRuleKey::Identifier(key_id) = &rule.key {
+        if let cw_parser::cwt::AstCwtIdentifierOrString::Identifier(key_id) = &rule.key {
             if matches!(key_id.identifier_type, CwtReferenceType::AliasName) {
                 // Check if the value is alias_match_left[something]
                 if let CwtValue::Identifier(value_id) = &rule.value {
@@ -178,7 +177,7 @@ impl CwtConverter {
 
     /// Extract the alias type from an alias pattern
     fn extract_alias_type(rule: &cw_parser::cwt::AstCwtRule) -> Option<String> {
-        if let cw_parser::cwt::AstCwtRuleKey::Identifier(key_id) = &rule.key {
+        if let cw_parser::cwt::AstCwtIdentifierOrString::Identifier(key_id) = &rule.key {
             if matches!(key_id.identifier_type, CwtReferenceType::AliasName) {
                 return Some(key_id.name.raw_value().to_string());
             }

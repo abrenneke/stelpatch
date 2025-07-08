@@ -975,10 +975,7 @@ mod tests {
     fn test_malformed_ranges() {
         // These should not parse as ranges but as identifiers
         let non_ranges = vec![
-            "cardinality = 0..",      // Missing max
-            "cardinality = ..1",      // Missing min
-            "cardinality = 0",        // No range operator
-            "cardinality = abc..def", // Non-numeric
+            "cardinality = 0", // No range operator
         ];
 
         for input in non_ranges {

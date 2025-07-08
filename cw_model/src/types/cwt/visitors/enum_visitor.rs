@@ -8,7 +8,8 @@ use super::super::definitions::*;
 use super::converter::CwtConverter;
 use super::registry::CwtAnalysisData;
 use cw_parser::cwt::{
-    AstCwtBlock, AstCwtRule, CwtReferenceType, AstCwtRuleKey, CwtSimpleValueType, CwtValue, CwtVisitor,
+    AstCwtBlock, AstCwtIdentifierOrString, AstCwtRule, CwtReferenceType, CwtSimpleValueType,
+    CwtValue, CwtVisitor,
 };
 use std::collections::HashSet;
 
@@ -37,7 +38,7 @@ impl<'a> EnumVisitor<'a> {
         let key = rule.key.name();
 
         // Check for typed identifiers
-        if let AstCwtRuleKey::Identifier(identifier) = &rule.key {
+        if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
             return matches!(
                 identifier.identifier_type,
                 CwtReferenceType::Enum | CwtReferenceType::ComplexEnum
@@ -75,7 +76,7 @@ impl<'a> EnumVisitor<'a> {
 
     /// Extract the enum name from a rule
     fn extract_enum_name(&self, rule: &AstCwtRule) -> Option<String> {
-        if let AstCwtRuleKey::Identifier(identifier) = &rule.key {
+        if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
             if matches!(
                 identifier.identifier_type,
                 CwtReferenceType::Enum | CwtReferenceType::ComplexEnum
@@ -99,7 +100,7 @@ impl<'a> EnumVisitor<'a> {
 
     /// Check if this is a complex enum
     fn is_complex_enum(&self, rule: &AstCwtRule) -> bool {
-        if let AstCwtRuleKey::Identifier(identifier) = &rule.key {
+        if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
             matches!(identifier.identifier_type, CwtReferenceType::ComplexEnum)
         } else {
             let key = rule.key.name();
@@ -145,9 +146,15 @@ impl<'a> EnumVisitor<'a> {
     fn extract_enum_values(enum_def: &mut EnumDefinition, block: &AstCwtBlock) {
         for item in &block.items {
             match item {
-                cw_parser::cwt::AstCwtExpression::String(s) => {
-                    enum_def.values.insert(s.raw_value().to_string());
-                }
+                cw_parser::cwt::AstCwtExpression::Value(s) => match s {
+                    CwtValue::String(s) => {
+                        enum_def.values.insert(s.raw_value().to_string());
+                    }
+                    CwtValue::Identifier(id) => {
+                        enum_def.values.insert(id.name.raw_value().to_string());
+                    }
+                    _ => {}
+                },
                 cw_parser::cwt::AstCwtExpression::Identifier(id) => {
                     enum_def.values.insert(id.name.raw_value().to_string());
                 }
