@@ -354,7 +354,7 @@ pub fn format_type_description_with_property_context(
             }
         }
         CwtType::Union(types) => {
-            if types.len() <= 3 {
+            if types.len() <= 8 {
                 types
                     .iter()
                     .map(|t| {
@@ -373,7 +373,7 @@ pub fn format_type_description_with_property_context(
                     "{} | /* ... +{} more types */",
                     types
                         .iter()
-                        .take(2)
+                        .take(8)
                         .map(|t| format_type_description_with_property_context(
                             t,
                             depth + 1,
@@ -383,7 +383,7 @@ pub fn format_type_description_with_property_context(
                         ))
                         .collect::<Vec<_>>()
                         .join(" | "),
-                    types.len() - 2
+                    types.len() - 8
                 )
             }
         }

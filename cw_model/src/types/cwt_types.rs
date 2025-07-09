@@ -145,6 +145,76 @@ pub struct BlockType {
     pub modifiers: Option<ModifierSpec>,
 }
 
+/// Aliases can be defined in (at least) two ways:
+/// 1. alias[foo:x] = bar
+/// 2. alias[foo:<type_name>] = bar
+///
+/// The first is a simple alias, the second is a dynamic alias.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AliasPattern {
+    /// Full text for hashing, e.g. "foo:<type_name>" or "foo:x"
+    pub full_text: String,
+
+    /// Category of the alias, e.g. "foo"
+    pub category: String,
+
+    /// Name of the alias, either a static name or a dynamic name
+    pub name: AliasName,
+}
+
+impl AliasPattern {
+    pub fn new_basic(category: &str, name: &str) -> Self {
+        Self {
+            full_text: format!("{}:{}", category, name),
+            category: category.to_string(),
+            name: AliasName::Static(name.to_string()),
+        }
+    }
+
+    pub fn new_type_ref(category: &str, name: &str) -> Self {
+        Self {
+            full_text: format!("{}:{}", category, name),
+            category: category.to_string(),
+            name: AliasName::TypeRef(name.to_string()),
+        }
+    }
+
+    pub fn new_enum(category: &str, name: &str) -> Self {
+        Self {
+            full_text: format!("{}:{}", category, name),
+            category: category.to_string(),
+            name: AliasName::Enum(name.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for AliasPattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.full_text)
+    }
+}
+
+impl std::hash::Hash for AliasPattern {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.full_text.hash(state);
+    }
+}
+
+impl PartialEq for AliasPattern {
+    fn eq(&self, other: &Self) -> bool {
+        self.full_text == other.full_text
+    }
+}
+
+impl Eq for AliasPattern {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AliasName {
+    Static(String),
+    TypeRef(String),
+    Enum(String),
+}
+
 /// A property in a block type
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Property {

@@ -1,7 +1,9 @@
 use super::core::GameDataCache;
 use cw_model::types::CwtAnalyzer;
-use cw_model::{BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
-use std::collections::{HashMap, HashSet};
+use cw_model::{
+    AliasName, AliasPattern, BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType,
+};
+use std::collections::HashMap;
 
 /// Result of type resolution that includes both the resolved type and display information
 #[derive(Debug, Clone)]
@@ -25,6 +27,12 @@ pub struct ResolvedDisplayInfo {
 fn expand_patterns_in_block(block_type: &mut BlockType, cwt_analyzer: &CwtAnalyzer) {
     let mut new_properties = HashMap::new();
 
+    if !GameDataCache::is_initialized() {
+        return;
+    }
+
+    let game_data = GameDataCache::get().unwrap();
+
     // Process each enum pattern
     for (enum_key, value_type) in &block_type.enum_patterns {
         if let Some(enum_def) = cwt_analyzer.get_enum(enum_key) {
@@ -41,28 +49,51 @@ fn expand_patterns_in_block(block_type: &mut BlockType, cwt_analyzer: &CwtAnalyz
     }
 
     // Process each alias pattern
-    for (alias_key, value_type) in &block_type.alias_patterns {
+    for (alias_pattern, value_type) in &block_type.alias_patterns {
         // Get all aliases from this category and create properties for them
-        for (alias_key_full, alias_def) in cwt_analyzer.get_aliases() {
-            if let Some((cat, name)) = alias_key_full.split_once(':') {
-                if cat == alias_key {
-                    // For alias patterns, we need to resolve the value_type
-                    let resolved_value_type = match value_type {
-                        CwtType::Reference(ReferenceType::AliasMatchLeft { key })
-                            if key == alias_key =>
-                        {
-                            // This is alias_name[X] = alias_match_left[X] - use the alias definition
-                            alias_def.rules.clone()
+        for (alias_key_full, _) in cwt_analyzer.get_aliases() {
+            if alias_key_full.category == *alias_pattern {
+                match &alias_key_full.name {
+                    // For alias[foo:x] = bar, we create a single property for each alias
+                    AliasName::Static(name) => {
+                        let new_property = Property {
+                            property_type: resolve_type(value_type, cwt_analyzer),
+                            options: CwtOptions::default(),
+                            documentation: Some(format!("Alias from {} category", alias_pattern)),
+                        };
+                        new_properties.insert(name.to_string(), new_property);
+                    }
+                    // For alias[foo:<type_name>] = bar, we expand <type_name> to all types in the namespace
+                    AliasName::TypeRef(name) => {
+                        let all_types = game_data.get_namespace_keys(name);
+                        if let Some(all_types) = all_types {
+                            for type_key in all_types {
+                                let new_property = Property {
+                                    property_type: resolve_type(value_type, cwt_analyzer),
+                                    options: CwtOptions::default(),
+                                    documentation: Some(format!(
+                                        "Alias from {} category",
+                                        alias_pattern
+                                    )),
+                                };
+                                new_properties.insert(type_key.clone(), new_property);
+                            }
                         }
-                        _ => value_type.clone(),
-                    };
+                    }
+                    AliasName::Enum(name) => {
+                        let all_enums = cwt_analyzer.get_enum(name);
+                        if let Some(all_enums) = all_enums {
+                            for enum_value in &all_enums.values {
+                                let new_property = Property {
+                                    property_type: value_type.clone(),
+                                    options: CwtOptions::default(),
+                                    documentation: Some(format!("Enum value from {}", name)),
+                                };
 
-                    let new_property = Property {
-                        property_type: resolved_value_type,
-                        options: CwtOptions::default(),
-                        documentation: Some(format!("Alias from {} category", alias_key)),
-                    };
-                    new_properties.insert(name.to_string(), new_property);
+                                new_properties.insert(enum_value.clone(), new_property);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -118,23 +149,26 @@ pub fn resolve_type(cwt_type: &CwtType, cwt_analyzer: &CwtAnalyzer) -> CwtType {
                     // If game data isn't available or namespace not found, return the original reference
                     cwt_type.clone()
                 }
-                ReferenceType::Alias { key } => {
-                    // Try to resolve alias references
-                    if let Some(alias) = cwt_analyzer.get_alias(key) {
-                        resolve_type(&alias.rules, cwt_analyzer)
-                    } else if let Some(resolved_type) = cwt_analyzer.get_single_alias(key) {
-                        resolve_type(resolved_type, cwt_analyzer)
-                    } else {
-                        cwt_type.clone()
-                    }
+                ReferenceType::Alias { .. } => {
+                    // Invalid alias[] on RHS
+                    cwt_type.clone()
                 }
-                ReferenceType::AliasName { key } => {
-                    // For alias_name, create a block type with all aliases from this category as properties
-                    create_alias_category_block(cwt_analyzer, key)
+                ReferenceType::AliasName { .. } => {
+                    // Invalid alias_name on RHS
+                    cwt_type.clone()
                 }
                 ReferenceType::AliasMatchLeft { key } => {
                     // For alias_match_left, we want to represent the value types of aliases from this category
-                    let union_types = get_alias_value_types_from_category(cwt_analyzer, key);
+                    let mut union_types = Vec::new();
+
+                    // Look for aliases that match the category (format: "category:name")
+                    for (alias_key, alias_def) in cwt_analyzer.get_aliases() {
+                        if alias_key.category == *key {
+                            // DON'T recursively resolve - just use the alias definition directly
+                            union_types.push(alias_def.to.clone());
+                        }
+                    }
+
                     if !union_types.is_empty() {
                         if union_types.len() == 1 {
                             union_types.into_iter().next().unwrap()
@@ -145,13 +179,9 @@ pub fn resolve_type(cwt_type: &CwtType, cwt_analyzer: &CwtAnalyzer) -> CwtType {
                         cwt_type.clone()
                     }
                 }
-                ReferenceType::SingleAlias { key } => {
-                    // Try to resolve single alias references
-                    if let Some(resolved_type) = cwt_analyzer.get_single_alias(key) {
-                        resolve_type(resolved_type, cwt_analyzer)
-                    } else {
-                        cwt_type.clone()
-                    }
+                ReferenceType::SingleAlias { .. } => {
+                    // Invalid single_alias_name on RHS
+                    cwt_type.clone()
                 }
                 ReferenceType::Enum { key } => {
                     // Try to get the enum type from our analyzer
@@ -226,80 +256,6 @@ pub fn resolve_type(cwt_type: &CwtType, cwt_analyzer: &CwtAnalyzer) -> CwtType {
     result
 }
 
-/// Create a block type with all aliases from a category as properties
-fn create_alias_category_block(cwt_analyzer: &CwtAnalyzer, category: &str) -> CwtType {
-    let mut properties = HashMap::new();
-
-    // Get all aliases from this category and create properties for them
-    for (alias_key, alias_def) in cwt_analyzer.get_aliases() {
-        if let Some((cat, name)) = alias_key.split_once(':') {
-            if cat == category {
-                // DON'T recursively resolve - just use the alias definition directly
-                // This prevents stack overflow when aliases contain alias_name[same_category]
-                let property = Property {
-                    property_type: alias_def.rules.clone(),
-                    options: CwtOptions::default(),
-                    documentation: Some(format!("Alias from {} category", category)),
-                };
-                properties.insert(name.to_string(), property);
-            }
-        }
-    }
-
-    if properties.is_empty() {
-        // If no aliases found, fall back to literal set of names
-        let alias_names = get_alias_names_from_category(cwt_analyzer, category);
-        CwtType::LiteralSet(alias_names)
-    } else {
-        CwtType::Block(BlockType {
-            properties,
-            subtypes: HashMap::new(),
-            alias_patterns: HashMap::new(),
-            enum_patterns: HashMap::new(),
-            localisation: None,
-            modifiers: None,
-        })
-    }
-}
-
-/// Get all alias names from a specific category
-fn get_alias_names_from_category(cwt_analyzer: &CwtAnalyzer, category: &str) -> HashSet<String> {
-    let mut alias_names = HashSet::new();
-
-    // Look for aliases that match the category (format: "category:name")
-    for alias_key in cwt_analyzer.get_aliases().keys() {
-        if let Some((cat, name)) = alias_key.split_once(':') {
-            if cat == category {
-                alias_names.insert(name.to_string());
-            }
-        }
-    }
-
-    alias_names
-}
-
-/// Get all value types from aliases in a specific category
-fn get_alias_value_types_from_category(cwt_analyzer: &CwtAnalyzer, category: &str) -> Vec<CwtType> {
-    let mut value_types = Vec::new();
-
-    // Look for aliases that match the category (format: "category:name")
-    for (alias_key, alias_def) in cwt_analyzer.get_aliases() {
-        if let Some((cat, _name)) = alias_key.split_once(':') {
-            if cat == category {
-                // DON'T recursively resolve - just use the alias definition directly
-                // This prevents stack overflow when aliases contain alias_name[same_category]
-                value_types.push(alias_def.rules.clone());
-            }
-        }
-    }
-
-    // Remove duplicates by converting to a set-like structure
-    value_types.sort_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
-    value_types.dedup();
-
-    value_types
-}
-
 /// Resolve a type with display information for formatting, with namespace context
 pub fn resolve_type_with_display_info(
     cwt_type: &CwtType,
@@ -367,36 +323,24 @@ pub fn resolve_type_with_display_info(
                     }
                 }
                 ReferenceType::AliasName { key } => {
-                    // For AliasName, create a block with all aliases from this category
-                    let block_type = create_alias_category_block(cwt_analyzer, key);
+                    // TODO
                     ResolvedType {
-                        cwt_type: block_type,
-                        display_info: Some(ResolvedDisplayInfo {
-                            enum_values: None,
-                            value_set: None,
-                            alias_names: Some(
-                                get_alias_names_from_category(cwt_analyzer, key)
-                                    .into_iter()
-                                    .collect(),
-                            ),
-                            alias_value_types: None,
-                            is_resolved_reference: true,
-                        }),
+                        cwt_type: cwt_type.clone(),
+                        display_info: None,
                     }
                 }
                 ReferenceType::AliasMatchLeft { key } => {
-                    resolve_alias_match_left_with_property_context(key, cwt_analyzer, property_name)
+                    // TODO
+                    ResolvedType {
+                        cwt_type: cwt_type.clone(),
+                        display_info: None,
+                    }
                 }
                 ReferenceType::Alias { key } => {
-                    if let Some(alias) = cwt_analyzer.get_alias(key) {
-                        resolve_type_with_display_info(&alias.rules, cwt_analyzer, property_name)
-                    } else if let Some(resolved_type) = cwt_analyzer.get_single_alias(key) {
-                        resolve_type_with_display_info(resolved_type, cwt_analyzer, property_name)
-                    } else {
-                        ResolvedType {
-                            cwt_type: cwt_type.clone(),
-                            display_info: None,
-                        }
+                    // TODO
+                    ResolvedType {
+                        cwt_type: cwt_type.clone(),
+                        display_info: None,
                     }
                 }
                 ReferenceType::SingleAlias { key } => {
@@ -452,101 +396,6 @@ pub fn resolve_type_with_display_info(
                         display_info: None,
                     }
                 }
-            }
-        }
-    }
-}
-
-/// Resolve alias_name with property context (handles namespaced aliases)
-fn resolve_alias_name_with_property_context(
-    key: &str,
-    cwt_analyzer: &CwtAnalyzer,
-    property_name: Option<&str>,
-) -> ResolvedType {
-    // If we have a property name, try the namespaced version first
-    if let Some(prop_name) = property_name {
-        let namespaced_key = format!("{}:{}", key, prop_name);
-
-        if let Some(alias) = cwt_analyzer.get_alias(&namespaced_key) {
-            return resolve_type_with_display_info(&alias.rules, cwt_analyzer, property_name);
-        } else if let Some(resolved_type) = cwt_analyzer.get_single_alias(&namespaced_key) {
-            return resolve_type_with_display_info(resolved_type, cwt_analyzer, property_name);
-        }
-    }
-
-    // Create a block with all aliases from this category
-    let block_type = create_alias_category_block(cwt_analyzer, key);
-    ResolvedType {
-        cwt_type: block_type,
-        display_info: Some(ResolvedDisplayInfo {
-            enum_values: None,
-            value_set: None,
-            alias_names: Some(
-                get_alias_names_from_category(cwt_analyzer, key)
-                    .into_iter()
-                    .collect(),
-            ),
-            alias_value_types: None,
-            is_resolved_reference: true,
-        }),
-    }
-}
-
-/// Resolve alias_match_left with property context
-fn resolve_alias_match_left_with_property_context(
-    key: &str,
-    cwt_analyzer: &CwtAnalyzer,
-    property_name: Option<&str>,
-) -> ResolvedType {
-    // If we have a property name, try the namespaced version first
-    if let Some(prop_name) = property_name {
-        let namespaced_key = format!("{}:{}", key, prop_name);
-
-        if let Some(alias) = cwt_analyzer.get_alias(&namespaced_key) {
-            return resolve_type_with_display_info(&alias.rules, cwt_analyzer, property_name);
-        } else if let Some(resolved_type) = cwt_analyzer.get_single_alias(&namespaced_key) {
-            return resolve_type_with_display_info(resolved_type, cwt_analyzer, property_name);
-        }
-    }
-
-    // Get all value types from aliases in this category
-    let value_types = get_alias_value_types_from_category(cwt_analyzer, key);
-
-    if !value_types.is_empty() {
-        let resolved_type = if value_types.len() == 1 {
-            value_types.clone().into_iter().next().unwrap()
-        } else {
-            CwtType::Union(value_types.clone())
-        };
-
-        // Convert types to string representations for display
-        let type_strings: Vec<String> = value_types
-            .iter()
-            .map(|t| format!("{:?}", t)) // Simple debug representation for now
-            .collect();
-
-        ResolvedType {
-            cwt_type: resolved_type,
-            display_info: Some(ResolvedDisplayInfo {
-                enum_values: None,
-                value_set: None,
-                alias_names: None,
-                alias_value_types: Some(type_strings),
-                is_resolved_reference: true,
-            }),
-        }
-    } else {
-        // Fallback to original behavior
-        if let Some(resolved_type) = cwt_analyzer.get_single_alias(key) {
-            resolve_type_with_display_info(resolved_type, cwt_analyzer, property_name)
-        } else if let Some(alias) = cwt_analyzer.get_alias(key) {
-            resolve_type_with_display_info(&alias.rules, cwt_analyzer, property_name)
-        } else {
-            ResolvedType {
-                cwt_type: CwtType::Reference(ReferenceType::AliasMatchLeft {
-                    key: key.to_string(),
-                }),
-                display_info: None,
             }
         }
     }

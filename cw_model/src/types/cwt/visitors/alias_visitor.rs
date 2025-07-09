@@ -5,7 +5,7 @@
 
 use cw_parser::{AstCwtIdentifierOrString, AstCwtRule, CwtReferenceType, CwtVisitor};
 
-use crate::{AliasDefinition, ConversionError, CwtAnalysisData, CwtConverter};
+use crate::{AliasDefinition, AliasPattern, ConversionError, CwtAnalysisData, CwtConverter};
 
 /// Specialized visitor for alias definitions
 pub struct AliasVisitor<'a> {
@@ -56,17 +56,46 @@ impl<'a> AliasVisitor<'a> {
         if let Some(identifier) = &rule.key.as_identifier() {
             if let Some(scope) = &identifier.name.scope {
                 let category = scope.raw_value();
-                let name = identifier.name.key.name();
-
-                let alias_def = AliasDefinition {
-                    category: category.to_string(),
-                    name: name.to_string(),
-                    rules: CwtConverter::convert_value(&rule.value),
-                };
-
-                self.data
-                    .aliases
-                    .insert(format!("{}:{}", category, name), alias_def);
+                match &identifier.name.key {
+                    AstCwtIdentifierOrString::Identifier(key_id) => match key_id.identifier_type {
+                        CwtReferenceType::TypeRef => {
+                            let name = key_id.name.raw_value();
+                            let alias_def = AliasDefinition {
+                                category: category.to_string(),
+                                name: name.to_string(),
+                                to: CwtConverter::convert_value(&rule.value),
+                            };
+                            self.data
+                                .aliases
+                                .insert(AliasPattern::new_type_ref(category, name), alias_def);
+                        }
+                        CwtReferenceType::Enum => {
+                            let name = key_id.name.raw_value();
+                            let alias_def = AliasDefinition {
+                                category: category.to_string(),
+                                name: name.to_string(),
+                                to: CwtConverter::convert_value(&rule.value),
+                            };
+                            self.data
+                                .aliases
+                                .insert(AliasPattern::new_enum(category, name), alias_def);
+                        }
+                        _ => {
+                            panic!("Unknown identifier type for alias in rule: {:?}", rule);
+                        }
+                    },
+                    AstCwtIdentifierOrString::String(key_str) => {
+                        let name = key_str.raw_value();
+                        let alias_def = AliasDefinition {
+                            category: category.to_string(),
+                            name: name.to_string(),
+                            to: CwtConverter::convert_value(&rule.value),
+                        };
+                        self.data
+                            .aliases
+                            .insert(AliasPattern::new_basic(category, name), alias_def);
+                    }
+                }
             }
         } else {
             self.data.errors.push(ConversionError::InvalidAliasFormat);

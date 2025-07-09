@@ -3,7 +3,7 @@
 //! This is the main entry point for CWT analysis, using a visitor pattern
 //! with specialized visitors for different CWT constructs.
 
-use crate::CwtType;
+use crate::{AliasPattern, CwtType};
 
 use super::conversion::ConversionError;
 use super::definitions::*;
@@ -56,7 +56,7 @@ impl CwtAnalyzer {
     }
 
     /// Get all defined aliases
-    pub fn get_aliases(&self) -> &HashMap<String, AliasDefinition> {
+    pub fn get_aliases(&self) -> &HashMap<AliasPattern, AliasDefinition> {
         &self.data.aliases
     }
 
@@ -91,8 +91,8 @@ impl CwtAnalyzer {
     }
 
     /// Get a specific alias definition
-    pub fn get_alias(&self, name: &str) -> Option<&AliasDefinition> {
-        self.data.aliases.get(name)
+    pub fn get_alias(&self, pattern: &AliasPattern) -> Option<&AliasDefinition> {
+        self.data.aliases.get(pattern)
     }
 
     /// Get a specific single alias
@@ -116,8 +116,8 @@ impl CwtAnalyzer {
     }
 
     /// Check if an alias is defined
-    pub fn has_alias(&self, name: &str) -> bool {
-        self.data.aliases.contains_key(name)
+    pub fn has_alias(&self, pattern: &AliasPattern) -> bool {
+        self.data.aliases.contains_key(pattern)
     }
 
     /// Check if a single alias is defined
@@ -254,13 +254,17 @@ mod tests {
         assert!(!analyzer.has_type("test"));
         assert!(!analyzer.has_enum("test"));
         assert!(!analyzer.has_value_set("test"));
-        assert!(!analyzer.has_alias("test"));
+        assert!(!analyzer.has_alias(&AliasPattern::new_basic("test", "test")));
         assert!(!analyzer.has_single_alias("test"));
 
         assert!(analyzer.get_type("test").is_none());
         assert!(analyzer.get_enum("test").is_none());
         assert!(analyzer.get_value_set("test").is_none());
-        assert!(analyzer.get_alias("test").is_none());
+        assert!(
+            analyzer
+                .get_alias(&AliasPattern::new_basic("test", "test"))
+                .is_none()
+        );
         assert!(analyzer.get_single_alias("test").is_none());
     }
 }

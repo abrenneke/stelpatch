@@ -3,7 +3,7 @@
 //! This module provides the main coordinator for all CWT visitors, determining which
 //! visitor should handle each rule based on its type and context.
 
-use crate::CwtType;
+use crate::{AliasPattern, CwtType};
 
 use super::super::conversion::ConversionError;
 use super::super::definitions::*;
@@ -23,7 +23,7 @@ pub struct CwtAnalysisData {
     /// Known value sets registry
     pub value_sets: HashMap<String, HashSet<String>>,
     /// Known aliases registry
-    pub aliases: HashMap<String, AliasDefinition>,
+    pub aliases: HashMap<AliasPattern, AliasDefinition>,
     /// Known single aliases registry
     pub single_aliases: HashMap<String, CwtType>,
     /// Errors encountered during conversion

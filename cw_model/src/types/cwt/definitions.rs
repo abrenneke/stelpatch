@@ -204,10 +204,12 @@ pub struct ComplexEnumDefinition {
 pub struct AliasDefinition {
     /// Alias category (e.g., "effect", "trigger")
     pub category: String,
+
     /// Alias name/key
     pub name: String,
-    /// Alias rules
-    pub rules: CwtType,
+
+    /// Alias to this type
+    pub to: CwtType,
 }
 
 impl TypeDefinition {
@@ -317,7 +319,7 @@ impl AliasDefinition {
         Self {
             category,
             name,
-            rules,
+            to: rules,
         }
     }
 

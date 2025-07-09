@@ -2,12 +2,18 @@
 //!
 //! This module provides utilities for converting CWT AST values to our CwtType system.
 
-use cw_parser::cwt::{
-    AstCwtBlock, AstCwtIdentifier, CwtReferenceType, CwtSimpleValue, CwtSimpleValueType, CwtValue,
+use cw_parser::{
+    AstCwtIdentifierKey, AstCwtIdentifierOrString,
+    cwt::{
+        AstCwtBlock, AstCwtIdentifier, CwtReferenceType, CwtSimpleValue, CwtSimpleValueType,
+        CwtValue,
+    },
 };
 use std::collections::HashMap;
 
-use crate::{BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
+use crate::{
+    AliasName, AliasPattern, BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType,
+};
 
 /// Converter for CWT values to CwtType
 pub struct CwtConverter;
@@ -109,34 +115,46 @@ impl CwtConverter {
     /// Convert a CWT block to our type system
     pub fn convert_block(block: &AstCwtBlock) -> CwtType {
         let mut properties: HashMap<String, Property> = HashMap::new();
-        let mut alias_patterns: HashMap<String, CwtType> = HashMap::new();
-        let mut enum_patterns: HashMap<String, CwtType> = HashMap::new();
+        let mut alias_patterns = HashMap::new();
+        let mut enum_patterns = HashMap::new();
         let mut union_values = Vec::new();
 
         // Process all items in the block normally
         for item in &block.items {
             match item {
                 cw_parser::cwt::AstCwtExpression::Rule(rule) => {
-                    // Check if this is an enum pattern
-                    if let cw_parser::cwt::AstCwtIdentifierOrString::Identifier(key_id) = &rule.key
-                    {
-                        if matches!(key_id.identifier_type, CwtReferenceType::Enum) {
-                            // This is an enum pattern - store it
-                            let enum_key = key_id.name.raw_value().to_string();
-                            let value_type = Self::convert_value(&rule.value);
-                            enum_patterns.insert(enum_key, value_type);
-                            continue;
+                    match &rule.key {
+                        AstCwtIdentifierOrString::Identifier(key_id) => {
+                            match key_id.identifier_type {
+                                CwtReferenceType::Enum => {
+                                    let enum_key = key_id.name.raw_value().to_string();
+                                    let value_type = Self::convert_value(&rule.value);
+                                    enum_patterns.insert(enum_key, value_type);
+                                    continue;
+                                }
+                                CwtReferenceType::AliasName => {
+                                    match &key_id.name.key {
+                                        // Handle alias_name[foo:<type_name>] = bar
+                                        AstCwtIdentifierOrString::Identifier(_) => {
+                                            panic!(
+                                                "alias_name[foo:<type_name>] = bar is not supported"
+                                            );
+                                        }
+                                        // Handle alias[foo:x] = bar
+                                        AstCwtIdentifierOrString::String(key_str) => {
+                                            let value_type = Self::convert_value(&rule.value);
+                                            alias_patterns.insert(
+                                                key_str.raw_value().to_string(),
+                                                value_type,
+                                            );
+                                            continue;
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
                         }
-                    }
-
-                    // Check if this is an alias pattern
-                    if Self::is_alias_pattern(rule) {
-                        // This is an alias pattern - store it
-                        if let Some(alias_key) = Self::extract_alias_type(rule) {
-                            let value_type = Self::convert_value(&rule.value);
-                            alias_patterns.insert(alias_key, value_type);
-                            continue;
-                        }
+                        _ => {}
                     }
 
                     let key = rule.key.name();
@@ -220,24 +238,5 @@ impl CwtConverter {
             CwtValue::Block(block) => Self::convert_block(block),
             CwtValue::String(s) => CwtType::Literal(s.raw_value().to_string()),
         }
-    }
-
-    /// Check if a rule is an alias pattern (alias_name[X] = <any_value>)
-    fn is_alias_pattern(rule: &cw_parser::cwt::AstCwtRule) -> bool {
-        // Check if the key is alias_name[something]
-        if let cw_parser::cwt::AstCwtIdentifierOrString::Identifier(key_id) = &rule.key {
-            return matches!(key_id.identifier_type, CwtReferenceType::AliasName);
-        }
-        false
-    }
-
-    /// Extract the alias type from an alias pattern
-    fn extract_alias_type(rule: &cw_parser::cwt::AstCwtRule) -> Option<String> {
-        if let cw_parser::cwt::AstCwtIdentifierOrString::Identifier(key_id) = &rule.key {
-            if matches!(key_id.identifier_type, CwtReferenceType::AliasName) {
-                return Some(key_id.name.raw_value().to_string());
-            }
-        }
-        None
     }
 }

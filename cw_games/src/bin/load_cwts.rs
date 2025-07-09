@@ -246,7 +246,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  Alias: {}", name);
                 println!("    Category: {}", alias.category);
                 println!("    Name: {}", alias.name);
-                println!("    Rules: {:?}", alias.rules);
+                println!("    Rules: {:?}", alias.to);
                 println!();
             }
         }
