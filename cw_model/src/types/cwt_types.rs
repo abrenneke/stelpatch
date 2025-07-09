@@ -132,6 +132,12 @@ pub struct BlockType {
     /// Subtypes - conditional property sets
     pub subtypes: HashMap<String, Subtype>,
 
+    /// Alias patterns - alias_name[X] = alias_match_left[X] patterns
+    pub alias_patterns: HashMap<String, CwtType>,
+
+    /// Enum patterns - enum[key] = type patterns
+    pub enum_patterns: HashMap<String, CwtType>,
+
     /// Localisation requirements
     pub localisation: Option<LocalisationSpec>,
 
@@ -389,6 +395,8 @@ impl CwtType {
         BlockType {
             properties: HashMap::new(),
             subtypes: HashMap::new(),
+            alias_patterns: HashMap::new(),
+            enum_patterns: HashMap::new(),
             localisation: None,
             modifiers: None,
         }

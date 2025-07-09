@@ -73,38 +73,34 @@ impl CwtConverter {
     /// Convert a CWT block to our type system
     pub fn convert_block(block: &AstCwtBlock) -> CwtType {
         let mut properties = HashMap::new();
+        let mut alias_patterns: HashMap<String, CwtType> = HashMap::new();
+        let mut enum_patterns: HashMap<String, CwtType> = HashMap::new();
         let mut union_values = Vec::new();
-        let mut is_alias_context = false;
-        let mut alias_type_key = None;
-
-        // First pass: check for alias patterns
-        for item in &block.items {
-            if let cw_parser::cwt::AstCwtExpression::Rule(rule) = item {
-                if Self::is_alias_pattern(rule) {
-                    // Extract the alias type from the pattern
-                    if let Some(extracted_type) = Self::extract_alias_type(rule) {
-                        is_alias_context = true;
-                        alias_type_key = Some(extracted_type);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // If this is an alias context, return a reference to the alias type directly
-        if is_alias_context {
-            if let Some(type_key) = alias_type_key {
-                return CwtType::Reference(ReferenceType::AliasName { key: type_key });
-            }
-        }
 
         // Process all items in the block normally
         for item in &block.items {
             match item {
                 cw_parser::cwt::AstCwtExpression::Rule(rule) => {
-                    // Skip alias patterns since we've already handled them
+                    // Check if this is an enum pattern
+                    if let cw_parser::cwt::AstCwtIdentifierOrString::Identifier(key_id) = &rule.key
+                    {
+                        if matches!(key_id.identifier_type, CwtReferenceType::Enum) {
+                            // This is an enum pattern - store it
+                            let enum_key = key_id.name.raw_value().to_string();
+                            let value_type = Self::convert_value(&rule.value);
+                            enum_patterns.insert(enum_key, value_type);
+                            continue;
+                        }
+                    }
+
+                    // Check if this is an alias pattern
                     if Self::is_alias_pattern(rule) {
-                        continue;
+                        // This is an alias pattern - store it
+                        if let Some(alias_key) = Self::extract_alias_type(rule) {
+                            let value_type = Self::convert_value(&rule.value);
+                            alias_patterns.insert(alias_key, value_type);
+                            continue;
+                        }
                     }
 
                     let key = rule.key.name();
@@ -143,6 +139,8 @@ impl CwtConverter {
         CwtType::Block(BlockType {
             properties,
             subtypes: HashMap::new(),
+            alias_patterns,
+            enum_patterns,
             localisation: None,
             modifiers: None,
         })
@@ -158,19 +156,11 @@ impl CwtConverter {
         }
     }
 
-    /// Check if a rule is an alias pattern (alias_name[X] = alias_match_left[X])
+    /// Check if a rule is an alias pattern (alias_name[X] = <any_value>)
     fn is_alias_pattern(rule: &cw_parser::cwt::AstCwtRule) -> bool {
         // Check if the key is alias_name[something]
         if let cw_parser::cwt::AstCwtIdentifierOrString::Identifier(key_id) = &rule.key {
-            if matches!(key_id.identifier_type, CwtReferenceType::AliasName) {
-                // Check if the value is alias_match_left[something]
-                if let CwtValue::Identifier(value_id) = &rule.value {
-                    if matches!(value_id.identifier_type, CwtReferenceType::AliasMatchLeft) {
-                        // Both key and value should reference the same type
-                        return key_id.name.raw_value() == value_id.name.raw_value();
-                    }
-                }
-            }
+            return matches!(key_id.identifier_type, CwtReferenceType::AliasName);
         }
         false
     }

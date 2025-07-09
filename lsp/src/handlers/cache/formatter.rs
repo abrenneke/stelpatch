@@ -222,7 +222,7 @@ pub fn format_type_description_with_property_context(
 
             // Fallback to basic reference type formatting
             match ref_type {
-                ReferenceType::Type { key } => format!("→ {}", key),
+                ReferenceType::Type { key } => format!("<{}>", key),
                 ReferenceType::Enum { key } => format!("enum {}", key),
                 ReferenceType::ComplexEnum { key } => format!("complex_enum {}", key),
                 ReferenceType::ValueSet { key } => format!("value_set {}", key),

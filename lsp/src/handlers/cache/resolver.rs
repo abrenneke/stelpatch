@@ -19,6 +19,58 @@ pub struct ResolvedDisplayInfo {
     pub is_resolved_reference: bool,
 }
 
+/// Expand patterns in a block type
+/// This handles both enum patterns and alias patterns
+fn expand_patterns_in_block(block_type: &mut BlockType, cwt_analyzer: &CwtAnalyzer) {
+    let mut new_properties = HashMap::new();
+
+    // Process each enum pattern
+    for (enum_key, value_type) in &block_type.enum_patterns {
+        if let Some(enum_def) = cwt_analyzer.get_enum(enum_key) {
+            // Create a property for each enum value
+            for enum_value in &enum_def.values {
+                let new_property = Property {
+                    property_type: value_type.clone(),
+                    options: CwtOptions::default(),
+                    documentation: Some(format!("Enum value from {}", enum_key)),
+                };
+                new_properties.insert(enum_value.clone(), new_property);
+            }
+        }
+    }
+
+    // Process each alias pattern
+    for (alias_key, value_type) in &block_type.alias_patterns {
+        // Get all aliases from this category and create properties for them
+        for (alias_key_full, alias_def) in cwt_analyzer.get_aliases() {
+            if let Some((cat, name)) = alias_key_full.split_once(':') {
+                if cat == alias_key {
+                    // For alias patterns, we need to resolve the value_type
+                    let resolved_value_type = match value_type {
+                        CwtType::Reference(ReferenceType::AliasMatchLeft { key })
+                            if key == alias_key =>
+                        {
+                            // This is alias_name[X] = alias_match_left[X] - use the alias definition
+                            alias_def.rules.clone()
+                        }
+                        _ => value_type.clone(),
+                    };
+
+                    let new_property = Property {
+                        property_type: resolved_value_type,
+                        options: CwtOptions::default(),
+                        documentation: Some(format!("Alias from {} category", alias_key)),
+                    };
+                    new_properties.insert(name.to_string(), new_property);
+                }
+            }
+        }
+    }
+
+    // Add all expanded properties
+    block_type.properties.extend(new_properties);
+}
+
 /// Resolve a type to its actual concrete type
 /// This handles references and other indirect types
 pub fn resolve_type(cwt_type: &CwtType, cwt_analyzer: &CwtAnalyzer) -> CwtType {
@@ -132,6 +184,12 @@ pub fn resolve_type(cwt_type: &CwtType, cwt_analyzer: &CwtAnalyzer) -> CwtType {
         }
         // For comparables, unwrap to the base type
         CwtType::Comparable(base_type) => resolve_type(base_type, cwt_analyzer),
+        // For blocks, resolve and expand patterns
+        CwtType::Block(block_type) => {
+            let mut resolved_block = block_type.clone();
+            expand_patterns_in_block(&mut resolved_block, cwt_analyzer);
+            CwtType::Block(resolved_block)
+        }
         // For all other types, return as-is
         _ => cwt_type.clone(),
     };
@@ -167,6 +225,8 @@ fn create_alias_category_block(cwt_analyzer: &CwtAnalyzer, category: &str) -> Cw
         CwtType::Block(BlockType {
             properties,
             subtypes: HashMap::new(),
+            alias_patterns: HashMap::new(),
+            enum_patterns: HashMap::new(),
             localisation: None,
             modifiers: None,
         })
@@ -346,10 +406,23 @@ pub fn resolve_type_with_display_info(
             }
         }
         _ => {
-            // For non-reference types, just return as-is
-            ResolvedType {
-                cwt_type: cwt_type.clone(),
-                display_info: None,
+            // For non-reference types, handle blocks specially to expand patterns
+            match cwt_type {
+                CwtType::Block(block_type) => {
+                    let mut resolved_block = block_type.clone();
+                    expand_patterns_in_block(&mut resolved_block, cwt_analyzer);
+                    ResolvedType {
+                        cwt_type: CwtType::Block(resolved_block),
+                        display_info: None,
+                    }
+                }
+                _ => {
+                    // For other non-reference types, just return as-is
+                    ResolvedType {
+                        cwt_type: cwt_type.clone(),
+                        display_info: None,
+                    }
+                }
             }
         }
     }

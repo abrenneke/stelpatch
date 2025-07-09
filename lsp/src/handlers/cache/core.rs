@@ -245,16 +245,19 @@ impl TypeCache {
                 }
             }
 
+            // IMPORTANT: Resolve the final property type to expand any patterns it may have
+            let resolved_final_type = resolve_type(&current_type, &self.cwt_analyzer);
+
             return Some(TypeInfo {
                 property_path: property_path.to_string(),
                 type_description: format_type_description_with_property_context(
-                    &current_type,
+                    &resolved_final_type,
                     0,
                     30,
                     &self.cwt_analyzer,
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
-                cwt_type: Some(current_type.clone()),
+                cwt_type: Some(resolved_final_type),
                 documentation: None,
                 source_info: Some(format!("From {} entity definition", namespace)),
             });
