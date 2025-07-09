@@ -72,7 +72,7 @@ impl CwtConverter {
 
     /// Convert a CWT block to our type system
     pub fn convert_block(block: &AstCwtBlock) -> CwtType {
-        let mut properties = HashMap::new();
+        let mut properties: HashMap<String, Property> = HashMap::new();
         let mut alias_patterns: HashMap<String, CwtType> = HashMap::new();
         let mut enum_patterns: HashMap<String, CwtType> = HashMap::new();
         let mut union_values = Vec::new();
@@ -110,7 +110,37 @@ impl CwtConverter {
                         options: CwtOptions::default(),
                         documentation: None,
                     };
-                    properties.insert(key.to_string(), property_def);
+
+                    // Handle duplicate keys by creating unions
+                    let key_string = key.to_string();
+                    if let Some(existing_property) = properties.get(&key_string) {
+                        // Key already exists, create a union
+                        let union_type = match &existing_property.property_type {
+                            CwtType::Union(existing_types) => {
+                                // Already a union, add the new type to it
+                                let mut new_types = existing_types.clone();
+                                new_types.push(property_def.property_type);
+                                CwtType::Union(new_types)
+                            }
+                            existing_type => {
+                                // Not a union yet, create one with both types
+                                CwtType::Union(vec![
+                                    existing_type.clone(),
+                                    property_def.property_type,
+                                ])
+                            }
+                        };
+
+                        let unified_property = Property {
+                            property_type: union_type,
+                            options: CwtOptions::default(),
+                            documentation: None,
+                        };
+                        properties.insert(key_string, unified_property);
+                    } else {
+                        // Key doesn't exist yet, insert normally
+                        properties.insert(key_string, property_def);
+                    }
                 }
                 cw_parser::cwt::AstCwtExpression::Value(value) => {
                     let value_type = Self::convert_value(value);
