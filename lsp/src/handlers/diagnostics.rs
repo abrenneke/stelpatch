@@ -3,6 +3,7 @@ use cw_parser::{AstEntityItem, AstModule, AstNode, AstValue};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::RwLock;
 use tower_lsp::Client;
 use tower_lsp::lsp_types::*;
@@ -18,19 +19,39 @@ pub async fn generate_diagnostics(
     _document_cache: &DocumentCache,
     uri: &str,
 ) {
+    let start_time = Instant::now();
+    eprintln!("DEBUG: Starting diagnostics generation for {}", uri);
+
     let documents_guard = documents.read().await;
     if let Some(content) = documents_guard.get(uri) {
         let mut diagnostics = Vec::new();
 
         // First, try to parse the content
+        let parse_start = Instant::now();
         let mut module = AstModule::new();
         match module.parse_input(content) {
             Ok(()) => {
+                let parse_duration = parse_start.elapsed();
+                eprintln!(
+                    "DEBUG: Parsing completed in {:?} for {}",
+                    parse_duration, uri
+                );
+
                 // If parsing succeeds, do type checking
+                let type_check_start = Instant::now();
                 let type_diagnostics = generate_type_diagnostics(&module, uri, content).await;
+                let type_check_duration = type_check_start.elapsed();
+                eprintln!(
+                    "DEBUG: Type checking completed in {:?} for {}",
+                    type_check_duration, uri
+                );
+
                 diagnostics.extend(type_diagnostics);
             }
             Err(error) => {
+                let parse_duration = parse_start.elapsed();
+                eprintln!("DEBUG: Parsing failed in {:?} for {}", parse_duration, uri);
+
                 // If parsing fails, add parsing error
                 let diagnostic = create_diagnostic_from_parse_error(&error, content);
                 diagnostics.push(diagnostic);
@@ -41,6 +62,14 @@ pub async fn generate_diagnostics(
         client
             .publish_diagnostics(Url::parse(uri).unwrap(), diagnostics, None)
             .await;
+
+        let total_duration = start_time.elapsed();
+        eprintln!(
+            "DEBUG: Total diagnostics generation completed in {:?} for {}",
+            total_duration, uri
+        );
+    } else {
+        eprintln!("DEBUG: No content found for {}", uri);
     }
 }
 
@@ -50,6 +79,7 @@ async fn generate_type_diagnostics(
     uri: &str,
     content: &str,
 ) -> Vec<Diagnostic> {
+    let type_check_start = Instant::now();
     let mut diagnostics = Vec::new();
 
     // Check if type cache is initialized
@@ -62,6 +92,7 @@ async fn generate_type_diagnostics(
     }
 
     // Extract namespace from URI
+    let namespace_start = Instant::now();
     let namespace = match extract_namespace_from_uri(uri) {
         Some(ns) => {
             eprintln!("DEBUG: Extracted namespace '{}' from URI {}", ns, uri);
@@ -75,8 +106,14 @@ async fn generate_type_diagnostics(
             return diagnostics;
         }
     };
+    let namespace_duration = namespace_start.elapsed();
+    eprintln!(
+        "DEBUG: Namespace extraction took {:?} for {}",
+        namespace_duration, uri
+    );
 
     // Get type information for this namespace
+    let type_info_start = Instant::now();
     let type_info = match super::cache::get_namespace_entity_type(&namespace).await {
         Some(info) => {
             eprintln!("DEBUG: Retrieved type info for namespace '{}'", namespace);
@@ -90,6 +127,11 @@ async fn generate_type_diagnostics(
             return diagnostics;
         }
     };
+    let type_info_duration = type_info_start.elapsed();
+    eprintln!(
+        "DEBUG: Type info retrieval took {:?} for namespace '{}'",
+        type_info_duration, namespace
+    );
 
     let namespace_type = match &type_info.cwt_type {
         Some(t) => {
@@ -112,6 +154,7 @@ async fn generate_type_diagnostics(
     );
 
     // Validate each entity in the module
+    let validation_start = Instant::now();
     for item in &module.items {
         if let AstEntityItem::Expression(expr) = item {
             let entity_name = expr.key.raw_value();
@@ -128,10 +171,17 @@ async fn generate_type_diagnostics(
             diagnostics.extend(entity_diagnostics);
         }
     }
-
+    let validation_duration = validation_start.elapsed();
     eprintln!(
-        "DEBUG: Generated {} diagnostics for namespace '{}'",
+        "DEBUG: Entity validation took {:?} for namespace '{}'",
+        validation_duration, namespace
+    );
+
+    let total_type_check_duration = type_check_start.elapsed();
+    eprintln!(
+        "DEBUG: Generated {} diagnostics in {:?} for namespace '{}'",
         diagnostics.len(),
+        total_type_check_duration,
         namespace
     );
     diagnostics
@@ -170,16 +220,22 @@ fn validate_entity_value(
                         );
                         diagnostics.push(diagnostic);
                     } else {
-                        // For nested entities, validate recursively but keep using the same type
-                        // This avoids the complex type resolution that was causing infinite loops
-                        let nested_diagnostics = validate_entity_value(
-                            &expr.value,
-                            expected_type,
-                            content,
-                            namespace,
-                            depth + 1,
-                        );
-                        diagnostics.extend(nested_diagnostics);
+                        // For nested entities, we need to get the actual type of this property
+                        // before validating its contents
+                        if let AstValue::Entity(_) = &expr.value {
+                            // Get the type of this specific property
+                            let property_type =
+                                get_property_type_from_expected_type(expected_type, key_name);
+
+                            let nested_diagnostics = validate_entity_value(
+                                &expr.value,
+                                &property_type,
+                                content,
+                                namespace,
+                                depth + 1,
+                            );
+                            diagnostics.extend(nested_diagnostics);
+                        }
                     }
                 }
             }
@@ -193,9 +249,58 @@ fn validate_entity_value(
     diagnostics
 }
 
+/// Get the type of a property from the expected type structure
+fn get_property_type_from_expected_type(expected_type: &CwtType, property_name: &str) -> CwtType {
+    if !TypeCache::is_initialized() {
+        return CwtType::Unknown;
+    }
+
+    let cache = TypeCache::get().unwrap();
+    let resolved_type = cache.resolve_type(expected_type);
+
+    match resolved_type {
+        CwtType::Block(obj) => {
+            if let Some(property_def) = obj.properties.get(property_name) {
+                // Return the resolved type of this property
+                cache.resolve_type(&property_def.property_type)
+            } else {
+                CwtType::Unknown
+            }
+        }
+        CwtType::Union(types) => {
+            // For union types, try to find the property in any of the union members
+            for union_type in types {
+                let property_type =
+                    get_property_type_from_expected_type(&union_type, property_name);
+                if !matches!(property_type, CwtType::Unknown) {
+                    return property_type;
+                }
+            }
+            CwtType::Unknown
+        }
+        CwtType::Reference(_) => {
+            // For references, resolve and try again
+            let resolved_ref = cache.resolve_type(&resolved_type);
+            if !matches!(resolved_ref, CwtType::Reference(_)) {
+                get_property_type_from_expected_type(&resolved_ref, property_name)
+            } else {
+                CwtType::Unknown
+            }
+        }
+        _ => CwtType::Unknown,
+    }
+}
+
 /// Check if a key is valid for the given type
-fn is_key_valid(inferred_type: &CwtType, key_name: &str) -> bool {
-    match inferred_type {
+fn is_key_valid(cwt_type: &CwtType, key_name: &str) -> bool {
+    if !TypeCache::is_initialized() {
+        return true;
+    }
+
+    let cache = TypeCache::get().unwrap();
+    let cwt_type = cache.resolve_type(cwt_type);
+
+    match cwt_type {
         CwtType::Block(obj) => {
             // Check if the key is in the known properties
             obj.properties.contains_key(key_name)
@@ -206,20 +311,14 @@ fn is_key_valid(inferred_type: &CwtType, key_name: &str) -> bool {
         }
         CwtType::Reference(_) => {
             // For references, try to resolve them but don't get stuck in infinite loops
-            if let Some(cache) = TypeCache::get() {
-                let resolved_type = cache.resolve_type(inferred_type);
-                // Only recurse if we got a different type (avoid infinite loops)
-                if !std::ptr::eq(inferred_type, &resolved_type) {
-                    return is_key_valid(&resolved_type, key_name);
-                }
-            }
-            // If we can't resolve the reference safely, be permissive
-            true
+            return is_key_valid(&cwt_type, key_name);
         }
-        _ => {
-            // For other types, be permissive to avoid false positives
-            true
-        }
+        CwtType::Unknown => false,
+        CwtType::Simple(_) => false,
+        CwtType::Array(_) => false,
+        CwtType::Literal(_) => false,
+        CwtType::LiteralSet(_) => false,
+        CwtType::Comparable(_) => false,
     }
 }
 

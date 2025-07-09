@@ -267,7 +267,7 @@ pub fn format_type_description_with_property_context(
             // - The root obj
             // - The properties of the root obj
             // - The properties of the properties of the root obj
-            if depth >= 2 {
+            if depth >= 1 {
                 if block.properties.is_empty() {
                     return "{}".to_string();
                 } else {
