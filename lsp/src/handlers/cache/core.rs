@@ -8,14 +8,16 @@ use std::fs;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
+use crate::handlers::cache::resolver::TypeResolver;
+
 use super::formatter::format_type_description_with_property_context;
-use super::resolver::resolve_type;
 use super::types::TypeInfo;
 
 /// Cache for Stellaris type information that's loaded once and shared across requests
 pub struct TypeCache {
     namespace_types: HashMap<String, CwtType>,
     cwt_analyzer: Arc<CwtAnalyzer>,
+    resolver: TypeResolver,
 }
 
 static TYPE_CACHE: OnceLock<TypeCache> = OnceLock::new();
@@ -70,9 +72,12 @@ impl TypeCache {
                 cwt_analyzer.get_types().len()
             );
 
+            let cwt_analyzer = Arc::new(cwt_analyzer);
+
             TypeCache {
                 namespace_types,
-                cwt_analyzer: Arc::new(cwt_analyzer),
+                cwt_analyzer: cwt_analyzer.clone(),
+                resolver: TypeResolver::new(cwt_analyzer.clone()),
             }
         })
     }
@@ -163,7 +168,7 @@ impl TypeCache {
                 current_path.push_str(part);
 
                 // Resolve the current type to its actual type
-                current_type = resolve_type(&current_type, &self.cwt_analyzer);
+                current_type = self.resolver.resolve_type(&current_type);
 
                 match &current_type {
                     CwtType::Block(block) => {
@@ -184,7 +189,7 @@ impl TypeCache {
                     }
                     CwtType::Reference(_reference) => {
                         // For references, resolve to the actual type and continue traversal
-                        let resolved_type = resolve_type(&current_type, &self.cwt_analyzer);
+                        let resolved_type = self.resolver.resolve_type(&current_type);
 
                         // If we couldn't resolve the reference, return info about the reference itself
                         if matches!(resolved_type, CwtType::Reference(_)) {
@@ -195,6 +200,7 @@ impl TypeCache {
                                     0,
                                     30,
                                     &self.cwt_analyzer,
+                                    &self.resolver,
                                     Some(part), // Pass the current property name
                                 ),
                                 cwt_type: Some(resolved_type),
@@ -218,6 +224,7 @@ impl TypeCache {
                                     0,
                                     30,
                                     &self.cwt_analyzer,
+                                    &self.resolver,
                                     path_parts.last().map(|s| *s), // Pass the last part as property name
                                 ),
                                 cwt_type: Some(current_type.clone()),
@@ -248,7 +255,7 @@ impl TypeCache {
             }
 
             // IMPORTANT: Resolve the final property type to expand any patterns it may have
-            let resolved_final_type = resolve_type(&current_type, &self.cwt_analyzer);
+            let resolved_final_type = self.resolver.resolve_type(&current_type);
 
             return Some(TypeInfo {
                 property_path: property_path.to_string(),
@@ -257,6 +264,7 @@ impl TypeCache {
                     0,
                     30,
                     &self.cwt_analyzer,
+                    &self.resolver,
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
                 cwt_type: Some(resolved_final_type),
@@ -275,6 +283,7 @@ impl TypeCache {
                     0,
                     30,
                     &self.cwt_analyzer,
+                    &self.resolver,
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
                 cwt_type: Some(type_def.rules.clone()),
@@ -298,7 +307,7 @@ impl TypeCache {
 
     /// Resolve a type to its actual concrete type
     pub fn resolve_type(&self, cwt_type: &CwtType) -> CwtType {
-        resolve_type(cwt_type, &self.cwt_analyzer)
+        self.resolver.resolve_type(cwt_type)
     }
 }
 

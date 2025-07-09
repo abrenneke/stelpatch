@@ -1,9 +1,7 @@
 use cw_model::types::CwtAnalyzer;
 use cw_model::{CwtType, ReferenceType, SimpleType};
 
-use crate::handlers::cache::resolver::resolve_type;
-
-use super::resolver::resolve_type_with_display_info;
+use crate::handlers::cache::resolver::TypeResolver;
 
 /// Helper function to format enum values
 fn format_enum_values(ref_type: &ReferenceType, enum_values: &[String]) -> String {
@@ -141,13 +139,14 @@ pub fn format_type_description_with_property_context(
     depth: usize,
     max_lines: usize,
     cwt_context: &CwtAnalyzer,
+    resolver: &TypeResolver,
     property_name: Option<&str>,
 ) -> String {
     if depth > 5 {
         return "...".to_string();
     }
 
-    let cwt_type = resolve_type(cwt_type, cwt_context);
+    let cwt_type = resolver.resolve_type(cwt_type);
 
     match cwt_type {
         CwtType::Literal(lit) => format!("\"{}\"", lit),
@@ -195,9 +194,8 @@ pub fn format_type_description_with_property_context(
         },
         CwtType::Reference(ref_type) => {
             // Use the enhanced resolver for most reference types
-            let resolved = resolve_type_with_display_info(
+            let resolved = resolver.resolve_type_with_display_info(
                 &CwtType::Reference(ref_type.clone()),
-                cwt_context,
                 property_name,
             );
 
@@ -208,6 +206,7 @@ pub fn format_type_description_with_property_context(
                     depth + 1,
                     max_lines,
                     cwt_context,
+                    resolver,
                     property_name,
                 );
             }
@@ -258,6 +257,7 @@ pub fn format_type_description_with_property_context(
                     depth + 1,
                     max_lines,
                     cwt_context,
+                    resolver,
                     property_name,
                 )
             )
@@ -300,6 +300,7 @@ pub fn format_type_description_with_property_context(
                     depth + 1,
                     max_lines - line_count,
                     cwt_context,
+                    resolver,
                     Some(key), // Pass the property name for alias resolution
                 );
 
@@ -338,6 +339,7 @@ pub fn format_type_description_with_property_context(
                 depth + 1,
                 max_lines,
                 cwt_context,
+                resolver,
                 property_name,
             );
             if element_desc.contains('\n') {
@@ -363,6 +365,7 @@ pub fn format_type_description_with_property_context(
                             depth + 1,
                             max_lines,
                             cwt_context,
+                            resolver,
                             property_name,
                         )
                     })
@@ -379,6 +382,7 @@ pub fn format_type_description_with_property_context(
                             depth + 1,
                             max_lines,
                             cwt_context,
+                            resolver,
                             property_name,
                         ))
                         .collect::<Vec<_>>()
