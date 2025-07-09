@@ -1,6 +1,8 @@
 use cw_model::types::CwtAnalyzer;
 use cw_model::{CwtType, ReferenceType, SimpleType};
 
+use crate::handlers::cache::resolver::resolve_type;
+
 use super::resolver::resolve_type_with_display_info;
 
 /// Helper function to format enum values
@@ -145,6 +147,8 @@ pub fn format_type_description_with_property_context(
         return "...".to_string();
     }
 
+    let cwt_type = resolve_type(cwt_type, cwt_context);
+
     match cwt_type {
         CwtType::Literal(lit) => format!("\"{}\"", lit),
         CwtType::LiteralSet(literals) => {
@@ -191,7 +195,11 @@ pub fn format_type_description_with_property_context(
         },
         CwtType::Reference(ref_type) => {
             // Use the enhanced resolver for most reference types
-            let resolved = resolve_type_with_display_info(cwt_type, cwt_context, property_name);
+            let resolved = resolve_type_with_display_info(
+                &CwtType::Reference(ref_type.clone()),
+                cwt_context,
+                property_name,
+            );
 
             // If we got a resolved type different from the original, format it recursively
             if !matches!(resolved.cwt_type, CwtType::Reference(_)) {
@@ -207,16 +215,16 @@ pub fn format_type_description_with_property_context(
             // If we have display info, use it to format the reference nicely
             if let Some(display_info) = &resolved.display_info {
                 if let Some(enum_values) = &display_info.enum_values {
-                    return format_enum_values(ref_type, enum_values);
+                    return format_enum_values(&ref_type, enum_values);
                 }
                 if let Some(value_set) = &display_info.value_set {
-                    return format_value_set(ref_type, value_set);
+                    return format_value_set(&ref_type, value_set);
                 }
                 if let Some(alias_names) = &display_info.alias_names {
-                    return format_alias_names(ref_type, alias_names);
+                    return format_alias_names(&ref_type, alias_names);
                 }
                 if let Some(alias_value_types) = &display_info.alias_value_types {
-                    return format_alias_value_types(ref_type, alias_value_types);
+                    return format_alias_value_types(&ref_type, alias_value_types);
                 }
             }
 
@@ -246,7 +254,7 @@ pub fn format_type_description_with_property_context(
             format!(
                 "comparable[{}]",
                 format_type_description_with_property_context(
-                    comparable,
+                    &comparable,
                     depth + 1,
                     max_lines,
                     cwt_context,
@@ -255,7 +263,10 @@ pub fn format_type_description_with_property_context(
             )
         }
         CwtType::Block(block) => {
-            // Don't recurse into nested entities when we're already at depth 1 or higher
+            // Show:
+            // - The root obj
+            // - The properties of the root obj
+            // - The properties of the properties of the root obj
             if depth >= 2 {
                 if block.properties.is_empty() {
                     return "{}".to_string();
