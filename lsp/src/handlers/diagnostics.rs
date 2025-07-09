@@ -7,8 +7,8 @@ use tokio::sync::RwLock;
 use tower_lsp::Client;
 use tower_lsp::lsp_types::*;
 
+use super::cache::TypeCache;
 use super::document_cache::DocumentCache;
-use super::type_cache::TypeCache;
 use super::utils::extract_namespace_from_uri;
 
 /// Generate diagnostics for a document by attempting to parse it and type-check it
@@ -77,7 +77,7 @@ async fn generate_type_diagnostics(
     };
 
     // Get type information for this namespace
-    let type_info = match super::type_cache::get_namespace_entity_type(&namespace).await {
+    let type_info = match super::cache::get_namespace_entity_type(&namespace).await {
         Some(info) => {
             eprintln!("DEBUG: Retrieved type info for namespace '{}'", namespace);
             info
@@ -155,12 +155,6 @@ fn validate_entity_value(
 
     match value {
         AstValue::Entity(entity) => {
-            eprintln!(
-                "DEBUG: Validating entity with {} items at depth {}",
-                entity.items.len(),
-                depth
-            );
-
             // Validate each property in the entity
             for item in &entity.items {
                 if let AstEntityItem::Expression(expr) = item {
@@ -168,7 +162,6 @@ fn validate_entity_value(
 
                     // Check if this key is valid for the expected type
                     if !is_key_valid(expected_type, key_name) {
-                        eprintln!("DEBUG: Found invalid key '{}' at depth {}", key_name, depth);
                         let diagnostic = create_unexpected_key_diagnostic(
                             expr.key.span_range(),
                             key_name,
@@ -177,8 +170,6 @@ fn validate_entity_value(
                         );
                         diagnostics.push(diagnostic);
                     } else {
-                        eprintln!("DEBUG: Key '{}' is valid at depth {}", key_name, depth);
-
                         // For nested entities, validate recursively but keep using the same type
                         // This avoids the complex type resolution that was causing infinite loops
                         let nested_diagnostics = validate_entity_value(

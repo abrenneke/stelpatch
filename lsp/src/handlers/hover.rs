@@ -4,8 +4,8 @@ use tokio::sync::RwLock;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, jsonrpc::Result};
 
+use super::cache::{get_entity_property_type, get_namespace_entity_type};
 use super::document_cache::DocumentCache;
-use super::type_cache::{get_entity_property_type, get_namespace_entity_type};
 use super::utils::{extract_namespace_from_uri, position_to_offset};
 use cw_parser::{AstEntity, AstExpression, AstNode, AstValue, AstVisitor};
 
@@ -137,7 +137,7 @@ pub async fn hover(
         // Add type information if we can determine the namespace
         if let Some(namespace) = namespace {
             // Only try to get type info if the type cache is initialized
-            if crate::handlers::type_cache::TypeCache::is_initialized() {
+            if crate::handlers::cache::TypeCache::is_initialized() {
                 let type_info = if is_top_level_key {
                     // For top-level keys, show the namespace type (the structure of entities in this namespace)
                     get_namespace_entity_type(&namespace).await
