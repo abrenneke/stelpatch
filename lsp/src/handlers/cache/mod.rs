@@ -7,4 +7,4 @@ mod types;
 
 // Re-exports for public API
 pub use api::{get_entity_property_type, get_namespace_entity_type};
-pub use core::TypeCache;
+pub use core::{GameDataCache, TypeCache};

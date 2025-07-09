@@ -1,3 +1,4 @@
+use crate::handlers::cache::{GameDataCache, TypeCache};
 use crate::semantic_token_collector::CwSemanticTokenType;
 use tower_lsp::Client;
 use tower_lsp::jsonrpc::Result;
@@ -40,6 +41,14 @@ pub async fn initialize(_params: InitializeParams) -> Result<InitializeResult> {
 pub async fn initialized(client: &Client, _params: InitializedParams) {
     client
         .log_message(MessageType::INFO, "CW LSP Server initialized!")
+        .await;
+
+    // Initialize caches in the background
+    TypeCache::initialize_in_background();
+    GameDataCache::initialize_in_background();
+
+    client
+        .log_message(MessageType::INFO, "Starting cache initialization...")
         .await;
 }
 

@@ -250,7 +250,7 @@ pub fn format_type_description_with_property_context(
                     depth + 1,
                     max_lines,
                     cwt_context,
-                    property_name
+                    property_name,
                 )
             )
         }
@@ -368,7 +368,7 @@ pub fn format_type_description_with_property_context(
                             depth + 1,
                             max_lines,
                             cwt_context,
-                            property_name
+                            property_name,
                         ))
                         .collect::<Vec<_>>()
                         .join(" | "),

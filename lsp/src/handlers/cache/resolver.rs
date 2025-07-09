@@ -1,3 +1,4 @@
+use super::core::GameDataCache;
 use cw_model::types::CwtAnalyzer;
 use cw_model::{BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
 use std::collections::{HashMap, HashSet};
@@ -79,15 +80,43 @@ pub fn resolve_type(cwt_type: &CwtType, cwt_analyzer: &CwtAnalyzer) -> CwtType {
         CwtType::Reference(ref_type) => {
             match ref_type {
                 ReferenceType::Type { key } => {
-                    // Try to find the referenced type in our analyzer
-                    if let Some(resolved_type) = cwt_analyzer.get_type(key) {
-                        resolve_type(&resolved_type.rules, cwt_analyzer)
-                    } else if let Some(resolved_type) = cwt_analyzer.get_single_alias(key) {
-                        resolve_type(resolved_type, cwt_analyzer)
+                    let type_def = cwt_analyzer.get_type(key);
+
+                    if let Some(type_def) = type_def {
+                        if let Some(path) = type_def.path.as_ref() {
+                            // CWT paths are prefixed with "game/"
+                            let path = path.trim_start_matches("game/");
+
+                            // For Type references, we want the union of all keys in that namespace
+                            // This is what the user expects when they hover over "resource" - they want to see
+                            // all the possible resource keys like "energy", "minerals", etc.
+                            if let Some(game_data) = GameDataCache::get() {
+                                if let Some(namespace_keys) = game_data.get_namespace_keys(&path) {
+                                    return CwtType::LiteralSet(
+                                        namespace_keys.iter().cloned().collect(),
+                                    );
+                                } else {
+                                    eprintln!("Failed to resolve namespace: {}", path);
+                                }
+
+                                // Also try the key directly in case it's already a full path
+                                if let Some(namespace_keys) = game_data.get_namespace_keys(key) {
+                                    return CwtType::LiteralSet(
+                                        namespace_keys.iter().cloned().collect(),
+                                    );
+                                }
+                            } else {
+                                eprintln!("Failed to resolve type: {}, no game data", key);
+                            }
+                        } else {
+                            eprintln!("Failed to resolve type: {}, no path", key);
+                        }
                     } else {
-                        // If we can't resolve it, return the original reference
-                        cwt_type.clone()
+                        eprintln!("Failed to resolve type: {}, no type definition", key);
                     }
+
+                    // If game data isn't available or namespace not found, return the original reference
+                    cwt_type.clone()
                 }
                 ReferenceType::Alias { key } => {
                     // Try to resolve alias references
@@ -271,7 +300,7 @@ fn get_alias_value_types_from_category(cwt_analyzer: &CwtAnalyzer, category: &st
     value_types
 }
 
-/// Resolve a type with display information for formatting
+/// Resolve a type with display information for formatting, with namespace context
 pub fn resolve_type_with_display_info(
     cwt_type: &CwtType,
     cwt_analyzer: &CwtAnalyzer,

@@ -62,7 +62,43 @@ impl CwtConverter {
             CwtReferenceType::ValueSet => ReferenceType::ValueSet {
                 key: identifier.name.raw_value().to_string(),
             },
-            _ => ReferenceType::Type {
+            CwtReferenceType::ScopeGroup => ReferenceType::ScopeGroup {
+                key: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::Alias => ReferenceType::Alias {
+                key: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::AliasName => ReferenceType::AliasName {
+                key: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::AliasMatchLeft => ReferenceType::AliasMatchLeft {
+                key: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::SingleAlias => ReferenceType::SingleAlias {
+                key: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::AliasKeysField => ReferenceType::AliasKeysField {
+                key: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::Icon => ReferenceType::Icon {
+                path: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::Filepath => ReferenceType::Filepath {
+                path: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::Colour => ReferenceType::Colour {
+                format: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::StellarisNameFormat => ReferenceType::StellarisNameFormat {
+                key: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::Subtype => ReferenceType::Subtype {
+                name: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::Type => ReferenceType::Type {
+                key: identifier.name.raw_value().to_string(),
+            },
+            CwtReferenceType::ComplexEnum => ReferenceType::ComplexEnum {
                 key: identifier.name.raw_value().to_string(),
             },
         };

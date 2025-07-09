@@ -1,5 +1,7 @@
+use cw_games::stellaris::BaseGame;
 use cw_model::CwtType;
 use cw_model::types::CwtAnalyzer;
+use cw_model::{GameMod, LoadMode};
 use cw_parser::CwtModuleCell;
 use std::collections::HashMap;
 use std::fs;
@@ -216,7 +218,7 @@ impl TypeCache {
                                     0,
                                     30,
                                     &self.cwt_analyzer,
-                                    Some(&path_parts[path_parts.len() - 1]), // Pass the last part as property name
+                                    path_parts.last().map(|s| *s), // Pass the last part as property name
                                 ),
                                 cwt_type: Some(current_type.clone()),
                                 documentation: None,
@@ -297,5 +299,71 @@ impl TypeCache {
     /// Resolve a type to its actual concrete type
     pub fn resolve_type(&self, cwt_type: &CwtType) -> CwtType {
         resolve_type(cwt_type, &self.cwt_analyzer)
+    }
+}
+
+/// Cache for actual game data keys from namespaces (e.g., "energy", "minerals" from resources namespace)
+pub struct GameDataCache {
+    /// Maps namespace -> set of keys defined in that namespace
+    namespace_keys: HashMap<String, Vec<String>>,
+    base_game: &'static GameMod,
+}
+
+static GAME_DATA_CACHE: OnceLock<GameDataCache> = OnceLock::new();
+
+impl GameDataCache {
+    /// Initialize the game data cache by loading Stellaris base game data
+    pub fn initialize_in_background() {
+        // This runs in a background task since it can take time
+        std::thread::spawn(|| {
+            let _ = Self::get_or_init_blocking();
+        });
+    }
+
+    pub fn get() -> Option<&'static GameDataCache> {
+        GAME_DATA_CACHE.get()
+    }
+
+    /// Get or initialize the global game data cache (blocking version)
+    fn get_or_init_blocking() -> &'static GameDataCache {
+        GAME_DATA_CACHE.get_or_init(|| {
+            eprintln!("Initializing game data cache");
+
+            // Load base game data
+            let base_game = BaseGame::load_global_as_mod_definition(LoadMode::Parallel);
+
+            eprintln!(
+                "Building namespace keys cache from {} namespaces",
+                base_game.namespaces.len()
+            );
+
+            // Extract keys from each namespace
+            let mut namespace_keys = HashMap::new();
+            for (namespace_name, namespace) in &base_game.namespaces {
+                let mut keys: Vec<String> = namespace.properties.kv.keys().cloned().collect();
+                keys.sort(); // Sort for consistent ordering
+                namespace_keys.insert(namespace_name.clone(), keys);
+            }
+
+            eprintln!(
+                "Built game data cache with {} namespaces",
+                namespace_keys.len()
+            );
+
+            GameDataCache {
+                namespace_keys,
+                base_game,
+            }
+        })
+    }
+
+    /// Get all keys defined in a namespace
+    pub fn get_namespace_keys(&self, namespace: &str) -> Option<&Vec<String>> {
+        self.namespace_keys.get(namespace)
+    }
+
+    /// Check if the game data cache is initialized
+    pub fn is_initialized() -> bool {
+        GAME_DATA_CACHE.get().is_some()
     }
 }
