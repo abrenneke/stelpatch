@@ -225,6 +225,7 @@ impl CwtConverter {
             subtypes: HashMap::new(),
             alias_patterns,
             enum_patterns,
+            pattern_properties: Vec::new(),
             localisation: None,
             modifiers: None,
         })

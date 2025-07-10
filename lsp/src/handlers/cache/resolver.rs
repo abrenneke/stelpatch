@@ -1,5 +1,5 @@
 use super::core::GameDataCache;
-use cw_model::types::{CwtAnalyzer, TypeFingerprint};
+use cw_model::types::{CwtAnalyzer, PatternProperty, PatternType, TypeFingerprint};
 use cw_model::{AliasName, BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
 use std::sync::RwLock;
 use std::{collections::HashMap, sync::Arc};
@@ -86,7 +86,7 @@ impl TypeResolver {
             }
             // For comparables, unwrap to the base type
             CwtType::Comparable(base_type) => self.resolve_type(base_type),
-            // For blocks, resolve and expand patterns with caching
+            // For blocks, resolve and convert patterns to pattern properties with caching
             CwtType::Block(block_type) => {
                 let cache_key = cwt_type.fingerprint();
 
@@ -108,7 +108,7 @@ impl TypeResolver {
                     .insert(cache_key.clone());
 
                 let mut resolved_block = block_type.clone();
-                self.expand_patterns_in_block(&mut resolved_block);
+                self.convert_patterns_to_pattern_properties(&mut resolved_block);
                 let result = CwtType::Block(resolved_block);
 
                 // Remove from resolving set
@@ -128,6 +128,153 @@ impl TypeResolver {
             }
             // For all other types, return as-is
             _ => cwt_type.clone(),
+        }
+    }
+
+    /// Convert patterns to pattern properties instead of expanding them
+    /// This preserves cardinality constraints while allowing pattern matching
+    fn convert_patterns_to_pattern_properties(&self, block_type: &mut BlockType) {
+        // Convert enum patterns to pattern properties
+        for (enum_key, value_type) in &block_type.enum_patterns {
+            let pattern_property = PatternProperty {
+                pattern_type: PatternType::Enum {
+                    key: enum_key.clone(),
+                },
+                value_type: value_type.clone(),
+                options: CwtOptions::default(),
+                documentation: Some(format!("Enum pattern for {}", enum_key)),
+            };
+            block_type.pattern_properties.push(pattern_property);
+        }
+
+        // Convert alias patterns to pattern properties
+        for (alias_pattern, value_type) in &block_type.alias_patterns {
+            let pattern_property = PatternProperty {
+                pattern_type: PatternType::AliasName {
+                    category: alias_pattern.clone(),
+                },
+                value_type: value_type.clone(),
+                options: CwtOptions::default(),
+                documentation: Some(format!("Alias pattern for {} category", alias_pattern)),
+            };
+            block_type.pattern_properties.push(pattern_property);
+        }
+
+        // Clear the old pattern maps since we've converted them
+        block_type.enum_patterns.clear();
+        block_type.alias_patterns.clear();
+    }
+
+    /// Check if a key matches any pattern property in a block
+    pub fn key_matches_pattern<'a>(
+        &self,
+        key: &str,
+        block_type: &'a BlockType,
+    ) -> Option<&'a PatternProperty> {
+        for pattern_property in &block_type.pattern_properties {
+            if self.key_matches_pattern_type(key, &pattern_property.pattern_type) {
+                return Some(pattern_property);
+            }
+        }
+        None
+    }
+
+    /// Check if a key matches a specific pattern type
+    pub fn key_matches_pattern_type(&self, key: &str, pattern_type: &PatternType) -> bool {
+        match pattern_type {
+            PatternType::AliasName { category } => {
+                // Check if the key matches any alias name from this category
+                for (alias_key, _) in self.cwt_analyzer.get_aliases() {
+                    if alias_key.category == *category {
+                        match &alias_key.name {
+                            AliasName::Static(name) => {
+                                if name == key {
+                                    return true;
+                                }
+                            }
+                            AliasName::TypeRef(type_name) => {
+                                // Check if key matches any type from this namespace
+                                if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
+                                    if let Some(path) = type_def.path.as_ref() {
+                                        let path = path.trim_start_matches("game/");
+                                        if let Some(game_data) = GameDataCache::get() {
+                                            if let Some(namespace_keys) =
+                                                game_data.get_namespace_keys(&path)
+                                            {
+                                                if namespace_keys.contains(&key.to_string()) {
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            AliasName::Enum(enum_name) => {
+                                // Check if key matches any enum value
+                                if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
+                                    if enum_def.values.contains(key) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                false
+            }
+            PatternType::Enum { key: enum_key } => {
+                // Check if the key matches any enum value
+                if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_key) {
+                    enum_def.values.contains(key)
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    /// Get all possible completions for a pattern type
+    pub fn get_pattern_completions(&self, pattern_type: &PatternType) -> Vec<String> {
+        match pattern_type {
+            PatternType::AliasName { category } => {
+                let mut completions = Vec::new();
+                for (alias_key, _) in self.cwt_analyzer.get_aliases() {
+                    if alias_key.category == *category {
+                        match &alias_key.name {
+                            AliasName::Static(name) => {
+                                completions.push(name.clone());
+                            }
+                            AliasName::TypeRef(type_name) => {
+                                if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
+                                    if let Some(path) = type_def.path.as_ref() {
+                                        let path = path.trim_start_matches("game/");
+                                        if let Some(game_data) = GameDataCache::get() {
+                                            if let Some(namespace_keys) =
+                                                game_data.get_namespace_keys(&path)
+                                            {
+                                                completions.extend(namespace_keys.iter().cloned());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            AliasName::Enum(enum_name) => {
+                                if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
+                                    completions.extend(enum_def.values.iter().cloned());
+                                }
+                            }
+                        }
+                    }
+                }
+                completions
+            }
+            PatternType::Enum { key } => {
+                if let Some(enum_def) = self.cwt_analyzer.get_enum(key) {
+                    enum_def.values.iter().cloned().collect()
+                } else {
+                    Vec::new()
+                }
+            }
         }
     }
 
@@ -316,103 +463,5 @@ impl TypeResolver {
             // For any remaining unhandled reference types, return the original
             _ => CwtType::Reference(ref_type.clone()),
         }
-    }
-
-    /// Expand patterns in a block type
-    /// This handles both enum patterns and alias patterns
-    /// Note: This method is now cached in resolve_type for performance
-    fn expand_patterns_in_block(&self, block_type: &mut BlockType) {
-        // Early return if no patterns to expand
-        if block_type.enum_patterns.is_empty() && block_type.alias_patterns.is_empty() {
-            return;
-        }
-
-        let mut new_properties = HashMap::new();
-
-        if !GameDataCache::is_initialized() {
-            return;
-        }
-
-        let game_data = GameDataCache::get().unwrap();
-
-        // Process each enum pattern
-        for (enum_key, value_type) in &block_type.enum_patterns {
-            if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_key) {
-                // Create a property for each enum value
-                for enum_value in &enum_def.values {
-                    let new_property = Property {
-                        property_type: self.resolve_type(value_type),
-                        options: CwtOptions::default(),
-                        documentation: Some(format!("Enum value from {}", enum_key)),
-                    };
-                    new_properties.insert(enum_value.clone(), new_property);
-                }
-            }
-        }
-
-        // Process each alias pattern
-        for (alias_pattern, value_type) in &block_type.alias_patterns {
-            // Get all aliases from this category and create properties for them
-            for (alias_key_full, _) in self.cwt_analyzer.get_aliases() {
-                if alias_key_full.category == *alias_pattern {
-                    match &alias_key_full.name {
-                        // For alias[foo:x] = bar, we create a single property for each alias
-                        AliasName::Static(name) => {
-                            // DON'T resolve the value_type here - it causes O(n²) performance issues
-                            // Just use the raw type and let it be resolved lazily when needed
-                            let new_property = Property {
-                                property_type: value_type.clone(),
-                                options: CwtOptions::default(),
-                                documentation: Some(format!(
-                                    "Alias from {} category",
-                                    alias_pattern
-                                )),
-                            };
-                            new_properties.insert(name.to_string(), new_property);
-                        }
-                        // For alias[foo:<type_name>] = bar, we expand <type_name> to all types in the namespace
-                        AliasName::TypeRef(name) => {
-                            let type_def = self.cwt_analyzer.get_type(name);
-                            if let Some(type_def) = type_def {
-                                if let Some(path) = type_def.path.as_ref() {
-                                    let path = path.trim_start_matches("game/");
-                                    let all_types = game_data.get_namespace_keys(path);
-                                    if let Some(all_types) = all_types {
-                                        for type_key in all_types {
-                                            let new_property = Property {
-                                                property_type: value_type.clone(),
-                                                options: CwtOptions::default(),
-                                                documentation: Some(format!(
-                                                    "Alias from {} category",
-                                                    alias_pattern
-                                                )),
-                                            };
-                                            new_properties.insert(type_key.clone(), new_property);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        AliasName::Enum(name) => {
-                            let all_enums = self.cwt_analyzer.get_enum(name);
-                            if let Some(all_enums) = all_enums {
-                                for enum_value in &all_enums.values {
-                                    let new_property = Property {
-                                        property_type: value_type.clone(),
-                                        options: CwtOptions::default(),
-                                        documentation: Some(format!("Enum value from {}", name)),
-                                    };
-
-                                    new_properties.insert(enum_value.clone(), new_property);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Add all expanded properties
-        block_type.properties.extend(new_properties);
     }
 }

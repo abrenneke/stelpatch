@@ -308,7 +308,15 @@ impl<'client> DiagnosticsProvider<'client> {
                     // Return the resolved type of this property
                     cache.resolve_type(&property_def.property_type)
                 } else {
-                    CwtType::Unknown
+                    // Check if the property matches any pattern property
+                    if let Some(pattern_property) = cache
+                        .get_resolver()
+                        .key_matches_pattern(property_name, &obj)
+                    {
+                        cache.resolve_type(&pattern_property.value_type)
+                    } else {
+                        CwtType::Unknown
+                    }
                 }
             }
             CwtType::Union(types) => {
@@ -364,7 +372,20 @@ impl<'client> DiagnosticsProvider<'client> {
         let result = match &cwt_type {
             CwtType::Block(obj) => {
                 // Check if the key is in the known properties
-                obj.properties.contains_key(key_name)
+                if obj.properties.contains_key(key_name) {
+                    return true;
+                }
+
+                // Check if the key matches any pattern property
+                if cache
+                    .get_resolver()
+                    .key_matches_pattern(key_name, obj)
+                    .is_some()
+                {
+                    return true;
+                }
+
+                false
             }
             CwtType::Union(types) => {
                 // For union types, key is valid if it's valid in any of the union members

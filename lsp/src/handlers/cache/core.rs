@@ -175,16 +175,23 @@ impl TypeCache {
                         if let Some(property_def) = block.properties.get(*part) {
                             current_type = property_def.property_type.clone();
                         } else {
-                            return Some(TypeInfo {
-                                property_path: current_path,
-                                type_description: format!("Unknown property '{}'", part),
-                                cwt_type: None,
-                                documentation: None,
-                                source_info: Some(format!(
-                                    "Property not found in {} entity",
-                                    namespace
-                                )),
-                            });
+                            // Check if the property matches any pattern property
+                            if let Some(pattern_property) =
+                                self.resolver.key_matches_pattern(part, block)
+                            {
+                                current_type = pattern_property.value_type.clone();
+                            } else {
+                                return Some(TypeInfo {
+                                    property_path: current_path,
+                                    type_description: format!("Unknown property '{}'", part),
+                                    cwt_type: None,
+                                    documentation: None,
+                                    source_info: Some(format!(
+                                        "Property not found in {} entity",
+                                        namespace
+                                    )),
+                                });
+                            }
                         }
                     }
                     CwtType::Reference(_reference) => {
@@ -347,6 +354,10 @@ impl TypeCache {
         &self.cwt_analyzer
     }
 
+    pub fn get_resolver(&self) -> &TypeResolver {
+        &self.resolver
+    }
+
     /// Resolve a type to its actual concrete type
     pub fn resolve_type(&self, cwt_type: &CwtType) -> CwtType {
         self.resolver.resolve_type(cwt_type)
@@ -391,6 +402,15 @@ impl TypeCache {
                     let resolved_property_type =
                         self.resolver.resolve_type(&property_def.property_type);
                     property_types.push(resolved_property_type);
+                } else {
+                    // Check if the property matches any pattern property
+                    if let Some(pattern_property) =
+                        self.resolver.key_matches_pattern(current_property, &block)
+                    {
+                        let resolved_property_type =
+                            self.resolver.resolve_type(&pattern_property.value_type);
+                        property_types.push(resolved_property_type);
+                    }
                 }
             }
         }

@@ -104,17 +104,20 @@ pub fn format_type_description_with_property_context(
             // - The properties of the root obj
             // - The properties of the properties of the root obj
             if depth >= 1 {
-                if block.properties.is_empty() {
+                let total_properties = block.properties.len() + block.pattern_properties.len();
+                if total_properties == 0 {
                     return "{}".to_string();
                 } else {
-                    return format!("{{ /* ... +{} properties */ }}", block.properties.len());
+                    return format!("{{ /* ... +{} properties */ }}", total_properties);
                 }
             }
 
-            if block.properties.is_empty() {
+            let total_properties = block.properties.len() + block.pattern_properties.len();
+            if total_properties == 0 {
                 return "{}".to_string();
             }
 
+            // Collect regular properties
             let mut properties: Vec<_> = block.properties.iter().collect();
             properties.sort_by_key(|(k, _)| k.as_str());
 
@@ -122,11 +125,12 @@ pub fn format_type_description_with_property_context(
             let mut line_count = 1;
             let mut properties_shown = 0;
 
+            // Show regular properties first
             for (key, property_def) in properties {
                 if line_count >= max_lines {
                     lines.push(format!(
                         "  # ... +{} more properties",
-                        block.properties.len() - properties_shown
+                        total_properties - properties_shown
                     ));
                     break;
                 }
@@ -160,6 +164,59 @@ pub fn format_type_description_with_property_context(
                     line_count += lines_added;
                 } else {
                     lines.push(format!("  {} = {}", key, formatted_value));
+                    line_count += 1;
+                }
+                properties_shown += 1;
+            }
+
+            // Show pattern properties
+            for pattern_property in &block.pattern_properties {
+                if line_count >= max_lines {
+                    lines.push(format!(
+                        "  # ... +{} more properties",
+                        total_properties - properties_shown
+                    ));
+                    break;
+                }
+
+                let pattern_description = match &pattern_property.pattern_type {
+                    cw_model::types::PatternType::AliasName { category } => {
+                        format!("({})", category)
+                    }
+                    cw_model::types::PatternType::Enum { key } => {
+                        format!("({})", key)
+                    }
+                };
+
+                let formatted_value = format_type_description_with_property_context(
+                    &pattern_property.value_type,
+                    depth + 1,
+                    max_lines - line_count,
+                    cwt_context,
+                    resolver,
+                    None, // Pattern properties don't have specific property names
+                );
+
+                // Handle multi-line types (nested blocks)
+                if formatted_value.contains('\n') {
+                    lines.push(format!("  {}:", pattern_description));
+                    let nested_lines: Vec<&str> = formatted_value.lines().collect();
+                    let mut lines_added = 1;
+
+                    for line in nested_lines {
+                        if line.starts_with("{") {
+                            continue;
+                        }
+                        if line_count + lines_added >= max_lines {
+                            lines.push("    # ... (truncated)".to_string());
+                            break;
+                        }
+                        lines.push(format!("    {}", line));
+                        lines_added += 1;
+                    }
+                    line_count += lines_added;
+                } else {
+                    lines.push(format!("  {} = {}", pattern_description, formatted_value));
                     line_count += 1;
                 }
                 properties_shown += 1;

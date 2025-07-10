@@ -219,8 +219,6 @@ pub enum PatternType {
     AliasName { category: String },
     /// enum[key] - matches any enum value from the key
     Enum { key: String },
-    /// alias_match_left[category] - matches any alias match left from the category
-    AliasMatchLeft { category: String },
 }
 
 /// Aliases can be defined in (at least) two ways:
@@ -695,7 +693,6 @@ impl TypeFingerprint for PatternType {
         match self {
             PatternType::AliasName { category } => format!("alias_name:{}", category),
             PatternType::Enum { key } => format!("enum:{}", key),
-            PatternType::AliasMatchLeft { category } => format!("alias_match_left:{}", category),
         }
     }
 }
