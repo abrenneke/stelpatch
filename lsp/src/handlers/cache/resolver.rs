@@ -1,67 +1,8 @@
 use super::core::GameDataCache;
-use cw_model::types::CwtAnalyzer;
+use cw_model::types::{CwtAnalyzer, TypeFingerprint};
 use cw_model::{AliasName, BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
 use std::sync::RwLock;
 use std::{collections::HashMap, sync::Arc};
-
-/// A cache key for type resolution
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum CacheKey {
-    Type(String),
-    Alias(String),
-    AliasMatchLeft(String),
-    Enum(String),
-    ValueSet(String),
-    Value(String),
-    ComplexEnum(String),
-    AliasKeysField(String),
-    SingleAlias(String),
-    Subtype(String),
-    TypeWithAffix(String),
-    Scope(String),
-    ScopeGroup(String),
-    AliasName(String),
-    Icon(String),
-    Filepath(String),
-    Colour(String),
-    StellarisNameFormat(String),
-}
-
-impl CacheKey {
-    fn from_reference_type(ref_type: &ReferenceType) -> Self {
-        match ref_type {
-            ReferenceType::Type { key } => CacheKey::Type(key.clone()),
-            ReferenceType::Alias { key } => CacheKey::Alias(key.clone()),
-            ReferenceType::AliasMatchLeft { key } => CacheKey::AliasMatchLeft(key.clone()),
-            ReferenceType::Enum { key } => CacheKey::Enum(key.clone()),
-            ReferenceType::ValueSet { key } => CacheKey::ValueSet(key.clone()),
-            ReferenceType::Value { key } => CacheKey::Value(key.clone()),
-            ReferenceType::ComplexEnum { key } => CacheKey::ComplexEnum(key.clone()),
-            ReferenceType::AliasKeysField { key } => CacheKey::AliasKeysField(key.clone()),
-            ReferenceType::SingleAlias { key } => CacheKey::SingleAlias(key.clone()),
-            ReferenceType::Subtype { name } => CacheKey::Subtype(name.clone()),
-            ReferenceType::TypeWithAffix {
-                key,
-                prefix,
-                suffix,
-            } => CacheKey::TypeWithAffix(format!(
-                "{}<{}>{}",
-                key,
-                prefix.as_ref().unwrap_or(&"".to_string()),
-                suffix.as_ref().unwrap_or(&"".to_string())
-            )),
-            ReferenceType::Scope { key } => CacheKey::Scope(key.clone()),
-            ReferenceType::ScopeGroup { key } => CacheKey::ScopeGroup(key.clone()),
-            ReferenceType::AliasName { key } => CacheKey::AliasName(key.clone()),
-            ReferenceType::Icon { path } => CacheKey::Icon(path.clone()),
-            ReferenceType::Filepath { path } => CacheKey::Filepath(path.clone()),
-            ReferenceType::Colour { format } => CacheKey::Colour(format.clone()),
-            ReferenceType::StellarisNameFormat { key } => {
-                CacheKey::StellarisNameFormat(key.clone())
-            }
-        }
-    }
-}
 
 pub struct TypeResolver {
     cwt_analyzer: Arc<CwtAnalyzer>,
@@ -69,8 +10,8 @@ pub struct TypeResolver {
 }
 
 pub struct TypeResolverCache {
-    cache: HashMap<CacheKey, CwtType>,
-    resolving: std::collections::HashSet<CacheKey>,
+    cache: HashMap<String, CwtType>,
+    resolving: std::collections::HashSet<String>,
 }
 
 impl TypeResolver {
@@ -84,12 +25,29 @@ impl TypeResolver {
         }
     }
 
-    /// Resolve a type to its actual concrete type with caching
+    /// Clear the cache (useful for debugging or memory management)
+    pub fn clear_cache(&self) {
+        let mut cache = self.cache.write().unwrap();
+        cache.cache.clear();
+        cache.resolving.clear();
+    }
+
+    /// Get cache statistics
+    pub fn cache_stats(&self) -> (usize, usize) {
+        let cache = self.cache.read().unwrap();
+        (cache.cache.len(), cache.resolving.len())
+    }
+
+    /// Resolve a type to its actual concrete type with fingerprint-based caching
+    ///
+    /// This method uses the type fingerprint system to cache resolved types,
+    /// which provides better cache hit rates and more reliable deduplication
+    /// compared to the previous custom cache key system.
     pub fn resolve_type(&self, cwt_type: &CwtType) -> CwtType {
         match cwt_type {
             // For references, try to resolve to the actual type
             CwtType::Reference(ref_type) => {
-                let cache_key = CacheKey::from_reference_type(ref_type);
+                let cache_key = cwt_type.fingerprint();
 
                 // Check if we're already resolving this type (circular reference)
                 if self.cache.read().unwrap().resolving.contains(&cache_key) {
@@ -128,14 +86,109 @@ impl TypeResolver {
             }
             // For comparables, unwrap to the base type
             CwtType::Comparable(base_type) => self.resolve_type(base_type),
-            // For blocks, resolve and expand patterns
+            // For blocks, resolve and expand patterns with caching
             CwtType::Block(block_type) => {
+                let cache_key = cwt_type.fingerprint();
+
+                // Check cache first
+                if let Some(cached_result) = self.cache.read().unwrap().cache.get(&cache_key) {
+                    return cached_result.clone();
+                }
+
+                // Check if we're already resolving this block (circular reference)
+                if self.cache.read().unwrap().resolving.contains(&cache_key) {
+                    return cwt_type.clone();
+                }
+
+                // Mark as resolving
+                self.cache
+                    .write()
+                    .unwrap()
+                    .resolving
+                    .insert(cache_key.clone());
+
                 let mut resolved_block = block_type.clone();
                 self.expand_patterns_in_block(&mut resolved_block);
-                CwtType::Block(resolved_block)
+                let result = CwtType::Block(resolved_block);
+
+                // Remove from resolving set
+                {
+                    let mut cache = self.cache.write().unwrap();
+                    cache.resolving.remove(&cache_key);
+                }
+
+                // Cache the result
+                self.cache
+                    .write()
+                    .unwrap()
+                    .cache
+                    .insert(cache_key, result.clone());
+
+                result
             }
             // For all other types, return as-is
             _ => cwt_type.clone(),
+        }
+    }
+
+    /// Check if two types are equivalent using their fingerprints
+    /// This is more efficient than resolving both types and comparing them
+    pub fn are_types_equivalent(&self, type1: &CwtType, type2: &CwtType) -> bool {
+        type1.fingerprint() == type2.fingerprint()
+    }
+
+    /// Get the fingerprint hash for a type for efficient deduplication
+    /// This can be used for storing types in hash sets or other data structures
+    pub fn get_type_fingerprint_hash(&self, cwt_type: &CwtType) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        cwt_type.fingerprint().hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Deduplicate a collection of types using their fingerprints
+    /// Returns a Vec with unique types, preserving order of first occurrence
+    pub fn deduplicate_types(&self, types: Vec<CwtType>) -> Vec<CwtType> {
+        let mut seen_fingerprints = std::collections::HashSet::new();
+        let mut result = Vec::new();
+
+        for cwt_type in types {
+            let fingerprint = cwt_type.fingerprint();
+            if seen_fingerprints.insert(fingerprint) {
+                result.push(cwt_type);
+            }
+        }
+
+        result
+    }
+
+    /// Create a union type from a collection of types, automatically deduplicating
+    /// and flattening nested unions
+    pub fn create_deduplicated_union(&self, types: Vec<CwtType>) -> CwtType {
+        let mut flattened_types = Vec::new();
+
+        // Flatten nested unions
+        for cwt_type in types {
+            match cwt_type {
+                CwtType::Union(nested_types) => {
+                    flattened_types.extend(nested_types);
+                }
+                _ => {
+                    flattened_types.push(cwt_type);
+                }
+            }
+        }
+
+        // Deduplicate
+        let unique_types = self.deduplicate_types(flattened_types);
+
+        // Return appropriate type based on count
+        match unique_types.len() {
+            0 => CwtType::Unknown,
+            1 => unique_types.into_iter().next().unwrap(),
+            _ => CwtType::Union(unique_types),
         }
     }
 
@@ -191,6 +244,8 @@ impl TypeResolver {
                         union_types.push(alias_def.to.clone());
                     }
                 }
+
+                union_types.dedup_by(|a, b| a.fingerprint() == b.fingerprint());
 
                 if !union_types.is_empty() {
                     if union_types.len() == 1 {
@@ -265,7 +320,13 @@ impl TypeResolver {
 
     /// Expand patterns in a block type
     /// This handles both enum patterns and alias patterns
+    /// Note: This method is now cached in resolve_type for performance
     fn expand_patterns_in_block(&self, block_type: &mut BlockType) {
+        // Early return if no patterns to expand
+        if block_type.enum_patterns.is_empty() && block_type.alias_patterns.is_empty() {
+            return;
+        }
+
         let mut new_properties = HashMap::new();
 
         if !GameDataCache::is_initialized() {
