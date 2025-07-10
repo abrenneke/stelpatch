@@ -1,9 +1,9 @@
 use cw_games::stellaris::BaseGame;
-use cw_model::CwtType;
 use cw_model::types::CwtAnalyzer;
+use cw_model::{CwtType, ReferenceType};
 use cw_model::{GameMod, LoadMode};
 use cw_parser::CwtModuleCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -239,6 +239,48 @@ impl TypeCache {
                         // Continue to next iteration to handle the resolved type
                         continue;
                     }
+                    CwtType::Union(u) => {
+                        // For unions, we need to process the entire remaining path
+                        // This handles nested unions properly by flattening them recursively
+                        let remaining_path: Vec<&str> = path_parts[i..].to_vec();
+                        let result_types = self.get_property_types_from_union(u, &remaining_path);
+
+                        match result_types.len() {
+                            0 => {
+                                return Some(TypeInfo {
+                                    property_path: current_path,
+                                    type_description: format!(
+                                        "Property path '{}' not found in any branch of union",
+                                        remaining_path.join(".")
+                                    ),
+                                    cwt_type: None,
+                                    documentation: None,
+                                    source_info: Some(format!(
+                                        "Property path not found in union type in {} entity",
+                                        namespace
+                                    )),
+                                });
+                            }
+                            1 => {
+                                // Single result type
+                                current_type = result_types.into_iter().next().unwrap();
+                            }
+                            _ => {
+                                // Multiple result types - create union
+                                let mut deduped_types = result_types;
+                                deduped_types.dedup();
+
+                                if deduped_types.len() == 1 {
+                                    current_type = deduped_types.into_iter().next().unwrap();
+                                } else {
+                                    current_type = CwtType::Union(deduped_types);
+                                }
+                            }
+                        }
+
+                        // We've processed the entire remaining path, so we're done
+                        break;
+                    }
                     _ => {
                         return Some(TypeInfo {
                             property_path: current_path,
@@ -308,6 +350,105 @@ impl TypeCache {
     /// Resolve a type to its actual concrete type
     pub fn resolve_type(&self, cwt_type: &CwtType) -> CwtType {
         self.resolver.resolve_type(cwt_type)
+    }
+
+    /// Get property types from a union by processing the full property path
+    /// This handles nested unions properly by flattening them recursively
+    fn get_property_types_from_union(
+        &self,
+        union_types: &[CwtType],
+        property_path: &[&str],
+    ) -> Vec<CwtType> {
+        self.get_property_types_from_union_with_depth(union_types, property_path, 0)
+    }
+
+    fn get_property_types_from_union_with_depth(
+        &self,
+        union_types: &[CwtType],
+        property_path: &[&str],
+        depth: usize,
+    ) -> Vec<CwtType> {
+        // Prevent infinite recursion with a reasonable depth limit
+        if depth > 50 {
+            return vec![];
+        }
+
+        if property_path.is_empty() {
+            return union_types.to_vec();
+        }
+
+        let current_property = property_path[0];
+        let remaining_path = &property_path[1..];
+
+        // First, flatten all union types to get all possible block types
+        let all_block_types = self.flatten_to_blocks(union_types);
+
+        // Then, for each block type, check if it has the property
+        let mut property_types = Vec::new();
+        for block_type in all_block_types {
+            if let CwtType::Block(block) = block_type {
+                if let Some(property_def) = block.properties.get(current_property) {
+                    let resolved_property_type =
+                        self.resolver.resolve_type(&property_def.property_type);
+                    property_types.push(resolved_property_type);
+                }
+            }
+        }
+
+        // If this is the last property, return the types
+        if remaining_path.is_empty() {
+            return property_types;
+        }
+
+        // Otherwise, recursively continue with the remaining path
+        self.get_property_types_from_union_with_depth(&property_types, remaining_path, depth + 1)
+    }
+
+    /// Flatten a list of types to get all possible block types
+    /// This recursively expands unions to find all block types
+    fn flatten_to_blocks(&self, types: &[CwtType]) -> Vec<CwtType> {
+        let mut visited = HashSet::new();
+        self.flatten_to_blocks_with_visited(types, &mut visited)
+    }
+
+    fn flatten_to_blocks_with_visited(
+        &self,
+        types: &[CwtType],
+        visited: &mut HashSet<String>,
+    ) -> Vec<CwtType> {
+        let mut result = Vec::new();
+        for cwt_type in types {
+            // Only track reference types to prevent cycles, not all types
+            let type_id = match cwt_type {
+                CwtType::Reference(ref_type) => ref_type.id(),
+                _ => None,
+            };
+
+            if let Some(ref id) = type_id {
+                if visited.contains(id) {
+                    // Skip if we've already processed this reference to prevent infinite recursion
+                    continue;
+                }
+                visited.insert(id.clone());
+            }
+
+            let resolved = self.resolver.resolve_type(cwt_type);
+            match resolved {
+                CwtType::Block(_) => result.push(resolved),
+                CwtType::Union(nested_types) => {
+                    // Recursively flatten nested unions
+                    let flattened = self.flatten_to_blocks_with_visited(&nested_types, visited);
+                    result.extend(flattened);
+                }
+                _ => {} // Skip non-block types
+            }
+
+            // Remove from visited set after processing to allow the same type in different branches
+            if let Some(ref id) = type_id {
+                visited.remove(id);
+            }
+        }
+        result
     }
 }
 

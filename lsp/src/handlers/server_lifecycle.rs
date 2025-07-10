@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use crate::handlers::cache::{GameDataCache, TypeCache};
+use crate::handlers::diagnostics::DiagnosticsProvider;
 use crate::semantic_token_collector::CwSemanticTokenType;
+use tokio::sync::RwLock;
 use tower_lsp::Client;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -38,18 +43,35 @@ pub async fn initialize(_params: InitializeParams) -> Result<InitializeResult> {
     })
 }
 
-pub async fn initialized(client: &Client, _params: InitializedParams) {
-    client
-        .log_message(MessageType::INFO, "CW LSP Server initialized!")
-        .await;
-
-    // Initialize caches in the background
+pub async fn initialized(
+    client: &Client,
+    documents: Arc<RwLock<HashMap<String, String>>>,
+    _params: InitializedParams,
+) {
     TypeCache::initialize_in_background();
     GameDataCache::initialize_in_background();
 
-    client
-        .log_message(MessageType::INFO, "Starting cache initialization...")
-        .await;
+    let client_clone = client.clone();
+
+    tokio::task::spawn(async move {
+        while !TypeCache::is_initialized() || !GameDataCache::is_initialized() {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+
+        client_clone
+            .log_message(
+                MessageType::INFO,
+                "Caches are ready, generating diagnostics",
+            )
+            .await;
+
+        let provider = DiagnosticsProvider::new(&client_clone, documents.clone());
+
+        let documents_guard = documents.read().await;
+        for uri in documents_guard.keys() {
+            provider.generate_diagnostics(uri).await;
+        }
+    });
 }
 
 pub async fn shutdown() -> Result<()> {

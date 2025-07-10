@@ -21,7 +21,7 @@ impl LanguageServer for CwLspServer {
     }
 
     async fn initialized(&self, params: InitializedParams) {
-        server_lifecycle::initialized(&self.client, params).await;
+        server_lifecycle::initialized(&self.client, self.documents.clone(), params).await;
     }
 
     async fn shutdown(&self) -> Result<()> {

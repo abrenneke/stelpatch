@@ -29,7 +29,7 @@ pub async fn did_open(
         .await;
 
     // Generate diagnostics for the opened document
-    diagnostics::generate_diagnostics(client, documents, document_cache, &uri).await;
+    diagnostics::generate_diagnostics(client, documents, &uri).await;
 }
 
 pub async fn did_change(
@@ -57,6 +57,6 @@ pub async fn did_change(
             .await;
 
         // Generate diagnostics for the changed document
-        diagnostics::generate_diagnostics(client, documents, document_cache, &uri).await;
+        diagnostics::generate_diagnostics(client, documents, &uri).await;
     }
 }

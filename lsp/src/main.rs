@@ -27,9 +27,6 @@ impl CwLspServer {
 
 #[tokio::main]
 async fn main() {
-    // Initialize type cache with Stellaris data in the background
-    TypeCache::initialize_in_background();
-
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
