@@ -278,67 +278,6 @@ impl TypeResolver {
         }
     }
 
-    /// Check if two types are equivalent using their fingerprints
-    /// This is more efficient than resolving both types and comparing them
-    pub fn are_types_equivalent(&self, type1: &CwtType, type2: &CwtType) -> bool {
-        type1.fingerprint() == type2.fingerprint()
-    }
-
-    /// Get the fingerprint hash for a type for efficient deduplication
-    /// This can be used for storing types in hash sets or other data structures
-    pub fn get_type_fingerprint_hash(&self, cwt_type: &CwtType) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-        cwt_type.fingerprint().hash(&mut hasher);
-        hasher.finish()
-    }
-
-    /// Deduplicate a collection of types using their fingerprints
-    /// Returns a Vec with unique types, preserving order of first occurrence
-    pub fn deduplicate_types(&self, types: Vec<CwtType>) -> Vec<CwtType> {
-        let mut seen_fingerprints = std::collections::HashSet::new();
-        let mut result = Vec::new();
-
-        for cwt_type in types {
-            let fingerprint = cwt_type.fingerprint();
-            if seen_fingerprints.insert(fingerprint) {
-                result.push(cwt_type);
-            }
-        }
-
-        result
-    }
-
-    /// Create a union type from a collection of types, automatically deduplicating
-    /// and flattening nested unions
-    pub fn create_deduplicated_union(&self, types: Vec<CwtType>) -> CwtType {
-        let mut flattened_types = Vec::new();
-
-        // Flatten nested unions
-        for cwt_type in types {
-            match cwt_type {
-                CwtType::Union(nested_types) => {
-                    flattened_types.extend(nested_types);
-                }
-                _ => {
-                    flattened_types.push(cwt_type);
-                }
-            }
-        }
-
-        // Deduplicate
-        let unique_types = self.deduplicate_types(flattened_types);
-
-        // Return appropriate type based on count
-        match unique_types.len() {
-            0 => CwtType::Unknown,
-            1 => unique_types.into_iter().next().unwrap(),
-            _ => CwtType::Union(unique_types),
-        }
-    }
-
     fn resolve_reference_type(&self, ref_type: &ReferenceType) -> CwtType {
         match ref_type {
             ReferenceType::Type { key } => {

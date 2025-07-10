@@ -3,7 +3,7 @@
 //! This module provides utilities for converting CWT AST values to our CwtType system.
 
 use cw_parser::{
-    AstCwtIdentifierKey, AstCwtIdentifierOrString,
+    AstCwtIdentifierOrString,
     cwt::{
         AstCwtBlock, AstCwtIdentifier, CwtReferenceType, CwtSimpleValue, CwtSimpleValueType,
         CwtValue,
@@ -11,9 +11,7 @@ use cw_parser::{
 };
 use std::collections::HashMap;
 
-use crate::{
-    AliasName, AliasPattern, BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType,
-};
+use crate::{BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType, TypeFingerprint};
 
 /// Converter for CWT values to CwtType
 pub struct CwtConverter;
@@ -217,6 +215,8 @@ impl CwtConverter {
         }
 
         if !union_values.is_empty() {
+            union_values.dedup_by(|a, b| a.fingerprint() == b.fingerprint());
+
             return CwtType::Union(union_values);
         }
 

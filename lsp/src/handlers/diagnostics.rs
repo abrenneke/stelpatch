@@ -1,4 +1,5 @@
 use cw_model::CwtType;
+use cw_model::TypeFingerprint;
 use cw_parser::{AstEntityItem, AstModule, AstNode, AstValue};
 use std::collections::HashMap;
 use std::ops::Range;
@@ -241,35 +242,578 @@ impl<'client> DiagnosticsProvider<'client> {
                             );
                             diagnostics.push(diagnostic);
                         } else {
-                            // For nested entities, we need to get the actual type of this property
-                            // before validating its contents
-                            if let AstValue::Entity(_) = &expr.value {
-                                // Get the type of this specific property
-                                let property_type = Self::get_property_type_from_expected_type(
-                                    expected_type,
-                                    key_name,
-                                );
+                            // Get the expected type for this key
+                            let property_type =
+                                Self::get_property_type_from_expected_type(expected_type, key_name);
 
-                                let nested_diagnostics = self.validate_entity_value(
-                                    &expr.value,
-                                    &property_type,
-                                    content,
-                                    namespace,
-                                    depth + 1,
-                                );
-                                diagnostics.extend(nested_diagnostics);
-                            }
+                            // Validate the value against the property type
+                            let value_diagnostics = self.validate_value_against_type(
+                                &expr.value,
+                                &property_type,
+                                content,
+                                namespace,
+                                depth + 1,
+                            );
+                            diagnostics.extend(value_diagnostics);
                         }
                     }
                 }
             }
             _ => {
-                eprintln!("DEBUG: Non-entity value at depth {}", depth);
-                // For non-entity values (strings, numbers, etc.), no validation needed
+                // For non-entity values, validate the value directly against the expected type
+                let value_diagnostics = self.validate_value_against_type(
+                    value,
+                    expected_type,
+                    content,
+                    namespace,
+                    depth + 1,
+                );
+                diagnostics.extend(value_diagnostics);
             }
         }
 
         diagnostics
+    }
+
+    /// Validate a value against the expected CWT type
+    fn validate_value_against_type(
+        &self,
+        value: &AstValue<'_>,
+        expected_type: &CwtType,
+        content: &str,
+        namespace: &str,
+        depth: usize,
+    ) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+
+        // Prevent infinite recursion
+        if depth > 10 {
+            eprintln!("DEBUG: Max recursion depth reached at depth {}", depth);
+            return diagnostics;
+        }
+
+        if !TypeCache::is_initialized() {
+            return diagnostics;
+        }
+
+        let cache = TypeCache::get().unwrap();
+        let resolved_type = cache.resolve_type(expected_type);
+
+        match (&resolved_type, value) {
+            // Block type validation
+            (CwtType::Block(_), AstValue::Entity(_)) => {
+                // For block types, validate the entity structure recursively
+                let entity_diagnostics =
+                    self.validate_entity_value(value, &resolved_type, content, namespace, depth);
+                diagnostics.extend(entity_diagnostics);
+            }
+            (CwtType::Block(_), _) => {
+                // Expected a block but got something else
+                let diagnostic = Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Expected a block/entity",
+                    content,
+                );
+                diagnostics.push(diagnostic);
+            }
+
+            // Literal value validation
+            (CwtType::Literal(literal_value), AstValue::String(string_value)) => {
+                if string_value.raw_value() != literal_value {
+                    let diagnostic = Self::create_value_mismatch_diagnostic(
+                        value.span_range(),
+                        &format!(
+                            "Expected '{}' but got '{}'",
+                            literal_value,
+                            string_value.raw_value()
+                        ),
+                        content,
+                    );
+                    diagnostics.push(diagnostic);
+                }
+            }
+            (CwtType::Literal(literal_value), _) => {
+                // Expected a literal string but got something else
+                let diagnostic = Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    &format!("Expected string literal '{}'", literal_value),
+                    content,
+                );
+                diagnostics.push(diagnostic);
+            }
+
+            // Literal set validation
+            (CwtType::LiteralSet(valid_values), AstValue::String(string_value)) => {
+                if !valid_values.contains(string_value.raw_value()) {
+                    let valid_list: Vec<_> = valid_values.iter().collect();
+                    let diagnostic = Self::create_value_mismatch_diagnostic(
+                        value.span_range(),
+                        &format!(
+                            "Expected one of {:?} but got '{}'",
+                            valid_list,
+                            string_value.raw_value()
+                        ),
+                        content,
+                    );
+                    diagnostics.push(diagnostic);
+                }
+            }
+            (CwtType::LiteralSet(_), _) => {
+                // Expected a string from literal set but got something else
+                let diagnostic = Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Expected a string value",
+                    content,
+                );
+                diagnostics.push(diagnostic);
+            }
+
+            // Simple type validation
+            (CwtType::Simple(simple_type), _) => {
+                if let Some(diagnostic) =
+                    Self::is_value_compatible_with_simple_type(value, simple_type, content)
+                {
+                    diagnostics.push(diagnostic);
+                }
+            }
+
+            // Array type validation
+            (CwtType::Array(array_type), AstValue::Entity(entity)) => {
+                // Arrays in CW are represented as entities with numbered keys
+                // For now, we'll just validate that it's an entity - more complex validation would require
+                // checking that all keys are valid indices and values match the element type
+                let _element_type = &array_type.element_type;
+                // TODO: Implement array element validation
+            }
+            (CwtType::Array(_), _) => {
+                let diagnostic = Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Expected an array (entity with indexed elements)",
+                    content,
+                );
+                diagnostics.push(diagnostic);
+            }
+
+            // Union type validation
+            (CwtType::Union(types), _) => {
+                // Check if the value is structurally compatible with any of the union members
+                let mut compatible_type = None;
+
+                for union_type in types {
+                    if Self::is_value_structurally_compatible(value, union_type) {
+                        compatible_type = Some(union_type.clone());
+                        break;
+                    }
+                }
+
+                if let Some(matching_type) = compatible_type {
+                    // Value is structurally compatible with this union member,
+                    // now validate the content according to this type
+                    let content_diagnostics = self.validate_value_against_type(
+                        value,
+                        &matching_type,
+                        content,
+                        namespace,
+                        depth + 1,
+                    );
+                    diagnostics.extend(content_diagnostics);
+                } else {
+                    // Value is not structurally compatible with any union member
+                    let type_names: Vec<String> =
+                        types.iter().map(|t| Self::get_type_name(t)).collect();
+
+                    let diagnostic = Self::create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        &format!(
+                            "Value is not compatible with any of the expected types: {}",
+                            type_names.join(", ")
+                        ),
+                        content,
+                    );
+                    diagnostics.push(diagnostic);
+                }
+            }
+
+            // Comparable type validation
+            (CwtType::Comparable(base_type), _) => {
+                // For comparable types, validate against the base type
+                let base_diagnostics = self.validate_value_against_type(
+                    value,
+                    base_type,
+                    content,
+                    namespace,
+                    depth + 1,
+                );
+                diagnostics.extend(base_diagnostics);
+            }
+
+            // Reference type validation
+            (CwtType::Reference(ref_type), _) => {
+                // For reference types, we need to resolve them through the cache
+                // For now, we'll skip validation of reference types as they require complex resolution
+                eprintln!(
+                    "DEBUG: Skipping validation of reference type {:?}",
+                    ref_type
+                );
+            }
+
+            // Unknown type - don't validate
+            (CwtType::Unknown, _) => {
+                // Don't validate unknown types
+            }
+        }
+
+        diagnostics
+    }
+
+    /// Check if a value is compatible with a simple type, returning a diagnostic if incompatible
+    fn is_value_compatible_with_simple_type(
+        value: &AstValue<'_>,
+        simple_type: &cw_model::SimpleType,
+        content: &str,
+    ) -> Option<Diagnostic> {
+        use cw_model::SimpleType;
+
+        match (value, simple_type) {
+            (AstValue::String(_), SimpleType::Localisation) => {
+                // TODO: Implement proper localisation validation
+                Some(Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Localisation validation not yet implemented",
+                    content,
+                ))
+            }
+            (AstValue::String(_), SimpleType::LocalisationSynced) => {
+                // TODO: Implement proper localisation validation
+                Some(Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Localisation synced validation not yet implemented",
+                    content,
+                ))
+            }
+            (AstValue::String(_), SimpleType::LocalisationInline) => {
+                // TODO: Implement proper localisation validation
+                Some(Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Inline localisation validation not yet implemented",
+                    content,
+                ))
+            }
+            (AstValue::String(_), SimpleType::Filepath) => {
+                // TODO: Implement proper filepath validation
+                Some(Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Filepath validation not yet implemented",
+                    content,
+                ))
+            }
+            (AstValue::String(_), SimpleType::Icon) => {
+                // TODO: Implement proper icon validation
+                Some(Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Icon validation not yet implemented",
+                    content,
+                ))
+            }
+            (AstValue::String(_), SimpleType::VariableField) => {
+                // TODO: Implement proper variable field validation
+                Some(Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Variable field validation not yet implemented",
+                    content,
+                ))
+            }
+            (AstValue::String(_), SimpleType::ScopeField) => {
+                // TODO: Implement proper scope field validation
+                Some(Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Scope field validation not yet implemented",
+                    content,
+                ))
+            }
+            (AstValue::String(_), SimpleType::DateField) => {
+                // TODO: Implement proper date field validation
+                Some(Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Date field validation not yet implemented",
+                    content,
+                ))
+            }
+            (AstValue::String(_), SimpleType::Scalar) => None, // Valid
+            (AstValue::String(_), SimpleType::IntVariableField) => {
+                // TODO: Implement proper int variable field validation
+                Some(Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Int variable field validation not yet implemented",
+                    content,
+                ))
+            }
+            (AstValue::String(_), SimpleType::IntValueField) => {
+                // TODO: Implement proper int value field validation
+                Some(Self::create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Int value field validation not yet implemented",
+                    content,
+                ))
+            }
+
+            (AstValue::Number(_), SimpleType::ValueField) => None, // Valid
+            (AstValue::Number(n), SimpleType::Int) => {
+                if n.value.value.find('.').is_none() {
+                    None // Valid integer
+                } else {
+                    Some(Self::create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Expected integer but got decimal number",
+                        content,
+                    ))
+                }
+            }
+            (AstValue::Number(_), SimpleType::Float) => None, // Valid
+            (AstValue::Number(n), SimpleType::PercentageField) => {
+                if n.value.value.ends_with("%") {
+                    None // Valid percentage
+                } else {
+                    Some(Self::create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Expected percentage value (ending with %)",
+                        content,
+                    ))
+                }
+            }
+
+            (AstValue::String(s), SimpleType::Bool) => {
+                let val = s.raw_value();
+                if val == "yes" || val == "no" {
+                    None // Valid boolean
+                } else {
+                    Some(Self::create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Expected boolean value ('yes' or 'no')",
+                        content,
+                    ))
+                }
+            }
+
+            (AstValue::Color(_), SimpleType::Color) => None, // Valid
+            (AstValue::Maths(_), SimpleType::Maths) => None, // Valid
+
+            // Type mismatches
+            (_, simple_type) => Some(Self::create_type_mismatch_diagnostic(
+                value.span_range(),
+                &format!(
+                    "Expected {:?} but got {}",
+                    simple_type,
+                    Self::get_value_type_name(value)
+                ),
+                content,
+            )),
+        }
+    }
+
+    /// Get a human-readable name for a value type
+    fn get_value_type_name(value: &AstValue<'_>) -> &'static str {
+        match value {
+            AstValue::String(_) => "string",
+            AstValue::Number(_) => "number",
+            AstValue::Entity(_) => "entity/block",
+            AstValue::Color(_) => "color",
+            AstValue::Maths(_) => "math expression",
+        }
+    }
+
+    /// Get a human-readable name for a CWT type
+    fn get_type_name(cwt_type: &CwtType) -> String {
+        match cwt_type {
+            CwtType::Simple(simple_type) => format!("{:?}", simple_type),
+            CwtType::Block(_) => "block".to_string(),
+            CwtType::Literal(value) => format!("'{}'", value),
+            CwtType::LiteralSet(values) => {
+                let value_list: Vec<_> = values.iter().take(3).collect();
+                if values.len() > 3 {
+                    format!("one of {:?}...", value_list)
+                } else {
+                    format!("one of {:?}", value_list)
+                }
+            }
+            CwtType::Array(_) => "array".to_string(),
+            CwtType::Union(_) => "union".to_string(),
+            CwtType::Comparable(base_type) => {
+                format!("comparable {}", Self::get_type_name(base_type))
+            }
+            CwtType::Reference(ref_type) => match ref_type {
+                cw_model::ReferenceType::Type { key } => format!("<{}>", key),
+                cw_model::ReferenceType::Enum { key } => format!("enum {}", key),
+                cw_model::ReferenceType::ComplexEnum { key } => format!("complex_enum {}", key),
+                cw_model::ReferenceType::ValueSet { key } => format!("value_set {}", key),
+                cw_model::ReferenceType::Value { key } => format!("value {}", key),
+                cw_model::ReferenceType::Scope { key } => format!("scope {}", key),
+                cw_model::ReferenceType::ScopeGroup { key } => format!("scope_group {}", key),
+                cw_model::ReferenceType::Alias { key } => format!("alias {}", key),
+                cw_model::ReferenceType::AliasName { key } => format!("alias_name {}", key),
+                cw_model::ReferenceType::AliasMatchLeft { key } => {
+                    format!("alias_match_left {}", key)
+                }
+                cw_model::ReferenceType::SingleAlias { key } => format!("single_alias {}", key),
+                cw_model::ReferenceType::AliasKeysField { key } => {
+                    format!("alias_keys_field {}", key)
+                }
+                cw_model::ReferenceType::Colour { format } => format!("colour ({})", format),
+                cw_model::ReferenceType::Icon { path } => format!("icon ({})", path),
+                cw_model::ReferenceType::Filepath { path } => format!("filepath ({})", path),
+                cw_model::ReferenceType::Subtype { name } => format!("subtype {}", name),
+                cw_model::ReferenceType::StellarisNameFormat { key } => {
+                    format!("name_format {}", key)
+                }
+                _ => format!("reference {:?}", ref_type),
+            },
+            CwtType::Unknown => "unknown".to_string(),
+        }
+    }
+
+    /// Check if a value is structurally compatible with a type (without content validation)
+    fn is_value_structurally_compatible(value: &AstValue<'_>, expected_type: &CwtType) -> bool {
+        Self::is_value_structurally_compatible_with_depth(value, expected_type, 0)
+    }
+
+    /// Check if a value is structurally compatible with a type with recursion depth limit
+    fn is_value_structurally_compatible_with_depth(
+        value: &AstValue<'_>,
+        expected_type: &CwtType,
+        depth: usize,
+    ) -> bool {
+        // Prevent infinite recursion
+        if depth > 10 {
+            return false;
+        }
+
+        if !TypeCache::is_initialized() {
+            return true; // Default to compatible if cache not available
+        }
+
+        let cache = TypeCache::get().unwrap();
+        let resolved_type = cache.resolve_type(expected_type);
+
+        match (&resolved_type, value) {
+            // Block types are compatible with entities
+            (CwtType::Block(_), AstValue::Entity(_)) => true,
+
+            // Literal types are compatible with strings
+            (CwtType::Literal(_), AstValue::String(_)) => true,
+
+            // Literal sets are compatible with strings
+            (CwtType::LiteralSet(_), AstValue::String(_)) => true,
+
+            // Simple types - check basic compatibility
+            (CwtType::Simple(simple_type), _) => {
+                Self::is_value_compatible_with_simple_type_structurally(value, simple_type)
+            }
+
+            // Array types are compatible with entities
+            (CwtType::Array(_), AstValue::Entity(_)) => true,
+
+            // Union types - check if compatible with any member
+            (CwtType::Union(types), _) => types.iter().any(|union_type| {
+                Self::is_value_structurally_compatible_with_depth(value, union_type, depth + 1)
+            }),
+
+            // Comparable types - check compatibility with base type
+            (CwtType::Comparable(base_type), _) => {
+                Self::is_value_structurally_compatible_with_depth(value, base_type, depth + 1)
+            }
+
+            // Reference types - resolve and check
+            (CwtType::Reference(_), _) => {
+                // For now, assume references are compatible
+                // TODO: Implement proper reference resolution
+                true
+            }
+
+            // Unknown types are always compatible
+            (CwtType::Unknown, _) => true,
+
+            // Everything else is incompatible
+            _ => false,
+        }
+    }
+
+    /// Check if a value is structurally compatible with a simple type
+    fn is_value_compatible_with_simple_type_structurally(
+        value: &AstValue<'_>,
+        simple_type: &cw_model::SimpleType,
+    ) -> bool {
+        use cw_model::SimpleType;
+
+        match (value, simple_type) {
+            // String-based types
+            (AstValue::String(_), SimpleType::Localisation) => true,
+            (AstValue::String(_), SimpleType::LocalisationSynced) => true,
+            (AstValue::String(_), SimpleType::LocalisationInline) => true,
+            (AstValue::String(_), SimpleType::Filepath) => true,
+            (AstValue::String(_), SimpleType::Icon) => true,
+            (AstValue::String(_), SimpleType::VariableField) => true,
+            (AstValue::String(_), SimpleType::ScopeField) => true,
+            (AstValue::String(_), SimpleType::DateField) => true,
+            (AstValue::String(_), SimpleType::Scalar) => true,
+            (AstValue::String(_), SimpleType::IntVariableField) => true,
+            (AstValue::String(_), SimpleType::IntValueField) => true,
+            (AstValue::String(_), SimpleType::Bool) => true,
+
+            // Number-based types
+            (AstValue::Number(_), SimpleType::ValueField) => true,
+            (AstValue::Number(_), SimpleType::Int) => true,
+            (AstValue::Number(_), SimpleType::Float) => true,
+            (AstValue::Number(_), SimpleType::PercentageField) => true,
+
+            // Specialized types
+            (AstValue::Color(_), SimpleType::Color) => true,
+            (AstValue::Maths(_), SimpleType::Maths) => true,
+
+            // Everything else is incompatible
+            _ => false,
+        }
+    }
+
+    /// Create a diagnostic for type mismatches
+    fn create_type_mismatch_diagnostic(
+        span: Range<usize>,
+        message: &str,
+        content: &str,
+    ) -> Diagnostic {
+        let range = span_to_lsp_range(span, content);
+
+        Diagnostic {
+            range,
+            severity: Some(DiagnosticSeverity::ERROR),
+            code: Some(NumberOrString::String("type-mismatch".to_string())),
+            code_description: None,
+            source: Some("cw-type-checker".to_string()),
+            message: message.to_string(),
+            related_information: None,
+            tags: None,
+            data: None,
+        }
+    }
+
+    /// Create a diagnostic for value mismatches
+    fn create_value_mismatch_diagnostic(
+        span: Range<usize>,
+        message: &str,
+        content: &str,
+    ) -> Diagnostic {
+        let range = span_to_lsp_range(span, content);
+
+        Diagnostic {
+            range,
+            severity: Some(DiagnosticSeverity::WARNING),
+            code: Some(NumberOrString::String("value-mismatch".to_string())),
+            code_description: None,
+            source: Some("cw-type-checker".to_string()),
+            message: message.to_string(),
+            related_information: None,
+            tags: None,
+            data: None,
+        }
     }
 
     /// Get the type of a property from the expected type structure
