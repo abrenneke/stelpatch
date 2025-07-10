@@ -311,18 +311,24 @@ impl TypeResolver {
                         }
                         // For alias[foo:<type_name>] = bar, we expand <type_name> to all types in the namespace
                         AliasName::TypeRef(name) => {
-                            let all_types = game_data.get_namespace_keys(name);
-                            if let Some(all_types) = all_types {
-                                for type_key in all_types {
-                                    let new_property = Property {
-                                        property_type: value_type.clone(),
-                                        options: CwtOptions::default(),
-                                        documentation: Some(format!(
-                                            "Alias from {} category",
-                                            alias_pattern
-                                        )),
-                                    };
-                                    new_properties.insert(type_key.clone(), new_property);
+                            let type_def = self.cwt_analyzer.get_type(name);
+                            if let Some(type_def) = type_def {
+                                if let Some(path) = type_def.path.as_ref() {
+                                    let path = path.trim_start_matches("game/");
+                                    let all_types = game_data.get_namespace_keys(path);
+                                    if let Some(all_types) = all_types {
+                                        for type_key in all_types {
+                                            let new_property = Property {
+                                                property_type: value_type.clone(),
+                                                options: CwtOptions::default(),
+                                                documentation: Some(format!(
+                                                    "Alias from {} category",
+                                                    alias_pattern
+                                                )),
+                                            };
+                                            new_properties.insert(type_key.clone(), new_property);
+                                        }
+                                    }
                                 }
                             }
                         }

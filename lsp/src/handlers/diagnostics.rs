@@ -1,6 +1,6 @@
 use cw_model::CwtType;
 use cw_parser::{AstEntityItem, AstModule, AstNode, AstValue};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
@@ -277,6 +277,24 @@ impl<'client> DiagnosticsProvider<'client> {
         expected_type: &CwtType,
         property_name: &str,
     ) -> CwtType {
+        Self::get_property_type_from_expected_type_with_depth(expected_type, property_name, 0)
+    }
+
+    /// Get the type of a property from the expected type structure with recursion depth limit
+    fn get_property_type_from_expected_type_with_depth(
+        expected_type: &CwtType,
+        property_name: &str,
+        depth: usize,
+    ) -> CwtType {
+        // Prevent infinite recursion by limiting depth
+        if depth > 10 {
+            eprintln!(
+                "DEBUG: Max recursion depth reached for property {}, returning Unknown",
+                property_name
+            );
+            return CwtType::Unknown;
+        }
+
         if !TypeCache::is_initialized() {
             return CwtType::Unknown;
         }
@@ -296,8 +314,11 @@ impl<'client> DiagnosticsProvider<'client> {
             CwtType::Union(types) => {
                 // For union types, try to find the property in any of the union members
                 for union_type in types {
-                    let property_type =
-                        Self::get_property_type_from_expected_type(&union_type, property_name);
+                    let property_type = Self::get_property_type_from_expected_type_with_depth(
+                        &union_type,
+                        property_name,
+                        depth + 1,
+                    );
                     if !matches!(property_type, CwtType::Unknown) {
                         return property_type;
                     }
@@ -308,7 +329,11 @@ impl<'client> DiagnosticsProvider<'client> {
                 // For references, resolve and try again
                 let resolved_ref = cache.resolve_type(&resolved_type);
                 if !matches!(resolved_ref, CwtType::Reference(_)) {
-                    Self::get_property_type_from_expected_type(&resolved_ref, property_name)
+                    Self::get_property_type_from_expected_type_with_depth(
+                        &resolved_ref,
+                        property_name,
+                        depth + 1,
+                    )
                 } else {
                     CwtType::Unknown
                 }
@@ -319,17 +344,15 @@ impl<'client> DiagnosticsProvider<'client> {
 
     /// Check if a key is valid for the given type
     fn is_key_valid(cwt_type: &CwtType, key_name: &str) -> bool {
-        let mut seen = HashSet::new();
-        Self::is_key_valid_with_seen(cwt_type, key_name, &mut seen)
+        Self::is_key_valid_with_depth(cwt_type, key_name, 0)
     }
 
-    /// Check if a key is valid for the given type with cycle detection
-    fn is_key_valid_with_seen(
-        cwt_type: &CwtType,
-        key_name: &str,
-        seen: &mut HashSet<*const CwtType>,
-    ) -> bool {
-        eprintln!("DEBUG: checking if key {} is valid", key_name);
+    /// Check if a key is valid for the given type with recursion depth limit
+    fn is_key_valid_with_depth(cwt_type: &CwtType, key_name: &str, depth: usize) -> bool {
+        // Prevent infinite recursion by limiting depth
+        if depth > 10 {
+            return false;
+        }
 
         if !TypeCache::is_initialized() {
             return true;
@@ -337,19 +360,6 @@ impl<'client> DiagnosticsProvider<'client> {
 
         let cache = TypeCache::get().unwrap();
         let cwt_type = cache.resolve_type(cwt_type);
-
-        // Check if we've already seen this type to prevent infinite recursion
-        let type_ptr = &cwt_type as *const CwtType;
-        if seen.contains(&type_ptr) {
-            eprintln!(
-                "DEBUG: Detected cycle for key {}, returning false",
-                key_name
-            );
-            return false;
-        }
-
-        // Add this type to the seen set
-        seen.insert(type_ptr);
 
         let result = match &cwt_type {
             CwtType::Block(obj) => {
@@ -360,11 +370,11 @@ impl<'client> DiagnosticsProvider<'client> {
                 // For union types, key is valid if it's valid in any of the union members
                 types
                     .iter()
-                    .any(|t| Self::is_key_valid_with_seen(t, key_name, seen))
+                    .any(|t| Self::is_key_valid_with_depth(t, key_name, depth + 1))
             }
             CwtType::Reference(_) => {
                 // For references, try to resolve them but don't get stuck in infinite loops
-                Self::is_key_valid_with_seen(&cwt_type, key_name, seen)
+                Self::is_key_valid_with_depth(&cwt_type, key_name, depth + 1)
             }
             CwtType::Unknown => false,
             CwtType::Simple(_) => false,
@@ -373,9 +383,6 @@ impl<'client> DiagnosticsProvider<'client> {
             CwtType::LiteralSet(_) => false,
             CwtType::Comparable(_) => false,
         };
-
-        // Remove this type from the seen set before returning
-        seen.remove(&type_ptr);
 
         result
     }
