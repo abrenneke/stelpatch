@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::handlers::cache::{GameDataCache, TypeCache};
-use crate::handlers::diagnostics::DiagnosticsProvider;
+use crate::handlers::diagnostics::generate_diagnostics;
 use crate::semantic_token_collector::CwSemanticTokenType;
 use tokio::sync::RwLock;
 use tower_lsp::Client;
@@ -65,11 +65,9 @@ pub async fn initialized(
             )
             .await;
 
-        let provider = DiagnosticsProvider::new(&client_clone, documents.clone());
-
         let documents_guard = documents.read().await;
         for uri in documents_guard.keys() {
-            provider.generate_diagnostics(uri).await;
+            generate_diagnostics(&client_clone, &documents, uri).await;
         }
     });
 }
