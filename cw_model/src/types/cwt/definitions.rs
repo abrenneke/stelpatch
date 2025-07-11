@@ -212,6 +212,38 @@ pub struct AliasDefinition {
     pub to: CwtType,
 }
 
+/// Definition of a CWT link
+#[derive(Debug, Clone)]
+pub struct LinkDefinition {
+    /// Link name/key
+    pub name: String,
+    /// Description of the link
+    pub desc: Option<String>,
+    /// Whether this link is generated from data
+    pub from_data: bool,
+    /// Type of link (scope, both, value)
+    pub link_type: LinkType,
+    /// Data source for generated links
+    pub data_source: Option<String>,
+    /// Mandatory prefix for link values
+    pub prefix: Option<String>,
+    /// Input scopes this link can be used from
+    pub input_scopes: Vec<String>,
+    /// Output scope this link results in
+    pub output_scope: String,
+}
+
+/// Type of link
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LinkType {
+    /// Scope link
+    Scope,
+    /// Value link
+    Value,
+    /// Both scope and value
+    Both,
+}
+
 impl TypeDefinition {
     /// Create a new type definition with default values
     pub fn new(rules: CwtType) -> Self {
@@ -326,5 +358,75 @@ impl AliasDefinition {
     /// Get the full alias key (category:name)
     pub fn full_key(&self) -> String {
         format!("{}:{}", self.category, self.name)
+    }
+}
+
+impl LinkDefinition {
+    /// Create a new link definition
+    pub fn new(name: String, input_scopes: Vec<String>, output_scope: String) -> Self {
+        Self {
+            name,
+            desc: None,
+            from_data: false,
+            link_type: LinkType::Scope,
+            data_source: None,
+            prefix: None,
+            input_scopes,
+            output_scope,
+        }
+    }
+
+    /// Create a link definition with description
+    pub fn with_desc(mut self, desc: String) -> Self {
+        self.desc = Some(desc);
+        self
+    }
+
+    /// Set from_data flag
+    pub fn with_from_data(mut self, from_data: bool) -> Self {
+        self.from_data = from_data;
+        self
+    }
+
+    /// Set link type
+    pub fn with_type(mut self, link_type: LinkType) -> Self {
+        self.link_type = link_type;
+        self
+    }
+
+    /// Set data source
+    pub fn with_data_source(mut self, data_source: String) -> Self {
+        self.data_source = Some(data_source);
+        self
+    }
+
+    /// Set prefix
+    pub fn with_prefix(mut self, prefix: String) -> Self {
+        self.prefix = Some(prefix);
+        self
+    }
+
+    /// Check if this link can be used from a specific scope
+    pub fn can_be_used_from(&self, scope: &str) -> bool {
+        self.input_scopes.contains(&scope.to_string())
+            || self.input_scopes.contains(&"all".to_string())
+    }
+
+    /// Check if this link is generated from data
+    pub fn is_from_data(&self) -> bool {
+        self.from_data
+    }
+}
+
+impl std::str::FromStr for LinkType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "scope" => Ok(LinkType::Scope),
+            "value" => Ok(LinkType::Value),
+            "both" => Ok(LinkType::Both),
+            _ => Err(format!("Invalid link type: {}", s)),
+        }
     }
 }

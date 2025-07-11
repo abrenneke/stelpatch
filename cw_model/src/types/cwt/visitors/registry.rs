@@ -7,7 +7,7 @@ use crate::{AliasPattern, CwtType};
 
 use super::super::conversion::ConversionError;
 use super::super::definitions::*;
-use super::{AliasVisitor, EnumVisitor, RuleVisitor, TypeVisitor, ValueSetVisitor};
+use super::{AliasVisitor, EnumVisitor, LinksVisitor, RuleVisitor, TypeVisitor, ValueSetVisitor};
 use cw_parser::cwt::{
     AstCwtIdentifierOrString, AstCwtRule, CwtModule, CwtReferenceType, CwtValue, CwtVisitor,
 };
@@ -26,6 +26,8 @@ pub struct CwtAnalysisData {
     pub aliases: HashMap<AliasPattern, AliasDefinition>,
     /// Known single aliases registry
     pub single_aliases: HashMap<String, CwtType>,
+    /// Known links registry
+    pub links: HashMap<String, LinkDefinition>,
     /// Errors encountered during conversion
     pub errors: Vec<ConversionError>,
 }
@@ -43,6 +45,7 @@ impl CwtAnalysisData {
         self.value_sets.clear();
         self.aliases.clear();
         self.single_aliases.clear();
+        self.links.clear();
         self.errors.clear();
     }
 
@@ -58,6 +61,7 @@ impl CwtAnalysisData {
             + self.value_sets.len()
             + self.aliases.len()
             + self.single_aliases.len()
+            + self.links.len()
     }
 
     /// Insert or merge a type definition
@@ -119,6 +123,12 @@ impl<'a> CwtRegistryVisitor<'a> {
             }
         }
     }
+
+    /// Handle a links section
+    fn handle_links_section(&mut self, rule: &AstCwtRule) {
+        let mut links_visitor = LinksVisitor::new(self.data);
+        links_visitor.visit_rule(rule);
+    }
 }
 
 impl<'a> CwtVisitor<'a> for CwtRegistryVisitor<'a> {
@@ -132,6 +142,9 @@ impl<'a> CwtVisitor<'a> for CwtRegistryVisitor<'a> {
             }
             "enums" => {
                 self.handle_enums_section(rule);
+            }
+            "links" => {
+                self.handle_links_section(rule);
             }
             _ => {
                 // Check for typed identifiers in the rule key

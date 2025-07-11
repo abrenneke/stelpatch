@@ -65,6 +65,11 @@ impl CwtAnalyzer {
         &self.data.single_aliases
     }
 
+    /// Get all defined links
+    pub fn get_links(&self) -> &HashMap<String, super::definitions::LinkDefinition> {
+        &self.data.links
+    }
+
     /// Get conversion errors
     pub fn get_errors(&self) -> &Vec<ConversionError> {
         &self.data.errors
@@ -100,6 +105,11 @@ impl CwtAnalyzer {
         self.data.single_aliases.get(name)
     }
 
+    /// Get a specific link definition
+    pub fn get_link(&self, name: &str) -> Option<&super::definitions::LinkDefinition> {
+        self.data.links.get(name)
+    }
+
     /// Check if a type is defined
     pub fn has_type(&self, name: &str) -> bool {
         self.data.types.contains_key(name)
@@ -125,6 +135,11 @@ impl CwtAnalyzer {
         self.data.single_aliases.contains_key(name)
     }
 
+    /// Check if a link is defined
+    pub fn has_link(&self, name: &str) -> bool {
+        self.data.links.contains_key(name)
+    }
+
     /// Get statistics about the analyzer
     pub fn get_stats(&self) -> AnalyzerStats {
         AnalyzerStats {
@@ -133,6 +148,7 @@ impl CwtAnalyzer {
             value_sets_count: self.data.value_sets.len(),
             aliases_count: self.data.aliases.len(),
             single_aliases_count: self.data.single_aliases.len(),
+            links_count: self.data.links.len(),
             errors_count: self.data.errors.len(),
         }
     }
@@ -144,6 +160,7 @@ impl CwtAnalyzer {
         self.data.value_sets.extend(other.data.value_sets);
         self.data.aliases.extend(other.data.aliases);
         self.data.single_aliases.extend(other.data.single_aliases);
+        self.data.links.extend(other.data.links);
         self.data.errors.extend(other.data.errors);
     }
 
@@ -172,6 +189,7 @@ pub struct AnalyzerStats {
     pub value_sets_count: usize,
     pub aliases_count: usize,
     pub single_aliases_count: usize,
+    pub links_count: usize,
     pub errors_count: usize,
 }
 
@@ -183,6 +201,7 @@ impl AnalyzerStats {
             + self.value_sets_count
             + self.aliases_count
             + self.single_aliases_count
+            + self.links_count
     }
 
     /// Check if there are any errors
@@ -200,12 +219,13 @@ impl std::fmt::Display for AnalyzerStats {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Types: {}, Enums: {}, Value Sets: {}, Aliases: {}, Single Aliases: {}, Errors: {}",
+            "Types: {}, Enums: {}, Value Sets: {}, Aliases: {}, Single Aliases: {}, Links: {}, Errors: {}",
             self.types_count,
             self.enums_count,
             self.value_sets_count,
             self.aliases_count,
             self.single_aliases_count,
+            self.links_count,
             self.errors_count
         )
     }
@@ -234,6 +254,7 @@ mod tests {
         assert_eq!(stats.value_sets_count, 0);
         assert_eq!(stats.aliases_count, 0);
         assert_eq!(stats.single_aliases_count, 0);
+        assert_eq!(stats.links_count, 0);
         assert_eq!(stats.errors_count, 0);
         assert_eq!(stats.total_definitions(), 0);
         assert!(!stats.has_errors());
@@ -249,6 +270,7 @@ mod tests {
         assert!(analyzer.get_value_sets().is_empty());
         assert!(analyzer.get_aliases().is_empty());
         assert!(analyzer.get_single_aliases().is_empty());
+        assert!(analyzer.get_links().is_empty());
         assert!(analyzer.get_errors().is_empty());
 
         assert!(!analyzer.has_type("test"));
@@ -256,6 +278,7 @@ mod tests {
         assert!(!analyzer.has_value_set("test"));
         assert!(!analyzer.has_alias(&AliasPattern::new_basic("test", "test")));
         assert!(!analyzer.has_single_alias("test"));
+        assert!(!analyzer.has_link("test"));
 
         assert!(analyzer.get_type("test").is_none());
         assert!(analyzer.get_enum("test").is_none());
@@ -266,5 +289,6 @@ mod tests {
                 .is_none()
         );
         assert!(analyzer.get_single_alias("test").is_none());
+        assert!(analyzer.get_link("test").is_none());
     }
 }

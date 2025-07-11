@@ -15,6 +15,7 @@ pub enum ConversionError {
     InvalidSubtypeFormat,
     InvalidEnumFormat,
     InvalidAliasFormat,
+    InvalidLinkFormat(String),
     UnsupportedFeature(String),
     MissingReference(String),
     InvalidTypeDefinition(String),
@@ -30,6 +31,9 @@ impl std::fmt::Display for ConversionError {
             ConversionError::InvalidSubtypeFormat => write!(f, "Invalid subtype format"),
             ConversionError::InvalidEnumFormat => write!(f, "Invalid enum format"),
             ConversionError::InvalidAliasFormat => write!(f, "Invalid alias format"),
+            ConversionError::InvalidLinkFormat(link_error) => {
+                write!(f, "Invalid link format: {}", link_error)
+            }
             ConversionError::UnsupportedFeature(feature) => {
                 write!(f, "Unsupported CWT feature: {}", feature)
             }

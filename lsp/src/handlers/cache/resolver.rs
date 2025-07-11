@@ -164,19 +164,10 @@ impl TypeResolver {
         property_name: &str,
     ) -> PropertyNavigationResult {
         let resolved_type = self.resolve_type(scoped_type);
-
-        eprintln!(
-            "Resolving property {} on {}",
-            property_name,
-            scoped_type.fingerprint()
-        );
-
         match resolved_type.cwt_type() {
             CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
                 // Check regular properties first
                 if let Some(property) = block.properties.get(property_name) {
-                    eprintln!("Found property: {:?}", property);
-
                     // Check if this property changes scope
                     if property.changes_scope() {
                         match property.apply_scope_changes(resolved_type.scope_context()) {
@@ -200,8 +191,6 @@ impl TypeResolver {
                 } else {
                     // Check pattern properties
                     if let Some(pattern_property) = self.key_matches_pattern(property_name, block) {
-                        eprintln!("Found pattern property: {:?}", pattern_property);
-
                         if pattern_property.changes_scope() {
                             match pattern_property
                                 .apply_scope_changes(resolved_type.scope_context())
