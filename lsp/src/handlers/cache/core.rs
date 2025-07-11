@@ -1,14 +1,15 @@
 use cw_games::stellaris::BaseGame;
 use cw_model::types::CwtAnalyzer;
-use cw_model::{CwtType, ReferenceType};
+use cw_model::{CwtType, TypeFingerprint};
 use cw_model::{GameMod, LoadMode};
 use cw_parser::CwtModuleCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use crate::handlers::cache::resolver::TypeResolver;
+use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
 
 use super::formatter::format_type_description_with_property_context;
 use super::types::TypeInfo;
@@ -158,7 +159,7 @@ impl TypeCache {
         // First try to get from namespace types (game data)
         if let Some(namespace_type) = self.get_namespace_type(namespace) {
             let path_parts: Vec<&str> = property_path.split('.').collect();
-            let mut current_type = namespace_type.clone();
+            let mut current_type = ScopedType::new_cwt(namespace_type.clone(), Default::default());
             let mut current_path = String::new();
 
             for (i, part) in path_parts.iter().enumerate() {
@@ -170,17 +171,22 @@ impl TypeCache {
                 // Resolve the current type to its actual type
                 current_type = self.resolver.resolve_type(&current_type);
 
-                match &current_type {
-                    CwtType::Block(block) => {
-                        if let Some(property_def) = block.properties.get(*part) {
-                            current_type = property_def.property_type.clone();
-                        } else {
-                            // Check if the property matches any pattern property
-                            if let Some(pattern_property) =
-                                self.resolver.key_matches_pattern(part, block)
-                            {
-                                current_type = pattern_property.value_type.clone();
-                            } else {
+                match &current_type.cwt_type() {
+                    CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
+                        match self.resolver.navigate_to_property(&current_type, part) {
+                            PropertyNavigationResult::Success(scoped_type) => {
+                                current_type = scoped_type;
+                            }
+                            PropertyNavigationResult::ScopeError(e) => {
+                                return Some(TypeInfo {
+                                    property_path: current_path,
+                                    type_description: format!("Scope error: {}", e),
+                                    cwt_type: None,
+                                    documentation: None,
+                                    source_info: Some(format!("Scope error: {}", e)),
+                                });
+                            }
+                            PropertyNavigationResult::NotFound => {
                                 return Some(TypeInfo {
                                     property_path: current_path,
                                     type_description: format!("Unknown property '{}'", part),
@@ -194,100 +200,55 @@ impl TypeCache {
                             }
                         }
                     }
-                    CwtType::Reference(_reference) => {
-                        // For references, resolve to the actual type and continue traversal
-                        let resolved_type = self.resolver.resolve_type(&current_type);
-
-                        // If we couldn't resolve the reference, return info about the reference itself
-                        if matches!(resolved_type, CwtType::Reference(_)) {
-                            return Some(TypeInfo {
-                                property_path: current_path.clone(),
-                                type_description: format_type_description_with_property_context(
-                                    &resolved_type,
-                                    0,
-                                    30,
-                                    &self.cwt_analyzer,
-                                    &self.resolver,
-                                    Some(part), // Pass the current property name
-                                ),
-                                cwt_type: Some(resolved_type),
-                                documentation: None,
-                                source_info: Some(format!(
-                                    "Reference in {} entity at path '{}'",
-                                    namespace, current_path
-                                )),
-                            });
-                        }
-
-                        // Continue with the resolved type
-                        current_type = resolved_type;
-
-                        // If this is the last part of the path, we're done
-                        if i == path_parts.len() - 1 {
-                            return Some(TypeInfo {
-                                property_path: property_path.to_string(),
-                                type_description: format_type_description_with_property_context(
-                                    &current_type,
-                                    0,
-                                    30,
-                                    &self.cwt_analyzer,
-                                    &self.resolver,
-                                    path_parts.last().map(|s| *s), // Pass the last part as property name
-                                ),
-                                cwt_type: Some(current_type.clone()),
-                                documentation: None,
-                                source_info: Some(format!(
-                                    "Resolved reference in {} entity",
-                                    namespace
-                                )),
-                            });
-                        }
-
-                        // Continue to next iteration to handle the resolved type
-                        continue;
-                    }
-                    CwtType::Union(u) => {
-                        // For unions, we need to process the entire remaining path
-                        // This handles nested unions properly by flattening them recursively
-                        let remaining_path: Vec<&str> = path_parts[i..].to_vec();
-                        let result_types = self.get_property_types_from_union(u, &remaining_path);
-
-                        match result_types.len() {
-                            0 => {
+                    CwtTypeOrSpecial::CwtType(CwtType::Reference(_)) => {
+                        // Handle reference types (like alias_match_left) using the resolver
+                        match self.resolver.navigate_to_property(&current_type, part) {
+                            PropertyNavigationResult::Success(scoped_type) => {
+                                current_type = scoped_type;
+                            }
+                            PropertyNavigationResult::ScopeError(e) => {
                                 return Some(TypeInfo {
                                     property_path: current_path,
-                                    type_description: format!(
-                                        "Property path '{}' not found in any branch of union",
-                                        remaining_path.join(".")
-                                    ),
+                                    type_description: format!("Scope error: {}", e),
+                                    cwt_type: None,
+                                    documentation: None,
+                                    source_info: Some(format!("Scope error: {}", e)),
+                                });
+                            }
+                            PropertyNavigationResult::NotFound => {
+                                return Some(TypeInfo {
+                                    property_path: current_path,
+                                    type_description: format!("Unknown property '{}'", part),
                                     cwt_type: None,
                                     documentation: None,
                                     source_info: Some(format!(
-                                        "Property path not found in union type in {} entity",
+                                        "Property not found in {} entity",
                                         namespace
                                     )),
                                 });
                             }
-                            1 => {
-                                // Single result type
-                                current_type = result_types.into_iter().next().unwrap();
-                            }
-                            _ => {
-                                // Multiple result types - create union
-                                let mut deduped_types = result_types;
-                                deduped_types.dedup();
-
-                                if deduped_types.len() == 1 {
-                                    current_type = deduped_types.into_iter().next().unwrap();
-                                } else {
-                                    current_type = CwtType::Union(deduped_types);
-                                }
-                            }
                         }
-
-                        // We've processed the entire remaining path, so we're done
-                        break;
                     }
+                    CwtTypeOrSpecial::CwtType(CwtType::Union(u)) => {
+                        // let mut potential_types = vec![];
+                        // for member in u {
+                        //     self.extract_all_union_types_with_property(
+                        //         current_type.child(member.clone()),
+                        //         part,
+                        //         &mut potential_types,
+                        //     );
+                        // }
+
+                        // potential_types.dedup_by(|a, b| a.fingerprint() == b.fingerprint());
+
+                        // current_type = ScopedType::new_scoped_union(
+                        //     potential_types,
+                        //     current_type.scope_context().clone(),
+                        // );
+
+                        continue;
+                    }
+
                     _ => {
                         return Some(TypeInfo {
                             property_path: current_path,
@@ -303,20 +264,17 @@ impl TypeCache {
                 }
             }
 
-            // IMPORTANT: Resolve the final property type to expand any patterns it may have
-            let resolved_final_type = self.resolver.resolve_type(&current_type);
-
             return Some(TypeInfo {
                 property_path: property_path.to_string(),
                 type_description: format_type_description_with_property_context(
-                    &resolved_final_type,
+                    &current_type,
                     0,
                     30,
                     &self.cwt_analyzer,
                     &self.resolver,
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
-                cwt_type: Some(resolved_final_type),
+                cwt_type: Some(current_type.cwt_type().clone()),
                 documentation: None,
                 source_info: Some(format!("From {} entity definition", namespace)),
             });
@@ -325,23 +283,65 @@ impl TypeCache {
         // If not found in namespace types, try CWT type definitions
         if let Some(type_def) = self.cwt_analyzer.get_type(namespace) {
             let path_parts: Vec<&str> = property_path.split('.').collect();
+            let scoped_type = ScopedType::new_cwt(type_def.rules.clone(), Default::default());
             return Some(TypeInfo {
                 property_path: property_path.to_string(),
                 type_description: format_type_description_with_property_context(
-                    &type_def.rules,
+                    &scoped_type,
                     0,
                     30,
                     &self.cwt_analyzer,
                     &self.resolver,
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
-                cwt_type: Some(type_def.rules.clone()),
+                cwt_type: Some(CwtTypeOrSpecial::CwtType(type_def.rules.clone())),
                 documentation: None,
                 source_info: Some(format!("CWT type definition: {}", namespace)),
             });
         }
 
         None
+    }
+
+    fn extract_all_union_types_with_property(
+        &self,
+        scoped_type: ScopedType,
+        property_name: &str,
+        building: &mut Vec<ScopedType>,
+    ) {
+        // First, always resolve the type to handle references
+        let resolved_type = self.resolver.resolve_type(&scoped_type);
+
+        match resolved_type.cwt_type() {
+            CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
+                let navigation_result = self
+                    .resolver
+                    .navigate_to_property(&resolved_type, property_name);
+                match navigation_result {
+                    PropertyNavigationResult::Success(found_type) => {
+                        building.push(found_type);
+                    }
+                    _ => {}
+                }
+            }
+            CwtTypeOrSpecial::CwtType(CwtType::Union(u)) => {
+                for member in u {
+                    self.extract_all_union_types_with_property(
+                        ScopedType::new_cwt(member.clone(), resolved_type.scope_context().clone()),
+                        property_name,
+                        building,
+                    );
+                }
+            }
+            CwtTypeOrSpecial::CwtType(CwtType::Reference(_)) => {
+                // This shouldn't happen after resolution, but let's be safe
+                // and try to resolve again or skip
+            }
+            _ => {
+                // For other types (Value, etc.), they don't have properties
+                // so we can't navigate to the property
+            }
+        }
     }
 
     /// Check if the cache is ready
@@ -358,117 +358,8 @@ impl TypeCache {
         &self.resolver
     }
 
-    /// Resolve a type to its actual concrete type
-    pub fn resolve_type(&self, cwt_type: &CwtType) -> CwtType {
-        self.resolver.resolve_type(cwt_type)
-    }
-
-    /// Get property types from a union by processing the full property path
-    /// This handles nested unions properly by flattening them recursively
-    fn get_property_types_from_union(
-        &self,
-        union_types: &[CwtType],
-        property_path: &[&str],
-    ) -> Vec<CwtType> {
-        self.get_property_types_from_union_with_depth(union_types, property_path, 0)
-    }
-
-    fn get_property_types_from_union_with_depth(
-        &self,
-        union_types: &[CwtType],
-        property_path: &[&str],
-        depth: usize,
-    ) -> Vec<CwtType> {
-        // Prevent infinite recursion with a reasonable depth limit
-        if depth > 50 {
-            return vec![];
-        }
-
-        if property_path.is_empty() {
-            return union_types.to_vec();
-        }
-
-        let current_property = property_path[0];
-        let remaining_path = &property_path[1..];
-
-        // First, flatten all union types to get all possible block types
-        let all_block_types = self.flatten_to_blocks(union_types);
-
-        // Then, for each block type, check if it has the property
-        let mut property_types = Vec::new();
-        for block_type in all_block_types {
-            if let CwtType::Block(block) = block_type {
-                if let Some(property_def) = block.properties.get(current_property) {
-                    let resolved_property_type =
-                        self.resolver.resolve_type(&property_def.property_type);
-                    property_types.push(resolved_property_type);
-                } else {
-                    // Check if the property matches any pattern property
-                    if let Some(pattern_property) =
-                        self.resolver.key_matches_pattern(current_property, &block)
-                    {
-                        let resolved_property_type =
-                            self.resolver.resolve_type(&pattern_property.value_type);
-                        property_types.push(resolved_property_type);
-                    }
-                }
-            }
-        }
-
-        // If this is the last property, return the types
-        if remaining_path.is_empty() {
-            return property_types;
-        }
-
-        // Otherwise, recursively continue with the remaining path
-        self.get_property_types_from_union_with_depth(&property_types, remaining_path, depth + 1)
-    }
-
-    /// Flatten a list of types to get all possible block types
-    /// This recursively expands unions to find all block types
-    fn flatten_to_blocks(&self, types: &[CwtType]) -> Vec<CwtType> {
-        let mut visited = HashSet::new();
-        self.flatten_to_blocks_with_visited(types, &mut visited)
-    }
-
-    fn flatten_to_blocks_with_visited(
-        &self,
-        types: &[CwtType],
-        visited: &mut HashSet<String>,
-    ) -> Vec<CwtType> {
-        let mut result = Vec::new();
-        for cwt_type in types {
-            // Only track reference types to prevent cycles, not all types
-            let type_id = match cwt_type {
-                CwtType::Reference(ref_type) => ref_type.id(),
-                _ => None,
-            };
-
-            if let Some(ref id) = type_id {
-                if visited.contains(id) {
-                    // Skip if we've already processed this reference to prevent infinite recursion
-                    continue;
-                }
-                visited.insert(id.clone());
-            }
-
-            let resolved = self.resolver.resolve_type(cwt_type);
-            match resolved {
-                CwtType::Block(_) => result.push(resolved),
-                CwtType::Union(nested_types) => {
-                    // Recursively flatten nested unions
-                    let flattened = self.flatten_to_blocks_with_visited(&nested_types, visited);
-                    result.extend(flattened);
-                }
-                _ => {} // Skip non-block types
-            }
-
-            // Remove from visited set after processing to allow the same type in different branches
-            if let Some(ref id) = type_id {
-                visited.remove(id);
-            }
-        }
-        result
+    pub fn resolve_type(&self, scoped_type: &ScopedType) -> ScopedType {
+        self.resolver.resolve_type(scoped_type)
     }
 }
 

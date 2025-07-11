@@ -2,10 +2,13 @@ use cw_model::types::CwtAnalyzer;
 use cw_model::{CwtType, ReferenceType, SimpleType};
 
 use crate::handlers::cache::resolver::TypeResolver;
+use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
+
+const MAX_UNION_MEMBERS: usize = 8;
 
 /// Format a type description with depth control, max lines, optional CWT context, and property name context
 pub fn format_type_description_with_property_context(
-    cwt_type: &CwtType,
+    scoped_type: &ScopedType,
     depth: usize,
     max_lines: usize,
     cwt_context: &CwtAnalyzer,
@@ -16,11 +19,11 @@ pub fn format_type_description_with_property_context(
         return "...".to_string();
     }
 
-    let cwt_type = resolver.resolve_type(cwt_type);
+    let scoped_type = resolver.resolve_type(scoped_type);
 
-    match cwt_type {
-        CwtType::Literal(lit) => format!("\"{}\"", lit),
-        CwtType::LiteralSet(literals) => {
+    match scoped_type.cwt_type() {
+        CwtTypeOrSpecial::CwtType(CwtType::Literal(lit)) => format!("\"{}\"", lit),
+        CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(literals)) => {
             let mut sorted: Vec<_> = literals.iter().collect();
             sorted.sort();
             if sorted.len() <= 6 {
@@ -42,11 +45,11 @@ pub fn format_type_description_with_property_context(
                 )
             }
         }
-        CwtType::Simple(simple) => match simple {
+        CwtTypeOrSpecial::CwtType(CwtType::Simple(simple)) => match simple {
             SimpleType::Bool => "boolean".to_string(),
             SimpleType::Int => "integer".to_string(),
             SimpleType::Float => "float".to_string(),
-            SimpleType::Scalar => "scalar (0.0-1.0)".to_string(),
+            SimpleType::Scalar => "scalar".to_string(),
             SimpleType::PercentageField => "percentage".to_string(),
             SimpleType::Localisation => "localisation key".to_string(),
             SimpleType::LocalisationSynced => "synced localisation key".to_string(),
@@ -62,34 +65,40 @@ pub fn format_type_description_with_property_context(
             SimpleType::Color => "color (rgb/hsv/hex)".to_string(),
             SimpleType::Maths => "mathematical expression".to_string(),
         },
-        CwtType::Reference(ref_type) => {
-            // Fallback to basic reference type formatting
-            match ref_type {
-                ReferenceType::Type { key } => format!("<{}>", key),
-                ReferenceType::Enum { key } => format!("enum {}", key),
-                ReferenceType::ComplexEnum { key } => format!("complex_enum {}", key),
-                ReferenceType::ValueSet { key } => format!("value_set {}", key),
-                ReferenceType::Value { key } => format!("value {}", key),
-                ReferenceType::Scope { key } => format!("scope {}", key),
-                ReferenceType::ScopeGroup { key } => format!("scope_group {}", key),
-                ReferenceType::Alias { key } => format!("alias {}", key),
-                ReferenceType::AliasName { key } => format!("alias_name {}", key),
-                ReferenceType::AliasMatchLeft { key } => format!("alias_match_left {}", key),
-                ReferenceType::SingleAlias { key } => format!("single_alias {}", key),
-                ReferenceType::AliasKeysField { key } => format!("alias_keys_field {}", key),
-                ReferenceType::Colour { format } => format!("colour ({})", format),
-                ReferenceType::Icon { path } => format!("icon ({})", path),
-                ReferenceType::Filepath { path } => format!("filepath ({})", path),
-                ReferenceType::Subtype { name } => format!("subtype {}", name),
-                ReferenceType::StellarisNameFormat { key } => format!("name_format {}", key),
-                _ => format!("reference {:?}", ref_type),
+        CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)) => {
+            // Special handling for alias_match_left - expand it like a block
+            if let ReferenceType::AliasMatchLeft { .. } = ref_type {
+                let available_properties = resolver.get_available_properties(&scoped_type);
+
+                let mut lines = vec![];
+
+                for property_name in available_properties {
+                    let property_type = resolver.navigate_to_property(&scoped_type, &property_name);
+
+                    if let PropertyNavigationResult::Success(property_type) = property_type {
+                        let formatted_value = format_type_description_with_property_context(
+                            &property_type,
+                            depth + 1,
+                            max_lines,
+                            cwt_context,
+                            resolver,
+                            Some(&property_name),
+                        );
+
+                        lines.push(format!("{} = {}", property_name, formatted_value));
+                    }
+                }
+
+                lines.join("\n")
+            } else {
+                format!("reference {:?}", ref_type)
             }
         }
-        CwtType::Comparable(comparable) => {
+        CwtTypeOrSpecial::CwtType(CwtType::Comparable(comparable)) => {
             format!(
                 "comparable[{}]",
                 format_type_description_with_property_context(
-                    &comparable,
+                    &ScopedType::new_cwt(*comparable.clone(), scoped_type.scope_context().clone()),
                     depth + 1,
                     max_lines,
                     cwt_context,
@@ -98,7 +107,7 @@ pub fn format_type_description_with_property_context(
                 )
             )
         }
-        CwtType::Block(block) => {
+        CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
             // Show:
             // - The root obj
             // - The properties of the root obj
@@ -136,7 +145,10 @@ pub fn format_type_description_with_property_context(
                 }
 
                 let formatted_value = format_type_description_with_property_context(
-                    &property_def.property_type,
+                    &ScopedType::new_cwt(
+                        property_def.property_type.clone(),
+                        scoped_type.scope_context().clone(),
+                    ),
                     depth + 1,
                     max_lines - line_count,
                     cwt_context,
@@ -179,17 +191,11 @@ pub fn format_type_description_with_property_context(
                     break;
                 }
 
-                let pattern_description = match &pattern_property.pattern_type {
-                    cw_model::types::PatternType::AliasName { category } => {
-                        format!("({})", category)
-                    }
-                    cw_model::types::PatternType::Enum { key } => {
-                        format!("({})", key)
-                    }
-                };
-
                 let formatted_value = format_type_description_with_property_context(
-                    &pattern_property.value_type,
+                    &ScopedType::new_cwt(
+                        pattern_property.value_type.clone(),
+                        scoped_type.scope_context().clone(),
+                    ),
                     depth + 1,
                     max_lines - line_count,
                     cwt_context,
@@ -199,7 +205,6 @@ pub fn format_type_description_with_property_context(
 
                 // Handle multi-line types (nested blocks)
                 if formatted_value.contains('\n') {
-                    lines.push(format!("  {}:", pattern_description));
                     let nested_lines: Vec<&str> = formatted_value.lines().collect();
                     let mut lines_added = 1;
 
@@ -216,7 +221,7 @@ pub fn format_type_description_with_property_context(
                     }
                     line_count += lines_added;
                 } else {
-                    lines.push(format!("  {} = {}", pattern_description, formatted_value));
+                    lines.push(format!("{}", formatted_value));
                     line_count += 1;
                 }
                 properties_shown += 1;
@@ -226,9 +231,12 @@ pub fn format_type_description_with_property_context(
 
             lines.join("\n")
         }
-        CwtType::Array(array_type) => {
+        CwtTypeOrSpecial::CwtType(CwtType::Array(array_type)) => {
             let element_desc = format_type_description_with_property_context(
-                &array_type.element_type,
+                &ScopedType::new_cwt(
+                    *array_type.element_type.clone(),
+                    scoped_type.scope_context().clone(),
+                ),
                 depth + 1,
                 max_lines,
                 cwt_context,
@@ -248,8 +256,45 @@ pub fn format_type_description_with_property_context(
                 format!("array[{}]", element_desc)
             }
         }
-        CwtType::Union(types) => {
-            if types.len() <= 8 {
+        CwtTypeOrSpecial::CwtType(CwtType::Union(types)) => {
+            if types.len() <= MAX_UNION_MEMBERS {
+                types
+                    .iter()
+                    .map(|t| {
+                        format_type_description_with_property_context(
+                            &ScopedType::new_cwt(t.clone(), scoped_type.scope_context().clone()),
+                            depth + 1,
+                            max_lines,
+                            cwt_context,
+                            resolver,
+                            property_name,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            } else {
+                format!(
+                    "{} | /* ... +{} more types */",
+                    types
+                        .iter()
+                        .take(MAX_UNION_MEMBERS)
+                        .map(|t| format_type_description_with_property_context(
+                            &ScopedType::new_cwt(t.clone(), scoped_type.scope_context().clone()),
+                            depth + 1,
+                            max_lines,
+                            cwt_context,
+                            resolver,
+                            property_name,
+                        ))
+                        .collect::<Vec<_>>()
+                        .join(" | "),
+                    types.len() - MAX_UNION_MEMBERS
+                )
+            }
+        }
+        CwtTypeOrSpecial::CwtType(CwtType::Unknown) => "unknown".to_string(),
+        CwtTypeOrSpecial::ScopedUnion(types) => {
+            if types.len() <= MAX_UNION_MEMBERS {
                 types
                     .iter()
                     .map(|t| {
@@ -269,7 +314,7 @@ pub fn format_type_description_with_property_context(
                     "{} | /* ... +{} more types */",
                     types
                         .iter()
-                        .take(8)
+                        .take(MAX_UNION_MEMBERS)
                         .map(|t| format_type_description_with_property_context(
                             t,
                             depth + 1,
@@ -280,10 +325,9 @@ pub fn format_type_description_with_property_context(
                         ))
                         .collect::<Vec<_>>()
                         .join(" | "),
-                    types.len() - 8
+                    types.len() - MAX_UNION_MEMBERS
                 )
             }
         }
-        CwtType::Unknown => "unknown".to_string(),
     }
 }

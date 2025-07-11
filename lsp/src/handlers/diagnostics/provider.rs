@@ -1,9 +1,10 @@
 use cw_parser::{AstEntityItem, AstModule};
 use tower_lsp::lsp_types::*;
 
-use crate::handlers::cache::{get_namespace_entity_type, GameDataCache};
+use crate::handlers::cache::{GameDataCache, get_namespace_entity_type};
 use crate::handlers::diagnostics::diagnostic::create_diagnostic_from_parse_error;
 use crate::handlers::diagnostics::type_validation::validate_entity_value;
+use crate::handlers::scoped_type::ScopedType;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -185,8 +186,13 @@ impl<'client> DiagnosticsProvider<'client> {
 
                 // Top-level keys are entity names - they can be anything, so don't validate them
                 // Instead, validate their VALUES against the namespace structure
-                let entity_diagnostics =
-                    validate_entity_value(&expr.value, namespace_type, content, &namespace, 0);
+                let entity_diagnostics = validate_entity_value(
+                    &expr.value,
+                    &ScopedType::new(namespace_type.clone(), Default::default()),
+                    content,
+                    &namespace,
+                    0,
+                );
                 diagnostics.extend(entity_diagnostics);
             }
         }

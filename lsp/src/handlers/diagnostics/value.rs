@@ -1,13 +1,16 @@
 use cw_parser::{AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
 
-use crate::handlers::diagnostics::diagnostic::create_type_mismatch_diagnostic;
+use crate::handlers::{
+    diagnostics::diagnostic::create_type_mismatch_diagnostic, scope::ScopeContextManager,
+};
 
-/// Check if a value is compatible with a simple type, returning a diagnostic if incompatible
-pub fn is_value_compatible_with_simple_type(
+/// Check if a value is compatible with a simple type with scope context, returning a diagnostic if incompatible
+pub fn is_value_compatible_with_simple_type_with_scope(
     value: &AstValue<'_>,
     simple_type: &cw_model::SimpleType,
     content: &str,
+    scope_manager: &ScopeContextManager,
 ) -> Option<Diagnostic> {
     use cw_model::SimpleType;
 
@@ -60,13 +63,25 @@ pub fn is_value_compatible_with_simple_type(
                 content,
             ))
         }
-        (AstValue::String(_), SimpleType::ScopeField) => {
-            // TODO: Implement proper scope field validation
-            Some(create_type_mismatch_diagnostic(
-                value.span_range(),
-                "Scope field validation not yet implemented",
-                content,
-            ))
+        (AstValue::String(scope_field), SimpleType::ScopeField) => {
+            // Now we can properly validate scope fields using the scope context!
+            let field_name = scope_field.raw_value();
+            match scope_manager.validate_scope_name(field_name) {
+                Ok(_) => None, // Valid scope field
+                Err(error) => {
+                    let available_scopes = scope_manager.available_scope_names();
+                    Some(create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        &format!(
+                            "Invalid scope field '{}'. Available scopes: {}. {}",
+                            field_name,
+                            available_scopes.join(", "),
+                            error
+                        ),
+                        content,
+                    ))
+                }
+            }
         }
         (AstValue::String(_), SimpleType::DateField) => {
             // TODO: Implement proper date field validation

@@ -1,4 +1,5 @@
 use crate::handlers::cache::resolver::TypeResolver;
+use crate::handlers::scoped_type::{CwtTypeOrSpecial, ScopedType};
 
 use super::core::TypeCache;
 use super::formatter::format_type_description_with_property_context;
@@ -19,17 +20,18 @@ pub async fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
     let cache = TypeCache::get().unwrap();
     let mut resolver = TypeResolver::new(cache.get_cwt_analyzer().clone());
     if let Some(namespace_type) = cache.get_namespace_type(namespace) {
+        let scoped_type = ScopedType::new_cwt(namespace_type.clone(), Default::default());
         Some(TypeInfo {
             property_path: "entity".to_string(),
             type_description: format_type_description_with_property_context(
-                namespace_type,
+                &scoped_type,
                 0,
                 30,
                 cache.get_cwt_analyzer(),
                 &mut resolver,
                 None, // No specific property name for top-level entity types
             ),
-            cwt_type: Some(namespace_type.clone()),
+            cwt_type: Some(CwtTypeOrSpecial::CwtType(namespace_type.clone())),
             documentation: None,
             source_info: Some(format!("Entity structure for {} namespace", namespace)),
         })

@@ -1,17 +1,20 @@
 use cw_model::CwtType;
 use cw_parser::AstValue;
 
-use crate::handlers::cache::TypeCache;
+use crate::handlers::{
+    cache::TypeCache,
+    scoped_type::{CwtTypeOrSpecial, ScopedType},
+};
 
 /// Check if a value is structurally compatible with a type (without content validation)
-pub fn is_value_structurally_compatible(value: &AstValue<'_>, expected_type: &CwtType) -> bool {
+pub fn is_value_structurally_compatible(value: &AstValue<'_>, expected_type: &ScopedType) -> bool {
     is_value_structurally_compatible_with_depth(value, expected_type, 0)
 }
 
 /// Check if a value is structurally compatible with a type with recursion depth limit
 fn is_value_structurally_compatible_with_depth(
     value: &AstValue<'_>,
-    expected_type: &CwtType,
+    expected_type: &ScopedType,
     depth: usize,
 ) -> bool {
     // Prevent infinite recursion
@@ -26,43 +29,51 @@ fn is_value_structurally_compatible_with_depth(
     let cache = TypeCache::get().unwrap();
     let resolved_type = cache.resolve_type(expected_type);
 
-    match (&resolved_type, value) {
+    match (&resolved_type.cwt_type(), value) {
         // Block types are compatible with entities
-        (CwtType::Block(_), AstValue::Entity(_)) => true,
+        (CwtTypeOrSpecial::CwtType(CwtType::Block(_)), AstValue::Entity(_)) => true,
 
         // Literal types are compatible with strings
-        (CwtType::Literal(_), AstValue::String(_)) => true,
+        (CwtTypeOrSpecial::CwtType(CwtType::Literal(_)), AstValue::String(_)) => true,
 
         // Literal sets are compatible with strings
-        (CwtType::LiteralSet(_), AstValue::String(_)) => true,
+        (CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(_)), AstValue::String(_)) => true,
 
         // Simple types - check basic compatibility
-        (CwtType::Simple(simple_type), _) => {
+        (CwtTypeOrSpecial::CwtType(CwtType::Simple(simple_type)), _) => {
             is_value_compatible_with_simple_type_structurally(value, simple_type)
         }
 
         // Array types are compatible with entities
-        (CwtType::Array(_), AstValue::Entity(_)) => true,
+        (CwtTypeOrSpecial::CwtType(CwtType::Array(_)), AstValue::Entity(_)) => true,
 
         // Union types - check if compatible with any member
-        (CwtType::Union(types), _) => types.iter().any(|union_type| {
-            is_value_structurally_compatible_with_depth(value, union_type, depth + 1)
+        (CwtTypeOrSpecial::CwtType(CwtType::Union(types)), _) => types.iter().any(|union_type| {
+            is_value_structurally_compatible_with_depth(
+                value,
+                &ScopedType::new_cwt(union_type.clone(), expected_type.scope_context().clone()),
+                depth + 1,
+            )
         }),
 
         // Comparable types - check compatibility with base type
-        (CwtType::Comparable(base_type), _) => {
-            is_value_structurally_compatible_with_depth(value, base_type, depth + 1)
+        (CwtTypeOrSpecial::CwtType(CwtType::Comparable(base_type)), _) => {
+            is_value_structurally_compatible_with_depth(
+                value,
+                &ScopedType::new_cwt(*base_type.clone(), expected_type.scope_context().clone()),
+                depth + 1,
+            )
         }
 
         // Reference types - resolve and check
-        (CwtType::Reference(_), _) => {
+        (CwtTypeOrSpecial::CwtType(CwtType::Reference(_)), _) => {
             // For now, assume references are compatible
             // TODO: Implement proper reference resolution
             true
         }
 
         // Unknown types are always compatible
-        (CwtType::Unknown, _) => true,
+        (CwtTypeOrSpecial::CwtType(CwtType::Unknown), _) => true,
 
         // Everything else is incompatible
         _ => false,

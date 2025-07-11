@@ -13,20 +13,28 @@ use crate::TypeKeyFilter;
 pub struct RuleOptions {
     /// Cardinality constraint (min..max)
     pub cardinality: Option<CardinalityConstraint>,
+
     /// Scope constraint
     pub scope: Option<Vec<String>>,
+
     /// Push scope
     pub push_scope: Option<String>,
+
     /// Replace scope mappings
     pub replace_scope: Option<HashMap<String, String>>,
+
     /// Documentation comment
     pub documentation: Option<String>,
+
     /// Severity
     pub severity: Option<String>,
+
     /// Starts with
     pub starts_with: Option<String>,
+
     /// Type key filter
     pub type_key_filter: Option<TypeKeyFilter>,
+
     /// Graph related types
     pub graph_related_types: Vec<String>,
 }
