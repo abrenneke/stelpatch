@@ -4,13 +4,13 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::Client;
 
-mod diagnostic;
-mod key;
-mod provider;
-mod structural;
-mod type_validation;
-mod util;
-mod value;
+pub mod diagnostic;
+pub mod key;
+pub mod provider;
+pub mod structural;
+pub mod type_validation;
+pub mod util;
+pub mod value;
 
 /// Generate diagnostics for a document (convenience function)
 pub async fn generate_diagnostics(

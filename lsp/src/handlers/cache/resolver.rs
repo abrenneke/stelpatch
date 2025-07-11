@@ -1,4 +1,4 @@
-use super::core::GameDataCache;
+use crate::handlers::cache::GameDataCache;
 use crate::handlers::scope::ScopeStack;
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
@@ -291,7 +291,7 @@ impl TypeResolver {
                                         let path = path.trim_start_matches("game/");
                                         if let Some(game_data) = GameDataCache::get() {
                                             if let Some(namespace_keys) =
-                                                game_data.get_namespace_keys(&path)
+                                                game_data.get_namespace_entity_keys(&path)
                                             {
                                                 if namespace_keys.contains(&key.to_string()) {
                                                     return true;
@@ -344,7 +344,7 @@ impl TypeResolver {
                                         let path = path.trim_start_matches("game/");
                                         if let Some(game_data) = GameDataCache::get() {
                                             if let Some(namespace_keys) =
-                                                game_data.get_namespace_keys(&path)
+                                                game_data.get_namespace_entity_keys(&path)
                                             {
                                                 completions.extend(namespace_keys.iter().cloned());
                                             }
@@ -386,14 +386,15 @@ impl TypeResolver {
                         // This is what the user expects when they hover over "resource" - they want to see
                         // all the possible resource keys like "energy", "minerals", etc.
                         if let Some(game_data) = GameDataCache::get() {
-                            if let Some(namespace_keys) = game_data.get_namespace_keys(&path) {
+                            if let Some(namespace_keys) = game_data.get_namespace_entity_keys(&path)
+                            {
                                 return CwtType::LiteralSet(
                                     namespace_keys.iter().cloned().collect(),
                                 );
                             }
 
                             // Also try the key directly in case it's already a full path
-                            if let Some(namespace_keys) = game_data.get_namespace_keys(key) {
+                            if let Some(namespace_keys) = game_data.get_namespace_entity_keys(key) {
                                 return CwtType::LiteralSet(
                                     namespace_keys.iter().cloned().collect(),
                                 );
@@ -500,7 +501,7 @@ impl TypeResolver {
                                     let path = path.trim_start_matches("game/");
                                     if let Some(game_data) = GameDataCache::get() {
                                         if let Some(namespace_keys) =
-                                            game_data.get_namespace_keys(&path)
+                                            game_data.get_namespace_entity_keys(&path)
                                         {
                                             if namespace_keys.contains(&property_name.to_string()) {
                                                 return alias_def.to.clone();
@@ -584,7 +585,7 @@ impl TypeResolver {
                                         let path = path.trim_start_matches("game/");
                                         if let Some(game_data) = GameDataCache::get() {
                                             if let Some(namespace_keys) =
-                                                game_data.get_namespace_keys(&path)
+                                                game_data.get_namespace_entity_keys(&path)
                                             {
                                                 properties.extend(namespace_keys.iter().cloned());
                                             }

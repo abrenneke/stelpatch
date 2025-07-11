@@ -41,7 +41,7 @@ pub fn validate_entity_value(
                 if let AstEntityItem::Expression(expr) = item {
                     let key_name = expr.key.raw_value();
 
-                    eprintln!("DEBUG: Validating key '{}'", key_name);
+                    // eprintln!("DEBUG: Validating key '{}'", key_name);
 
                     // Check if this key is valid for the expected type
                     if !is_key_valid(expected_type, key_name) {
@@ -212,31 +212,19 @@ fn validate_value_against_type(
 
         // Union type validation
         (CwtTypeOrSpecial::CwtType(CwtType::Union(types)), _) => {
-            // Check if the value is structurally compatible with any of the union members
-            let mut compatible_type = None;
+            // Find all structurally compatible union members
+            let mut compatible_types = Vec::new();
 
             for union_type in types {
                 if is_value_structurally_compatible(
                     value,
                     &ScopedType::new_cwt(union_type.clone(), expected_type.scope_stack().clone()),
                 ) {
-                    compatible_type = Some(union_type.clone());
-                    break;
+                    compatible_types.push(union_type.clone());
                 }
             }
 
-            if let Some(matching_type) = compatible_type {
-                // Value is structurally compatible with this union member,
-                // now validate the content according to this type
-                let content_diagnostics = validate_value_against_type(
-                    value,
-                    &ScopedType::new_cwt(matching_type, expected_type.scope_stack().clone()),
-                    content,
-                    namespace,
-                    depth + 1,
-                );
-                diagnostics.extend(content_diagnostics);
-            } else {
+            if compatible_types.is_empty() {
                 // Value is not structurally compatible with any union member
                 let type_names: Vec<String> = types.iter().map(|t| get_type_name(t)).collect();
 
@@ -249,6 +237,37 @@ fn validate_value_against_type(
                     content,
                 );
                 diagnostics.push(diagnostic);
+            } else {
+                // Value is structurally compatible with at least one union member
+                // Validate against each compatible type and use "any" logic:
+                // only report errors if ALL compatible types have validation errors
+                let mut all_validation_results = Vec::new();
+
+                for compatible_type in &compatible_types {
+                    let content_diagnostics = validate_value_against_type(
+                        value,
+                        &ScopedType::new_cwt(
+                            compatible_type.clone(),
+                            expected_type.scope_stack().clone(),
+                        ),
+                        content,
+                        namespace,
+                        depth + 1,
+                    );
+                    all_validation_results.push(content_diagnostics);
+                }
+
+                // If ANY compatible type validates without errors, the union validation passes
+                let any_validation_passed =
+                    all_validation_results.iter().any(|diags| diags.is_empty());
+
+                if !any_validation_passed {
+                    // All compatible types have validation errors - report errors from the first one
+                    // (or we could aggregate errors from all, but that might be too noisy)
+                    if let Some(first_errors) = all_validation_results.first() {
+                        diagnostics.extend(first_errors.clone());
+                    }
+                }
             }
         }
 
@@ -267,12 +286,12 @@ fn validate_value_against_type(
 
         // Reference type validation
         (CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)), _) => {
-            // For reference types, we need to resolve them through the cache
-            // For now, we'll skip validation of reference types as they require complex resolution
-            eprintln!(
-                "DEBUG: Skipping validation of reference type {:?}",
-                ref_type
+            let diagnostic = create_type_mismatch_diagnostic(
+                value.span_range(),
+                "Reference types are not supported yet",
+                content,
             );
+            diagnostics.push(diagnostic);
         }
 
         // Unknown type - don't validate

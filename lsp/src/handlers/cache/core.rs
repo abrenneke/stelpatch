@@ -90,8 +90,6 @@ impl TypeCache {
                         .unwrap();
                 }
 
-                eprintln!("Type {} has scope {}", type_name, scoped_type.scope_stack());
-
                 // Store the type rules for this namespace
                 namespace_types.insert(namespace, scoped_type);
             }
@@ -341,67 +339,5 @@ impl TypeCache {
 
     pub fn resolve_type(&self, scoped_type: &ScopedType) -> ScopedType {
         self.resolver.resolve_type(scoped_type)
-    }
-}
-
-/// Cache for actual game data keys from namespaces (e.g., "energy", "minerals" from resources namespace)
-pub struct GameDataCache {
-    /// Maps namespace -> set of keys defined in that namespace
-    namespace_keys: HashMap<String, Vec<String>>,
-}
-
-static GAME_DATA_CACHE: OnceLock<GameDataCache> = OnceLock::new();
-
-impl GameDataCache {
-    /// Initialize the game data cache by loading Stellaris base game data
-    pub fn initialize_in_background() {
-        // This runs in a background task since it can take time
-        std::thread::spawn(|| {
-            let _ = Self::get_or_init_blocking();
-        });
-    }
-
-    pub fn get() -> Option<&'static GameDataCache> {
-        GAME_DATA_CACHE.get()
-    }
-
-    /// Get or initialize the global game data cache (blocking version)
-    fn get_or_init_blocking() -> &'static GameDataCache {
-        GAME_DATA_CACHE.get_or_init(|| {
-            eprintln!("Initializing game data cache");
-
-            // Load base game data
-            let base_game = BaseGame::load_global_as_mod_definition(LoadMode::Parallel);
-
-            eprintln!(
-                "Building namespace keys cache from {} namespaces",
-                base_game.namespaces.len()
-            );
-
-            // Extract keys from each namespace
-            let mut namespace_keys = HashMap::new();
-            for (namespace_name, namespace) in &base_game.namespaces {
-                let mut keys: Vec<String> = namespace.properties.kv.keys().cloned().collect();
-                keys.sort(); // Sort for consistent ordering
-                namespace_keys.insert(namespace_name.clone(), keys);
-            }
-
-            eprintln!(
-                "Built game data cache with {} namespaces",
-                namespace_keys.len()
-            );
-
-            GameDataCache { namespace_keys }
-        })
-    }
-
-    /// Get all keys defined in a namespace
-    pub fn get_namespace_keys(&self, namespace: &str) -> Option<&Vec<String>> {
-        self.namespace_keys.get(namespace)
-    }
-
-    /// Check if the game data cache is initialized
-    pub fn is_initialized() -> bool {
-        GAME_DATA_CACHE.get().is_some()
     }
 }

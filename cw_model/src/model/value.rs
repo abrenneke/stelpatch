@@ -106,6 +106,14 @@ impl Value {
     pub fn is_maths(&self) -> bool {
         matches!(self, Value::Maths(_))
     }
+
+    pub fn as_entity(&self) -> Option<&Entity> {
+        if let Value::Entity(e) = self {
+            Some(e)
+        } else {
+            None
+        }
+    }
 }
 
 pub(crate) struct ValueVisitor<'a> {

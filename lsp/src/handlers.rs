@@ -5,7 +5,7 @@ use tower_lsp::lsp_types::*;
 use crate::CwLspServer;
 
 pub mod cache;
-mod diagnostics;
+pub mod diagnostics;
 mod document;
 pub mod document_cache;
 mod formatting;

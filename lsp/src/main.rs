@@ -1,28 +1,6 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use tower_lsp::{Client, LspService, Server};
+use tower_lsp::{LspService, Server};
 
-mod handlers;
-mod semantic_token_collector;
-
-use handlers::document_cache::DocumentCache;
-
-struct CwLspServer {
-    client: Client,
-    documents: Arc<RwLock<HashMap<String, String>>>,
-    document_cache: DocumentCache,
-}
-
-impl CwLspServer {
-    fn new(client: Client) -> Self {
-        Self {
-            client,
-            documents: Arc::new(RwLock::new(HashMap::new())),
-            document_cache: DocumentCache::new(),
-        }
-    }
-}
+use cw_lsp::CwLspServer;
 
 #[tokio::main]
 async fn main() {
