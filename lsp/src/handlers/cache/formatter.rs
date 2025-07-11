@@ -98,7 +98,7 @@ pub fn format_type_description_with_property_context(
             format!(
                 "comparable[{}]",
                 format_type_description_with_property_context(
-                    &ScopedType::new_cwt(*comparable.clone(), scoped_type.scope_context().clone()),
+                    &ScopedType::new_cwt(*comparable.clone(), scoped_type.scope_stack().clone()),
                     depth + 1,
                     max_lines,
                     cwt_context,
@@ -147,7 +147,7 @@ pub fn format_type_description_with_property_context(
                 let formatted_value = format_type_description_with_property_context(
                     &ScopedType::new_cwt(
                         property_def.property_type.clone(),
-                        scoped_type.scope_context().clone(),
+                        scoped_type.scope_stack().clone(),
                     ),
                     depth + 1,
                     max_lines - line_count,
@@ -194,7 +194,7 @@ pub fn format_type_description_with_property_context(
                 let formatted_value = format_type_description_with_property_context(
                     &ScopedType::new_cwt(
                         pattern_property.value_type.clone(),
-                        scoped_type.scope_context().clone(),
+                        scoped_type.scope_stack().clone(),
                     ),
                     depth + 1,
                     max_lines - line_count,
@@ -235,7 +235,7 @@ pub fn format_type_description_with_property_context(
             let element_desc = format_type_description_with_property_context(
                 &ScopedType::new_cwt(
                     *array_type.element_type.clone(),
-                    scoped_type.scope_context().clone(),
+                    scoped_type.scope_stack().clone(),
                 ),
                 depth + 1,
                 max_lines,
@@ -262,7 +262,7 @@ pub fn format_type_description_with_property_context(
                     .iter()
                     .map(|t| {
                         format_type_description_with_property_context(
-                            &ScopedType::new_cwt(t.clone(), scoped_type.scope_context().clone()),
+                            &ScopedType::new_cwt(t.clone(), scoped_type.scope_stack().clone()),
                             depth + 1,
                             max_lines,
                             cwt_context,
@@ -279,7 +279,7 @@ pub fn format_type_description_with_property_context(
                         .iter()
                         .take(MAX_UNION_MEMBERS)
                         .map(|t| format_type_description_with_property_context(
-                            &ScopedType::new_cwt(t.clone(), scoped_type.scope_context().clone()),
+                            &ScopedType::new_cwt(t.clone(), scoped_type.scope_stack().clone()),
                             depth + 1,
                             max_lines,
                             cwt_context,

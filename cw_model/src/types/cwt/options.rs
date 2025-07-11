@@ -195,6 +195,64 @@ impl RuleOptions {
     pub fn has_documentation(&self) -> bool {
         self.documentation.is_some()
     }
+
+    pub fn merge_with(&mut self, other: RuleOptions) {
+        // Merge cardinality - prefer current if it exists
+        if self.cardinality.is_none() {
+            self.cardinality = other.cardinality;
+        }
+
+        // Merge scope - prefer current if it exists
+        if self.scope.is_none() {
+            self.scope = other.scope;
+        }
+
+        // Merge push_scope - prefer current if it exists
+        if self.push_scope.is_none() {
+            self.push_scope = other.push_scope;
+        }
+
+        // Merge replace_scope - merge hashmaps, preferring current values
+        match (&mut self.replace_scope, other.replace_scope) {
+            (None, Some(other_map)) => {
+                self.replace_scope = Some(other_map);
+            }
+            (Some(self_map), Some(other_map)) => {
+                // Merge the maps, preferring current values in case of conflict
+                for (key, value) in other_map {
+                    self_map.entry(key).or_insert(value);
+                }
+            }
+            _ => {}
+        }
+
+        // Merge documentation - prefer current if it exists
+        if self.documentation.is_none() {
+            self.documentation = other.documentation;
+        }
+
+        // Merge severity - prefer current if it exists
+        if self.severity.is_none() {
+            self.severity = other.severity;
+        }
+
+        // Merge starts_with - prefer current if it exists
+        if self.starts_with.is_none() {
+            self.starts_with = other.starts_with;
+        }
+
+        // Merge type_key_filter - prefer current if it exists
+        if self.type_key_filter.is_none() {
+            self.type_key_filter = other.type_key_filter;
+        }
+
+        // Merge graph_related_types - extend the vector with unique values
+        for related_type in other.graph_related_types {
+            if !self.graph_related_types.contains(&related_type) {
+                self.graph_related_types.push(related_type);
+            }
+        }
+    }
 }
 
 impl CardinalityConstraint {

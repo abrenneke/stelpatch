@@ -314,6 +314,8 @@ impl TypeDefinition {
 
         // Merge options - prefer non-default values
         self.options.merge_with(other.options);
+
+        self.rule_options.merge_with(other.rule_options);
     }
 }
 

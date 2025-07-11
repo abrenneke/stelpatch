@@ -158,8 +158,8 @@ pub(crate) fn cwt_module<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<
     opt(literal("\u{feff}")).parse_next(input)?;
 
     // Parse leading comments for the entire module
-    let leading_comments_data = opt_cwt_ws_and_comments.parse_next(input)?;
-    let leading_comments = get_cwt_comments(&leading_comments_data);
+    // let leading_comments_data = opt_cwt_ws_and_comments.parse_next(input)?;
+    // let leading_comments = get_cwt_comments(&leading_comments_data);
 
     // Parse all entities (each entity parser will handle its own leading comments)
     let ((entities, _), span): ((Vec<AstCwtExpression<'a>>, _), _) =
@@ -173,7 +173,7 @@ pub(crate) fn cwt_module<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<
     Ok(CwtModule {
         items: entities,
         span,
-        leading_comments,
+        leading_comments: Vec::new(),
         trailing_comments: Vec::new(),
     })
 }
@@ -536,5 +536,27 @@ job = {
     fn test_nested_identifier() {
         let input = "alias[modifier_rule:enum[complex_maths_enum]] = value_field";
         let _result = CwtModule::from_input(input).unwrap();
+    }
+
+    #[test]
+    fn multiple_comment_types() {
+        let input = r#"
+#TODO subtypes, and make stricter this was an initial pass
+#This is a draft guess (assuming that only the resources bit has changed)
+## replace_scope = { this = planet root = planet from = species }
+army = {}
+        "#;
+
+        let result = CwtModule::from_input(input).unwrap();
+
+        let army = result.rules().find_map(|rule| {
+            if rule.key.name() == "army" {
+                Some(rule)
+            } else {
+                None
+            }
+        });
+
+        assert_eq!(army.unwrap().options.len(), 1);
     }
 }

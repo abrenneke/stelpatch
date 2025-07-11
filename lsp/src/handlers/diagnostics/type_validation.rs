@@ -14,7 +14,7 @@ use crate::handlers::{
         util::get_type_name,
         value::is_value_compatible_with_simple_type_with_scope,
     },
-    scope::{ScopeContext, ScopeContextManager},
+    scope::ScopeStack,
     scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
 };
 
@@ -166,7 +166,7 @@ pub fn validate_value_against_scoped_type(
                 value,
                 simple_type,
                 content,
-                scoped_type.scope_context(),
+                scoped_type.scope_stack(),
             ) {
                 diagnostics.push(diagnostic);
             }
@@ -248,7 +248,7 @@ pub fn validate_value_against_scoped_type(
             for union_type in types {
                 if is_value_structurally_compatible(
                     value,
-                    &ScopedType::new_cwt(union_type.clone(), scoped_type.scope_context().clone()),
+                    &ScopedType::new_cwt(union_type.clone(), scoped_type.scope_stack().clone()),
                 ) {
                     compatible_type = Some(union_type.clone());
                     break;
@@ -258,7 +258,7 @@ pub fn validate_value_against_scoped_type(
             if let Some(matching_type) = compatible_type {
                 // Create a new scoped type with the matching union member
                 let matching_scoped_type =
-                    ScopedType::new_cwt(matching_type, scoped_type.scope_context().clone());
+                    ScopedType::new_cwt(matching_type, scoped_type.scope_stack().clone());
                 let content_diagnostics = validate_value_against_scoped_type(
                     value,
                     &matching_scoped_type,
@@ -284,7 +284,7 @@ pub fn validate_value_against_scoped_type(
         // Comparable type validation
         (CwtTypeOrSpecial::CwtType(CwtType::Comparable(base_type)), _) => {
             let base_scoped_type =
-                ScopedType::new_cwt((**base_type).clone(), scoped_type.scope_context().clone());
+                ScopedType::new_cwt((**base_type).clone(), scoped_type.scope_stack().clone());
             let base_diagnostics = validate_value_against_scoped_type(
                 value,
                 &base_scoped_type,
@@ -410,7 +410,7 @@ fn validate_value_against_type(
         // Simple type validation
         (CwtTypeOrSpecial::CwtType(CwtType::Simple(simple_type)), _) => {
             // Create a default scope for backward compatibility
-            let scope_manager = ScopeContextManager::default_with_root("unknown");
+            let scope_manager = ScopeStack::default_with_root("unknown");
             if let Some(diagnostic) = is_value_compatible_with_simple_type_with_scope(
                 value,
                 simple_type,
@@ -446,7 +446,7 @@ fn validate_value_against_type(
             for union_type in types {
                 if is_value_structurally_compatible(
                     value,
-                    &ScopedType::new_cwt(union_type.clone(), expected_type.scope_context().clone()),
+                    &ScopedType::new_cwt(union_type.clone(), expected_type.scope_stack().clone()),
                 ) {
                     compatible_type = Some(union_type.clone());
                     break;
@@ -458,7 +458,7 @@ fn validate_value_against_type(
                 // now validate the content according to this type
                 let content_diagnostics = validate_value_against_type(
                     value,
-                    &ScopedType::new_cwt(matching_type, expected_type.scope_context().clone()),
+                    &ScopedType::new_cwt(matching_type, expected_type.scope_stack().clone()),
                     content,
                     namespace,
                     depth + 1,
@@ -485,7 +485,7 @@ fn validate_value_against_type(
             // For comparable types, validate against the base type
             let base_diagnostics = validate_value_against_type(
                 value,
-                &ScopedType::new_cwt(*base_type.clone(), expected_type.scope_context().clone()),
+                &ScopedType::new_cwt(*base_type.clone(), expected_type.scope_stack().clone()),
                 content,
                 namespace,
                 depth + 1,

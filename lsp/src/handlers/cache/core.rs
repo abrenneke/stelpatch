@@ -16,7 +16,7 @@ use super::types::TypeInfo;
 
 /// Cache for Stellaris type information that's loaded once and shared across requests
 pub struct TypeCache {
-    namespace_types: HashMap<String, CwtType>,
+    namespace_types: HashMap<String, ScopedType>,
     cwt_analyzer: Arc<CwtAnalyzer>,
     resolver: TypeResolver,
 }
@@ -64,8 +64,27 @@ impl TypeCache {
                     type_name.clone()
                 };
 
+                let mut scoped_type =
+                    ScopedType::new_cwt(type_def.rules.clone(), Default::default());
+
+                if let Some(push_scope) = type_def.rule_options.push_scope.as_ref() {
+                    scoped_type
+                        .scope_stack_mut()
+                        .push_scope_type(push_scope)
+                        .unwrap();
+                }
+
+                if let Some(replace_scope) = type_def.rule_options.replace_scope.as_ref() {
+                    scoped_type
+                        .scope_stack_mut()
+                        .replace_scope_from_strings(replace_scope.clone())
+                        .expect("Failed to replace scope");
+                }
+
+                eprintln!("Type {} has scope {}", type_name, scoped_type.scope_stack());
+
                 // Store the type rules for this namespace
-                namespace_types.insert(namespace, type_def.rules.clone());
+                namespace_types.insert(namespace, scoped_type);
             }
 
             eprintln!(
@@ -149,7 +168,7 @@ impl TypeCache {
     }
 
     /// Get type information for a specific namespace
-    pub fn get_namespace_type(&self, namespace: &str) -> Option<&CwtType> {
+    pub fn get_namespace_type(&self, namespace: &str) -> Option<&ScopedType> {
         self.namespace_types.get(namespace)
     }
 
@@ -159,7 +178,7 @@ impl TypeCache {
         // First try to get from namespace types (game data)
         if let Some(namespace_type) = self.get_namespace_type(namespace) {
             let path_parts: Vec<&str> = property_path.split('.').collect();
-            let mut current_type = ScopedType::new_cwt(namespace_type.clone(), Default::default());
+            let mut current_type = namespace_type.clone();
             let mut current_path = String::new();
 
             for (i, part) in path_parts.iter().enumerate() {
@@ -301,47 +320,6 @@ impl TypeCache {
         }
 
         None
-    }
-
-    fn extract_all_union_types_with_property(
-        &self,
-        scoped_type: ScopedType,
-        property_name: &str,
-        building: &mut Vec<ScopedType>,
-    ) {
-        // First, always resolve the type to handle references
-        let resolved_type = self.resolver.resolve_type(&scoped_type);
-
-        match resolved_type.cwt_type() {
-            CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
-                let navigation_result = self
-                    .resolver
-                    .navigate_to_property(&resolved_type, property_name);
-                match navigation_result {
-                    PropertyNavigationResult::Success(found_type) => {
-                        building.push(found_type);
-                    }
-                    _ => {}
-                }
-            }
-            CwtTypeOrSpecial::CwtType(CwtType::Union(u)) => {
-                for member in u {
-                    self.extract_all_union_types_with_property(
-                        ScopedType::new_cwt(member.clone(), resolved_type.scope_context().clone()),
-                        property_name,
-                        building,
-                    );
-                }
-            }
-            CwtTypeOrSpecial::CwtType(CwtType::Reference(_)) => {
-                // This shouldn't happen after resolution, but let's be safe
-                // and try to resolve again or skip
-            }
-            _ => {
-                // For other types (Value, etc.), they don't have properties
-                // so we can't navigate to the property
-            }
-        }
     }
 
     /// Check if the cache is ready

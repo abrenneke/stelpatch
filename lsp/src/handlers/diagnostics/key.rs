@@ -2,7 +2,7 @@ use cw_model::CwtType;
 
 use crate::handlers::{
     cache::TypeCache,
-    scoped_type::{CwtTypeOrSpecial, ScopedType},
+    scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
 };
 
 /// Get the type of a property from the expected type structure
@@ -25,11 +25,11 @@ fn get_property_type_from_expected_type_with_depth(
             "DEBUG: Max recursion depth reached for property {}, returning Unknown",
             property_name
         );
-        return ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_context().clone());
+        return ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_stack().clone());
     }
 
     if !TypeCache::is_initialized() {
-        return ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_context().clone());
+        return ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_stack().clone());
     }
 
     let cache = TypeCache::get().unwrap();
@@ -41,7 +41,7 @@ fn get_property_type_from_expected_type_with_depth(
                 // Return the resolved type of this property
                 cache.resolve_type(&ScopedType::new_cwt(
                     property_def.property_type.clone(),
-                    expected_type.scope_context().clone(),
+                    expected_type.scope_stack().clone(),
                 ))
             } else {
                 // Check if the property matches any pattern property
@@ -51,10 +51,10 @@ fn get_property_type_from_expected_type_with_depth(
                 {
                     cache.resolve_type(&ScopedType::new_cwt(
                         pattern_property.value_type.clone(),
-                        expected_type.scope_context().clone(),
+                        expected_type.scope_stack().clone(),
                     ))
                 } else {
-                    ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_context().clone())
+                    ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_stack().clone())
                 }
             }
         }
@@ -62,7 +62,7 @@ fn get_property_type_from_expected_type_with_depth(
             // For union types, try to find the property in any of the union members
             for union_type in types {
                 let property_type = get_property_type_from_expected_type_with_depth(
-                    &ScopedType::new_cwt(union_type.clone(), expected_type.scope_context().clone()),
+                    &ScopedType::new_cwt(union_type.clone(), expected_type.scope_stack().clone()),
                     property_name,
                     depth + 1,
                 );
@@ -73,7 +73,7 @@ fn get_property_type_from_expected_type_with_depth(
                     return property_type;
                 }
             }
-            ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_context().clone())
+            ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_stack().clone())
         }
         CwtTypeOrSpecial::CwtType(CwtType::Reference(_)) => {
             // For references, resolve and try again
@@ -88,72 +88,24 @@ fn get_property_type_from_expected_type_with_depth(
                     depth + 1,
                 )
             } else {
-                ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_context().clone())
+                ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_stack().clone())
             }
         }
-        _ => ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_context().clone()),
+        _ => ScopedType::new_cwt(CwtType::Unknown, expected_type.scope_stack().clone()),
     }
 }
 
 /// Check if a key is valid for the given type
 pub fn is_key_valid(cwt_type: &ScopedType, key_name: &str) -> bool {
-    is_key_valid_with_depth(cwt_type, key_name, 0)
-}
-
-/// Check if a key is valid for the given type with recursion depth limit
-fn is_key_valid_with_depth(cwt_type: &ScopedType, key_name: &str, depth: usize) -> bool {
-    // Prevent infinite recursion by limiting depth
-    if depth > 10 {
-        return false;
-    }
-
     if !TypeCache::is_initialized() {
         return true;
     }
 
     let cache = TypeCache::get().unwrap();
-    let scoped_type = cache.resolve_type(cwt_type);
 
-    let result = match &scoped_type.cwt_type() {
-        CwtTypeOrSpecial::CwtType(CwtType::Block(obj)) => {
-            // Check if the key is in the known properties
-            if obj.properties.contains_key(key_name) {
-                return true;
-            }
+    let result = cache
+        .get_resolver()
+        .navigate_to_property(cwt_type, key_name);
 
-            // Check if the key matches any pattern property
-            if cache
-                .get_resolver()
-                .key_matches_pattern(key_name, obj)
-                .is_some()
-            {
-                return true;
-            }
-
-            false
-        }
-        CwtTypeOrSpecial::CwtType(CwtType::Union(types)) => {
-            // For union types, key is valid if it's valid in any of the union members
-            types.iter().any(|t| {
-                is_key_valid_with_depth(
-                    &ScopedType::new_cwt(t.clone(), scoped_type.scope_context().clone()),
-                    key_name,
-                    depth + 1,
-                )
-            })
-        }
-        CwtTypeOrSpecial::CwtType(CwtType::Reference(_)) => {
-            // For references, try to resolve them but don't get stuck in infinite loops
-            is_key_valid_with_depth(&scoped_type, key_name, depth + 1)
-        }
-        CwtTypeOrSpecial::CwtType(CwtType::Unknown) => false,
-        CwtTypeOrSpecial::CwtType(CwtType::Simple(_)) => false,
-        CwtTypeOrSpecial::CwtType(CwtType::Array(_)) => false,
-        CwtTypeOrSpecial::CwtType(CwtType::Literal(_)) => false,
-        CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(_)) => false,
-        CwtTypeOrSpecial::CwtType(CwtType::Comparable(_)) => false,
-        CwtTypeOrSpecial::ScopedUnion(_) => todo!(),
-    };
-
-    result
+    matches!(result, PropertyNavigationResult::Success(_))
 }

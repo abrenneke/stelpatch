@@ -995,6 +995,8 @@ mod tests {
         }
     }
 
+    // === Complex nested structures ===
+
     #[test]
     fn test_complex_nested_structures() {
         // Test complex nested structures (though our current parser doesn't deeply nest)
@@ -1007,5 +1009,52 @@ mod tests {
 
         // Should parse as some kind of structured expression
         assert!(option.value.is_list());
+    }
+
+    // === All Comment Types Together ===
+
+    #[test]
+    fn test_all_comment_types_together() {
+        use winnow::LocatingSlice;
+
+        // Test input with all three comment types in sequence
+        let input = "# Regular comment\n## cardinality = 0..1\n### Documentation comment\n";
+        let mut input_slice = LocatingSlice::new(input);
+
+        // Parse all comments and whitespace
+        let comments_and_ws = opt_cwt_ws_and_comments(&mut input_slice).unwrap();
+        let comments = get_cwt_comments(&comments_and_ws);
+
+        // Should have parsed all three comments
+        assert_eq!(comments.len(), 3);
+
+        // First comment should be regular
+        let regular_comment = &comments[0];
+        assert!(regular_comment.is_regular());
+        assert_eq!(regular_comment.text.trim(), "Regular comment");
+
+        // Second comment should be option
+        let option_comment = &comments[1];
+        assert!(option_comment.is_option());
+        assert_eq!(option_comment.text.trim(), "cardinality = 0..1");
+
+        // Verify the option data is parsed correctly
+        let option_data = option_comment.option_data().unwrap();
+        assert!(option_data.has_option("cardinality"));
+        let cardinality = option_data.get_cardinality().unwrap();
+        assert!(cardinality.is_range());
+
+        // Third comment should be documentation
+        let doc_comment = &comments[2];
+        assert!(doc_comment.is_documentation());
+        assert_eq!(doc_comment.text.trim(), "Documentation comment");
+
+        // Verify type-specific checks work correctly
+        assert!(!regular_comment.is_option());
+        assert!(!regular_comment.is_documentation());
+        assert!(!option_comment.is_regular());
+        assert!(!option_comment.is_documentation());
+        assert!(!doc_comment.is_regular());
+        assert!(!doc_comment.is_option());
     }
 }

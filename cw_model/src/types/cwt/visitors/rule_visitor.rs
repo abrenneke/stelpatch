@@ -38,12 +38,17 @@ impl<'a> RuleVisitor<'a> {
 
         if let Some(name) = rule_name {
             // Skip special section names that are handled by other visitors
-            if name == "types" || name == "enums" {
+            if name == "types" || name == "enums" || name == "links" {
                 return;
             }
 
             // Parse rule options
             let options = RuleOptions::from_rule(rule);
+
+            if let Some(replace_scope) = options.replace_scope.as_ref() {
+                dbg!(&name);
+                dbg!(&replace_scope);
+            }
 
             // Convert the rule definition to an inferred type
             let rule_type = CwtConverter::convert_value(&rule.value);
@@ -51,7 +56,7 @@ impl<'a> RuleVisitor<'a> {
             // Store the rule definition as a TypeDefinition (merge with existing if present)
             let mut type_def = TypeDefinition::new(rule_type);
             type_def.rule_options = options;
-            self.data.insert_or_merge_type(name, type_def);
+            self.data.insert_or_merge_type(name.clone(), type_def);
         } else {
             let key_name = match &rule.key {
                 AstCwtIdentifierOrString::Identifier(identifier) => identifier.name.raw_value(),

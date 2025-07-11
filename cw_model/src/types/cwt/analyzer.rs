@@ -106,7 +106,7 @@ impl CwtAnalyzer {
     }
 
     /// Get a specific link definition
-    pub fn get_link(&self, name: &str) -> Option<&super::definitions::LinkDefinition> {
+    pub fn get_link(&self, name: &str) -> Option<&LinkDefinition> {
         self.data.links.get(name)
     }
 

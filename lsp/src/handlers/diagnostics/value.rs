@@ -2,7 +2,7 @@ use cw_parser::{AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
 
 use crate::handlers::{
-    diagnostics::diagnostic::create_type_mismatch_diagnostic, scope::ScopeContextManager,
+    diagnostics::diagnostic::create_type_mismatch_diagnostic, scope::ScopeStack,
 };
 
 /// Check if a value is compatible with a simple type with scope context, returning a diagnostic if incompatible
@@ -10,7 +10,7 @@ pub fn is_value_compatible_with_simple_type_with_scope(
     value: &AstValue<'_>,
     simple_type: &cw_model::SimpleType,
     content: &str,
-    scope_manager: &ScopeContextManager,
+    scope_manager: &ScopeStack,
 ) -> Option<Diagnostic> {
     use cw_model::SimpleType;
 

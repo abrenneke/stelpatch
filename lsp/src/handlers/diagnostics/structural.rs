@@ -51,7 +51,7 @@ fn is_value_structurally_compatible_with_depth(
         (CwtTypeOrSpecial::CwtType(CwtType::Union(types)), _) => types.iter().any(|union_type| {
             is_value_structurally_compatible_with_depth(
                 value,
-                &ScopedType::new_cwt(union_type.clone(), expected_type.scope_context().clone()),
+                &ScopedType::new_cwt(union_type.clone(), expected_type.scope_stack().clone()),
                 depth + 1,
             )
         }),
@@ -60,7 +60,7 @@ fn is_value_structurally_compatible_with_depth(
         (CwtTypeOrSpecial::CwtType(CwtType::Comparable(base_type)), _) => {
             is_value_structurally_compatible_with_depth(
                 value,
-                &ScopedType::new_cwt(*base_type.clone(), expected_type.scope_context().clone()),
+                &ScopedType::new_cwt(*base_type.clone(), expected_type.scope_stack().clone()),
                 depth + 1,
             )
         }

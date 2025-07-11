@@ -2,18 +2,10 @@ use super::core::GameDataCache;
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
-use cw_model::types::{CwtAnalyzer, PatternProperty, PatternType, TypeFingerprint};
-use cw_model::{AliasName, BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType};
-use cw_parser::AstValue;
+use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType, TypeFingerprint};
+use cw_model::{AliasName, BlockType, CwtOptions, CwtType, ReferenceType, SimpleType};
+use std::sync::Arc;
 use std::sync::RwLock;
-use std::{collections::HashMap, sync::Arc};
-
-// For validation errors - define a simple struct for now
-#[derive(Debug, Clone)]
-pub struct CwtValidationError {
-    pub message: String,
-    pub location: Option<String>,
-}
 
 pub struct TypeResolver {
     cwt_analyzer: Arc<CwtAnalyzer>,
@@ -21,7 +13,6 @@ pub struct TypeResolver {
 }
 
 pub struct TypeResolverCache {
-    cache: HashMap<String, CwtType>,
     resolving: std::collections::HashSet<String>,
 }
 
@@ -30,23 +21,9 @@ impl TypeResolver {
         Self {
             cwt_analyzer,
             cache: Arc::new(RwLock::new(TypeResolverCache {
-                cache: HashMap::new(),
                 resolving: std::collections::HashSet::new(),
             })),
         }
-    }
-
-    /// Clear the cache (useful for debugging or memory management)
-    pub fn clear_cache(&self) {
-        let mut cache = self.cache.write().unwrap();
-        cache.cache.clear();
-        cache.resolving.clear();
-    }
-
-    /// Get cache statistics
-    pub fn cache_stats(&self) -> (usize, usize) {
-        let cache = self.cache.read().unwrap();
-        (cache.cache.len(), cache.resolving.len())
     }
 
     /// Resolve a scoped type to its actual concrete type with scope context
@@ -74,7 +51,7 @@ impl TypeResolver {
 
                 let resolved_cwt_type = self.resolve_reference_type(ref_type);
                 let result =
-                    ScopedType::new_cwt(resolved_cwt_type, scoped_type.scope_context().clone());
+                    ScopedType::new_cwt(resolved_cwt_type, scoped_type.scope_stack().clone());
 
                 // Remove from resolving set
                 {
@@ -87,7 +64,7 @@ impl TypeResolver {
             // For comparables, unwrap to the base type
             CwtTypeOrSpecial::CwtType(CwtType::Comparable(base_type)) => {
                 let base_scoped =
-                    ScopedType::new_cwt((**base_type).clone(), scoped_type.scope_context().clone());
+                    ScopedType::new_cwt((**base_type).clone(), scoped_type.scope_stack().clone());
                 self.resolve_type(&base_scoped)
             }
             // For blocks, resolve and convert patterns to pattern properties
@@ -108,7 +85,7 @@ impl TypeResolver {
                 self.convert_patterns_to_pattern_properties(&mut resolved_block);
                 let resolved_cwt_type = CwtType::Block(resolved_block);
                 let result =
-                    ScopedType::new_cwt(resolved_cwt_type, scoped_type.scope_context().clone());
+                    ScopedType::new_cwt(resolved_cwt_type, scoped_type.scope_stack().clone());
 
                 // Remove from resolving set
                 {
@@ -164,13 +141,33 @@ impl TypeResolver {
         property_name: &str,
     ) -> PropertyNavigationResult {
         let resolved_type = self.resolve_type(scoped_type);
+
+        // First, check if this property is a link property
+        let current_scope = &resolved_type.scope_stack().current_scope().scope_type;
+        if property_name == "owner" {
+            dbg!(&current_scope);
+            dbg!(&property_name);
+            dbg!(&self.cwt_analyzer.get_link(property_name));
+            dbg!(self.is_link_property(property_name, current_scope));
+        }
+        if let Some(link_def) = self.is_link_property(property_name, current_scope) {
+            // This is a link property - create a scoped type with the output scope
+            let mut new_scope_context = resolved_type.scope_stack().clone();
+            new_scope_context
+                .push_scope_type(&link_def.output_scope)
+                .unwrap();
+            let result = ScopedType::new(resolved_type.cwt_type().clone(), new_scope_context);
+            return PropertyNavigationResult::Success(result);
+        }
+
+        // If not a link property, handle as regular property
         match resolved_type.cwt_type() {
             CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
                 // Check regular properties first
                 if let Some(property) = block.properties.get(property_name) {
                     // Check if this property changes scope
                     if property.changes_scope() {
-                        match property.apply_scope_changes(resolved_type.scope_context()) {
+                        match property.apply_scope_changes(resolved_type.scope_stack()) {
                             Ok(new_scope) => {
                                 let property_scoped =
                                     ScopedType::new_cwt(property.property_type.clone(), new_scope);
@@ -183,7 +180,7 @@ impl TypeResolver {
                         // Same scope context
                         let property_scoped = ScopedType::new_cwt(
                             property.property_type.clone(),
-                            resolved_type.scope_context().clone(),
+                            resolved_type.scope_stack().clone(),
                         );
                         let resolved_property = self.resolve_type(&property_scoped);
                         PropertyNavigationResult::Success(resolved_property)
@@ -192,8 +189,7 @@ impl TypeResolver {
                     // Check pattern properties
                     if let Some(pattern_property) = self.key_matches_pattern(property_name, block) {
                         if pattern_property.changes_scope() {
-                            match pattern_property
-                                .apply_scope_changes(resolved_type.scope_context())
+                            match pattern_property.apply_scope_changes(resolved_type.scope_stack())
                             {
                                 Ok(new_scope) => {
                                     let property_scoped = ScopedType::new_cwt(
@@ -209,7 +205,7 @@ impl TypeResolver {
                             // Same scope context
                             let property_scoped = ScopedType::new_cwt(
                                 pattern_property.value_type.clone(),
-                                resolved_type.scope_context().clone(),
+                                resolved_type.scope_stack().clone(),
                             );
                             let resolved_property = self.resolve_type(&property_scoped);
                             PropertyNavigationResult::Success(resolved_property)
@@ -234,7 +230,7 @@ impl TypeResolver {
                                 if name == property_name {
                                     let property_scoped = ScopedType::new_cwt(
                                         alias_def.to.clone(),
-                                        resolved_type.scope_context().clone(),
+                                        resolved_type.scope_stack().clone(),
                                     );
                                     let resolved_property = self.resolve_type(&property_scoped);
                                     return PropertyNavigationResult::Success(resolved_property);
@@ -254,7 +250,7 @@ impl TypeResolver {
                                                 {
                                                     let property_scoped = ScopedType::new_cwt(
                                                         alias_def.to.clone(),
-                                                        resolved_type.scope_context().clone(),
+                                                        resolved_type.scope_stack().clone(),
                                                     );
                                                     let resolved_property =
                                                         self.resolve_type(&property_scoped);
@@ -273,7 +269,7 @@ impl TypeResolver {
                                     if enum_def.values.contains(property_name) {
                                         let property_scoped = ScopedType::new_cwt(
                                             alias_def.to.clone(),
-                                            resolved_type.scope_context().clone(),
+                                            resolved_type.scope_stack().clone(),
                                         );
                                         let resolved_property = self.resolve_type(&property_scoped);
                                         return PropertyNavigationResult::Success(
@@ -515,14 +511,36 @@ impl TypeResolver {
         }
     }
 
+    /// Get all available link properties for the current scope
+    pub fn get_scope_link_properties(&self, scope: &str) -> Vec<String> {
+        let mut link_properties = Vec::new();
+
+        for (link_name, link_def) in self.cwt_analyzer.get_links() {
+            if link_def.can_be_used_from(scope) {
+                link_properties.push(link_name.clone());
+            }
+        }
+
+        link_properties
+    }
+
+    /// Check if a property name is a link property for the current scope
+    pub fn is_link_property(&self, property_name: &str, scope: &str) -> Option<&LinkDefinition> {
+        if let Some(link_def) = self.cwt_analyzer.get_link(property_name) {
+            if link_def.can_be_used_from(scope) {
+                return Some(link_def);
+            }
+        }
+        None
+    }
+
     /// Get all available property names for a scoped type
     pub fn get_available_properties(&self, scoped_type: &ScopedType) -> Vec<String> {
         let resolved_type = self.resolve_type(scoped_type);
+        let mut properties = Vec::new();
 
         match resolved_type.cwt_type() {
             CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
-                let mut properties = Vec::new();
-
                 // Add regular properties
                 properties.extend(block.properties.keys().cloned());
 
@@ -531,17 +549,11 @@ impl TypeResolver {
                     let completions = self.get_pattern_completions(&pattern_property.pattern_type);
                     properties.extend(completions);
                 }
-
-                properties.sort();
-                properties.dedup();
-                properties
             }
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::AliasMatchLeft {
                 key,
             })) => {
                 // For alias_match_left[category], return all possible alias names from that category
-                let mut properties = Vec::new();
-
                 for (alias_key, _) in self.cwt_analyzer.get_aliases() {
                     if alias_key.category == *key {
                         match &alias_key.name {
@@ -570,12 +582,17 @@ impl TypeResolver {
                         }
                     }
                 }
-
-                properties.sort();
-                properties.dedup();
-                properties
             }
-            _ => Vec::new(),
+            _ => {}
         }
+
+        // Add link properties based on the current scope
+        let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
+        let link_properties = self.get_scope_link_properties(current_scope);
+        properties.extend(link_properties);
+
+        properties.sort();
+        properties.dedup();
+        properties
     }
 }

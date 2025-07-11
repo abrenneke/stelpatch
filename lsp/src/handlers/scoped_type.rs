@@ -1,4 +1,4 @@
-use crate::handlers::scope::{ScopeContext, ScopeContextManager, ScopeError};
+use crate::handlers::scope::{ScopeContext, ScopeError, ScopeStack};
 use cw_model::{CwtType, Property, SimpleType, TypeFingerprint};
 
 /// A wrapper that combines a CWT type with its scope context
@@ -8,7 +8,7 @@ pub struct ScopedType {
     /// The actual CWT type definition
     cwt_type: CwtTypeOrSpecial,
     /// The scope context this type exists in
-    scope_context: ScopeContextManager,
+    scope_context: ScopeStack,
 }
 
 impl TypeFingerprint for ScopedType {
@@ -41,7 +41,7 @@ impl TypeFingerprint for CwtTypeOrSpecial {
 }
 
 impl ScopedType {
-    pub fn new(cwt_type: CwtTypeOrSpecial, scope_context: ScopeContextManager) -> Self {
+    pub fn new(cwt_type: CwtTypeOrSpecial, scope_context: ScopeStack) -> Self {
         Self {
             cwt_type,
             scope_context,
@@ -49,17 +49,14 @@ impl ScopedType {
     }
 
     /// Create a new scoped type
-    pub fn new_cwt(cwt_type: CwtType, scope_context: ScopeContextManager) -> Self {
+    pub fn new_cwt(cwt_type: CwtType, scope_context: ScopeStack) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context,
         }
     }
 
-    pub fn new_scoped_union(
-        scoped_types: Vec<ScopedType>,
-        scope_context: ScopeContextManager,
-    ) -> Self {
+    pub fn new_scoped_union(scoped_types: Vec<ScopedType>, scope_context: ScopeStack) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::ScopedUnion(scoped_types),
             scope_context,
@@ -70,7 +67,7 @@ impl ScopedType {
     pub fn with_root_scope(cwt_type: CwtType, root_scope_type: impl Into<String>) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
-            scope_context: ScopeContextManager::default_with_root(root_scope_type),
+            scope_context: ScopeStack::default_with_root(root_scope_type),
         }
     }
 
@@ -87,8 +84,12 @@ impl ScopedType {
     }
 
     /// Get the scope context
-    pub fn scope_context(&self) -> &ScopeContextManager {
+    pub fn scope_stack(&self) -> &ScopeStack {
         &self.scope_context
+    }
+
+    pub fn scope_stack_mut(&mut self) -> &mut ScopeStack {
+        &mut self.scope_context
     }
 
     /// Check if this is a scope field type
@@ -111,19 +112,17 @@ impl ScopedType {
 
     /// Get the current scope type (equivalent to `this` in Stellaris)
     pub fn current_scope_type(&self) -> &str {
-        &self.scope_context.scope_stack().current_scope().scope_type
+        &self.scope_context.current_scope().scope_type
     }
 
     /// Get the root scope type
     pub fn root_scope_type(&self) -> &str {
-        &self.scope_context.scope_stack().root_scope().scope_type
+        &self.scope_context.root_scope().scope_type
     }
 
     /// Check if a scope field name is valid in the current context
     pub fn is_valid_scope_field(&self, field_name: &str) -> bool {
-        self.scope_context
-            .scope_stack()
-            .is_valid_scope_name(field_name)
+        self.scope_context.is_valid_scope_name(field_name)
     }
 
     /// Create a branch of this scoped type for exploration
@@ -182,11 +181,8 @@ pub trait ScopeAwareProperty {
     /// Get scope replacements, if any
     fn scope_replacements(&self) -> Option<&std::collections::HashMap<String, String>>;
 
-    /// Apply scope changes to a scope context manager
-    fn apply_scope_changes(
-        &self,
-        scope_manager: &ScopeContextManager,
-    ) -> Result<ScopeContextManager, ScopeError>;
+    /// Apply scope changes to a scope stack
+    fn apply_scope_changes(&self, scope_manager: &ScopeStack) -> Result<ScopeStack, ScopeError>;
 }
 
 impl ScopeAwareProperty for Property {
@@ -202,20 +198,19 @@ impl ScopeAwareProperty for Property {
         self.options.replace_scope.as_ref()
     }
 
-    fn apply_scope_changes(
-        &self,
-        scope_manager: &ScopeContextManager,
-    ) -> Result<ScopeContextManager, ScopeError> {
+    fn apply_scope_changes(&self, scope_manager: &ScopeStack) -> Result<ScopeStack, ScopeError> {
         let mut new_scope = scope_manager.branch();
 
         // Apply push_scope if present
         if let Some(push_scope) = &self.options.push_scope {
-            new_scope.push_scope(push_scope)?;
+            new_scope.push_scope_type(push_scope)?;
         }
 
         // Apply replace_scope if present
         if let Some(replace_scope) = &self.options.replace_scope {
-            new_scope.set_scope_replacements(replace_scope.clone());
+            new_scope
+                .replace_scope_from_strings(replace_scope.clone())
+                .expect("Failed to replace scope");
         }
 
         Ok(new_scope)
@@ -235,20 +230,19 @@ impl ScopeAwareProperty for cw_model::PatternProperty {
         self.options.replace_scope.as_ref()
     }
 
-    fn apply_scope_changes(
-        &self,
-        scope_manager: &ScopeContextManager,
-    ) -> Result<ScopeContextManager, ScopeError> {
+    fn apply_scope_changes(&self, scope_manager: &ScopeStack) -> Result<ScopeStack, ScopeError> {
         let mut new_scope = scope_manager.branch();
 
         // Apply push_scope if present
         if let Some(push_scope) = &self.options.push_scope {
-            new_scope.push_scope(push_scope)?;
+            new_scope.push_scope_type(push_scope)?;
         }
 
         // Apply replace_scope if present
         if let Some(replace_scope) = &self.options.replace_scope {
-            new_scope.set_scope_replacements(replace_scope.clone());
+            new_scope
+                .replace_scope_from_strings(replace_scope.clone())
+                .expect("Failed to replace scope");
         }
 
         Ok(new_scope)
@@ -274,8 +268,8 @@ mod tests {
     #[test]
     fn test_scope_field_validation() {
         let cwt_type = CwtType::Simple(SimpleType::ScopeField);
-        let mut scope_manager = ScopeContextManager::default_with_root("country");
-        scope_manager.push_scope("planet").unwrap();
+        let mut scope_manager = ScopeStack::default_with_root("country");
+        scope_manager.push_scope_type("planet").unwrap();
 
         let scoped_type = ScopedType::new_cwt(cwt_type, scope_manager);
 
@@ -306,18 +300,20 @@ mod tests {
         assert!(property.changes_scope());
         assert_eq!(property.pushed_scope(), Some("planet"));
 
-        let scope_manager = ScopeContextManager::default_with_root("country");
+        let scope_manager = ScopeStack::default_with_root("country");
         let new_scope = property.apply_scope_changes(&scope_manager).unwrap();
 
-        assert_eq!(new_scope.scope_stack().current_scope().scope_type, "planet");
-        assert_eq!(new_scope.scope_stack().root_scope().scope_type, "country");
+        assert_eq!(new_scope.current_scope().scope_type, "planet");
+        assert_eq!(new_scope.root_scope().scope_type, "country");
     }
 
     #[test]
     fn test_property_scope_replacements() {
         let mut options = CwtOptions::default();
         let mut replacements = HashMap::new();
-        replacements.insert("this".to_string(), "from".to_string());
+        replacements.insert("this".to_string(), "planet".to_string());
+        replacements.insert("from".to_string(), "country".to_string());
+        replacements.insert("root".to_string(), "empire".to_string());
         options.replace_scope = Some(replacements);
 
         let property = Property {
@@ -329,16 +325,25 @@ mod tests {
         assert!(property.changes_scope());
         assert!(property.scope_replacements().is_some());
 
-        let mut scope_manager = ScopeContextManager::default_with_root("country");
-        scope_manager.push_scope("planet").unwrap();
+        let mut scope_manager = ScopeStack::default_with_root("original_country");
+        scope_manager.push_scope_type("original_planet").unwrap();
 
         let new_scope = property.apply_scope_changes(&scope_manager).unwrap();
 
-        // "this" should now resolve to "from" (which is "country")
+        // After replace_scope, the scope context should be completely rebuilt
         assert_eq!(
             new_scope.get_scope_by_name("this").unwrap().scope_type,
+            "planet"
+        );
+        assert_eq!(
+            new_scope.get_scope_by_name("from").unwrap().scope_type,
             "country"
         );
+        assert_eq!(
+            new_scope.get_scope_by_name("root").unwrap().scope_type,
+            "empire"
+        );
+        assert_eq!(new_scope.depth(), 2); // from and this
     }
 
     #[test]
@@ -356,8 +361,8 @@ mod tests {
 
         // Verify they're independent (this is more of a conceptual test)
         assert_eq!(
-            scoped_type.scope_context.scope_stack().depth(),
-            branched.scope_context.scope_stack().depth()
+            scoped_type.scope_context.depth(),
+            branched.scope_context.depth()
         );
     }
 }
