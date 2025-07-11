@@ -26,8 +26,7 @@ impl TypeResolver {
         }
     }
 
-    /// Resolve a scoped type to its actual concrete type with scope context
-    /// This is the core type resolution method that handles scope transitions
+    /// Resolves references & nested types to concrete types
     pub fn resolve_type(&self, scoped_type: &ScopedType) -> ScopedType {
         let cwt_type = scoped_type.cwt_type();
         let cache_key = cwt_type.fingerprint();
@@ -143,12 +142,12 @@ impl TypeResolver {
 
         // First, check if this property is a link property
         let current_scope = &resolved_type.scope_stack().current_scope().scope_type;
-        // if property_name == "owner" {
-        //     dbg!(&current_scope);
-        //     dbg!(&property_name);
-        //     dbg!(&self.cwt_analyzer.get_link(property_name));
-        //     dbg!(self.is_link_property(property_name, current_scope));
-        // }
+        if property_name == "owner" {
+            dbg!(&current_scope);
+            dbg!(&property_name);
+            dbg!(&self.cwt_analyzer.get_link(property_name));
+            dbg!(self.is_link_property(property_name, current_scope));
+        }
         if let Some(link_def) = self.is_link_property(property_name, current_scope) {
             // This is a link property - create a scoped type with the output scope
             let mut new_scope_context = resolved_type.scope_stack().clone();

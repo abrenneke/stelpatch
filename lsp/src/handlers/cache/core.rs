@@ -202,7 +202,7 @@ impl TypeCache {
                                 return Some(TypeInfo {
                                     property_path: current_path,
                                     type_description: format!("Scope error: {}", e),
-                                    cwt_type: None,
+                                    scoped_type: None,
                                     documentation: None,
                                     source_info: Some(format!("Scope error: {}", e)),
                                 });
@@ -211,7 +211,7 @@ impl TypeCache {
                                 return Some(TypeInfo {
                                     property_path: current_path,
                                     type_description: format!("Unknown property '{}'", part),
-                                    cwt_type: None,
+                                    scoped_type: None,
                                     documentation: None,
                                     source_info: Some(format!(
                                         "Property not found in {} entity",
@@ -231,7 +231,7 @@ impl TypeCache {
                                 return Some(TypeInfo {
                                     property_path: current_path,
                                     type_description: format!("Scope error: {}", e),
-                                    cwt_type: None,
+                                    scoped_type: None,
                                     documentation: None,
                                     source_info: Some(format!("Scope error: {}", e)),
                                 });
@@ -240,7 +240,7 @@ impl TypeCache {
                                 return Some(TypeInfo {
                                     property_path: current_path,
                                     type_description: format!("Unknown property '{}'", part),
-                                    cwt_type: None,
+                                    scoped_type: None,
                                     documentation: None,
                                     source_info: Some(format!(
                                         "Property not found in {} entity",
@@ -277,7 +277,7 @@ impl TypeCache {
                                 "Cannot access property '{}' on non-block type {:?}",
                                 part, current_type
                             ),
-                            cwt_type: None,
+                            scoped_type: None,
                             documentation: None,
                             source_info: Some("Property access on non-block type".to_string()),
                         });
@@ -291,7 +291,7 @@ impl TypeCache {
                     &current_type,
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
-                cwt_type: Some(current_type.cwt_type().clone()),
+                scoped_type: Some(current_type),
                 documentation: None,
                 source_info: Some(format!("From {} entity definition", namespace)),
             });
@@ -307,7 +307,7 @@ impl TypeCache {
                     &scoped_type,
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
-                cwt_type: Some(CwtTypeOrSpecial::CwtType(type_def.rules.clone())),
+                scoped_type: Some(scoped_type),
                 documentation: None,
                 source_info: Some(format!("CWT type definition: {}", namespace)),
             });

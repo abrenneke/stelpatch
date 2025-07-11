@@ -10,7 +10,7 @@ pub async fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
         return Some(TypeInfo {
             property_path: "entity".to_string(),
             type_description: "Loading type information...".to_string(),
-            cwt_type: None,
+            scoped_type: None,
             documentation: None,
             source_info: Some("Type system initializing".to_string()),
         });
@@ -28,7 +28,7 @@ pub async fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
                 &scoped_type,
                 None, // No specific property name for top-level entity types
             ),
-            cwt_type: Some(scoped_type.cwt_type().clone()),
+            scoped_type: Some(scoped_type),
             documentation: None,
             source_info: Some(format!("Entity structure for {} namespace", namespace)),
         })
@@ -36,7 +36,7 @@ pub async fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
         Some(TypeInfo {
             property_path: "entity".to_string(),
             type_description: "No type information available for this namespace".to_string(),
-            cwt_type: None,
+            scoped_type: None,
             documentation: None,
             source_info: Some(format!("Namespace {} not found in type system", namespace)),
         })
@@ -50,7 +50,7 @@ pub async fn get_entity_property_type(namespace: &str, property_path: &str) -> O
         return Some(TypeInfo {
             property_path: property_path.to_string(),
             type_description: "Loading type information...".to_string(),
-            cwt_type: None,
+            scoped_type: None,
             documentation: None,
             source_info: Some("Type system initializing".to_string()),
         });
