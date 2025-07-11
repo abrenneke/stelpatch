@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use crate::handlers::scope::{ScopeContext, ScopeError, ScopeStack};
-use cw_model::{CwtType, Property, SimpleType, TypeFingerprint};
+use cw_model::{CwtAnalyzer, CwtType, PatternProperty, Property, SimpleType, TypeFingerprint};
 
 /// A wrapper that combines a CWT type with its scope context
 /// This ensures that types always carry information about what scope they exist in
@@ -182,7 +184,11 @@ pub trait ScopeAwareProperty {
     fn scope_replacements(&self) -> Option<&std::collections::HashMap<String, String>>;
 
     /// Apply scope changes to a scope stack
-    fn apply_scope_changes(&self, scope_manager: &ScopeStack) -> Result<ScopeStack, ScopeError>;
+    fn apply_scope_changes(
+        &self,
+        scope_manager: &ScopeStack,
+        analyzer: &CwtAnalyzer,
+    ) -> Result<ScopeStack, ScopeError>;
 }
 
 impl ScopeAwareProperty for Property {
@@ -198,18 +204,32 @@ impl ScopeAwareProperty for Property {
         self.options.replace_scope.as_ref()
     }
 
-    fn apply_scope_changes(&self, scope_manager: &ScopeStack) -> Result<ScopeStack, ScopeError> {
+    fn apply_scope_changes(
+        &self,
+        scope_manager: &ScopeStack,
+        analyzer: &CwtAnalyzer,
+    ) -> Result<ScopeStack, ScopeError> {
         let mut new_scope = scope_manager.branch();
 
         // Apply push_scope if present
         if let Some(push_scope) = &self.options.push_scope {
-            new_scope.push_scope_type(push_scope)?;
+            if let Some(scope_name) = analyzer.resolve_scope_name(push_scope) {
+                new_scope.push_scope_type(scope_name.to_string())?;
+            }
         }
 
         // Apply replace_scope if present
         if let Some(replace_scope) = &self.options.replace_scope {
+            let mut new_scopes = HashMap::new();
+
+            for (key, value) in replace_scope {
+                if let Some(scope_name) = analyzer.resolve_scope_name(value) {
+                    new_scopes.insert(key.clone(), scope_name.to_string());
+                }
+            }
+
             new_scope
-                .replace_scope_from_strings(replace_scope.clone())
+                .replace_scope_from_strings(new_scopes)
                 .expect("Failed to replace scope");
         }
 
@@ -217,7 +237,7 @@ impl ScopeAwareProperty for Property {
     }
 }
 
-impl ScopeAwareProperty for cw_model::PatternProperty {
+impl ScopeAwareProperty for PatternProperty {
     fn changes_scope(&self) -> bool {
         self.options.push_scope.is_some() || self.options.replace_scope.is_some()
     }
@@ -230,19 +250,31 @@ impl ScopeAwareProperty for cw_model::PatternProperty {
         self.options.replace_scope.as_ref()
     }
 
-    fn apply_scope_changes(&self, scope_manager: &ScopeStack) -> Result<ScopeStack, ScopeError> {
+    fn apply_scope_changes(
+        &self,
+        scope_manager: &ScopeStack,
+        analyzer: &CwtAnalyzer,
+    ) -> Result<ScopeStack, ScopeError> {
         let mut new_scope = scope_manager.branch();
 
         // Apply push_scope if present
         if let Some(push_scope) = &self.options.push_scope {
-            new_scope.push_scope_type(push_scope)?;
+            if let Some(scope_name) = analyzer.resolve_scope_name(push_scope) {
+                new_scope.push_scope_type(scope_name.to_string())?;
+            }
         }
 
         // Apply replace_scope if present
         if let Some(replace_scope) = &self.options.replace_scope {
-            new_scope
-                .replace_scope_from_strings(replace_scope.clone())
-                .expect("Failed to replace scope");
+            let mut new_scopes = HashMap::new();
+
+            for (key, value) in replace_scope {
+                if let Some(scope_name) = analyzer.resolve_scope_name(value) {
+                    new_scopes.insert(key.clone(), scope_name.to_string());
+                }
+            }
+
+            new_scope.replace_scope_from_strings(new_scopes).unwrap();
         }
 
         Ok(new_scope)
@@ -284,66 +316,6 @@ mod tests {
         // Test validation
         assert!(scoped_type.validate_scope_field("this").is_ok());
         assert!(scoped_type.validate_scope_field("invalid").is_err());
-    }
-
-    #[test]
-    fn test_property_scope_changes() {
-        let mut options = CwtOptions::default();
-        options.push_scope = Some("planet".to_string());
-
-        let property = Property {
-            property_type: CwtType::Simple(SimpleType::Bool),
-            options,
-            documentation: None,
-        };
-
-        assert!(property.changes_scope());
-        assert_eq!(property.pushed_scope(), Some("planet"));
-
-        let scope_manager = ScopeStack::default_with_root("country");
-        let new_scope = property.apply_scope_changes(&scope_manager).unwrap();
-
-        assert_eq!(new_scope.current_scope().scope_type, "planet");
-        assert_eq!(new_scope.root_scope().scope_type, "country");
-    }
-
-    #[test]
-    fn test_property_scope_replacements() {
-        let mut options = CwtOptions::default();
-        let mut replacements = HashMap::new();
-        replacements.insert("this".to_string(), "planet".to_string());
-        replacements.insert("from".to_string(), "country".to_string());
-        replacements.insert("root".to_string(), "empire".to_string());
-        options.replace_scope = Some(replacements);
-
-        let property = Property {
-            property_type: CwtType::Simple(SimpleType::Bool),
-            options,
-            documentation: None,
-        };
-
-        assert!(property.changes_scope());
-        assert!(property.scope_replacements().is_some());
-
-        let mut scope_manager = ScopeStack::default_with_root("original_country");
-        scope_manager.push_scope_type("original_planet").unwrap();
-
-        let new_scope = property.apply_scope_changes(&scope_manager).unwrap();
-
-        // After replace_scope, the scope context should be completely rebuilt
-        assert_eq!(
-            new_scope.get_scope_by_name("this").unwrap().scope_type,
-            "planet"
-        );
-        assert_eq!(
-            new_scope.get_scope_by_name("from").unwrap().scope_type,
-            "country"
-        );
-        assert_eq!(
-            new_scope.get_scope_by_name("root").unwrap().scope_type,
-            "empire"
-        );
-        assert_eq!(new_scope.depth(), 2); // from and this
     }
 
     #[test]

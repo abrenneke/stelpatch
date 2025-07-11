@@ -45,11 +45,6 @@ impl<'a> RuleVisitor<'a> {
             // Parse rule options
             let options = RuleOptions::from_rule(rule);
 
-            if let Some(replace_scope) = options.replace_scope.as_ref() {
-                dbg!(&name);
-                dbg!(&replace_scope);
-            }
-
             // Convert the rule definition to an inferred type
             let rule_type = CwtConverter::convert_value(&rule.value);
 

@@ -9,6 +9,7 @@ pub mod enum_visitor;
 pub mod links_visitor;
 pub mod registry;
 pub mod rule_visitor;
+pub mod scopes_visitor;
 pub mod type_visitor;
 pub mod value_set_visitor;
 
@@ -19,5 +20,6 @@ pub use enum_visitor::EnumVisitor;
 pub use links_visitor::LinksVisitor;
 pub use registry::{CwtAnalysisData, CwtVisitorRegistry};
 pub use rule_visitor::RuleVisitor;
+pub use scopes_visitor::ScopesVisitor;
 pub use type_visitor::TypeVisitor;
 pub use value_set_visitor::ValueSetVisitor;

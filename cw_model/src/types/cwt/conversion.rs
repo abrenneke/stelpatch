@@ -21,6 +21,7 @@ pub enum ConversionError {
     InvalidTypeDefinition(String),
     InvalidComplexEnum(String),
     InvalidRuleDefinition(String),
+    InvalidScopeFormat(String),
 }
 
 impl std::fmt::Display for ConversionError {
@@ -48,6 +49,9 @@ impl std::fmt::Display for ConversionError {
             }
             ConversionError::InvalidRuleDefinition(rule_name) => {
                 write!(f, "Invalid rule definition: {}", rule_name)
+            }
+            ConversionError::InvalidScopeFormat(scope_error) => {
+                write!(f, "Invalid scope format: {}", scope_error)
             }
         }
     }

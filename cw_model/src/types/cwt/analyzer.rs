@@ -173,6 +173,21 @@ impl CwtAnalyzer {
         self.data.links.contains_key(name)
     }
 
+    /// Resolves a scope alias to a scope's canonical name
+    pub fn resolve_scope_name(&self, name: &str) -> Option<&str> {
+        if let Some(scope) = self.data.scopes.get(name) {
+            return Some(&scope.name);
+        }
+
+        self.data.scopes.iter().find_map(|(_, scope)| {
+            if scope.aliases.iter().any(|alias| alias.as_str() == name) {
+                Some(scope.name.as_ref())
+            } else {
+                None
+            }
+        })
+    }
+
     /// Get statistics about the analyzer
     pub fn get_stats(&self) -> AnalyzerStats {
         AnalyzerStats {

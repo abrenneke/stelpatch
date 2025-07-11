@@ -1,4 +1,5 @@
 use super::core::GameDataCache;
+use crate::handlers::scope::ScopeStack;
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
@@ -140,14 +141,18 @@ impl TypeResolver {
     ) -> PropertyNavigationResult {
         let resolved_type = self.resolve_type(scoped_type);
 
-        // First, check if this property is a link property
-        let current_scope = &resolved_type.scope_stack().current_scope().scope_type;
-        if property_name == "owner" {
-            dbg!(&current_scope);
-            dbg!(&property_name);
-            dbg!(&self.cwt_analyzer.get_link(property_name));
-            dbg!(self.is_link_property(property_name, current_scope));
+        // First, check if this property is a scope property (from, fromfrom, etc.)
+        if let Some(scope_context) = resolved_type.scope_stack().get_scope_by_name(property_name) {
+            // This is a scope property - push that scope onto the current stack
+            let mut new_scope_context = resolved_type.scope_stack().clone();
+            new_scope_context.push_scope(scope_context.clone()).unwrap();
+            let result = ScopedType::new(resolved_type.cwt_type().clone(), new_scope_context);
+            return PropertyNavigationResult::Success(result);
         }
+
+        // Second, check if this property is a link property
+        let current_scope = &resolved_type.scope_stack().current_scope().scope_type;
+
         if let Some(link_def) = self.is_link_property(property_name, current_scope) {
             // This is a link property - create a scoped type with the output scope
             let mut new_scope_context = resolved_type.scope_stack().clone();
@@ -165,7 +170,9 @@ impl TypeResolver {
                 if let Some(property) = block.properties.get(property_name) {
                     // Check if this property changes scope
                     if property.changes_scope() {
-                        match property.apply_scope_changes(resolved_type.scope_stack()) {
+                        match property
+                            .apply_scope_changes(resolved_type.scope_stack(), &self.cwt_analyzer)
+                        {
                             Ok(new_scope) => {
                                 let property_scoped =
                                     ScopedType::new_cwt(property.property_type.clone(), new_scope);
@@ -196,8 +203,10 @@ impl TypeResolver {
                         };
 
                         if pattern_property.changes_scope() {
-                            match pattern_property.apply_scope_changes(resolved_type.scope_stack())
-                            {
+                            match pattern_property.apply_scope_changes(
+                                resolved_type.scope_stack(),
+                                &self.cwt_analyzer,
+                            ) {
                                 Ok(new_scope) => {
                                     let property_scoped =
                                         ScopedType::new_cwt(resolved_value_type, new_scope);
@@ -525,7 +534,7 @@ impl TypeResolver {
         let mut link_properties = Vec::new();
 
         for (link_name, link_def) in self.cwt_analyzer.get_links() {
-            if link_def.can_be_used_from(scope) {
+            if link_def.can_be_used_from(scope, &self.cwt_analyzer) {
                 link_properties.push(link_name.clone());
             }
         }
@@ -536,7 +545,7 @@ impl TypeResolver {
     /// Check if a property name is a link property for the current scope
     pub fn is_link_property(&self, property_name: &str, scope: &str) -> Option<&LinkDefinition> {
         if let Some(link_def) = self.cwt_analyzer.get_link(property_name) {
-            if link_def.can_be_used_from(scope) {
+            if link_def.can_be_used_from(scope, &self.cwt_analyzer) {
                 return Some(link_def);
             }
         }
@@ -594,6 +603,10 @@ impl TypeResolver {
             }
             _ => {}
         }
+
+        // Add scope properties (from, fromfrom, etc.) based on the current scope stack
+        let scope_properties = scoped_type.scope_stack().available_scope_names();
+        properties.extend(scope_properties);
 
         // Add link properties based on the current scope
         let current_scope = &scoped_type.scope_stack().current_scope().scope_type;

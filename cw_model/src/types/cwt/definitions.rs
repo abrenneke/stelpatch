@@ -10,7 +10,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{CwtType, ModifierSpec, RuleOptions, Subtype};
+use crate::{CwtAnalyzer, CwtType, ModifierSpec, RuleOptions, Subtype};
 
 /// Definition of a CWT type
 #[derive(Debug, Clone)]
@@ -186,6 +186,24 @@ pub struct EnumDefinition {
     pub values: HashSet<String>,
     /// Complex enum configuration
     pub complex: Option<ComplexEnumDefinition>,
+}
+
+/// Definition of a CWT scope
+#[derive(Debug, Clone)]
+pub struct ScopeDefinition {
+    /// Name of the scope
+    pub name: String,
+    /// Aliases for this scope
+    pub aliases: Vec<String>,
+}
+
+/// Definition of a CWT scope group
+#[derive(Debug, Clone)]
+pub struct ScopeGroupDefinition {
+    /// Name of the scope group
+    pub name: String,
+    /// Member scopes in this group
+    pub members: Vec<String>,
 }
 
 /// Configuration for complex enums
@@ -409,9 +427,15 @@ impl LinkDefinition {
     }
 
     /// Check if this link can be used from a specific scope
-    pub fn can_be_used_from(&self, scope: &str) -> bool {
-        self.input_scopes.contains(&scope.to_string())
-            || self.input_scopes.contains(&"all".to_string())
+    pub fn can_be_used_from(&self, scope: &str, analyzer: &CwtAnalyzer) -> bool {
+        if let Some(scope_name) = analyzer.resolve_scope_name(scope) {
+            return self
+                .input_scopes
+                .iter()
+                .any(|s| s == "all" || analyzer.resolve_scope_name(s) == Some(scope_name));
+        }
+
+        false
     }
 
     /// Check if this link is generated from data
@@ -430,5 +454,41 @@ impl std::str::FromStr for LinkType {
             "both" => Ok(LinkType::Both),
             _ => Err(format!("Invalid link type: {}", s)),
         }
+    }
+}
+
+impl ScopeDefinition {
+    /// Create a new scope definition
+    pub fn new(name: String, aliases: Vec<String>) -> Self {
+        Self { name, aliases }
+    }
+
+    /// Check if this scope has a specific alias
+    pub fn has_alias(&self, alias: &str) -> bool {
+        self.aliases.contains(&alias.to_string())
+    }
+
+    /// Get all identifiers for this scope (name + aliases)
+    pub fn all_identifiers(&self) -> Vec<String> {
+        let mut identifiers = vec![self.name.clone()];
+        identifiers.extend(self.aliases.clone());
+        identifiers
+    }
+}
+
+impl ScopeGroupDefinition {
+    /// Create a new scope group definition
+    pub fn new(name: String, members: Vec<String>) -> Self {
+        Self { name, members }
+    }
+
+    /// Check if this group contains a specific scope
+    pub fn contains_scope(&self, scope: &str) -> bool {
+        self.members.contains(&scope.to_string())
+    }
+
+    /// Get the number of members in this group
+    pub fn member_count(&self) -> usize {
+        self.members.len()
     }
 }

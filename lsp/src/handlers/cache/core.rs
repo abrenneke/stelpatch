@@ -68,17 +68,26 @@ impl TypeCache {
                     ScopedType::new_cwt(type_def.rules.clone(), Default::default());
 
                 if let Some(push_scope) = type_def.rule_options.push_scope.as_ref() {
-                    scoped_type
-                        .scope_stack_mut()
-                        .push_scope_type(push_scope)
-                        .unwrap();
+                    if let Some(scope_name) = cwt_analyzer.resolve_scope_name(push_scope) {
+                        scoped_type
+                            .scope_stack_mut()
+                            .push_scope_type(scope_name.to_string())
+                            .unwrap();
+                    }
                 }
 
                 if let Some(replace_scope) = type_def.rule_options.replace_scope.as_ref() {
+                    let mut new_scopes = HashMap::new();
+                    for (key, value) in replace_scope {
+                        if let Some(scope_name) = cwt_analyzer.resolve_scope_name(value) {
+                            new_scopes.insert(key.clone(), scope_name.to_string());
+                        }
+                    }
+
                     scoped_type
                         .scope_stack_mut()
-                        .replace_scope_from_strings(replace_scope.clone())
-                        .expect("Failed to replace scope");
+                        .replace_scope_from_strings(new_scopes)
+                        .unwrap();
                 }
 
                 eprintln!("Type {} has scope {}", type_name, scoped_type.scope_stack());

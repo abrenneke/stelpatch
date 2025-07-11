@@ -7,7 +7,10 @@ use crate::{AliasPattern, CwtType};
 
 use super::super::conversion::ConversionError;
 use super::super::definitions::*;
-use super::{AliasVisitor, EnumVisitor, LinksVisitor, RuleVisitor, TypeVisitor, ValueSetVisitor};
+use super::{
+    AliasVisitor, EnumVisitor, LinksVisitor, RuleVisitor, ScopesVisitor, TypeVisitor,
+    ValueSetVisitor,
+};
 use cw_parser::cwt::{
     AstCwtIdentifierOrString, AstCwtRule, CwtModule, CwtReferenceType, CwtValue, CwtVisitor,
 };
@@ -34,6 +37,12 @@ pub struct CwtAnalysisData {
     /// Known links registry
     pub links: HashMap<String, LinkDefinition>,
 
+    /// Known scopes registry
+    pub scopes: HashMap<String, ScopeDefinition>,
+
+    /// Known scope groups registry
+    pub scope_groups: HashMap<String, ScopeGroupDefinition>,
+
     /// Errors encountered during conversion
     pub errors: Vec<ConversionError>,
 }
@@ -52,6 +61,8 @@ impl CwtAnalysisData {
         self.aliases.clear();
         self.single_aliases.clear();
         self.links.clear();
+        self.scopes.clear();
+        self.scope_groups.clear();
         self.errors.clear();
     }
 
@@ -68,6 +79,8 @@ impl CwtAnalysisData {
             + self.aliases.len()
             + self.single_aliases.len()
             + self.links.len()
+            + self.scopes.len()
+            + self.scope_groups.len()
     }
 
     /// Insert or merge a type definition
@@ -135,6 +148,12 @@ impl<'a> CwtRegistryVisitor<'a> {
         let mut links_visitor = LinksVisitor::new(self.data);
         links_visitor.visit_rule(rule);
     }
+
+    /// Handle a scopes section
+    fn handle_scopes_section(&mut self, rule: &AstCwtRule) {
+        let mut scopes_visitor = ScopesVisitor::new(self.data);
+        scopes_visitor.visit_rule(rule);
+    }
 }
 
 impl<'a> CwtVisitor<'a> for CwtRegistryVisitor<'a> {
@@ -151,6 +170,9 @@ impl<'a> CwtVisitor<'a> for CwtRegistryVisitor<'a> {
             }
             "links" => {
                 self.handle_links_section(rule);
+            }
+            "scopes" | "scope_groups" => {
+                self.handle_scopes_section(rule);
             }
             _ => {
                 // Check for typed identifiers in the rule key
