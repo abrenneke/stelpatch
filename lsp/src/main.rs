@@ -6,7 +6,6 @@ use tower_lsp::{Client, LspService, Server};
 mod handlers;
 mod semantic_token_collector;
 
-use handlers::cache::TypeCache;
 use handlers::document_cache::DocumentCache;
 
 struct CwLspServer {

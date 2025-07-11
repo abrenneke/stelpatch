@@ -18,6 +18,8 @@ use std::collections::{HashMap, HashSet};
 pub struct CwtAnalyzer {
     /// Internal analysis data
     data: CwtAnalysisData,
+    /// Pre-computed category to aliases mapping for performance
+    category_index: HashMap<String, Vec<AliasPattern>>,
 }
 
 impl CwtAnalyzer {
@@ -25,6 +27,7 @@ impl CwtAnalyzer {
     pub fn new() -> Self {
         Self {
             data: CwtAnalysisData::new(),
+            category_index: HashMap::new(),
         }
     }
 
@@ -32,6 +35,9 @@ impl CwtAnalyzer {
     pub fn convert_module(&mut self, module: &CwtModule) -> Result<(), Vec<ConversionError>> {
         // Use the visitor registry to process the module
         CwtVisitorRegistry::process_module(&mut self.data, module);
+
+        // Rebuild category index after processing
+        self.rebuild_category_index();
 
         if self.data.errors.is_empty() {
             Ok(())
@@ -78,6 +84,33 @@ impl CwtAnalyzer {
     /// Clear all definitions and errors
     pub fn clear(&mut self) {
         self.data.clear();
+        self.category_index.clear();
+    }
+
+    /// Rebuild the category index from current aliases
+    fn rebuild_category_index(&mut self) {
+        self.category_index.clear();
+        for alias_pattern in self.data.aliases.keys() {
+            self.category_index
+                .entry(alias_pattern.category.clone())
+                .or_insert_with(Vec::new)
+                .push(alias_pattern.clone());
+        }
+    }
+
+    /// Get all aliases for a specific category (O(1) lookup)
+    pub fn get_aliases_for_category(&self, category: &str) -> Option<&[AliasPattern]> {
+        self.category_index.get(category).map(|v| v.as_slice())
+    }
+
+    /// Check if a category has any aliases
+    pub fn has_category(&self, category: &str) -> bool {
+        self.category_index.contains_key(category)
+    }
+
+    /// Get all available categories
+    pub fn get_categories(&self) -> Vec<&String> {
+        self.category_index.keys().collect()
     }
 
     /// Get a specific type definition
@@ -162,6 +195,9 @@ impl CwtAnalyzer {
         self.data.single_aliases.extend(other.data.single_aliases);
         self.data.links.extend(other.data.links);
         self.data.errors.extend(other.data.errors);
+
+        // Rebuild category index after merging
+        self.rebuild_category_index();
     }
 
     /// Get a reference to the internal analysis data

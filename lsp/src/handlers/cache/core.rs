@@ -1,6 +1,6 @@
 use cw_games::stellaris::BaseGame;
+use cw_model::CwtType;
 use cw_model::types::CwtAnalyzer;
-use cw_model::{CwtType, TypeFingerprint};
 use cw_model::{GameMod, LoadMode};
 use cw_parser::CwtModuleCell;
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ use std::sync::{Arc, OnceLock};
 use crate::handlers::cache::resolver::TypeResolver;
 use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
 
-use super::formatter::format_type_description_with_property_context;
+use super::formatter::TypeFormatter;
 use super::types::TypeInfo;
 
 /// Cache for Stellaris type information that's loaded once and shared across requests
@@ -175,6 +175,8 @@ impl TypeCache {
     /// Get type information for a specific property path in a namespace
     /// Path format: "property" or "property.nested.field"
     pub fn get_property_type(&self, namespace: &str, property_path: &str) -> Option<TypeInfo> {
+        let formatter = TypeFormatter::new(&self.resolver, 30);
+
         // First try to get from namespace types (game data)
         if let Some(namespace_type) = self.get_namespace_type(namespace) {
             let path_parts: Vec<&str> = property_path.split('.').collect();
@@ -248,7 +250,7 @@ impl TypeCache {
                             }
                         }
                     }
-                    CwtTypeOrSpecial::CwtType(CwtType::Union(u)) => {
+                    CwtTypeOrSpecial::CwtType(CwtType::Union(_u)) => {
                         // let mut potential_types = vec![];
                         // for member in u {
                         //     self.extract_all_union_types_with_property(
@@ -285,12 +287,8 @@ impl TypeCache {
 
             return Some(TypeInfo {
                 property_path: property_path.to_string(),
-                type_description: format_type_description_with_property_context(
+                type_description: formatter.format_type(
                     &current_type,
-                    0,
-                    30,
-                    &self.cwt_analyzer,
-                    &self.resolver,
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
                 cwt_type: Some(current_type.cwt_type().clone()),
@@ -305,12 +303,8 @@ impl TypeCache {
             let scoped_type = ScopedType::new_cwt(type_def.rules.clone(), Default::default());
             return Some(TypeInfo {
                 property_path: property_path.to_string(),
-                type_description: format_type_description_with_property_context(
+                type_description: formatter.format_type(
                     &scoped_type,
-                    0,
-                    30,
-                    &self.cwt_analyzer,
-                    &self.resolver,
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
                 cwt_type: Some(CwtTypeOrSpecial::CwtType(type_def.rules.clone())),
@@ -345,7 +339,6 @@ impl TypeCache {
 pub struct GameDataCache {
     /// Maps namespace -> set of keys defined in that namespace
     namespace_keys: HashMap<String, Vec<String>>,
-    base_game: &'static GameMod,
 }
 
 static GAME_DATA_CACHE: OnceLock<GameDataCache> = OnceLock::new();
@@ -389,10 +382,7 @@ impl GameDataCache {
                 namespace_keys.len()
             );
 
-            GameDataCache {
-                namespace_keys,
-                base_game,
-            }
+            GameDataCache { namespace_keys }
         })
     }
 

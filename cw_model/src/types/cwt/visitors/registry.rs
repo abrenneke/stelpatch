@@ -18,16 +18,22 @@ use std::collections::{HashMap, HashSet};
 pub struct CwtAnalysisData {
     /// Known types registry
     pub types: HashMap<String, TypeDefinition>,
+
     /// Known enums registry
     pub enums: HashMap<String, EnumDefinition>,
+
     /// Known value sets registry
     pub value_sets: HashMap<String, HashSet<String>>,
+
     /// Known aliases registry
     pub aliases: HashMap<AliasPattern, AliasDefinition>,
+
     /// Known single aliases registry
     pub single_aliases: HashMap<String, CwtType>,
+
     /// Known links registry
     pub links: HashMap<String, LinkDefinition>,
+
     /// Errors encountered during conversion
     pub errors: Vec<ConversionError>,
 }

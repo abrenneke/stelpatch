@@ -8,43 +8,25 @@ use cw_model::TypeFingerprint;
 pub struct ScopeContext {
     /// The current scope type (e.g., "country", "planet", "fleet", "ship", etc.)
     pub scope_type: String,
-    /// Optional scope identifier or name
-    pub scope_id: Option<String>,
 }
 
 impl ScopeContext {
     pub fn new(scope_type: impl Into<String>) -> Self {
         Self {
             scope_type: scope_type.into(),
-            scope_id: None,
-        }
-    }
-
-    pub fn with_id(scope_type: impl Into<String>, scope_id: impl Into<String>) -> Self {
-        Self {
-            scope_type: scope_type.into(),
-            scope_id: Some(scope_id.into()),
         }
     }
 }
 
 impl TypeFingerprint for ScopeContext {
     fn fingerprint(&self) -> String {
-        format!(
-            "{}:{}",
-            self.scope_type,
-            self.scope_id.as_ref().unwrap_or(&"".to_string())
-        )
+        format!("{}", self.scope_type)
     }
 }
 
 impl fmt::Display for ScopeContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(id) = &self.scope_id {
-            write!(f, "{}:{}", self.scope_type, id)
-        } else {
-            write!(f, "{}", self.scope_type)
-        }
+        write!(f, "{}", self.scope_type)
     }
 }
 
@@ -91,14 +73,6 @@ impl ScopeStack {
     pub fn push_scope_type(&mut self, scope_type: impl Into<String>) -> Result<(), ScopeError> {
         let scope = ScopeContext::new(scope_type);
         self.push_scope(scope)
-    }
-
-    /// Pop the current scope, returning to the previous scope
-    pub fn pop_scope(&mut self) -> Result<ScopeContext, ScopeError> {
-        if self.scopes.len() <= 1 {
-            return Err(ScopeError::CannotPopRoot);
-        }
-        self.scopes.pop().ok_or(ScopeError::EmptyStack)
     }
 
     /// Replace the entire scope context based on replace_scope specification
@@ -294,14 +268,8 @@ impl Default for ScopeStack {
 pub enum ScopeError {
     /// Stack overflow - too many nested scopes
     StackOverflow { max_depth: usize },
-    /// Attempted to pop the root scope
-    CannotPopRoot,
-    /// Empty stack (should never happen in practice)
-    EmptyStack,
     /// Invalid scope name
     InvalidScopeName { name: String },
-    /// Scope type mismatch
-    ScopeTypeMismatch { expected: String, actual: String },
 }
 
 impl fmt::Display for ScopeError {
@@ -310,21 +278,8 @@ impl fmt::Display for ScopeError {
             ScopeError::StackOverflow { max_depth } => {
                 write!(f, "Scope stack overflow (max depth: {})", max_depth)
             }
-            ScopeError::CannotPopRoot => {
-                write!(f, "Cannot pop root scope")
-            }
-            ScopeError::EmptyStack => {
-                write!(f, "Scope stack is empty")
-            }
             ScopeError::InvalidScopeName { name } => {
                 write!(f, "Invalid scope name: {}", name)
-            }
-            ScopeError::ScopeTypeMismatch { expected, actual } => {
-                write!(
-                    f,
-                    "Scope type mismatch: expected {}, got {}",
-                    expected, actual
-                )
             }
         }
     }
@@ -359,12 +314,6 @@ mod tests {
         assert_eq!(stack.from_scope().unwrap().scope_type, "planet");
         assert_eq!(stack.fromfrom_scope().unwrap().scope_type, "country");
         assert_eq!(stack.depth(), 3);
-
-        // Test pop
-        let popped = stack.pop_scope().unwrap();
-        assert_eq!(popped.scope_type, "pop");
-        assert_eq!(stack.current_scope().scope_type, "planet");
-        assert_eq!(stack.depth(), 2);
     }
 
     #[test]
@@ -568,12 +517,5 @@ mod tests {
             result,
             Err(ScopeError::StackOverflow { max_depth: 3 })
         ));
-    }
-
-    #[test]
-    fn test_cannot_pop_root() {
-        let mut stack = ScopeStack::new(ScopeContext::new("country"));
-        let result = stack.pop_scope();
-        assert!(matches!(result, Err(ScopeError::CannotPopRoot)));
     }
 }

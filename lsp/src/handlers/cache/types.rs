@@ -1,5 +1,3 @@
-use cw_model::CwtType;
-
 use crate::handlers::scoped_type::CwtTypeOrSpecial;
 
 /// Information about a property's type

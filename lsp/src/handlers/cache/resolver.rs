@@ -134,7 +134,6 @@ impl TypeResolver {
         block_type.alias_patterns.clear();
     }
 
-    /// Navigate to a property within a scoped type, handling scope changes automatically
     pub fn navigate_to_property(
         &self,
         scoped_type: &ScopedType,
@@ -144,12 +143,12 @@ impl TypeResolver {
 
         // First, check if this property is a link property
         let current_scope = &resolved_type.scope_stack().current_scope().scope_type;
-        if property_name == "owner" {
-            dbg!(&current_scope);
-            dbg!(&property_name);
-            dbg!(&self.cwt_analyzer.get_link(property_name));
-            dbg!(self.is_link_property(property_name, current_scope));
-        }
+        // if property_name == "owner" {
+        //     dbg!(&current_scope);
+        //     dbg!(&property_name);
+        //     dbg!(&self.cwt_analyzer.get_link(property_name));
+        //     dbg!(self.is_link_property(property_name, current_scope));
+        // }
         if let Some(link_def) = self.is_link_property(property_name, current_scope) {
             // This is a link property - create a scoped type with the output scope
             let mut new_scope_context = resolved_type.scope_stack().clone();
@@ -220,53 +219,14 @@ impl TypeResolver {
             })) => {
                 // For alias_match_left[category], we need to look up the specific alias
                 // category:property_name and return its type
-                eprintln!("Looking up alias {}:{}", key, property_name);
 
-                // Try to find the alias with the given category and property name
-                for (alias_key, alias_def) in self.cwt_analyzer.get_aliases() {
-                    if alias_key.category == *key {
-                        match &alias_key.name {
-                            AliasName::Static(name) => {
-                                if name == property_name {
-                                    let property_scoped = ScopedType::new_cwt(
-                                        alias_def.to.clone(),
-                                        resolved_type.scope_stack().clone(),
-                                    );
-                                    let resolved_property = self.resolve_type(&property_scoped);
-                                    return PropertyNavigationResult::Success(resolved_property);
-                                }
-                            }
-                            AliasName::TypeRef(type_name) => {
-                                // Check if property_name is a valid key for this type
-                                if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
-                                    if let Some(path) = type_def.path.as_ref() {
-                                        let path = path.trim_start_matches("game/");
-                                        if let Some(game_data) = GameDataCache::get() {
-                                            if let Some(namespace_keys) =
-                                                game_data.get_namespace_keys(&path)
-                                            {
-                                                if namespace_keys
-                                                    .contains(&property_name.to_string())
-                                                {
-                                                    let property_scoped = ScopedType::new_cwt(
-                                                        alias_def.to.clone(),
-                                                        resolved_type.scope_stack().clone(),
-                                                    );
-                                                    let resolved_property =
-                                                        self.resolve_type(&property_scoped);
-                                                    return PropertyNavigationResult::Success(
-                                                        resolved_property,
-                                                    );
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            AliasName::Enum(enum_name) => {
-                                // Check if property_name is a valid enum value
-                                if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
-                                    if enum_def.values.contains(property_name) {
+                // Use the category index for O(1) lookup instead of iterating through all aliases
+                if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(key) {
+                    for alias_pattern in aliases_in_category {
+                        if let Some(alias_def) = self.cwt_analyzer.get_alias(alias_pattern) {
+                            match &alias_pattern.name {
+                                AliasName::Static(name) => {
+                                    if name == property_name {
                                         let property_scoped = ScopedType::new_cwt(
                                             alias_def.to.clone(),
                                             resolved_type.scope_stack().clone(),
@@ -275,6 +235,49 @@ impl TypeResolver {
                                         return PropertyNavigationResult::Success(
                                             resolved_property,
                                         );
+                                    }
+                                }
+                                AliasName::TypeRef(type_name) => {
+                                    // Check if property_name is a valid key for this type
+                                    if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
+                                        if let Some(path) = type_def.path.as_ref() {
+                                            let path = path.trim_start_matches("game/");
+                                            if let Some(game_data) = GameDataCache::get() {
+                                                if let Some(namespace_keys) =
+                                                    game_data.get_namespace_keys(&path)
+                                                {
+                                                    if namespace_keys
+                                                        .contains(&property_name.to_string())
+                                                    {
+                                                        let property_scoped = ScopedType::new_cwt(
+                                                            alias_def.to.clone(),
+                                                            resolved_type.scope_stack().clone(),
+                                                        );
+                                                        let resolved_property =
+                                                            self.resolve_type(&property_scoped);
+                                                        return PropertyNavigationResult::Success(
+                                                            resolved_property,
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                AliasName::Enum(enum_name) => {
+                                    // Check if property_name is a valid enum value
+                                    if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
+                                        if enum_def.values.contains(property_name) {
+                                            let property_scoped = ScopedType::new_cwt(
+                                                alias_def.to.clone(),
+                                                resolved_type.scope_stack().clone(),
+                                            );
+                                            let resolved_property =
+                                                self.resolve_type(&property_scoped);
+                                            return PropertyNavigationResult::Success(
+                                                resolved_property,
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -308,9 +311,11 @@ impl TypeResolver {
         match pattern_type {
             PatternType::AliasName { category } => {
                 // Check if the key matches any alias name from this category
-                for (alias_key, _) in self.cwt_analyzer.get_aliases() {
-                    if alias_key.category == *category {
-                        match &alias_key.name {
+                if let Some(aliases_in_category) =
+                    self.cwt_analyzer.get_aliases_for_category(category)
+                {
+                    for alias_pattern in aliases_in_category {
+                        match &alias_pattern.name {
                             AliasName::Static(name) => {
                                 if name == key {
                                     return true;
@@ -362,9 +367,11 @@ impl TypeResolver {
         match pattern_type {
             PatternType::AliasName { category } => {
                 let mut completions = Vec::new();
-                for (alias_key, _) in self.cwt_analyzer.get_aliases() {
-                    if alias_key.category == *category {
-                        match &alias_key.name {
+                if let Some(aliases_in_category) =
+                    self.cwt_analyzer.get_aliases_for_category(category)
+                {
+                    for alias_pattern in aliases_in_category {
+                        match &alias_pattern.name {
                             AliasName::Static(name) => {
                                 completions.push(name.clone());
                             }
@@ -554,9 +561,9 @@ impl TypeResolver {
                 key,
             })) => {
                 // For alias_match_left[category], return all possible alias names from that category
-                for (alias_key, _) in self.cwt_analyzer.get_aliases() {
-                    if alias_key.category == *key {
-                        match &alias_key.name {
+                if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(key) {
+                    for alias_pattern in aliases_in_category {
+                        match &alias_pattern.name {
                             AliasName::Static(name) => {
                                 properties.push(name.clone());
                             }

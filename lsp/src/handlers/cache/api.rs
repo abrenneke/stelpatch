@@ -1,7 +1,7 @@
 use crate::handlers::cache::resolver::TypeResolver;
 
 use super::core::TypeCache;
-use super::formatter::format_type_description_with_property_context;
+use super::formatter::TypeFormatter;
 use super::types::TypeInfo;
 
 /// Get type information for a namespace entity (top-level entity structure)
@@ -17,17 +17,15 @@ pub async fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
     }
 
     let cache = TypeCache::get().unwrap();
-    let mut resolver = TypeResolver::new(cache.get_cwt_analyzer().clone());
+    let resolver = TypeResolver::new(cache.get_cwt_analyzer().clone());
+    let formatter = TypeFormatter::new(&resolver, 30);
+
     if let Some(namespace_type) = cache.get_namespace_type(namespace) {
         let scoped_type = namespace_type.clone();
         Some(TypeInfo {
             property_path: "entity".to_string(),
-            type_description: format_type_description_with_property_context(
+            type_description: formatter.format_type(
                 &scoped_type,
-                0,
-                30,
-                cache.get_cwt_analyzer(),
-                &mut resolver,
                 None, // No specific property name for top-level entity types
             ),
             cwt_type: Some(scoped_type.cwt_type().clone()),
