@@ -84,24 +84,24 @@ impl<'a> TypeFormatter<'a> {
                 // Special handling for alias_match_left - expand it like a block
                 if let ReferenceType::AliasMatchLeft { key } = ref_type {
                     let available_properties = self.resolver.get_available_properties(&scoped_type);
-                    let mut lines: Vec<String> = vec![];
+                    let mut lines: Vec<String> = vec!["TODO".to_string()];
 
-                    for property_name in available_properties {
-                        let property_type = self
-                            .resolver
-                            .navigate_to_property(&scoped_type, &property_name);
+                    // for property_name in available_properties {
+                    //     let property_type = self
+                    //         .resolver
+                    //         .navigate_to_property(&scoped_type, &property_name);
 
-                        if let PropertyNavigationResult::Success(property_type) = property_type {
-                            // TODO this is fucked up
-                            // let formatted_value = self.format_type_with_depth(
-                            //     &property_type,
-                            //     depth + 1,
-                            //     Some(&property_name),
-                            // );
+                    //     if let PropertyNavigationResult::Success(property_type) = property_type {
+                    //         // TODO this is fucked up
+                    //         // let formatted_value = self.format_type_with_depth(
+                    //         //     &property_type,
+                    //         //     depth + 1,
+                    //         //     Some(&property_name),
+                    //         // );
 
-                            lines.push(format!("{} = ({})", property_name, key));
-                        }
-                    }
+                    //         lines.push(format!("{} = ({})", property_name, key));
+                    //     }
+                    // }
 
                     lines.join("\n")
                 } else {
@@ -121,118 +121,91 @@ impl<'a> TypeFormatter<'a> {
                     )
                 )
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
+            CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
                 // Show:
                 // - The root obj
                 // - The properties of the root obj
                 // - The properties of the properties of the root obj
+                let available_properties = self.resolver.get_available_properties(&scoped_type);
+
                 if depth >= 1 {
-                    let total_properties = block.properties.len() + block.pattern_properties.len();
-                    if total_properties == 0 {
+                    if available_properties.is_empty() {
                         return "{}".to_string();
                     } else {
-                        return format!("{{ /* ... +{} properties */ }}", total_properties);
+                        return format!(
+                            "{{ /* ... +{} properties */ }}",
+                            available_properties.len()
+                        );
                     }
                 }
 
-                let total_properties = block.properties.len() + block.pattern_properties.len();
-                if total_properties == 0 {
+                if available_properties.is_empty() {
                     return "{}".to_string();
                 }
 
-                // Collect regular properties
-                let mut properties: Vec<_> = block.properties.iter().collect();
-                properties.sort_by_key(|(k, _)| k.as_str());
+                let mut sorted_properties: Vec<_> = available_properties.iter().collect();
+                sorted_properties.sort();
 
                 let mut lines = vec!["{".to_string()];
                 let mut line_count = 1;
                 let mut properties_shown = 0;
 
-                // Show regular properties first
-                for (key, property_def) in properties {
+                for property_name in sorted_properties {
                     if line_count >= self.max_lines {
                         lines.push(format!(
                             "  # ... +{} more properties",
-                            total_properties - properties_shown
+                            available_properties.len() - properties_shown
                         ));
                         break;
                     }
 
-                    let formatted_value = self.format_type_with_depth(
-                        &ScopedType::new_cwt(
-                            property_def.property_type.clone(),
-                            scoped_type.scope_stack().clone(),
-                        ),
-                        depth + 1,
-                        Some(key), // Pass the property name for alias resolution
-                    );
+                    let property_type = self
+                        .resolver
+                        .navigate_to_property(&scoped_type, property_name);
 
-                    // Handle multi-line types (nested blocks)
-                    if formatted_value.contains('\n') {
-                        lines.push(format!("  {}:", key));
-                        let nested_lines: Vec<&str> = formatted_value.lines().collect();
-                        let mut lines_added = 1;
-
-                        for line in nested_lines {
-                            if line.starts_with("{") {
-                                continue;
-                            }
-                            if line_count + lines_added >= self.max_lines {
-                                lines.push("    # ... (truncated)".to_string());
-                                break;
-                            }
-                            lines.push(format!("    {}", line));
-                            lines_added += 1;
+                    if let PropertyNavigationResult::Success(property_type) = property_type {
+                        if matches!(
+                            property_type.cwt_type(),
+                            CwtTypeOrSpecial::CwtType(CwtType::Reference(
+                                ReferenceType::AliasMatchLeft { .. }
+                            ))
+                        ) {
+                            eprintln!(
+                                "navigate_to_property '{}' did not resolve the alias_match_left, coming from {:?}",
+                                property_name, scoped_type
+                            );
                         }
-                        line_count += lines_added;
-                    } else {
-                        lines.push(format!("  {} = {}", key, formatted_value));
-                        line_count += 1;
-                    }
-                    properties_shown += 1;
-                }
 
-                // Show pattern properties
-                for pattern_property in &block.pattern_properties {
-                    if line_count >= self.max_lines {
-                        lines.push(format!(
-                            "  # ... +{} more properties",
-                            total_properties - properties_shown
-                        ));
-                        break;
-                    }
+                        let formatted_value = self.format_type_with_depth(
+                            &property_type,
+                            depth + 1,
+                            Some(property_name),
+                        );
 
-                    let formatted_value = self.format_type_with_depth(
-                        &ScopedType::new_cwt(
-                            pattern_property.value_type.clone(),
-                            scoped_type.scope_stack().clone(),
-                        ),
-                        depth + 1,
-                        None, // Pattern properties don't have specific property names
-                    );
+                        // Handle multi-line types (nested blocks)
+                        if formatted_value.contains('\n') {
+                            lines.push(format!("  {}:", property_name));
+                            let nested_lines: Vec<&str> = formatted_value.lines().collect();
+                            let mut lines_added = 1;
 
-                    // Handle multi-line types (nested blocks)
-                    if formatted_value.contains('\n') {
-                        let nested_lines: Vec<&str> = formatted_value.lines().collect();
-                        let mut lines_added = 1;
-
-                        for line in nested_lines {
-                            if line.starts_with("{") {
-                                continue;
+                            for line in nested_lines {
+                                if line.starts_with("{") {
+                                    continue;
+                                }
+                                if line_count + lines_added >= self.max_lines {
+                                    lines.push("    # ... (truncated)".to_string());
+                                    break;
+                                }
+                                lines.push(format!("    {}", line));
+                                lines_added += 1;
                             }
-                            if line_count + lines_added >= self.max_lines {
-                                lines.push("    # ... (truncated)".to_string());
-                                break;
-                            }
-                            lines.push(format!("    {}", line));
-                            lines_added += 1;
+                            line_count += lines_added;
+                        } else {
+                            lines.push(format!("  {} = {}", property_name, formatted_value));
+                            line_count += 1;
                         }
-                        line_count += lines_added;
-                    } else {
-                        lines.push(format!("{}", formatted_value));
-                        line_count += 1;
+                        properties_shown += 1;
                     }
-                    properties_shown += 1;
                 }
 
                 lines.push("}".to_string());
