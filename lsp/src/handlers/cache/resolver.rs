@@ -1,9 +1,8 @@
 use crate::handlers::cache::{FullAnalysis, GameDataCache};
-use crate::handlers::scope::ScopeStack;
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
-use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType, TypeFingerprint};
+use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType};
 use cw_model::{AliasName, BlockType, CwtOptions, CwtType, ReferenceType, SimpleType};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -14,7 +13,10 @@ pub struct TypeResolver {
 }
 
 pub struct TypeResolverCache {
-    resolving: std::collections::HashSet<String>,
+    resolved_references: std::collections::HashMap<String, CwtType>,
+    namespace_keys: std::collections::HashMap<String, Option<Vec<String>>>,
+    alias_match_left: std::collections::HashMap<String, CwtType>,
+    pattern_type_matches: std::collections::HashMap<String, bool>,
 }
 
 impl TypeResolver {
@@ -22,42 +24,55 @@ impl TypeResolver {
         Self {
             cwt_analyzer,
             cache: Arc::new(RwLock::new(TypeResolverCache {
-                resolving: std::collections::HashSet::new(),
+                resolved_references: std::collections::HashMap::new(),
+                namespace_keys: std::collections::HashMap::new(),
+                alias_match_left: std::collections::HashMap::new(),
+                pattern_type_matches: std::collections::HashMap::new(),
             })),
         }
+    }
+
+    /// Get namespace keys for a TypeRef alias name
+    fn get_namespace_keys_for_type_ref(&self, type_name: &str) -> Option<Vec<String>> {
+        if let Some(cached_result) = self.cache.read().unwrap().namespace_keys.get(type_name) {
+            return cached_result.clone();
+        }
+
+        if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
+            if let Some(path) = type_def.path.as_ref() {
+                let path = path.trim_start_matches("game/");
+                if let Some(game_data) = GameDataCache::get() {
+                    if let Some(namespace_keys) = game_data.get_namespace_entity_keys(&path) {
+                        let result = Some(namespace_keys.iter().cloned().collect());
+                        self.cache
+                            .write()
+                            .unwrap()
+                            .namespace_keys
+                            .insert(type_name.to_string(), result.clone());
+                        return result;
+                    }
+                }
+            }
+        }
+        let result = None;
+        self.cache
+            .write()
+            .unwrap()
+            .namespace_keys
+            .insert(type_name.to_string(), result.clone());
+        result
     }
 
     /// Resolves references & nested types to concrete types
     pub fn resolve_type(&self, scoped_type: &ScopedType) -> ScopedType {
         let cwt_type = scoped_type.cwt_type();
-        let cache_key = cwt_type.fingerprint();
 
         match cwt_type {
             // For references, try to resolve to the actual type
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)) => {
-                // Check if we're already resolving this type (circular reference)
-                if self.cache.read().unwrap().resolving.contains(&cache_key) {
-                    // Return the original scoped type to break the cycle
-                    return scoped_type.clone();
-                }
-
-                // For scoped types, we don't cache as heavily since scope context matters
-                // Mark as resolving
-                self.cache
-                    .write()
-                    .unwrap()
-                    .resolving
-                    .insert(cache_key.clone());
-
                 let resolved_cwt_type = self.resolve_reference_type(ref_type);
                 let result =
                     ScopedType::new_cwt(resolved_cwt_type, scoped_type.scope_stack().clone());
-
-                // Remove from resolving set
-                {
-                    let mut cache = self.cache.write().unwrap();
-                    cache.resolving.remove(&cache_key);
-                }
 
                 result
             }
@@ -69,29 +84,11 @@ impl TypeResolver {
             }
             // For blocks, resolve and convert patterns to pattern properties
             CwtTypeOrSpecial::CwtType(CwtType::Block(block_type)) => {
-                // Check if we're already resolving this block (circular reference)
-                if self.cache.read().unwrap().resolving.contains(&cache_key) {
-                    return scoped_type.clone();
-                }
-
-                // Mark as resolving
-                self.cache
-                    .write()
-                    .unwrap()
-                    .resolving
-                    .insert(cache_key.clone());
-
                 let mut resolved_block = block_type.clone();
                 self.convert_patterns_to_pattern_properties(&mut resolved_block);
                 let resolved_cwt_type = CwtType::Block(resolved_block);
                 let result =
                     ScopedType::new_cwt(resolved_cwt_type, scoped_type.scope_stack().clone());
-
-                // Remove from resolving set
-                {
-                    let mut cache = self.cache.write().unwrap();
-                    cache.resolving.remove(&cache_key);
-                }
 
                 result
             }
@@ -271,7 +268,19 @@ impl TypeResolver {
 
     /// Check if a key matches a specific pattern type
     pub fn key_matches_pattern_type(&self, key: &str, pattern_type: &PatternType) -> bool {
-        match pattern_type {
+        let composite_key = format!("{}:{}", key, pattern_type.id());
+
+        if let Some(cached_result) = self
+            .cache
+            .read()
+            .unwrap()
+            .pattern_type_matches
+            .get(&composite_key)
+        {
+            return *cached_result;
+        }
+
+        let result = match pattern_type {
             PatternType::AliasName { category } => {
                 // Check if the key matches any alias name from this category
                 if let Some(aliases_in_category) =
@@ -286,18 +295,11 @@ impl TypeResolver {
                             }
                             AliasName::TypeRef(type_name) => {
                                 // Check if key matches any type from this namespace
-                                if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
-                                    if let Some(path) = type_def.path.as_ref() {
-                                        let path = path.trim_start_matches("game/");
-                                        if let Some(game_data) = GameDataCache::get() {
-                                            if let Some(namespace_keys) =
-                                                game_data.get_namespace_entity_keys(&path)
-                                            {
-                                                if namespace_keys.contains(&key.to_string()) {
-                                                    return true;
-                                                }
-                                            }
-                                        }
+                                if let Some(namespace_keys) =
+                                    self.get_namespace_keys_for_type_ref(type_name)
+                                {
+                                    if namespace_keys.contains(&key.to_string()) {
+                                        return true;
                                     }
                                 }
                             }
@@ -322,7 +324,14 @@ impl TypeResolver {
                     false
                 }
             }
-        }
+        };
+
+        self.cache
+            .write()
+            .unwrap()
+            .pattern_type_matches
+            .insert(composite_key, result);
+        result
     }
 
     /// Get all possible completions for a pattern type
@@ -339,17 +348,10 @@ impl TypeResolver {
                                 completions.push(name.clone());
                             }
                             AliasName::TypeRef(type_name) => {
-                                if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
-                                    if let Some(path) = type_def.path.as_ref() {
-                                        let path = path.trim_start_matches("game/");
-                                        if let Some(game_data) = GameDataCache::get() {
-                                            if let Some(namespace_keys) =
-                                                game_data.get_namespace_entity_keys(&path)
-                                            {
-                                                completions.extend(namespace_keys.iter().cloned());
-                                            }
-                                        }
-                                    }
+                                if let Some(namespace_keys) =
+                                    self.get_namespace_keys_for_type_ref(type_name)
+                                {
+                                    completions.extend(namespace_keys.iter().cloned());
                                 }
                             }
                             AliasName::Enum(enum_name) => {
@@ -373,7 +375,20 @@ impl TypeResolver {
     }
 
     fn resolve_reference_type(&self, ref_type: &ReferenceType) -> CwtType {
-        match ref_type {
+        let cache_key = ref_type.id();
+
+        // Check if we already have this reference type cached
+        if let Some(cached_result) = self
+            .cache
+            .read()
+            .unwrap()
+            .resolved_references
+            .get(&cache_key)
+        {
+            return cached_result.clone();
+        }
+
+        let result = match ref_type {
             ReferenceType::Type { key } => {
                 let type_def = self.cwt_analyzer.get_type(key);
 
@@ -437,7 +452,14 @@ impl TypeResolver {
             ReferenceType::Value { key } => {
                 if let Some(full_analysis) = FullAnalysis::get() {
                     if let Some(dynamic_values) = full_analysis.dynamic_value_sets.get(key) {
-                        return CwtType::LiteralSet(dynamic_values.clone());
+                        let result = CwtType::LiteralSet(dynamic_values.clone());
+                        // Cache the result before returning
+                        self.cache
+                            .write()
+                            .unwrap()
+                            .resolved_references
+                            .insert(cache_key.clone(), result.clone());
+                        return result;
                     }
                 }
 
@@ -473,11 +495,32 @@ impl TypeResolver {
             ReferenceType::ScopeGroup { .. } => CwtType::Simple(SimpleType::ScopeField),
             // For any remaining unhandled reference types, return the original
             _ => CwtType::Reference(ref_type.clone()),
-        }
+        };
+
+        // Cache the result before returning
+        self.cache
+            .write()
+            .unwrap()
+            .resolved_references
+            .insert(cache_key, result.clone());
+        result
     }
 
     /// Resolve an AliasMatchLeft reference using a specific property name
     fn resolve_alias_match_left(&self, category: &str, property_name: &str) -> CwtType {
+        let composite_key = format!("{}:{}", category, property_name);
+
+        // Check if we already have this alias match left cached
+        if let Some(cached_result) = self
+            .cache
+            .read()
+            .unwrap()
+            .alias_match_left
+            .get(&composite_key)
+        {
+            return cached_result.clone();
+        }
+
         // Look up the specific alias category:property_name and return its type
         if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(category) {
             for alias_pattern in aliases_in_category {
@@ -485,23 +528,28 @@ impl TypeResolver {
                     match &alias_pattern.name {
                         AliasName::Static(name) => {
                             if name == property_name {
-                                return alias_def.to.clone();
+                                let result = alias_def.to.clone();
+                                self.cache
+                                    .write()
+                                    .unwrap()
+                                    .alias_match_left
+                                    .insert(composite_key.clone(), result.clone());
+                                return result;
                             }
                         }
                         AliasName::TypeRef(type_name) => {
                             // Check if property_name is a valid key for this type
-                            if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
-                                if let Some(path) = type_def.path.as_ref() {
-                                    let path = path.trim_start_matches("game/");
-                                    if let Some(game_data) = GameDataCache::get() {
-                                        if let Some(namespace_keys) =
-                                            game_data.get_namespace_entity_keys(&path)
-                                        {
-                                            if namespace_keys.contains(&property_name.to_string()) {
-                                                return alias_def.to.clone();
-                                            }
-                                        }
-                                    }
+                            if let Some(namespace_keys) =
+                                self.get_namespace_keys_for_type_ref(type_name)
+                            {
+                                if namespace_keys.contains(&property_name.to_string()) {
+                                    let result = alias_def.to.clone();
+                                    self.cache
+                                        .write()
+                                        .unwrap()
+                                        .alias_match_left
+                                        .insert(composite_key.clone(), result.clone());
+                                    return result;
                                 }
                             }
                         }
@@ -509,7 +557,13 @@ impl TypeResolver {
                             // Check if property_name is a valid enum value
                             if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
                                 if enum_def.values.contains(property_name) {
-                                    return alias_def.to.clone();
+                                    let result = alias_def.to.clone();
+                                    self.cache
+                                        .write()
+                                        .unwrap()
+                                        .alias_match_left
+                                        .insert(composite_key.clone(), result.clone());
+                                    return result;
                                 }
                             }
                         }
@@ -519,9 +573,15 @@ impl TypeResolver {
         }
 
         // If no matching alias was found, return the original AliasMatchLeft
-        CwtType::Reference(ReferenceType::AliasMatchLeft {
+        let result = CwtType::Reference(ReferenceType::AliasMatchLeft {
             key: category.to_string(),
-        })
+        });
+        self.cache
+            .write()
+            .unwrap()
+            .alias_match_left
+            .insert(composite_key.clone(), result.clone());
+        result
     }
 
     /// Get all available link properties for the current scope
@@ -574,17 +634,10 @@ impl TypeResolver {
                                 properties.push(name.clone());
                             }
                             AliasName::TypeRef(type_name) => {
-                                if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
-                                    if let Some(path) = type_def.path.as_ref() {
-                                        let path = path.trim_start_matches("game/");
-                                        if let Some(game_data) = GameDataCache::get() {
-                                            if let Some(namespace_keys) =
-                                                game_data.get_namespace_entity_keys(&path)
-                                            {
-                                                properties.extend(namespace_keys.iter().cloned());
-                                            }
-                                        }
-                                    }
+                                if let Some(namespace_keys) =
+                                    self.get_namespace_keys_for_type_ref(type_name)
+                                {
+                                    properties.extend(namespace_keys.iter().cloned());
                                 }
                             }
                             AliasName::Enum(enum_name) => {

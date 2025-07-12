@@ -47,7 +47,7 @@ pub enum CwtType {
 impl CwtType {
     pub fn reference_id(&self) -> Option<String> {
         match self {
-            CwtType::Reference(ref_type) => ref_type.id(),
+            CwtType::Reference(ref_type) => Some(ref_type.id()),
             _ => None,
         }
     }
@@ -139,37 +139,35 @@ pub enum ReferenceType {
 }
 
 impl ReferenceType {
-    pub fn id(&self) -> Option<String> {
+    pub fn id(&self) -> String {
         match self {
-            ReferenceType::Type { key } => Some(key.clone()),
+            ReferenceType::Type { key } => key.clone(),
             ReferenceType::TypeWithAffix {
                 key,
                 prefix,
                 suffix,
-            } => Some(format!(
+            } => format!(
                 "{}<{}>{}",
                 prefix.as_ref().unwrap_or(&"".to_string()),
                 key,
                 suffix.as_ref().unwrap_or(&"".to_string())
-            )),
-            ReferenceType::Enum { key } => Some(format!("enum[{}]", key)),
-            ReferenceType::ComplexEnum { key } => Some(format!("complex_enum[{}]", key)),
-            ReferenceType::Scope { key } => Some(format!("scope[{}]", key)),
-            ReferenceType::ScopeGroup { key } => Some(format!("scope_group[{}]", key)),
-            ReferenceType::Alias { key } => Some(format!("alias[{}]", key)),
-            ReferenceType::AliasName { key } => Some(format!("alias_name[{}]", key)),
-            ReferenceType::AliasMatchLeft { key } => Some(format!("alias_match_left[{}]", key)),
-            ReferenceType::SingleAlias { key } => Some(format!("single_alias[{}]", key)),
-            ReferenceType::AliasKeysField { key } => Some(format!("alias_keys_field[{}]", key)),
-            ReferenceType::Value { key } => Some(format!("value[{}]", key)),
-            ReferenceType::ValueSet { key } => Some(format!("value_set[{}]", key)),
-            ReferenceType::Icon { path } => Some(format!("icon[{}]", path)),
-            ReferenceType::Filepath { path } => Some(format!("filepath[{}]", path)),
-            ReferenceType::Colour { format } => Some(format!("colour[{}]", format)),
-            ReferenceType::StellarisNameFormat { key } => {
-                Some(format!("stellaris_name_format[{}]", key))
-            }
-            ReferenceType::Subtype { name } => Some(format!("subtype[{}]", name)),
+            ),
+            ReferenceType::Enum { key } => format!("enum[{}]", key),
+            ReferenceType::ComplexEnum { key } => format!("complex_enum[{}]", key),
+            ReferenceType::Scope { key } => format!("scope[{}]", key),
+            ReferenceType::ScopeGroup { key } => format!("scope_group[{}]", key),
+            ReferenceType::Alias { key } => format!("alias[{}]", key),
+            ReferenceType::AliasName { key } => format!("alias_name[{}]", key),
+            ReferenceType::AliasMatchLeft { key } => format!("alias_match_left[{}]", key),
+            ReferenceType::SingleAlias { key } => format!("single_alias[{}]", key),
+            ReferenceType::AliasKeysField { key } => format!("alias_keys_field[{}]", key),
+            ReferenceType::Value { key } => format!("value[{}]", key),
+            ReferenceType::ValueSet { key } => format!("value_set[{}]", key),
+            ReferenceType::Icon { path } => format!("icon[{}]", path),
+            ReferenceType::Filepath { path } => format!("filepath[{}]", path),
+            ReferenceType::Colour { format } => format!("colour[{}]", format),
+            ReferenceType::StellarisNameFormat { key } => format!("stellaris_name_format[{}]", key),
+            ReferenceType::Subtype { name } => format!("subtype[{}]", name),
         }
     }
 }
@@ -219,6 +217,15 @@ pub enum PatternType {
     AliasName { category: String },
     /// enum[key] - matches any enum value from the key
     Enum { key: String },
+}
+
+impl PatternType {
+    pub fn id(&self) -> String {
+        match self {
+            PatternType::AliasName { category } => format!("alias_name[{}]", category),
+            PatternType::Enum { key } => format!("enum[{}]", key),
+        }
+    }
 }
 
 /// Aliases can be defined in (at least) two ways:

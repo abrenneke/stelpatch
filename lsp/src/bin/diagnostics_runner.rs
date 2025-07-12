@@ -134,9 +134,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 
+    let full_analysis_start = std::time::Instant::now();
+
     println!("Loading full analysis...");
     let full_analysis = FullAnalysis::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
     full_analysis.load();
+
+    let full_analysis_duration = full_analysis_start.elapsed();
+    println!("Full analysis loaded in {:?}", full_analysis_duration);
 
     Ok(())
 
