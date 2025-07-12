@@ -25,7 +25,7 @@ pub fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
         Some(TypeInfo {
             property_path: "entity".to_string(),
             type_description: formatter.format_type(
-                &scoped_type,
+                scoped_type.clone(),
                 None, // No specific property name for top-level entity types
             ),
             scoped_type: Some(scoped_type),

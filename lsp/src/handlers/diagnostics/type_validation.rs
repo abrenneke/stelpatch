@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use cw_model::CwtType;
 use cw_parser::{AstEntityItem, AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
@@ -20,7 +22,7 @@ use crate::handlers::{
 /// Validate an entity value against the expected type structure
 pub fn validate_entity_value(
     value: &AstValue<'_>,
-    expected_type: &ScopedType,
+    expected_type: Arc<ScopedType>,
     content: &str,
     namespace: &str,
     depth: usize,
@@ -49,12 +51,12 @@ pub fn validate_entity_value(
 
                     if let PropertyNavigationResult::Success(property_type) = cache
                         .get_resolver()
-                        .navigate_to_property(expected_type, key_name)
+                        .navigate_to_property(expected_type.clone(), key_name)
                     {
                         // Validate the value against the property type
                         let value_diagnostics = validate_value_against_type(
                             &expr.value,
-                            &property_type,
+                            property_type,
                             content,
                             namespace,
                             depth + 1,
@@ -86,7 +88,7 @@ pub fn validate_entity_value(
 /// Validate a value against the expected CWT type
 fn validate_value_against_type(
     value: &AstValue<'_>,
-    expected_type: &ScopedType,
+    expected_type: Arc<ScopedType>,
     content: &str,
     namespace: &str,
     depth: usize,
@@ -104,14 +106,14 @@ fn validate_value_against_type(
     }
 
     let cache = TypeCache::get().unwrap();
-    let resolved_type = cache.resolve_type(expected_type);
+    let resolved_type = cache.resolve_type(expected_type.clone());
 
     match (&resolved_type.cwt_type(), value) {
         // Block type validation
         (CwtTypeOrSpecial::CwtType(CwtType::Block(_)), AstValue::Entity(_)) => {
             // For block types, validate the entity structure recursively
             let entity_diagnostics =
-                validate_entity_value(value, &resolved_type, content, namespace, depth);
+                validate_entity_value(value, resolved_type, content, namespace, depth);
             diagnostics.extend(entity_diagnostics);
         }
         (CwtTypeOrSpecial::CwtType(CwtType::Block(_)), _) => {
@@ -220,7 +222,10 @@ fn validate_value_against_type(
             for union_type in types {
                 if is_value_structurally_compatible(
                     value,
-                    &ScopedType::new_cwt(union_type.clone(), expected_type.scope_stack().clone()),
+                    Arc::new(ScopedType::new_cwt(
+                        union_type.clone(),
+                        expected_type.scope_stack().clone(),
+                    )),
                 ) {
                     compatible_types.push(union_type.clone());
                 }
@@ -248,10 +253,10 @@ fn validate_value_against_type(
                 for compatible_type in &compatible_types {
                     let content_diagnostics = validate_value_against_type(
                         value,
-                        &ScopedType::new_cwt(
+                        Arc::new(ScopedType::new_cwt(
                             compatible_type.clone(),
                             expected_type.scope_stack().clone(),
-                        ),
+                        )),
                         content,
                         namespace,
                         depth + 1,
@@ -278,7 +283,10 @@ fn validate_value_against_type(
             // For comparable types, validate against the base type
             let base_diagnostics = validate_value_against_type(
                 value,
-                &ScopedType::new_cwt(*base_type.clone(), expected_type.scope_stack().clone()),
+                Arc::new(ScopedType::new_cwt(
+                    *base_type.clone(),
+                    expected_type.scope_stack().clone(),
+                )),
                 content,
                 namespace,
                 depth + 1,

@@ -182,10 +182,10 @@ pub struct BlockType {
     pub subtypes: HashMap<String, Subtype>,
 
     /// Alias patterns - alias_name[X] = alias_match_left[X] patterns
-    pub alias_patterns: HashMap<String, CwtType>,
+    // pub alias_patterns: HashMap<String, CwtType>,
 
     /// Enum patterns - enum[key] = type patterns
-    pub enum_patterns: HashMap<String, CwtType>,
+    // pub enum_patterns: HashMap<String, CwtType>,
 
     /// Pattern properties - properties that can match multiple keys but maintain unified cardinality
     pub pattern_properties: Vec<PatternProperty>,
@@ -629,28 +629,6 @@ impl TypeFingerprint for BlockType {
             parts.push(format!("subtypes:{}", subtype_fingerprints.join(",")));
         }
 
-        // Alias patterns
-        if !self.alias_patterns.is_empty() {
-            let mut alias_fingerprints: Vec<String> = self
-                .alias_patterns
-                .iter()
-                .map(|(k, v)| format!("{}:{}", k, v.fingerprint()))
-                .collect();
-            alias_fingerprints.sort();
-            parts.push(format!("aliases:{}", alias_fingerprints.join(",")));
-        }
-
-        // Enum patterns
-        if !self.enum_patterns.is_empty() {
-            let mut enum_fingerprints: Vec<String> = self
-                .enum_patterns
-                .iter()
-                .map(|(k, v)| format!("{}:{}", k, v.fingerprint()))
-                .collect();
-            enum_fingerprints.sort();
-            parts.push(format!("enums:{}", enum_fingerprints.join(",")));
-        }
-
         // Pattern properties
         if !self.pattern_properties.is_empty() {
             let mut pattern_prop_fingerprints: Vec<String> = self
@@ -1085,8 +1063,6 @@ impl CwtType {
         BlockType {
             properties: HashMap::new(),
             subtypes: HashMap::new(),
-            alias_patterns: HashMap::new(),
-            enum_patterns: HashMap::new(),
             pattern_properties: Vec::new(),
             localisation: None,
             modifiers: None,

@@ -485,6 +485,7 @@ dependencies = [
  "cw_model",
  "cw_parser",
  "dashmap 6.1.0",
+ "rayon",
  "self_cell",
  "serde",
  "serde_json",

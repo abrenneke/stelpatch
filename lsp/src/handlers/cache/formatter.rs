@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use cw_model::{CwtType, ReferenceType, SimpleType, TypeFingerprint};
 
 use crate::handlers::cache::resolver::TypeResolver;
@@ -19,14 +21,14 @@ impl<'a> TypeFormatter<'a> {
         }
     }
 
-    pub fn format_type(&self, scoped_type: &ScopedType, property_name: Option<&str>) -> String {
+    pub fn format_type(&self, scoped_type: Arc<ScopedType>, property_name: Option<&str>) -> String {
         self.format_type_with_depth(scoped_type, 0, property_name)
     }
 
     /// Format a type description with depth control and optional property name context
     fn format_type_with_depth(
         &self,
-        scoped_type: &ScopedType,
+        scoped_type: Arc<ScopedType>,
         depth: usize,
         property_name: Option<&str>,
     ) -> String {
@@ -83,7 +85,7 @@ impl<'a> TypeFormatter<'a> {
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)) => {
                 // Special handling for alias_match_left - expand it like a block
                 if let ReferenceType::AliasMatchLeft { key } = ref_type {
-                    let available_properties = self.resolver.get_available_properties(&scoped_type);
+                    let available_properties = self.resolver.get_available_properties(scoped_type);
                     let mut lines: Vec<String> = vec!["TODO".to_string()];
 
                     // for property_name in available_properties {
@@ -112,10 +114,10 @@ impl<'a> TypeFormatter<'a> {
                 format!(
                     "comparable[{}]",
                     self.format_type_with_depth(
-                        &ScopedType::new_cwt(
+                        Arc::new(ScopedType::new_cwt(
                             *comparable.clone(),
                             scoped_type.scope_stack().clone()
-                        ),
+                        )),
                         depth + 1,
                         property_name,
                     )
@@ -126,7 +128,8 @@ impl<'a> TypeFormatter<'a> {
                 // - The root obj
                 // - The properties of the root obj
                 // - The properties of the properties of the root obj
-                let available_properties = self.resolver.get_available_properties(&scoped_type);
+                let available_properties =
+                    self.resolver.get_available_properties(scoped_type.clone());
 
                 if depth >= 1 {
                     if available_properties.is_empty() {
@@ -161,7 +164,7 @@ impl<'a> TypeFormatter<'a> {
 
                     let property_type = self
                         .resolver
-                        .navigate_to_property(&scoped_type, property_name);
+                        .navigate_to_property(scoped_type.clone(), property_name);
 
                     if let PropertyNavigationResult::Success(property_type) = property_type {
                         if matches!(
@@ -177,7 +180,7 @@ impl<'a> TypeFormatter<'a> {
                         }
 
                         let formatted_value = self.format_type_with_depth(
-                            &property_type,
+                            property_type,
                             depth + 1,
                             Some(property_name),
                         );
@@ -214,10 +217,10 @@ impl<'a> TypeFormatter<'a> {
             }
             CwtTypeOrSpecial::CwtType(CwtType::Array(array_type)) => {
                 let element_desc = self.format_type_with_depth(
-                    &ScopedType::new_cwt(
+                    Arc::new(ScopedType::new_cwt(
                         *array_type.element_type.clone(),
                         scoped_type.scope_stack().clone(),
-                    ),
+                    )),
                     depth + 1,
                     property_name,
                 );
@@ -240,7 +243,10 @@ impl<'a> TypeFormatter<'a> {
                         .iter()
                         .map(|t| {
                             self.format_type_with_depth(
-                                &ScopedType::new_cwt(t.clone(), scoped_type.scope_stack().clone()),
+                                Arc::new(ScopedType::new_cwt(
+                                    t.clone(),
+                                    scoped_type.scope_stack().clone(),
+                                )),
                                 depth + 1,
                                 property_name,
                             )
@@ -254,7 +260,10 @@ impl<'a> TypeFormatter<'a> {
                             .iter()
                             .take(MAX_UNION_MEMBERS)
                             .map(|t| self.format_type_with_depth(
-                                &ScopedType::new_cwt(t.clone(), scoped_type.scope_stack().clone()),
+                                Arc::new(ScopedType::new_cwt(
+                                    t.clone(),
+                                    scoped_type.scope_stack().clone()
+                                )),
                                 depth + 1,
                                 property_name,
                             ))
@@ -269,7 +278,13 @@ impl<'a> TypeFormatter<'a> {
                 if types.len() <= MAX_UNION_MEMBERS {
                     types
                         .iter()
-                        .map(|t| self.format_type_with_depth(t, depth + 1, property_name))
+                        .map(|t| {
+                            self.format_type_with_depth(
+                                Arc::new(t.clone()),
+                                depth + 1,
+                                property_name,
+                            )
+                        })
                         .collect::<Vec<_>>()
                         .join(" | ")
                 } else {
@@ -278,7 +293,13 @@ impl<'a> TypeFormatter<'a> {
                         types
                             .iter()
                             .take(MAX_UNION_MEMBERS)
-                            .map(|t| self.format_type_with_depth(t, depth + 1, property_name,))
+                            .map(|t| {
+                                self.format_type_with_depth(
+                                    Arc::new(t.clone()),
+                                    depth + 1,
+                                    property_name,
+                                )
+                            })
                             .collect::<Vec<_>>()
                             .join(" | "),
                         types.len() - MAX_UNION_MEMBERS

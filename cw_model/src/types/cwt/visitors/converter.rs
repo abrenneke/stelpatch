@@ -11,7 +11,10 @@ use cw_parser::{
 };
 use std::collections::HashMap;
 
-use crate::{BlockType, CwtOptions, CwtType, Property, ReferenceType, SimpleType, TypeFingerprint};
+use crate::{
+    BlockType, CwtOptions, CwtType, PatternProperty, PatternType, Property, ReferenceType,
+    SimpleType, TypeFingerprint,
+};
 
 /// Converter for CWT values to CwtType
 pub struct CwtConverter;
@@ -113,8 +116,7 @@ impl CwtConverter {
     /// Convert a CWT block to our type system
     pub fn convert_block(block: &AstCwtBlock) -> CwtType {
         let mut properties: HashMap<String, Property> = HashMap::new();
-        let mut alias_patterns = HashMap::new();
-        let mut enum_patterns = HashMap::new();
+        let mut pattern_properties = Vec::new();
         let mut union_values = Vec::new();
 
         // Process all items in the block normally
@@ -127,7 +129,16 @@ impl CwtConverter {
                                 CwtReferenceType::Enum => {
                                     let enum_key = key_id.name.raw_value().to_string();
                                     let value_type = Self::convert_value(&rule.value);
-                                    enum_patterns.insert(enum_key, value_type);
+
+                                    pattern_properties.push(PatternProperty {
+                                        pattern_type: PatternType::Enum {
+                                            key: enum_key.clone(),
+                                        },
+                                        value_type: value_type.clone(),
+                                        options: Default::default(),
+                                        documentation: None,
+                                    });
+
                                     continue;
                                 }
                                 CwtReferenceType::AliasName => {
@@ -141,10 +152,16 @@ impl CwtConverter {
                                         // Handle alias[foo:x] = bar
                                         AstCwtIdentifierOrString::String(key_str) => {
                                             let value_type = Self::convert_value(&rule.value);
-                                            alias_patterns.insert(
-                                                key_str.raw_value().to_string(),
-                                                value_type,
-                                            );
+                                            pattern_properties.push(PatternProperty {
+                                                pattern_type: PatternType::AliasName {
+                                                    category: key_str.raw_value().to_string(),
+                                                },
+                                                value_type: value_type.clone(),
+
+                                                // TODO!
+                                                options: Default::default(),
+                                                documentation: None,
+                                            });
                                             continue;
                                         }
                                     }
@@ -223,9 +240,7 @@ impl CwtConverter {
         CwtType::Block(BlockType {
             properties,
             subtypes: HashMap::new(),
-            alias_patterns,
-            enum_patterns,
-            pattern_properties: Vec::new(),
+            pattern_properties,
             localisation: None,
             modifiers: None,
         })

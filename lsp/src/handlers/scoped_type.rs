@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::handlers::scope::{ScopeContext, ScopeError, ScopeStack};
 use cw_model::{CwtAnalyzer, CwtType, PatternProperty, Property, SimpleType, TypeFingerprint};
@@ -140,7 +140,7 @@ impl ScopedType {
 #[derive(Debug)]
 pub enum PropertyNavigationResult {
     /// Successfully navigated to a property
-    Success(ScopedType),
+    Success(Arc<ScopedType>),
     /// Property exists but has invalid scope configuration
     ScopeError(ScopeError),
     /// Property doesn't exist
@@ -149,7 +149,7 @@ pub enum PropertyNavigationResult {
 
 impl PropertyNavigationResult {
     /// Convert to Option, losing error information
-    pub fn ok(self) -> Option<ScopedType> {
+    pub fn ok(self) -> Option<Arc<ScopedType>> {
         match self {
             PropertyNavigationResult::Success(scoped_type) => Some(scoped_type),
             _ => None,

@@ -119,7 +119,7 @@ impl<'client> DiagnosticsProvider<'client> {
         };
 
         let namespace_type = match &type_info.scoped_type {
-            Some(t) => t,
+            Some(t) => t.clone(),
             None => {
                 return diagnostics;
             }
@@ -131,8 +131,13 @@ impl<'client> DiagnosticsProvider<'client> {
             if let AstEntityItem::Expression(expr) = item {
                 // Top-level keys are entity names - they can be anything, so don't validate them
                 // Instead, validate their VALUES against the namespace structure
-                let entity_diagnostics =
-                    validate_entity_value(&expr.value, &namespace_type, content, &namespace, 0);
+                let entity_diagnostics = validate_entity_value(
+                    &expr.value,
+                    namespace_type.clone(),
+                    content,
+                    &namespace,
+                    0,
+                );
                 diagnostics.extend(entity_diagnostics);
             }
         }

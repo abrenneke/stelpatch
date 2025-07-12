@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+use std::sync::Arc;
 use std::{collections::HashMap, sync::OnceLock};
 
 use cw_games::stellaris::BaseGame;
@@ -12,6 +14,8 @@ pub struct GameDataCache {
 
 pub struct Namespace {
     pub entities: HashMap<String, Entity>,
+    pub entity_keys: Vec<String>,
+    pub entity_keys_set: Arc<HashSet<String>>,
     pub scripted_variables: HashMap<String, Value>,
 }
 
@@ -19,6 +23,8 @@ impl Namespace {
     pub fn new() -> Self {
         Self {
             entities: HashMap::new(),
+            entity_keys: Vec::new(),
+            entity_keys_set: Arc::new(HashSet::new()),
             scripted_variables: HashMap::new(),
         }
     }
@@ -78,6 +84,11 @@ impl GameDataCache {
                     }
                 }
 
+                // Pre-compute entity keys for fast access
+                namespace_data.entity_keys = namespace_data.entities.keys().cloned().collect();
+                namespace_data.entity_keys_set =
+                    Arc::new(namespace_data.entities.keys().cloned().collect());
+
                 namespaces.insert(namespace_name.clone(), namespace_data);
             }
 
@@ -95,9 +106,18 @@ impl GameDataCache {
     }
 
     /// Get all keys defined in a namespace
-    pub fn get_namespace_entity_keys(&self, namespace: &str) -> Option<Vec<String>> {
+    pub fn get_namespace_entity_keys(&self, namespace: &str) -> Option<&Vec<String>> {
         if let Some(namespace) = self.namespaces.get(namespace) {
-            Some(namespace.entities.keys().cloned().collect())
+            Some(&namespace.entity_keys)
+        } else {
+            None
+        }
+    }
+
+    /// Get all keys defined in a namespace as a HashSet (for LiteralSet)
+    pub fn get_namespace_entity_keys_set(&self, namespace: &str) -> Option<Arc<HashSet<String>>> {
+        if let Some(namespace) = self.namespaces.get(namespace) {
+            Some(namespace.entity_keys_set.clone())
         } else {
             None
         }

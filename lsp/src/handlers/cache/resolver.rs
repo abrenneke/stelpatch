@@ -3,7 +3,8 @@ use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
 use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType};
-use cw_model::{AliasName, BlockType, CwtOptions, CwtType, ReferenceType, SimpleType};
+use cw_model::{AliasName, BlockType, CwtType, ReferenceType, SimpleType};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -13,10 +14,10 @@ pub struct TypeResolver {
 }
 
 pub struct TypeResolverCache {
-    resolved_references: std::collections::HashMap<String, CwtType>,
-    namespace_keys: std::collections::HashMap<String, Option<Vec<String>>>,
-    alias_match_left: std::collections::HashMap<String, CwtType>,
-    pattern_type_matches: std::collections::HashMap<String, bool>,
+    resolved_references: HashMap<String, Arc<CwtType>>,
+    namespace_keys: HashMap<String, Option<Arc<HashSet<String>>>>,
+    alias_match_left: HashMap<String, CwtType>,
+    pattern_type_matches: HashMap<String, bool>,
 }
 
 impl TypeResolver {
@@ -24,16 +25,16 @@ impl TypeResolver {
         Self {
             cwt_analyzer,
             cache: Arc::new(RwLock::new(TypeResolverCache {
-                resolved_references: std::collections::HashMap::new(),
-                namespace_keys: std::collections::HashMap::new(),
-                alias_match_left: std::collections::HashMap::new(),
-                pattern_type_matches: std::collections::HashMap::new(),
+                resolved_references: HashMap::new(),
+                namespace_keys: HashMap::new(),
+                alias_match_left: HashMap::new(),
+                pattern_type_matches: HashMap::new(),
             })),
         }
     }
 
     /// Get namespace keys for a TypeRef alias name
-    fn get_namespace_keys_for_type_ref(&self, type_name: &str) -> Option<Vec<String>> {
+    fn get_namespace_keys_for_type_ref(&self, type_name: &str) -> Option<Arc<HashSet<String>>> {
         if let Some(cached_result) = self.cache.read().unwrap().namespace_keys.get(type_name) {
             return cached_result.clone();
         }
@@ -42,8 +43,8 @@ impl TypeResolver {
             if let Some(path) = type_def.path.as_ref() {
                 let path = path.trim_start_matches("game/");
                 if let Some(game_data) = GameDataCache::get() {
-                    if let Some(namespace_keys) = game_data.get_namespace_entity_keys(&path) {
-                        let result = Some(namespace_keys.iter().cloned().collect());
+                    if let Some(namespace_keys) = game_data.get_namespace_entity_keys_set(&path) {
+                        let result = Some(namespace_keys);
                         self.cache
                             .write()
                             .unwrap()
@@ -64,76 +65,34 @@ impl TypeResolver {
     }
 
     /// Resolves references & nested types to concrete types
-    pub fn resolve_type(&self, scoped_type: &ScopedType) -> ScopedType {
+    pub fn resolve_type(&self, scoped_type: Arc<ScopedType>) -> Arc<ScopedType> {
         let cwt_type = scoped_type.cwt_type();
 
         match cwt_type {
             // For references, try to resolve to the actual type
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)) => {
                 let resolved_cwt_type = self.resolve_reference_type(ref_type);
-                let result =
-                    ScopedType::new_cwt(resolved_cwt_type, scoped_type.scope_stack().clone());
+                let result = ScopedType::new_cwt(
+                    (*resolved_cwt_type).clone(),
+                    scoped_type.scope_stack().clone(),
+                );
 
-                result
+                Arc::new(result)
             }
             // For comparables, unwrap to the base type
             CwtTypeOrSpecial::CwtType(CwtType::Comparable(base_type)) => {
                 let base_scoped =
                     ScopedType::new_cwt((**base_type).clone(), scoped_type.scope_stack().clone());
-                self.resolve_type(&base_scoped)
-            }
-            // For blocks, resolve and convert patterns to pattern properties
-            CwtTypeOrSpecial::CwtType(CwtType::Block(block_type)) => {
-                let mut resolved_block = block_type.clone();
-                self.convert_patterns_to_pattern_properties(&mut resolved_block);
-                let resolved_cwt_type = CwtType::Block(resolved_block);
-                let result =
-                    ScopedType::new_cwt(resolved_cwt_type, scoped_type.scope_stack().clone());
-
-                result
+                self.resolve_type(Arc::new(base_scoped))
             }
             // For all other types, return as-is with same scope
-            _ => scoped_type.clone(),
+            _ => scoped_type,
         }
-    }
-
-    /// Convert patterns to pattern properties instead of expanding them
-    /// This preserves cardinality constraints while allowing pattern matching
-    fn convert_patterns_to_pattern_properties(&self, block_type: &mut BlockType) {
-        // Convert enum patterns to pattern properties
-        for (enum_key, value_type) in &block_type.enum_patterns {
-            let pattern_property = PatternProperty {
-                pattern_type: PatternType::Enum {
-                    key: enum_key.clone(),
-                },
-                value_type: value_type.clone(),
-                options: CwtOptions::default(),
-                documentation: Some(format!("Enum pattern for {}", enum_key)),
-            };
-            block_type.pattern_properties.push(pattern_property);
-        }
-
-        // Convert alias patterns to pattern properties
-        for (alias_pattern, value_type) in &block_type.alias_patterns {
-            let pattern_property = PatternProperty {
-                pattern_type: PatternType::AliasName {
-                    category: alias_pattern.clone(),
-                },
-                value_type: value_type.clone(),
-                options: CwtOptions::default(),
-                documentation: Some(format!("Alias pattern for {} category", alias_pattern)),
-            };
-            block_type.pattern_properties.push(pattern_property);
-        }
-
-        // Clear the old pattern maps since we've converted them
-        block_type.enum_patterns.clear();
-        block_type.alias_patterns.clear();
     }
 
     pub fn navigate_to_property(
         &self,
-        scoped_type: &ScopedType,
+        scoped_type: Arc<ScopedType>,
         property_name: &str,
     ) -> PropertyNavigationResult {
         let resolved_type = self.resolve_type(scoped_type);
@@ -144,7 +103,7 @@ impl TypeResolver {
             let mut new_scope_context = resolved_type.scope_stack().clone();
             new_scope_context.push_scope(scope_context.clone()).unwrap();
             let result = ScopedType::new(resolved_type.cwt_type().clone(), new_scope_context);
-            return PropertyNavigationResult::Success(result);
+            return PropertyNavigationResult::Success(Arc::new(result));
         }
 
         // Second, check if this property is a link property
@@ -157,7 +116,7 @@ impl TypeResolver {
                 .push_scope_type(&link_def.output_scope)
                 .unwrap();
             let result = ScopedType::new(resolved_type.cwt_type().clone(), new_scope_context);
-            return PropertyNavigationResult::Success(result);
+            return PropertyNavigationResult::Success(Arc::new(result));
         }
 
         // If not a link property, handle as regular property
@@ -173,7 +132,8 @@ impl TypeResolver {
                             Ok(new_scope) => {
                                 let property_scoped =
                                     ScopedType::new_cwt(property.property_type.clone(), new_scope);
-                                let resolved_property = self.resolve_type(&property_scoped);
+                                let resolved_property =
+                                    self.resolve_type(Arc::new(property_scoped));
                                 PropertyNavigationResult::Success(resolved_property)
                             }
                             Err(error) => PropertyNavigationResult::ScopeError(error),
@@ -184,7 +144,7 @@ impl TypeResolver {
                             property.property_type.clone(),
                             resolved_type.scope_stack().clone(),
                         );
-                        let resolved_property = self.resolve_type(&property_scoped);
+                        let resolved_property = self.resolve_type(Arc::new(property_scoped));
                         PropertyNavigationResult::Success(resolved_property)
                     }
                 } else {
@@ -207,7 +167,8 @@ impl TypeResolver {
                                 Ok(new_scope) => {
                                     let property_scoped =
                                         ScopedType::new_cwt(resolved_value_type, new_scope);
-                                    let resolved_property = self.resolve_type(&property_scoped);
+                                    let resolved_property =
+                                        self.resolve_type(Arc::new(property_scoped));
                                     PropertyNavigationResult::Success(resolved_property)
                                 }
                                 Err(error) => PropertyNavigationResult::ScopeError(error),
@@ -218,7 +179,7 @@ impl TypeResolver {
                                 resolved_value_type,
                                 resolved_type.scope_stack().clone(),
                             );
-                            let resolved_property = self.resolve_type(&property_scoped);
+                            let resolved_property = self.resolve_type(Arc::new(property_scoped));
                             PropertyNavigationResult::Success(resolved_property)
                         }
                     } else {
@@ -244,7 +205,7 @@ impl TypeResolver {
                     // We found a matching alias - return the resolved type
                     let property_scoped =
                         ScopedType::new_cwt(resolved_cwt_type, resolved_type.scope_stack().clone());
-                    let resolved_property = self.resolve_type(&property_scoped);
+                    let resolved_property = self.resolve_type(Arc::new(property_scoped));
                     PropertyNavigationResult::Success(resolved_property)
                 }
             }
@@ -374,7 +335,7 @@ impl TypeResolver {
         }
     }
 
-    fn resolve_reference_type(&self, ref_type: &ReferenceType) -> CwtType {
+    fn resolve_reference_type(&self, ref_type: &ReferenceType) -> Arc<CwtType> {
         let cache_key = ref_type.id();
 
         // Check if we already have this reference type cached
@@ -392,6 +353,8 @@ impl TypeResolver {
             ReferenceType::Type { key } => {
                 let type_def = self.cwt_analyzer.get_type(key);
 
+                let mut found = None;
+
                 if let Some(type_def) = type_def {
                     if let Some(path) = type_def.path.as_ref() {
                         // CWT paths are prefixed with "game/"
@@ -403,19 +366,29 @@ impl TypeResolver {
                         if let Some(game_data) = GameDataCache::get() {
                             if let Some(namespace_keys) = game_data.get_namespace_entity_keys(&path)
                             {
-                                return CwtType::LiteralSet(
+                                found = Some(CwtType::LiteralSet(
                                     namespace_keys.iter().cloned().collect(),
-                                );
+                                ));
                             }
 
                             // Also try the key directly in case it's already a full path
                             if let Some(namespace_keys) = game_data.get_namespace_entity_keys(key) {
-                                return CwtType::LiteralSet(
+                                found = Some(CwtType::LiteralSet(
                                     namespace_keys.iter().cloned().collect(),
-                                );
+                                ));
                             }
                         }
                     }
+                }
+
+                if let Some(found) = found {
+                    let result = Arc::new(found);
+                    self.cache
+                        .write()
+                        .unwrap()
+                        .resolved_references
+                        .insert(cache_key.clone(), result.clone());
+                    return result;
                 }
 
                 // If game data isn't available or namespace not found, return the original reference
@@ -453,7 +426,7 @@ impl TypeResolver {
                 if let Some(full_analysis) = FullAnalysis::get() {
                     if let Some(dynamic_values) = full_analysis.dynamic_value_sets.get(key) {
                         let result = CwtType::LiteralSet(dynamic_values.clone());
-                        // Cache the result before returning
+                        let result = Arc::new(result);
                         self.cache
                             .write()
                             .unwrap()
@@ -497,7 +470,7 @@ impl TypeResolver {
             _ => CwtType::Reference(ref_type.clone()),
         };
 
-        // Cache the result before returning
+        let result = Arc::new(result);
         self.cache
             .write()
             .unwrap()
@@ -608,8 +581,8 @@ impl TypeResolver {
     }
 
     /// Get all available property names for a scoped type
-    pub fn get_available_properties(&self, scoped_type: &ScopedType) -> Vec<String> {
-        let resolved_type = self.resolve_type(scoped_type);
+    pub fn get_available_properties(&self, scoped_type: Arc<ScopedType>) -> Vec<String> {
+        let resolved_type = self.resolve_type(scoped_type.clone());
         let mut properties = Vec::new();
 
         match resolved_type.cwt_type() {

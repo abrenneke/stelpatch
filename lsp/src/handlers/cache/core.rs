@@ -14,7 +14,7 @@ use super::types::TypeInfo;
 
 /// Cache for Stellaris type information that's loaded once and shared across requests
 pub struct TypeCache {
-    namespace_types: HashMap<String, ScopedType>,
+    namespace_types: HashMap<String, Arc<ScopedType>>,
     cwt_analyzer: Arc<CwtAnalyzer>,
     resolver: TypeResolver,
 }
@@ -89,7 +89,7 @@ impl TypeCache {
                 }
 
                 // Store the type rules for this namespace
-                namespace_types.insert(namespace, scoped_type);
+                namespace_types.insert(namespace, Arc::new(scoped_type));
             }
 
             eprintln!(
@@ -173,8 +173,8 @@ impl TypeCache {
     }
 
     /// Get type information for a specific namespace
-    pub fn get_namespace_type(&self, namespace: &str) -> Option<&ScopedType> {
-        self.namespace_types.get(namespace)
+    pub fn get_namespace_type(&self, namespace: &str) -> Option<Arc<ScopedType>> {
+        self.namespace_types.get(namespace).cloned()
     }
 
     /// Get type information for a specific property path in a namespace
@@ -195,11 +195,11 @@ impl TypeCache {
                 current_path.push_str(part);
 
                 // Resolve the current type to its actual type
-                current_type = self.resolver.resolve_type(&current_type);
+                current_type = self.resolver.resolve_type(current_type);
 
                 match &current_type.cwt_type() {
                     CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
-                        match self.resolver.navigate_to_property(&current_type, part) {
+                        match self.resolver.navigate_to_property(current_type, part) {
                             PropertyNavigationResult::Success(scoped_type) => {
                                 current_type = scoped_type;
                             }
@@ -228,7 +228,7 @@ impl TypeCache {
                     }
                     CwtTypeOrSpecial::CwtType(CwtType::Reference(_)) => {
                         // Handle reference types (like alias_match_left) using the resolver
-                        match self.resolver.navigate_to_property(&current_type, part) {
+                        match self.resolver.navigate_to_property(current_type, part) {
                             PropertyNavigationResult::Success(scoped_type) => {
                                 current_type = scoped_type;
                             }
@@ -293,10 +293,10 @@ impl TypeCache {
             return Some(TypeInfo {
                 property_path: property_path.to_string(),
                 type_description: formatter.format_type(
-                    &current_type,
+                    current_type.clone(),
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
-                scoped_type: Some(current_type),
+                scoped_type: Some(current_type.clone()),
                 documentation: None,
                 source_info: Some(format!("From {} entity definition", namespace)),
             });
@@ -305,11 +305,14 @@ impl TypeCache {
         // If not found in namespace types, try CWT type definitions
         if let Some(type_def) = self.cwt_analyzer.get_type(namespace) {
             let path_parts: Vec<&str> = property_path.split('.').collect();
-            let scoped_type = ScopedType::new_cwt(type_def.rules.clone(), Default::default());
+            let scoped_type = Arc::new(ScopedType::new_cwt(
+                type_def.rules.clone(),
+                Default::default(),
+            ));
             return Some(TypeInfo {
                 property_path: property_path.to_string(),
                 type_description: formatter.format_type(
-                    &scoped_type,
+                    scoped_type.clone(),
                     path_parts.last().map(|s| *s), // Pass the last part as property name
                 ),
                 scoped_type: Some(scoped_type),
@@ -335,7 +338,7 @@ impl TypeCache {
         &self.resolver
     }
 
-    pub fn resolve_type(&self, scoped_type: &ScopedType) -> ScopedType {
+    pub fn resolve_type(&self, scoped_type: Arc<ScopedType>) -> Arc<ScopedType> {
         self.resolver.resolve_type(scoped_type)
     }
 }

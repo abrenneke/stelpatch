@@ -82,7 +82,7 @@ async fn generate_type_diagnostics(module: &AstModule<'_>, uri: &str, content: &
     };
 
     let namespace_type = match &type_info.scoped_type {
-        Some(t) => t,
+        Some(t) => t.clone(),
         None => {
             return 0;
         }
@@ -94,7 +94,7 @@ async fn generate_type_diagnostics(module: &AstModule<'_>, uri: &str, content: &
             // Top-level keys are entity names - they can be anything, so don't validate them
             // Instead, validate their VALUES against the namespace structure
             let entity_diagnostics =
-                validate_entity_value(&expr.value, &namespace_type, content, &namespace, 0);
+                validate_entity_value(&expr.value, namespace_type.clone(), content, &namespace, 0);
             diagnostic_count += entity_diagnostics.len();
         }
     }

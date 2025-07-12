@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use cw_model::CwtType;
 use cw_parser::AstValue;
 
@@ -7,14 +9,17 @@ use crate::handlers::{
 };
 
 /// Check if a value is structurally compatible with a type (without content validation)
-pub fn is_value_structurally_compatible(value: &AstValue<'_>, expected_type: &ScopedType) -> bool {
+pub fn is_value_structurally_compatible(
+    value: &AstValue<'_>,
+    expected_type: Arc<ScopedType>,
+) -> bool {
     is_value_structurally_compatible_with_depth(value, expected_type, 0)
 }
 
 /// Check if a value is structurally compatible with a type with recursion depth limit
 fn is_value_structurally_compatible_with_depth(
     value: &AstValue<'_>,
-    expected_type: &ScopedType,
+    expected_type: Arc<ScopedType>,
     depth: usize,
 ) -> bool {
     // Prevent infinite recursion
@@ -27,7 +32,7 @@ fn is_value_structurally_compatible_with_depth(
     }
 
     let cache = TypeCache::get().unwrap();
-    let resolved_type = cache.resolve_type(expected_type);
+    let resolved_type = cache.resolve_type(expected_type.clone());
 
     match (&resolved_type.cwt_type(), value) {
         // Block types are compatible with entities
@@ -51,7 +56,10 @@ fn is_value_structurally_compatible_with_depth(
         (CwtTypeOrSpecial::CwtType(CwtType::Union(types)), _) => types.iter().any(|union_type| {
             is_value_structurally_compatible_with_depth(
                 value,
-                &ScopedType::new_cwt(union_type.clone(), expected_type.scope_stack().clone()),
+                Arc::new(ScopedType::new_cwt(
+                    union_type.clone(),
+                    expected_type.scope_stack().clone(),
+                )),
                 depth + 1,
             )
         }),
@@ -60,7 +68,10 @@ fn is_value_structurally_compatible_with_depth(
         (CwtTypeOrSpecial::CwtType(CwtType::Comparable(base_type)), _) => {
             is_value_structurally_compatible_with_depth(
                 value,
-                &ScopedType::new_cwt(*base_type.clone(), expected_type.scope_stack().clone()),
+                Arc::new(ScopedType::new_cwt(
+                    *base_type.clone(),
+                    expected_type.scope_stack().clone(),
+                )),
                 depth + 1,
             )
         }
