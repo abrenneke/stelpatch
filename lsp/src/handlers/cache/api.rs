@@ -5,7 +5,7 @@ use super::formatter::TypeFormatter;
 use super::types::TypeInfo;
 
 /// Get type information for a namespace entity (top-level entity structure)
-pub async fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
+pub fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
     if !TypeCache::is_initialized() {
         return Some(TypeInfo {
             property_path: "entity".to_string(),
@@ -45,7 +45,7 @@ pub async fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
 
 /// Get type information for a property within a namespace entity
 /// The property_path should be just the property path without the entity name
-pub async fn get_entity_property_type(namespace: &str, property_path: &str) -> Option<TypeInfo> {
+pub fn get_entity_property_type(namespace: &str, property_path: &str) -> Option<TypeInfo> {
     if !TypeCache::is_initialized() {
         return Some(TypeInfo {
             property_path: property_path.to_string(),

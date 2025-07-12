@@ -1,4 +1,4 @@
-use crate::handlers::cache::GameDataCache;
+use crate::handlers::cache::{FullAnalysis, GameDataCache};
 use crate::handlers::scope::ScopeStack;
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
@@ -433,21 +433,15 @@ impl TypeResolver {
                     CwtType::Reference(ref_type.clone())
                 }
             }
-            ReferenceType::ValueSet { key } => {
-                // Try to get the value set type from our analyzer
-                if let Some(value_set) = self.cwt_analyzer.get_value_set(key) {
-                    CwtType::LiteralSet(value_set.clone())
-                } else {
-                    CwtType::Reference(ref_type.clone())
-                }
-            }
+            ReferenceType::ValueSet { .. } => CwtType::Reference(ref_type.clone()),
             ReferenceType::Value { key } => {
-                // Try to resolve value references
-                if let Some(resolved_type) = self.cwt_analyzer.get_value_set(key) {
-                    CwtType::LiteralSet(resolved_type.clone())
-                } else {
-                    CwtType::Reference(ref_type.clone())
+                if let Some(full_analysis) = FullAnalysis::get() {
+                    if let Some(dynamic_values) = full_analysis.dynamic_value_sets.get(key) {
+                        return CwtType::LiteralSet(dynamic_values.clone());
+                    }
                 }
+
+                CwtType::Reference(ref_type.clone())
             }
             ReferenceType::ComplexEnum { key } => {
                 // Try to get the enum type from our analyzer

@@ -103,6 +103,11 @@ impl GameDataCache {
         }
     }
 
+    /// Get all namespaces
+    pub fn get_namespaces(&self) -> &HashMap<String, Namespace> {
+        &self.namespaces
+    }
+
     /// Check if the game data cache is initialized
     pub fn is_initialized() -> bool {
         GAME_DATA_CACHE.get().is_some()

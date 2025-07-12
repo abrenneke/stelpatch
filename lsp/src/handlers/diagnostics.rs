@@ -5,7 +5,6 @@ use tokio::sync::RwLock;
 use tower_lsp::Client;
 
 pub mod diagnostic;
-pub mod key;
 pub mod provider;
 pub mod structural;
 pub mod type_validation;

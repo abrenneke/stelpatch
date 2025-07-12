@@ -114,6 +114,14 @@ impl Value {
             None
         }
     }
+
+    pub fn as_string(&self) -> Option<&String> {
+        if let Value::String(s) = self {
+            Some(s)
+        } else {
+            None
+        }
+    }
 }
 
 pub(crate) struct ValueVisitor<'a> {

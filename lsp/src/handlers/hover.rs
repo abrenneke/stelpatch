@@ -140,14 +140,14 @@ pub async fn hover(
             if crate::handlers::cache::TypeCache::is_initialized() {
                 let type_info = if is_top_level_key {
                     // For top-level keys, show the namespace type (the structure of entities in this namespace)
-                    get_namespace_entity_type(&namespace).await
+                    get_namespace_entity_type(&namespace)
                 } else {
                     // For nested properties, strip the entity name and look up the property path
                     let property_parts: Vec<&str> = property_path.split('.').collect();
                     if property_parts.len() > 1 {
                         // Skip the first part (entity name) and join the rest
                         let actual_property_path = property_parts[1..].join(".");
-                        get_entity_property_type(&namespace, &actual_property_path).await
+                        get_entity_property_type(&namespace, &actual_property_path)
                     } else {
                         None
                     }

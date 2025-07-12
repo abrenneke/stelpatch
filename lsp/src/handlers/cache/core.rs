@@ -1,7 +1,5 @@
-use cw_games::stellaris::BaseGame;
 use cw_model::CwtType;
 use cw_model::types::CwtAnalyzer;
-use cw_model::{GameMod, LoadMode};
 use cw_parser::CwtModuleCell;
 use std::collections::HashMap;
 use std::fs;

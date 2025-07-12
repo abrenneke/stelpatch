@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::handlers::cache::{GameDataCache, TypeCache};
+use crate::handlers::cache::{FullAnalysis, GameDataCache, TypeCache};
 use crate::handlers::diagnostics::generate_diagnostics;
 use crate::semantic_token_collector::CwSemanticTokenType;
 use tokio::sync::RwLock;
@@ -59,11 +59,12 @@ pub async fn initialized(
         }
 
         client_clone
-            .log_message(
-                MessageType::INFO,
-                "Caches are ready, generating diagnostics",
-            )
+            .log_message(MessageType::INFO, "Caches are ready, loading full analysis")
             .await;
+
+        let full_analysis =
+            FullAnalysis::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
+        full_analysis.load();
 
         let documents_guard = documents.read().await;
         for uri in documents_guard.keys() {

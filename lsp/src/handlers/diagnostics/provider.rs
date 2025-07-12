@@ -111,7 +111,7 @@ impl<'client> DiagnosticsProvider<'client> {
         };
 
         // Get type information for this namespace
-        let type_info = match get_namespace_entity_type(&namespace).await {
+        let type_info = match get_namespace_entity_type(&namespace) {
             Some(info) => info,
             None => {
                 return diagnostics;

@@ -3,6 +3,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use cw_lsp::handlers::cache::FullAnalysis;
 use cw_lsp::handlers::cache::{GameDataCache, TypeCache, get_namespace_entity_type};
 use cw_lsp::handlers::diagnostics::type_validation::validate_entity_value;
 use cw_lsp::handlers::utils::extract_namespace_from_uri;
@@ -73,7 +74,7 @@ async fn generate_type_diagnostics(module: &AstModule<'_>, uri: &str, content: &
     };
 
     // Get type information for this namespace
-    let type_info = match get_namespace_entity_type(&namespace).await {
+    let type_info = match get_namespace_entity_type(&namespace) {
         Some(info) => info,
         None => {
             return 0;
@@ -133,36 +134,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 
-    println!("Caches initialized. Finding .txt files...");
-
-    // Find all .txt files
-    let txt_files = find_txt_files(dir_path)?;
-    println!("Found {} .txt files", txt_files.len());
-
-    let mut total_diagnostics = 0;
-    let mut processed_files = 0;
-
-    // Process each file
-    for file_path in txt_files {
-        match fs::read_to_string(&file_path) {
-            Ok(content) => {
-                let diagnostics = generate_file_diagnostics(&file_path, &content).await;
-                total_diagnostics += diagnostics;
-                processed_files += 1;
-
-                if diagnostics > 0 {
-                    println!("{}: {} diagnostics", file_path.display(), diagnostics);
-                }
-            }
-            Err(e) => {
-                eprintln!("Error reading file {}: {}", file_path.display(), e);
-            }
-        }
-    }
-
-    println!("\nSummary:");
-    println!("Processed {} files", processed_files);
-    println!("Total diagnostics: {}", total_diagnostics);
+    println!("Loading full analysis...");
+    let full_analysis = FullAnalysis::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
+    full_analysis.load();
 
     Ok(())
+
+    // println!("Caches initialized. Finding .txt files...");
+
+    // // Find all .txt files
+    // let txt_files = find_txt_files(dir_path)?;
+    // println!("Found {} .txt files", txt_files.len());
+
+    // let mut total_diagnostics = 0;
+    // let mut processed_files = 0;
+
+    // // Process each file
+    // for file_path in txt_files {
+    //     match fs::read_to_string(&file_path) {
+    //         Ok(content) => {
+    //             let diagnostics = generate_file_diagnostics(&file_path, &content).await;
+    //             total_diagnostics += diagnostics;
+    //             processed_files += 1;
+
+    //             if diagnostics > 0 {
+    //                 println!("{}: {} diagnostics", file_path.display(), diagnostics);
+    //             }
+    //         }
+    //         Err(e) => {
+    //             eprintln!("Error reading file {}: {}", file_path.display(), e);
+    //         }
+    //     }
+    // }
+
+    // println!("\nSummary:");
+    // println!("Processed {} files", processed_files);
+    // println!("Total diagnostics: {}", total_diagnostics);
+
+    // Ok(())
 }

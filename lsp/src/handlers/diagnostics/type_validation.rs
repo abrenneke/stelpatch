@@ -9,13 +9,12 @@ use crate::handlers::{
             create_type_mismatch_diagnostic, create_unexpected_key_diagnostic,
             create_value_mismatch_diagnostic,
         },
-        key::{get_property_type_from_expected_type, is_key_valid},
         structural::is_value_structurally_compatible,
         util::get_type_name,
         value::is_value_compatible_with_simple_type_with_scope,
     },
     scope::ScopeStack,
-    scoped_type::{CwtTypeOrSpecial, ScopedType},
+    scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
 };
 
 /// Validate an entity value against the expected type structure
@@ -34,6 +33,11 @@ pub fn validate_entity_value(
         return diagnostics;
     }
 
+    if !TypeCache::is_initialized() {
+        return diagnostics;
+    }
+    let cache = TypeCache::get().unwrap();
+
     match value {
         AstValue::Entity(entity) => {
             // Validate each property in the entity
@@ -43,20 +47,10 @@ pub fn validate_entity_value(
 
                     // eprintln!("DEBUG: Validating key '{}'", key_name);
 
-                    // Check if this key is valid for the expected type
-                    if !is_key_valid(expected_type, key_name) {
-                        let diagnostic = create_unexpected_key_diagnostic(
-                            expr.key.span_range(),
-                            key_name,
-                            namespace,
-                            content,
-                        );
-                        diagnostics.push(diagnostic);
-                    } else {
-                        // Get the expected type for this key
-                        let property_type =
-                            get_property_type_from_expected_type(expected_type, key_name);
-
+                    if let PropertyNavigationResult::Success(property_type) = cache
+                        .get_resolver()
+                        .navigate_to_property(expected_type, key_name)
+                    {
                         // Validate the value against the property type
                         let value_diagnostics = validate_value_against_type(
                             &expr.value,
@@ -66,6 +60,14 @@ pub fn validate_entity_value(
                             depth + 1,
                         );
                         diagnostics.extend(value_diagnostics);
+                    } else {
+                        let diagnostic = create_unexpected_key_diagnostic(
+                            expr.key.span_range(),
+                            key_name,
+                            namespace,
+                            content,
+                        );
+                        diagnostics.push(diagnostic);
                     }
                 }
             }
@@ -285,7 +287,7 @@ fn validate_value_against_type(
         }
 
         // Reference type validation
-        (CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)), _) => {
+        (CwtTypeOrSpecial::CwtType(CwtType::Reference(_)), _) => {
             let diagnostic = create_type_mismatch_diagnostic(
                 value.span_range(),
                 "Reference types are not supported yet",
