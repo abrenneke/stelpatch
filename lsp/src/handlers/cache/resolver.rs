@@ -416,7 +416,7 @@ impl TypeResolver {
         ref_type: &ReferenceType,
         scope_stack: &ScopeStack,
     ) -> Arc<CwtType> {
-        let cache_key = ref_type.id();
+        let cache_key = format!("{}-{}", ref_type.id(), scope_stack.to_string());
 
         // Check if we already have this reference type cached
         if let Some(cached_result) = self
@@ -448,19 +448,18 @@ impl TypeResolver {
                         // This is what the user expects when they hover over "resource" - they want to see
                         // all the possible resource keys like "energy", "minerals", etc.
                         if let Some(namespace_keys) =
-                            crate::handlers::cache::EntityRestructurer::get_namespace_entity_keys(
-                                &path,
-                            )
+                            EntityRestructurer::get_namespace_entity_keys(&path)
                         {
                             found = Some(CwtType::LiteralSet(namespace_keys.into_iter().collect()));
                         }
 
                         // Also try the key directly in case it's already a full path
                         if found.is_none() {
-                            if let Some(namespace_keys) = crate::handlers::cache::EntityRestructurer::get_namespace_entity_keys(key) {
-                                found = Some(CwtType::LiteralSet(
-                                    namespace_keys.into_iter().collect(),
-                                ));
+                            if let Some(namespace_keys) =
+                                EntityRestructurer::get_namespace_entity_keys(key)
+                            {
+                                found =
+                                    Some(CwtType::LiteralSet(namespace_keys.into_iter().collect()));
                             }
                         }
                     }

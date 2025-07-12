@@ -256,15 +256,19 @@ impl TypeFingerprint for ScopeStack {
     }
 }
 
-impl fmt::Display for ScopeStack {
+impl std::fmt::Display for ScopeStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "ScopeStack(current: {}, root: {}, depth: {})",
-            self.current_scope(),
-            self.root_scope(),
-            self.depth()
-        )
+            "{}/{}",
+            self.scopes
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join("->"),
+            self.root.to_string()
+        )?;
+        Ok(())
     }
 }
 

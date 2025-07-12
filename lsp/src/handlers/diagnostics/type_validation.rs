@@ -190,8 +190,12 @@ fn validate_value_against_type(
                 let diagnostic = create_value_mismatch_diagnostic(
                     value.span_range(),
                     &format!(
-                        "Expected one of {:?} but got '{}'",
-                        valid_list,
+                        "Expected one of {} but got '{}'",
+                        valid_list
+                            .iter()
+                            .map(|v| format!("\"{}\"", v))
+                            .collect::<Vec<_>>()
+                            .join(", "),
                         string_value.raw_value()
                     ),
                     content,
