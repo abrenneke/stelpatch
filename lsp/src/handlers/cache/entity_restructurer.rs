@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use cw_model::{Entity, SkipRootKey, Value};
+use cw_model::{Entity, SkipRootKey, TypeKeyFilter, Value};
 
 use crate::handlers::cache::{GameDataCache, TypeCache};
 
@@ -177,6 +177,7 @@ impl EntityRestructurer {
                     let type_info = TypeDefinitionInfo {
                         skip_root_key: type_def.skip_root_key.clone(),
                         name_field: type_def.name_field.clone(),
+                        type_key_filter: type_def.options.type_key_filter.clone(),
                     };
 
                     result
@@ -207,6 +208,11 @@ impl EntityRestructurer {
                     if let Value::Entity(entity) = &first_property.value {
                         original_count += 1;
 
+                        // Check if this entity passes the type_key_filter
+                        if !self.passes_type_key_filter(key, type_defs) {
+                            continue;
+                        }
+
                         // Check if this key should be skipped
                         if type_defs
                             .iter()
@@ -218,8 +224,11 @@ impl EntityRestructurer {
                                 self.should_skip_root_key(key, &type_def.skip_root_key)
                             });
                             let name_field = matching_type_def.and_then(|t| t.name_field.as_ref());
-                            let extracted_entities =
-                                self.extract_entities_from_container(entity, &name_field.cloned());
+                            let extracted_entities = self.extract_entities_from_container(
+                                entity,
+                                &name_field.cloned(),
+                                type_defs,
+                            );
                             restructured_entities.extend(extracted_entities);
                         } else if type_defs
                             .iter()
@@ -277,11 +286,43 @@ impl EntityRestructurer {
         }
     }
 
+    /// Check if a key passes the type_key_filter
+    fn passes_type_key_filter(&self, key: &str, type_defs: &Vec<TypeDefinitionInfo>) -> bool {
+        // If no type_key_filter is defined, allow all keys
+        let type_key_filters: Vec<&TypeKeyFilter> = type_defs
+            .iter()
+            .filter_map(|type_def| type_def.type_key_filter.as_ref())
+            .collect();
+
+        if type_key_filters.is_empty() {
+            return true;
+        }
+
+        // Check if the key matches any of the type_key_filters
+        for filter in type_key_filters {
+            if self.matches_type_key_filter(key, filter) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Check if a key matches a specific type_key_filter
+    fn matches_type_key_filter(&self, key: &str, filter: &TypeKeyFilter) -> bool {
+        match filter {
+            TypeKeyFilter::Specific(required_key) => key == required_key,
+            TypeKeyFilter::OneOf(required_keys) => required_keys.contains(&key.to_string()),
+            TypeKeyFilter::Not(excluded_key) => key != excluded_key,
+        }
+    }
+
     /// Extract entities from a container entity (when skipping root key)
     fn extract_entities_from_container(
         &self,
         container_entity: &Entity,
         name_field: &Option<String>,
+        type_defs: &Vec<TypeDefinitionInfo>,
     ) -> HashMap<String, Entity> {
         let mut result = HashMap::new();
 
@@ -289,6 +330,11 @@ impl EntityRestructurer {
         for (child_key, child_property_list) in &container_entity.properties.kv {
             for property_info in &child_property_list.0 {
                 if let Value::Entity(child_entity) = &property_info.value {
+                    // Check if this child entity passes the type_key_filter
+                    if !self.passes_type_key_filter(child_key, type_defs) {
+                        continue;
+                    }
+
                     // Determine the entity name based on whether we have a name field
                     let entity_name = if name_field.is_some() {
                         // Use name field if available, fallback to structural key
@@ -449,4 +495,5 @@ impl EntityRestructurer {
 struct TypeDefinitionInfo {
     pub skip_root_key: Option<SkipRootKey>,
     pub name_field: Option<String>,
+    pub type_key_filter: Option<TypeKeyFilter>,
 }

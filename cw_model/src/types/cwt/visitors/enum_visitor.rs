@@ -37,25 +37,19 @@ impl<'a> EnumVisitor<'a> {
     fn can_handle_rule(&self, rule: &AstCwtRule) -> bool {
         let key = rule.key.name();
 
-        // Check for typed identifiers
+        // Only handle typed identifiers - no legacy string parsing
         if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
-            return matches!(
+            let can_handle = matches!(
                 identifier.identifier_type,
                 CwtReferenceType::Enum | CwtReferenceType::ComplexEnum
             );
+            return can_handle;
         }
 
-        // Check for legacy string-based format
-        if key.starts_with("enum[") && key.ends_with("]") {
-            return true;
-        }
-
-        if key.starts_with("complex_enum[") && key.ends_with("]") {
-            return true;
-        }
-
-        // If we're in an enums section, we can handle any rule
-        self.in_enums_section
+        // If we're in an enums section, explicitly reject non-typed identifiers
+        // This prevents nested structure rules (like "tradition_swap = { name = enum_name }")
+        // from being processed as separate enum definitions
+        false
     }
 
     /// Process an enum definition rule
@@ -85,17 +79,7 @@ impl<'a> EnumVisitor<'a> {
             }
         }
 
-        // Legacy string-based handling
-        let key = rule.key.name();
-        if key.starts_with("enum[") && key.ends_with("]") {
-            Some(key[5..key.len() - 1].to_string())
-        } else if key.starts_with("complex_enum[") && key.ends_with("]") {
-            Some(key[13..key.len() - 1].to_string())
-        } else if self.in_enums_section {
-            Some(key.to_string())
-        } else {
-            None
-        }
+        None
     }
 
     /// Check if this is a complex enum
@@ -103,8 +87,7 @@ impl<'a> EnumVisitor<'a> {
         if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
             matches!(identifier.identifier_type, CwtReferenceType::ComplexEnum)
         } else {
-            let key = rule.key.name();
-            key.starts_with("complex_enum[") && key.ends_with("]")
+            false
         }
     }
 

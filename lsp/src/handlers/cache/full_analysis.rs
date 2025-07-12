@@ -3,7 +3,7 @@ use std::{
     sync::OnceLock,
 };
 
-use crate::handlers::cache::{GameDataCache, TypeCache, ValueSetCollector};
+use crate::handlers::cache::{DataCollector, GameDataCache, TypeCache};
 
 pub struct FullAnalysis {
     game_data: &'static GameDataCache,
@@ -12,6 +12,7 @@ pub struct FullAnalysis {
 
 pub struct FullAnalysisResult {
     pub dynamic_value_sets: HashMap<String, HashSet<String>>,
+    pub complex_enums: HashMap<String, HashSet<String>>,
 }
 
 static FULL_ANALYSIS: OnceLock<FullAnalysisResult> = OnceLock::new();
@@ -32,8 +33,7 @@ impl FullAnalysis {
         FULL_ANALYSIS.get_or_init(|| {
             let start = std::time::Instant::now();
 
-            let mut collector =
-                ValueSetCollector::new(self.game_data, self.type_cache.get_resolver());
+            let mut collector = DataCollector::new(self.game_data, self.type_cache.get_resolver());
             collector.collect_from_game_data();
 
             let duration = start.elapsed();
@@ -41,6 +41,7 @@ impl FullAnalysis {
 
             FullAnalysisResult {
                 dynamic_value_sets: collector.value_sets().clone(),
+                complex_enums: collector.complex_enums().clone(),
             }
         });
     }

@@ -1,4 +1,4 @@
-use crate::handlers::cache::{EntityRestructurer, FullAnalysis, GameDataCache};
+use crate::handlers::cache::{EntityRestructurer, FullAnalysis};
 use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
@@ -500,7 +500,16 @@ impl TypeResolver {
             ReferenceType::Enum { key } => {
                 // Try to get the enum type from our analyzer
                 if let Some(enum_def) = self.cwt_analyzer.get_enum(key) {
-                    CwtType::LiteralSet(enum_def.values.clone())
+                    let mut values = enum_def.values.clone();
+
+                    // Also include complex enum values if available
+                    if let Some(full_analysis) = FullAnalysis::get() {
+                        if let Some(complex_values) = full_analysis.complex_enums.get(key) {
+                            values.extend(complex_values.clone());
+                        }
+                    }
+
+                    CwtType::LiteralSet(values)
                 } else {
                     CwtType::Reference(ref_type.clone())
                 }
@@ -522,13 +531,9 @@ impl TypeResolver {
 
                 CwtType::Reference(ref_type.clone())
             }
-            ReferenceType::ComplexEnum { key } => {
-                // Try to get the enum type from our analyzer
-                if let Some(enum_def) = self.cwt_analyzer.get_enum(key) {
-                    CwtType::LiteralSet(enum_def.values.clone())
-                } else {
-                    CwtType::Reference(ref_type.clone())
-                }
+            ReferenceType::ComplexEnum { .. } => {
+                // Invalid complex_enum on RHS
+                CwtType::Reference(ref_type.clone())
             }
             ReferenceType::AliasKeysField { key } => {
                 // Try to resolve alias keys field references
@@ -803,5 +808,10 @@ impl TypeResolver {
         properties.sort();
         properties.dedup();
         properties
+    }
+
+    /// Get all enum definitions from the CWT analyzer
+    pub fn get_enums(&self) -> &HashMap<String, cw_model::types::EnumDefinition> {
+        self.cwt_analyzer.get_enums()
     }
 }

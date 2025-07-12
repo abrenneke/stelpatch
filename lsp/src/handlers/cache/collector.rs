@@ -8,24 +8,27 @@ use rayon::prelude::*;
 
 use crate::handlers::{
     cache::{
-        Namespace, game_data::GameDataCache, get_namespace_entity_type, resolver::TypeResolver,
+        Namespace, entity_restructurer::EntityRestructurer, game_data::GameDataCache,
+        get_namespace_entity_type, resolver::TypeResolver,
     },
     scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
 };
 
-pub struct ValueSetCollector<'game_data, 'resolver> {
+pub struct DataCollector<'game_data, 'resolver> {
     value_sets: HashMap<String, HashSet<String>>,
+    complex_enums: HashMap<String, HashSet<String>>,
     game_data: &'game_data GameDataCache,
     type_resolver: &'resolver TypeResolver,
 }
 
-impl<'game_data, 'resolver> ValueSetCollector<'game_data, 'resolver> {
+impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
     pub fn new(
         game_data: &'game_data GameDataCache,
         type_resolver: &'resolver TypeResolver,
     ) -> Self {
         Self {
             value_sets: HashMap::new(),
+            complex_enums: HashMap::new(),
             game_data,
             type_resolver,
         }
@@ -35,8 +38,12 @@ impl<'game_data, 'resolver> ValueSetCollector<'game_data, 'resolver> {
         &self.value_sets
     }
 
+    pub fn complex_enums(&self) -> &HashMap<String, HashSet<String>> {
+        &self.complex_enums
+    }
+
     pub fn collect_from_game_data(&mut self) {
-        // Collect results from parallel processing
+        // Collect value_sets from parallel processing
         let results: Vec<HashMap<String, HashSet<String>>> = self
             .game_data
             .get_namespaces()
@@ -54,6 +61,9 @@ impl<'game_data, 'resolver> ValueSetCollector<'game_data, 'resolver> {
                 self.value_sets.entry(key).or_default().extend(values);
             }
         }
+
+        // Collect complex enums
+        self.collect_complex_enums();
     }
 
     fn collect_from_namespace(
@@ -167,5 +177,147 @@ impl<'game_data, 'resolver> ValueSetCollector<'game_data, 'resolver> {
         }
 
         entity_value_sets
+    }
+
+    fn collect_complex_enums(&mut self) {
+        // Get all enum definitions from the CwtAnalyzer
+        let enum_definitions = self.type_resolver.get_enums();
+
+        // Process each complex enum
+        for (enum_name, enum_def) in enum_definitions {
+            if let Some(complex_def) = &enum_def.complex {
+                let values = self.extract_complex_enum_values(enum_name, complex_def);
+                if !values.is_empty() {
+                    self.complex_enums.insert(enum_name.to_string(), values);
+                }
+            }
+        }
+    }
+
+    fn extract_complex_enum_values(
+        &self,
+        enum_name: &str,
+        complex_def: &cw_model::types::ComplexEnumDefinition,
+    ) -> HashSet<String> {
+        let mut values = HashSet::new();
+
+        // Get the namespace for the specified path
+        let path = complex_def.path.trim_start_matches("game/");
+
+        // Use EntityRestructurer to get entities, which handles special loading rules
+        if let Some(entities) = EntityRestructurer::get_all_namespace_entities(path) {
+            // Special handling for tradition_swap - EntityRestructurer flattens tradition_swap blocks
+            // into top-level entities, so the entity names themselves are the enum values
+            if enum_name == "tradition_swap" {
+                for (entity_name, _entity) in &entities {
+                    values.insert(entity_name.clone());
+                }
+            } else {
+                // For other complex enums, use the original nested structure extraction
+                for (entity_name, entity) in &entities {
+                    if let Some(extracted_values) = self.extract_values_from_entity(
+                        entity,
+                        &complex_def.name_structure,
+                        complex_def.start_from_root,
+                    ) {
+                        values.extend(extracted_values);
+                    }
+                }
+            }
+        }
+
+        values
+    }
+
+    fn extract_values_from_entity(
+        &self,
+        entity: &cw_model::Entity,
+        name_structure: &cw_model::CwtType,
+        start_from_root: bool,
+    ) -> Option<HashSet<String>> {
+        let mut values = HashSet::new();
+
+        // If start_from_root is true, we start from the entity itself
+        // Otherwise, we start from the first level properties
+        if start_from_root {
+            self.extract_values_recursive(entity, name_structure, &mut values);
+        } else {
+            // Process each top-level property
+            for (_property_name, property_value) in &entity.properties.kv {
+                for value in &property_value.0 {
+                    if let Some(nested_entity) = value.value.as_entity() {
+                        self.extract_values_recursive(nested_entity, name_structure, &mut values);
+                    }
+                }
+            }
+        }
+
+        if values.is_empty() {
+            None
+        } else {
+            Some(values)
+        }
+    }
+
+    fn extract_values_recursive(
+        &self,
+        entity: &cw_model::Entity,
+        name_structure: &cw_model::CwtType,
+        values: &mut HashSet<String>,
+    ) {
+        use cw_model::CwtType;
+
+        match name_structure {
+            CwtType::Block(block_type) => {
+                // Process each property in the block structure
+                for (property_name, property_type) in &block_type.properties {
+                    if let Some(property_value) = entity.properties.kv.get(property_name) {
+                        for value in &property_value.0 {
+                            match &property_type.property_type {
+                                CwtType::Literal(literal) if literal == "enum_name" => {
+                                    // This is the special marker for enum name extraction
+                                    if let Some(string_value) = value.value.as_string() {
+                                        values.insert(string_value.clone());
+                                    }
+                                }
+                                CwtType::Block(_) => {
+                                    // Recurse into nested blocks
+                                    if let Some(nested_entity) = value.value.as_entity() {
+                                        self.extract_values_recursive(
+                                            nested_entity,
+                                            &property_type.property_type,
+                                            values,
+                                        );
+                                    }
+                                }
+                                _ => {
+                                    // For scalar matches, we can match any key
+                                    if property_name == "scalar" {
+                                        // Match any property in the entity
+                                        for (key, _) in &entity.properties.kv {
+                                            values.insert(key.clone());
+                                        }
+                                    }
+                                    // For any other type, if it's a string value, extract it
+                                    // This handles cases where enum_name is not a literal but a reference
+                                    if let Some(string_value) = value.value.as_string() {
+                                        values.insert(string_value.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            CwtType::Literal(literal) if literal == "enum_name" => {
+                // Direct enum name extraction - extract all keys as potential enum names
+                for (key, _) in &entity.properties.kv {
+                    values.insert(key.clone());
+                }
+            }
+            _ => {
+                // For other types, we don't extract values
+            }
+        }
     }
 }
