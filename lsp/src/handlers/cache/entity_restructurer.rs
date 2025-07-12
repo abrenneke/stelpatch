@@ -392,38 +392,53 @@ impl EntityRestructurer {
 
     /// Get entity keys for a namespace, using restructured keys if available
     pub fn get_namespace_entity_keys(namespace: &str) -> Option<Vec<String>> {
+        let mut all_keys = HashSet::new();
+
+        // Add restructured entity keys if available
         if let Some(restructured) = Self::get() {
             if let Some(entities) = restructured.entities.get(namespace) {
-                // Use restructured entity keys
-                return Some(entities.keys().cloned().collect());
+                all_keys.extend(entities.keys().cloned());
             }
         }
 
-        // Fall back to original GameDataCache
+        // Add original entity keys from GameDataCache
         if let Some(game_data) = GameDataCache::get() {
-            game_data.get_namespace_entity_keys(namespace).cloned()
-        } else {
+            if let Some(original_keys) = game_data.get_namespace_entity_keys(namespace) {
+                all_keys.extend(original_keys.iter().cloned());
+            }
+        }
+
+        if all_keys.is_empty() {
             None
+        } else {
+            Some(all_keys.into_iter().collect())
         }
     }
 
     /// Get entity keys for a namespace as a HashSet, using restructured keys if available
     pub fn get_namespace_entity_keys_set(namespace: &str) -> Option<Arc<HashSet<String>>> {
+        let mut all_keys = HashSet::new();
+
+        // Add restructured entity keys if available
         if let Some(restructured) = Self::get() {
             if let Some(entities) = restructured.entities.get(namespace) {
-                // Use restructured entity keys
-                let keys: HashSet<String> = entities.keys().cloned().collect();
-                return Some(Arc::new(keys));
+                all_keys.extend(entities.keys().cloned());
             }
         } else {
             eprintln!("WARN: EntityRestructurer not initialized");
         }
 
-        // Fall back to original GameDataCache
+        // Add original entity keys from GameDataCache
         if let Some(game_data) = GameDataCache::get() {
-            game_data.get_namespace_entity_keys_set(namespace)
-        } else {
+            if let Some(original_keys_set) = game_data.get_namespace_entity_keys_set(namespace) {
+                all_keys.extend(original_keys_set.iter().cloned());
+            }
+        }
+
+        if all_keys.is_empty() {
             None
+        } else {
+            Some(Arc::new(all_keys))
         }
     }
 
