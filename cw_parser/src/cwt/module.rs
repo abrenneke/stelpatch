@@ -9,10 +9,7 @@ use winnow::{
 
 use crate::{AstComment, AstNode, CwParseError, ParseError, opt_ws_and_comments};
 
-use super::{
-    AstCwtBlock, AstCwtComment, AstCwtExpression, AstCwtRule, cwt_expression, get_cwt_comments,
-    opt_cwt_ws_and_comments,
-};
+use super::{AstCwtBlock, AstCwtComment, AstCwtExpression, AstCwtRule, cwt_expression};
 
 use self_cell::self_cell;
 

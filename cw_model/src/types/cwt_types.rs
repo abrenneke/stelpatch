@@ -4,6 +4,7 @@
 //! closely aligned with the CWT specification rather than inferred types.
 
 use crate::{SeverityLevel, TypeKeyFilter};
+use cw_parser::AstCwtRule;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -1206,6 +1207,70 @@ impl Range {
 }
 
 impl CwtOptions {
+    /// Extract CWT options from a rule
+    pub fn from_rule(rule: &AstCwtRule) -> Self {
+        let mut options = CwtOptions::default();
+
+        // Parse CWT options from the rule
+        for option in &rule.options {
+            match option.key {
+                "display_name" => {
+                    options.display_name =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "abbreviation" => {
+                    options.abbreviation =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "push_scope" => {
+                    options.push_scope =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "starts_with" => {
+                    options.starts_with =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "severity" => {
+                    options.severity = Some(option.value.as_identifier().unwrap().parse().unwrap());
+                }
+                "type_key_filter" => {
+                    options.type_key_filter = Some(TypeKeyFilter::Specific(
+                        option.value.as_string_or_identifier().unwrap().to_string(),
+                    ));
+                }
+                "required" => {
+                    options.required = true;
+                }
+                "primary" => {
+                    options.primary = true;
+                }
+                "optional" => {
+                    options.optional = true;
+                }
+                "unique" => {
+                    options.unique = true;
+                }
+                "path_strict" => {
+                    options.path_strict = true;
+                }
+                "type_per_file" => {
+                    options.type_per_file = true;
+                }
+                "path_file" => {
+                    options.path_file =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "path_extension" => {
+                    options.path_extension =
+                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                _ => {}
+            }
+        }
+
+        options
+    }
+
     /// Merge options, preferring non-default values from other
     pub fn merge(self, other: CwtOptions) -> CwtOptions {
         CwtOptions {

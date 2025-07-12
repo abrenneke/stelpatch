@@ -10,7 +10,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{CwtAnalyzer, CwtType, ModifierSpec, RuleOptions, Subtype};
+use crate::{CwtAnalyzer, CwtOptions, CwtType, ModifierSpec, RuleOptions, Subtype};
 
 /// Definition of a CWT type
 #[derive(Debug, Clone)]
@@ -228,6 +228,9 @@ pub struct AliasDefinition {
 
     /// Alias to this type
     pub to: CwtType,
+
+    /// Options from the alias definition (e.g., push_scope, replace_scope)
+    pub options: CwtOptions,
 }
 
 /// Definition of a CWT link
@@ -372,12 +375,33 @@ impl AliasDefinition {
             category,
             name,
             to: rules,
+            options: CwtOptions::default(),
+        }
+    }
+
+    /// Create a new alias definition with options
+    pub fn with_options(
+        category: String,
+        name: String,
+        rules: CwtType,
+        options: CwtOptions,
+    ) -> Self {
+        Self {
+            category,
+            name,
+            to: rules,
+            options,
         }
     }
 
     /// Get the full alias key (category:name)
     pub fn full_key(&self) -> String {
         format!("{}:{}", self.category, self.name)
+    }
+
+    /// Check if this alias changes scope
+    pub fn changes_scope(&self) -> bool {
+        self.options.push_scope.is_some() || self.options.replace_scope.is_some()
     }
 }
 

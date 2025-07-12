@@ -143,38 +143,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let full_analysis_duration = full_analysis_start.elapsed();
     println!("Full analysis loaded in {:?}", full_analysis_duration);
 
+    println!("Caches initialized. Finding .txt files...");
+
+    // Find all .txt files
+    let txt_files = find_txt_files(dir_path)?;
+    println!("Found {} .txt files", txt_files.len());
+
+    let mut total_diagnostics = 0;
+    let mut processed_files = 0;
+
+    // Process each file
+    for file_path in txt_files {
+        match fs::read_to_string(&file_path) {
+            Ok(content) => {
+                let diagnostics = generate_file_diagnostics(&file_path, &content).await;
+                total_diagnostics += diagnostics;
+                processed_files += 1;
+
+                if diagnostics > 0 {
+                    println!("{}: {} diagnostics", file_path.display(), diagnostics);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error reading file {}: {}", file_path.display(), e);
+            }
+        }
+    }
+
+    println!("\nSummary:");
+    println!("Processed {} files", processed_files);
+    println!("Total diagnostics: {}", total_diagnostics);
+
     Ok(())
-
-    // println!("Caches initialized. Finding .txt files...");
-
-    // // Find all .txt files
-    // let txt_files = find_txt_files(dir_path)?;
-    // println!("Found {} .txt files", txt_files.len());
-
-    // let mut total_diagnostics = 0;
-    // let mut processed_files = 0;
-
-    // // Process each file
-    // for file_path in txt_files {
-    //     match fs::read_to_string(&file_path) {
-    //         Ok(content) => {
-    //             let diagnostics = generate_file_diagnostics(&file_path, &content).await;
-    //             total_diagnostics += diagnostics;
-    //             processed_files += 1;
-
-    //             if diagnostics > 0 {
-    //                 println!("{}: {} diagnostics", file_path.display(), diagnostics);
-    //             }
-    //         }
-    //         Err(e) => {
-    //             eprintln!("Error reading file {}: {}", file_path.display(), e);
-    //         }
-    //     }
-    // }
-
-    // println!("\nSummary:");
-    // println!("Processed {} files", processed_files);
-    // println!("Total diagnostics: {}", total_diagnostics);
-
-    // Ok(())
 }

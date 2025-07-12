@@ -435,39 +435,7 @@ impl<'a> TypeVisitor<'a> {
         subtype_name: &str,
         rule: &AstCwtRule,
     ) {
-        let mut subtype_options = CwtOptions::default();
-
-        // Parse CWT options from the rule
-        for option in &rule.options {
-            match option.key {
-                "display_name" => {
-                    subtype_options.display_name =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
-                }
-                "abbreviation" => {
-                    subtype_options.abbreviation =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
-                }
-                "push_scope" => {
-                    subtype_options.push_scope =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
-                }
-                "starts_with" => {
-                    subtype_options.starts_with =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
-                }
-                "severity" => {
-                    subtype_options.severity =
-                        Some(option.value.as_identifier().unwrap().parse().unwrap());
-                }
-                "type_key_filter" => {
-                    subtype_options.type_key_filter = Some(TypeKeyFilter::Specific(
-                        option.value.as_string_or_identifier().unwrap().to_string(),
-                    ));
-                }
-                _ => {}
-            }
-        }
+        let subtype_options = CwtOptions::from_rule(rule);
 
         // Create a more sophisticated condition based on the options and rule content
         let condition = if let Some(starts_with) = &subtype_options.starts_with {

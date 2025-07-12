@@ -1,9 +1,10 @@
 use crate::handlers::cache::{FullAnalysis, GameDataCache};
+use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
 use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType};
-use cw_model::{AliasName, BlockType, CwtType, ReferenceType, SimpleType};
+use cw_model::{AliasDefinition, AliasName, BlockType, CwtType, ReferenceType, SimpleType};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -16,7 +17,7 @@ pub struct TypeResolver {
 pub struct TypeResolverCache {
     resolved_references: HashMap<String, Arc<CwtType>>,
     namespace_keys: HashMap<String, Option<Arc<HashSet<String>>>>,
-    alias_match_left: HashMap<String, CwtType>,
+    alias_match_left: HashMap<String, (CwtType, Option<AliasDefinition>)>,
     pattern_type_matches: HashMap<String, bool>,
 }
 
@@ -151,37 +152,50 @@ impl TypeResolver {
                     // Check pattern properties
                     if let Some(pattern_property) = self.key_matches_pattern(property_name, block) {
                         // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
-                        let resolved_value_type = match &pattern_property.value_type {
+                        let (resolved_value_type, alias_def) = match &pattern_property.value_type {
                             CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
                                 // Resolve the AliasMatchLeft using the property name
                                 self.resolve_alias_match_left(key, property_name)
                             }
-                            _ => pattern_property.value_type.clone(),
+                            _ => (pattern_property.value_type.clone(), None),
                         };
 
-                        if pattern_property.changes_scope() {
-                            match pattern_property.apply_scope_changes(
-                                resolved_type.scope_stack(),
-                                &self.cwt_analyzer,
-                            ) {
-                                Ok(new_scope) => {
-                                    let property_scoped =
-                                        ScopedType::new_cwt(resolved_value_type, new_scope);
-                                    let resolved_property =
-                                        self.resolve_type(Arc::new(property_scoped));
-                                    PropertyNavigationResult::Success(resolved_property)
-                                }
-                                Err(error) => PropertyNavigationResult::ScopeError(error),
-                            }
-                        } else {
-                            // Same scope context
-                            let property_scoped = ScopedType::new_cwt(
-                                resolved_value_type,
-                                resolved_type.scope_stack().clone(),
-                            );
-                            let resolved_property = self.resolve_type(Arc::new(property_scoped));
-                            PropertyNavigationResult::Success(resolved_property)
+                        if property_name == "any_owned_fleet" {
+                            dbg!(&pattern_property);
+                            dbg!(&resolved_value_type);
+                            dbg!(&resolved_type);
+                            dbg!(&alias_def);
                         }
+
+                        // Apply scope changes - first from alias definition, then from pattern property
+                        let mut current_scope = resolved_type.scope_stack().clone();
+
+                        // Apply alias scope changes if present
+                        if let Some(alias_def) = alias_def {
+                            if alias_def.changes_scope() {
+                                match self.apply_alias_scope_changes(&current_scope, &alias_def) {
+                                    Ok(new_scope) => current_scope = new_scope,
+                                    Err(error) => {
+                                        return PropertyNavigationResult::ScopeError(error);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Apply pattern property scope changes if present
+                        if pattern_property.changes_scope() {
+                            match pattern_property
+                                .apply_scope_changes(&current_scope, &self.cwt_analyzer)
+                            {
+                                Ok(new_scope) => current_scope = new_scope,
+                                Err(error) => return PropertyNavigationResult::ScopeError(error),
+                            }
+                        }
+
+                        let property_scoped =
+                            ScopedType::new_cwt(resolved_value_type, current_scope);
+                        let resolved_property = self.resolve_type(Arc::new(property_scoped));
+                        PropertyNavigationResult::Success(resolved_property)
                     } else {
                         PropertyNavigationResult::NotFound
                     }
@@ -192,7 +206,8 @@ impl TypeResolver {
             })) => {
                 // For alias_match_left[category], we need to look up the specific alias
                 // category:property_name and return its type
-                let resolved_cwt_type = self.resolve_alias_match_left(key, property_name);
+                let (resolved_cwt_type, alias_def) =
+                    self.resolve_alias_match_left(key, property_name);
 
                 // Check if we found a matching alias
                 if matches!(
@@ -202,11 +217,39 @@ impl TypeResolver {
                     // No matching alias was found
                     PropertyNavigationResult::NotFound
                 } else {
-                    // We found a matching alias - return the resolved type
-                    let property_scoped =
-                        ScopedType::new_cwt(resolved_cwt_type, resolved_type.scope_stack().clone());
-                    let resolved_property = self.resolve_type(Arc::new(property_scoped));
-                    PropertyNavigationResult::Success(resolved_property)
+                    // We found a matching alias - check if it has scope changes
+                    if let Some(alias_def) = alias_def {
+                        if alias_def.changes_scope() {
+                            match self
+                                .apply_alias_scope_changes(resolved_type.scope_stack(), &alias_def)
+                            {
+                                Ok(new_scope) => {
+                                    let property_scoped =
+                                        ScopedType::new_cwt(resolved_cwt_type, new_scope);
+                                    let resolved_property =
+                                        self.resolve_type(Arc::new(property_scoped));
+                                    PropertyNavigationResult::Success(resolved_property)
+                                }
+                                Err(error) => PropertyNavigationResult::ScopeError(error),
+                            }
+                        } else {
+                            // No scope changes - use current scope
+                            let property_scoped = ScopedType::new_cwt(
+                                resolved_cwt_type,
+                                resolved_type.scope_stack().clone(),
+                            );
+                            let resolved_property = self.resolve_type(Arc::new(property_scoped));
+                            PropertyNavigationResult::Success(resolved_property)
+                        }
+                    } else {
+                        // No alias definition found - use current scope
+                        let property_scoped = ScopedType::new_cwt(
+                            resolved_cwt_type,
+                            resolved_type.scope_stack().clone(),
+                        );
+                        let resolved_property = self.resolve_type(Arc::new(property_scoped));
+                        PropertyNavigationResult::Success(resolved_property)
+                    }
                 }
             }
             _ => PropertyNavigationResult::NotFound,
@@ -437,11 +480,7 @@ impl TypeResolver {
                             .resolved_references
                             .insert(cache_key.clone(), result.clone());
                         return result;
-                    } else {
-                        eprintln!("no dynamic values for {}", key);
                     }
-                } else {
-                    eprintln!("no full analysis for {}", key);
                 }
 
                 CwtType::Reference(ref_type.clone())
@@ -488,7 +527,12 @@ impl TypeResolver {
     }
 
     /// Resolve an AliasMatchLeft reference using a specific property name
-    fn resolve_alias_match_left(&self, category: &str, property_name: &str) -> CwtType {
+    /// Returns (resolved_type, alias_definition_if_found)
+    fn resolve_alias_match_left(
+        &self,
+        category: &str,
+        property_name: &str,
+    ) -> (CwtType, Option<AliasDefinition>) {
         let composite_key = format!("{}:{}", category, property_name);
 
         // Check if we already have this alias match left cached
@@ -510,12 +554,11 @@ impl TypeResolver {
                         AliasName::Static(name) => {
                             if name == property_name {
                                 let result = alias_def.to.clone();
-                                self.cache
-                                    .write()
-                                    .unwrap()
-                                    .alias_match_left
-                                    .insert(composite_key.clone(), result.clone());
-                                return result;
+                                self.cache.write().unwrap().alias_match_left.insert(
+                                    composite_key.clone(),
+                                    (result.clone(), Some(alias_def.clone())),
+                                );
+                                return (result, Some(alias_def.clone()));
                             }
                         }
                         AliasName::TypeRef(type_name) => {
@@ -525,12 +568,11 @@ impl TypeResolver {
                             {
                                 if namespace_keys.contains(&property_name.to_string()) {
                                     let result = alias_def.to.clone();
-                                    self.cache
-                                        .write()
-                                        .unwrap()
-                                        .alias_match_left
-                                        .insert(composite_key.clone(), result.clone());
-                                    return result;
+                                    self.cache.write().unwrap().alias_match_left.insert(
+                                        composite_key.clone(),
+                                        (result.clone(), Some(alias_def.clone())),
+                                    );
+                                    return (result, Some(alias_def.clone()));
                                 }
                             }
                         }
@@ -539,12 +581,11 @@ impl TypeResolver {
                             if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
                                 if enum_def.values.contains(property_name) {
                                     let result = alias_def.to.clone();
-                                    self.cache
-                                        .write()
-                                        .unwrap()
-                                        .alias_match_left
-                                        .insert(composite_key.clone(), result.clone());
-                                    return result;
+                                    self.cache.write().unwrap().alias_match_left.insert(
+                                        composite_key.clone(),
+                                        (result.clone(), Some(alias_def.clone())),
+                                    );
+                                    return (result, Some(alias_def.clone()));
                                 }
                             }
                         }
@@ -561,8 +602,39 @@ impl TypeResolver {
             .write()
             .unwrap()
             .alias_match_left
-            .insert(composite_key.clone(), result.clone());
-        result
+            .insert(composite_key.clone(), (result.clone(), None));
+        (result, None)
+    }
+
+    /// Apply scope changes from alias definition options
+    fn apply_alias_scope_changes(
+        &self,
+        scope_stack: &ScopeStack,
+        alias_def: &cw_model::types::AliasDefinition,
+    ) -> Result<ScopeStack, ScopeError> {
+        let mut new_scope = scope_stack.branch();
+
+        // Apply push_scope if present
+        if let Some(push_scope) = &alias_def.options.push_scope {
+            if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(push_scope) {
+                new_scope.push_scope_type(scope_name)?;
+            }
+        }
+
+        // Apply replace_scope if present
+        if let Some(replace_scope) = &alias_def.options.replace_scope {
+            let mut new_scopes = HashMap::new();
+
+            for (key, value) in replace_scope {
+                if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(value) {
+                    new_scopes.insert(key.clone(), scope_name.to_string());
+                }
+            }
+
+            new_scope.replace_scope_from_strings(new_scopes)?;
+        }
+
+        Ok(new_scope)
     }
 
     /// Get all available link properties for the current scope

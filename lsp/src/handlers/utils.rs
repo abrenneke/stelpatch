@@ -24,6 +24,8 @@ pub fn position_to_offset(text: &str, position: Position) -> usize {
 /// file:///path/to/common/species_classes/species_classes.txt -> Some("common/species_classes")
 /// file:///path/to/events/events.txt -> None (not a namespace file)
 pub fn extract_namespace_from_uri(uri: &str) -> Option<String> {
+    let uri = uri.replace("file://", "").replace("\\", "/");
+
     // Parse the URI and extract the path
     let path = if uri.starts_with("file://") {
         // Remove file:// prefix and handle Windows/Unix paths
@@ -38,7 +40,7 @@ pub fn extract_namespace_from_uri(uri: &str) -> Option<String> {
             path_part
         }
     } else {
-        uri
+        &uri
     };
 
     // Look for "common/" in the path, but we want the last occurrence
