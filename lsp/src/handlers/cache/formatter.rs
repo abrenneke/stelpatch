@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cw_model::{CwtType, ReferenceType, SimpleType, TypeFingerprint};
+use cw_model::{CwtType, ReferenceType, SimpleType};
 
 use crate::handlers::cache::resolver::TypeResolver;
 use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
@@ -83,32 +83,7 @@ impl<'a> TypeFormatter<'a> {
                 SimpleType::Maths => "mathematical expression".to_string(),
             },
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)) => {
-                // Special handling for alias_match_left - expand it like a block
-                if let ReferenceType::AliasMatchLeft { key } = ref_type {
-                    let available_properties = self.resolver.get_available_properties(scoped_type);
-                    let mut lines: Vec<String> = vec!["TODO".to_string()];
-
-                    // for property_name in available_properties {
-                    //     let property_type = self
-                    //         .resolver
-                    //         .navigate_to_property(&scoped_type, &property_name);
-
-                    //     if let PropertyNavigationResult::Success(property_type) = property_type {
-                    //         // TODO this is fucked up
-                    //         // let formatted_value = self.format_type_with_depth(
-                    //         //     &property_type,
-                    //         //     depth + 1,
-                    //         //     Some(&property_name),
-                    //         // );
-
-                    //         lines.push(format!("{} = ({})", property_name, key));
-                    //     }
-                    // }
-
-                    lines.join("\n")
-                } else {
-                    format!("reference {:?}", ref_type)
-                }
+                format!("reference {:?}", ref_type)
             }
             CwtTypeOrSpecial::CwtType(CwtType::Comparable(comparable)) => {
                 format!(

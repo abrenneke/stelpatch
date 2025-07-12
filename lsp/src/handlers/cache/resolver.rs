@@ -346,7 +346,11 @@ impl TypeResolver {
             .resolved_references
             .get(&cache_key)
         {
-            return cached_result.clone();
+            match cached_result.as_ref() {
+                // Don't cache unresolved references
+                CwtType::Reference(_) => {}
+                _ => return cached_result.clone(),
+            }
         }
 
         let result = match ref_type {
@@ -433,7 +437,11 @@ impl TypeResolver {
                             .resolved_references
                             .insert(cache_key.clone(), result.clone());
                         return result;
+                    } else {
+                        eprintln!("no dynamic values for {}", key);
                     }
+                } else {
+                    eprintln!("no full analysis for {}", key);
                 }
 
                 CwtType::Reference(ref_type.clone())

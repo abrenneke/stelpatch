@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use std::collections::HashSet;
+
 use cw_model::CwtType;
 use cw_parser::{AstEntityItem, AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
@@ -12,12 +14,36 @@ use crate::handlers::{
             create_value_mismatch_diagnostic,
         },
         structural::is_value_structurally_compatible,
-        util::get_type_name,
         value::is_value_compatible_with_simple_type_with_scope,
     },
     scope::ScopeStack,
     scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
 };
+
+/// Extract possible string values from a CwtType for error messages
+fn extract_possible_values(cwt_type: &CwtType) -> Vec<String> {
+    match cwt_type {
+        CwtType::Literal(value) => vec![format!("\"{}\"", value)],
+        CwtType::LiteralSet(values) => {
+            let mut sorted_values: Vec<_> = values.iter().map(|v| format!("\"{}\"", v)).collect();
+            sorted_values.sort();
+            sorted_values
+        }
+        CwtType::Simple(simple_type) => vec![format!("<{:?}>", simple_type)],
+        CwtType::Block(_) => vec!["<block>".to_string()],
+        CwtType::Array(_) => vec!["<array>".to_string()],
+        CwtType::Union(types) => {
+            let mut all_values = Vec::new();
+            for union_type in types {
+                all_values.extend(extract_possible_values(union_type));
+            }
+            all_values
+        }
+        CwtType::Comparable(base_type) => extract_possible_values(base_type),
+        CwtType::Reference(_) => vec!["<reference>".to_string()],
+        CwtType::Unknown => vec!["<unknown>".to_string()],
+    }
+}
 
 /// Validate an entity value against the expected type structure
 pub fn validate_entity_value(
@@ -217,30 +243,46 @@ fn validate_value_against_type(
         // Union type validation
         (CwtTypeOrSpecial::CwtType(CwtType::Union(types)), _) => {
             // Find all structurally compatible union members
-            let mut compatible_types = Vec::new();
+            let mut compatible_resolved_types = Vec::new();
 
             for union_type in types {
-                if is_value_structurally_compatible(
-                    value,
-                    Arc::new(ScopedType::new_cwt(
-                        union_type.clone(),
-                        expected_type.scope_stack().clone(),
-                    )),
-                ) {
-                    compatible_types.push(union_type.clone());
+                // Resolve the union type first in case it's a reference
+                let resolved_union_type = cache.resolve_type(Arc::new(ScopedType::new_cwt(
+                    union_type.clone(),
+                    expected_type.scope_stack().clone(),
+                )));
+
+                if is_value_structurally_compatible(value, resolved_union_type.clone()) {
+                    compatible_resolved_types.push(resolved_union_type);
                 }
             }
 
-            if compatible_types.is_empty() {
+            if compatible_resolved_types.is_empty() {
                 // Value is not structurally compatible with any union member
-                let type_names: Vec<String> = types.iter().map(|t| get_type_name(t)).collect();
+                let mut all_possible_values = Vec::new();
+                for union_type in types {
+                    // Resolve each union type to get its actual structure for error messages
+                    let resolved_union_type = cache.resolve_type(Arc::new(ScopedType::new_cwt(
+                        union_type.clone(),
+                        expected_type.scope_stack().clone(),
+                    )));
+
+                    if let CwtTypeOrSpecial::CwtType(cwt_type) = resolved_union_type.cwt_type() {
+                        all_possible_values.extend(extract_possible_values(cwt_type));
+                    }
+                }
+
+                // Remove duplicates and sort
+                let mut unique_values: Vec<_> = all_possible_values
+                    .into_iter()
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect();
+                unique_values.sort();
 
                 let diagnostic = create_type_mismatch_diagnostic(
                     value.span_range(),
-                    &format!(
-                        "Value is not compatible with any of the expected types: {}",
-                        type_names.join(", ")
-                    ),
+                    &format!("Expected one of: {}", unique_values.join(", ")),
                     content,
                 );
                 diagnostics.push(diagnostic);
@@ -250,13 +292,10 @@ fn validate_value_against_type(
                 // only report errors if ALL compatible types have validation errors
                 let mut all_validation_results = Vec::new();
 
-                for compatible_type in &compatible_types {
+                for compatible_resolved_type in &compatible_resolved_types {
                     let content_diagnostics = validate_value_against_type(
                         value,
-                        Arc::new(ScopedType::new_cwt(
-                            compatible_type.clone(),
-                            expected_type.scope_stack().clone(),
-                        )),
+                        compatible_resolved_type.clone(),
                         content,
                         namespace,
                         depth + 1,
@@ -269,11 +308,31 @@ fn validate_value_against_type(
                     all_validation_results.iter().any(|diags| diags.is_empty());
 
                 if !any_validation_passed {
-                    // All compatible types have validation errors - report errors from the first one
-                    // (or we could aggregate errors from all, but that might be too noisy)
-                    if let Some(first_errors) = all_validation_results.first() {
-                        diagnostics.extend(first_errors.clone());
+                    // All compatible types have validation errors - create a comprehensive error message
+                    // showing all possible union values as a flat list
+                    let mut all_possible_values = Vec::new();
+                    for compatible_resolved_type in &compatible_resolved_types {
+                        if let CwtTypeOrSpecial::CwtType(cwt_type) =
+                            compatible_resolved_type.cwt_type()
+                        {
+                            all_possible_values.extend(extract_possible_values(cwt_type));
+                        }
                     }
+
+                    // Remove duplicates and sort
+                    let mut unique_values: Vec<_> = all_possible_values
+                        .into_iter()
+                        .collect::<HashSet<_>>()
+                        .into_iter()
+                        .collect();
+                    unique_values.sort();
+
+                    let diagnostic = create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        &format!("Expected one of: {}", unique_values.join(", ")),
+                        content,
+                    );
+                    diagnostics.push(diagnostic);
                 }
             }
         }

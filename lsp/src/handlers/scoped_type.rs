@@ -177,12 +177,6 @@ pub trait ScopeAwareProperty {
     /// Check if this property changes scope context
     fn changes_scope(&self) -> bool;
 
-    /// Get the scope that this property pushes to, if any
-    fn pushed_scope(&self) -> Option<&str>;
-
-    /// Get scope replacements, if any
-    fn scope_replacements(&self) -> Option<&std::collections::HashMap<String, String>>;
-
     /// Apply scope changes to a scope stack
     fn apply_scope_changes(
         &self,
@@ -194,14 +188,6 @@ pub trait ScopeAwareProperty {
 impl ScopeAwareProperty for Property {
     fn changes_scope(&self) -> bool {
         self.options.push_scope.is_some() || self.options.replace_scope.is_some()
-    }
-
-    fn pushed_scope(&self) -> Option<&str> {
-        self.options.push_scope.as_deref()
-    }
-
-    fn scope_replacements(&self) -> Option<&std::collections::HashMap<String, String>> {
-        self.options.replace_scope.as_ref()
     }
 
     fn apply_scope_changes(
@@ -242,14 +228,6 @@ impl ScopeAwareProperty for PatternProperty {
         self.options.push_scope.is_some() || self.options.replace_scope.is_some()
     }
 
-    fn pushed_scope(&self) -> Option<&str> {
-        self.options.push_scope.as_deref()
-    }
-
-    fn scope_replacements(&self) -> Option<&std::collections::HashMap<String, String>> {
-        self.options.replace_scope.as_ref()
-    }
-
     fn apply_scope_changes(
         &self,
         scope_manager: &ScopeStack,
@@ -284,8 +262,6 @@ impl ScopeAwareProperty for PatternProperty {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cw_model::CwtOptions;
-    use std::collections::HashMap;
 
     #[test]
     fn test_scoped_type_creation() {

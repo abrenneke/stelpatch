@@ -5,7 +5,9 @@
 
 use cw_parser::{AstCwtIdentifierOrString, AstCwtRule, CwtReferenceType, CwtVisitor};
 
-use crate::{AliasDefinition, AliasPattern, ConversionError, CwtAnalysisData, CwtConverter};
+use crate::{
+    AliasDefinition, AliasPattern, ConversionError, CwtAnalysisData, CwtConverter, CwtType,
+};
 
 /// Specialized visitor for alias definitions
 pub struct AliasVisitor<'a> {
@@ -56,29 +58,19 @@ impl<'a> AliasVisitor<'a> {
         if let Some(identifier) = &rule.key.as_identifier() {
             if let Some(scope) = &identifier.name.scope {
                 let category = scope.raw_value();
+                let new_to_type = CwtConverter::convert_value(&rule.value);
+
                 match &identifier.name.key {
                     AstCwtIdentifierOrString::Identifier(key_id) => match key_id.identifier_type {
                         CwtReferenceType::TypeRef => {
                             let name = key_id.name.raw_value();
-                            let alias_def = AliasDefinition {
-                                category: category.to_string(),
-                                name: name.to_string(),
-                                to: CwtConverter::convert_value(&rule.value),
-                            };
-                            self.data
-                                .aliases
-                                .insert(AliasPattern::new_type_ref(category, name), alias_def);
+                            let alias_pattern = AliasPattern::new_type_ref(category, name);
+                            self.insert_or_merge_alias(alias_pattern, category, name, new_to_type);
                         }
                         CwtReferenceType::Enum => {
                             let name = key_id.name.raw_value();
-                            let alias_def = AliasDefinition {
-                                category: category.to_string(),
-                                name: name.to_string(),
-                                to: CwtConverter::convert_value(&rule.value),
-                            };
-                            self.data
-                                .aliases
-                                .insert(AliasPattern::new_enum(category, name), alias_def);
+                            let alias_pattern = AliasPattern::new_enum(category, name);
+                            self.insert_or_merge_alias(alias_pattern, category, name, new_to_type);
                         }
                         _ => {
                             panic!("Unknown identifier type for alias in rule: {:?}", rule);
@@ -86,14 +78,8 @@ impl<'a> AliasVisitor<'a> {
                     },
                     AstCwtIdentifierOrString::String(key_str) => {
                         let name = key_str.raw_value();
-                        let alias_def = AliasDefinition {
-                            category: category.to_string(),
-                            name: name.to_string(),
-                            to: CwtConverter::convert_value(&rule.value),
-                        };
-                        self.data
-                            .aliases
-                            .insert(AliasPattern::new_basic(category, name), alias_def);
+                        let alias_pattern = AliasPattern::new_basic(category, name);
+                        self.insert_or_merge_alias(alias_pattern, category, name, new_to_type);
                     }
                 }
             }
@@ -102,14 +88,66 @@ impl<'a> AliasVisitor<'a> {
         }
     }
 
+    /// Insert or merge an alias definition, creating unions for duplicates
+    fn insert_or_merge_alias(
+        &mut self,
+        alias_pattern: AliasPattern,
+        category: &str,
+        name: &str,
+        new_to_type: CwtType,
+    ) {
+        if let Some(existing_def) = self.data.aliases.get_mut(&alias_pattern) {
+            // Merge with existing definition by creating a union
+            existing_def.to = match &existing_def.to {
+                CwtType::Union(types) => {
+                    // Already a union, add the new type
+                    let mut new_types = types.clone();
+                    new_types.push(new_to_type);
+                    CwtType::Union(new_types)
+                }
+                existing_type => {
+                    // Convert to union
+                    CwtType::Union(vec![existing_type.clone(), new_to_type])
+                }
+            };
+        } else {
+            // First definition, insert as normal
+            let alias_def = AliasDefinition {
+                category: category.to_string(),
+                name: name.to_string(),
+                to: new_to_type,
+            };
+            self.data.aliases.insert(alias_pattern, alias_def);
+        }
+    }
+
     /// Process a single alias definition
     fn process_single_alias(&mut self, rule: &AstCwtRule) {
         if let Some(identifier) = &rule.key.as_identifier() {
             let name = identifier.name.key.name();
-            let alias_type = CwtConverter::convert_value(&rule.value);
-            self.data
-                .single_aliases
-                .insert(name.to_string(), alias_type);
+            let new_alias_type = CwtConverter::convert_value(&rule.value);
+
+            if let Some(existing_type) = self.data.single_aliases.get_mut(name) {
+                // Merge with existing single alias by creating a union
+                let old_type = std::mem::replace(existing_type, CwtType::Unknown);
+                *existing_type = match old_type {
+                    CwtType::Union(types) => {
+                        // Already a union, add the new type
+                        let mut new_types = types;
+                        new_types.push(new_alias_type);
+                        CwtType::Union(new_types)
+                    }
+                    existing => {
+                        // Convert to union
+                        CwtType::Union(vec![existing, new_alias_type])
+                    }
+                };
+            } else {
+                // First definition, insert as normal
+                self.data
+                    .single_aliases
+                    .insert(name.to_string(), new_alias_type);
+            }
         } else {
             self.data.errors.push(ConversionError::InvalidAliasFormat);
         }

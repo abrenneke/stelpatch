@@ -117,6 +117,50 @@ impl<'game_data, 'resolver> ValueSetCollector<'game_data, 'resolver> {
                             }
                         }
                     }
+                    CwtTypeOrSpecial::CwtType(CwtType::Union(union_types)) => {
+                        // Process all union members that are blocks
+                        for union_type in union_types {
+                            match union_type {
+                                CwtType::Block(_) => {
+                                    // Create a scoped type for this union member
+                                    let union_member_type = Arc::new(ScopedType::new_cwt(
+                                        union_type.clone(),
+                                        property_type.scope_stack().clone(),
+                                    ));
+
+                                    for value in property_value.0.iter() {
+                                        if let Some(value) = value.value.as_entity() {
+                                            let nested_results = self.collect_from_entity(
+                                                value,
+                                                union_member_type.clone(),
+                                            );
+                                            for (key, values) in nested_results {
+                                                entity_value_sets
+                                                    .entry(key)
+                                                    .or_default()
+                                                    .extend(values);
+                                            }
+                                        }
+                                    }
+                                }
+                                CwtType::Reference(ReferenceType::ValueSet { key }) => {
+                                    // Handle value sets within unions
+                                    let mut values = HashSet::new();
+                                    for value in property_value.0.iter() {
+                                        if let Some(value) = value.value.as_string() {
+                                            values.insert(value.clone());
+                                        }
+                                    }
+                                    if !values.is_empty() {
+                                        entity_value_sets.insert(key.clone(), values);
+                                    }
+                                }
+                                _ => {
+                                    // Skip other union member types
+                                }
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
