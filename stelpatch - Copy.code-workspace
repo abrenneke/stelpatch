@@ -1,13 +1,13 @@
 {
   "folders": [
     {
-      "path": "."
-    },
-    {
       "path": "D:/SteamLibrary/steamapps/common/Stellaris/common"
     },
     {
       "path": "D:/SteamLibrary/steamapps/workshop/content/281990"
+    },
+    {
+      "path": "../../SteamLibrary/steamapps/common/Stellaris"
     }
   ],
   "settings": {

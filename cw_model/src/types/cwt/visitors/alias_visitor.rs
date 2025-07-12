@@ -190,3 +190,28 @@ impl<'a> CwtVisitor<'a> for AliasVisitor<'a> {
         self.walk_rule(rule);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use cw_parser::CwtModule;
+
+    use super::*;
+
+    #[test]
+    fn scope_exists() {
+        let mut data = CwtAnalysisData::new();
+        let mut visitor = AliasVisitor::new(&mut data);
+
+        let cwt_text = r#"
+#any scope
+###Checks if a target scope exists
+alias[trigger:exists] = scope[any]
+        "#;
+
+        let module = CwtModule::from_input(cwt_text).unwrap();
+
+        visitor.visit_module(&module);
+
+        dbg!(data);
+    }
+}

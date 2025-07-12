@@ -556,4 +556,17 @@ army = {}
 
         assert_eq!(army.unwrap().options.len(), 1);
     }
+
+    #[test]
+    fn scope_exists() {
+        let input = r#"
+#any scope
+###Checks if a target scope exists
+alias[trigger:exists] = scope[any]
+"#;
+
+        let result = CwtModule::from_input(input).unwrap();
+
+        dbg!(result);
+    }
 }

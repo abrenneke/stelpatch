@@ -14,7 +14,7 @@ use crate::handlers::{
             create_value_mismatch_diagnostic,
         },
         structural::is_value_structurally_compatible,
-        value::is_value_compatible_with_simple_type_with_scope,
+        value::is_value_compatible_with_simple_type,
     },
     scope::ScopeStack,
     scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
@@ -213,11 +213,12 @@ fn validate_value_against_type(
         (CwtTypeOrSpecial::CwtType(CwtType::Simple(simple_type)), _) => {
             // Create a default scope for backward compatibility
             let scope_manager = ScopeStack::default_with_root("unknown");
-            if let Some(diagnostic) = is_value_compatible_with_simple_type_with_scope(
+            if let Some(diagnostic) = is_value_compatible_with_simple_type(
                 value,
                 simple_type,
                 content,
                 &scope_manager,
+                Some(namespace),
             ) {
                 diagnostics.push(diagnostic);
             }

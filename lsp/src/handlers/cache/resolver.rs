@@ -4,7 +4,7 @@ use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
 use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType};
-use cw_model::{AliasDefinition, AliasName, BlockType, CwtType, ReferenceType, SimpleType};
+use cw_model::{AliasDefinition, AliasName, BlockType, CwtType, ReferenceType};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -72,7 +72,8 @@ impl TypeResolver {
         match cwt_type {
             // For references, try to resolve to the actual type
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)) => {
-                let resolved_cwt_type = self.resolve_reference_type(ref_type);
+                let resolved_cwt_type =
+                    self.resolve_reference_type(ref_type, scoped_type.scope_stack());
                 let result = ScopedType::new_cwt(
                     (*resolved_cwt_type).clone(),
                     scoped_type.scope_stack().clone(),
@@ -89,6 +90,45 @@ impl TypeResolver {
             // For all other types, return as-is with same scope
             _ => scoped_type,
         }
+    }
+
+    /// Check if a property name is a valid scope property or link property
+    /// Returns Some(description) if valid, None if invalid
+    pub fn is_valid_scope_or_link_property(
+        &self,
+        property_name: &str,
+        scope_stack: &ScopeStack,
+    ) -> Option<String> {
+        // First, check if this property is a scope property (from, fromfrom, etc.)
+        if let Some(scope_context) = scope_stack.get_scope_by_name(property_name) {
+            return Some(format!("scope property ({})", scope_context.scope_type));
+        }
+
+        // Second, check if this property is a link property
+        let current_scope = &scope_stack.current_scope().scope_type;
+        if let Some(link_def) = self.is_link_property(property_name, current_scope) {
+            return Some(format!("link property ({})", link_def.output_scope));
+        }
+
+        None
+    }
+
+    /// Get all available scope properties and link properties for the current scope
+    pub fn get_available_scope_and_link_properties(&self, scope_stack: &ScopeStack) -> Vec<String> {
+        let mut properties = Vec::new();
+
+        // Add scope properties (from, fromfrom, etc.) based on the current scope stack
+        let scope_properties = scope_stack.available_scope_names();
+        properties.extend(scope_properties);
+
+        // Add link properties based on the current scope
+        let current_scope = &scope_stack.current_scope().scope_type;
+        let link_properties = self.get_scope_link_properties(current_scope);
+        properties.extend(link_properties);
+
+        properties.sort();
+        properties.dedup();
+        properties
     }
 
     pub fn navigate_to_property(
@@ -159,13 +199,6 @@ impl TypeResolver {
                             }
                             _ => (pattern_property.value_type.clone(), None),
                         };
-
-                        if property_name == "any_owned_fleet" {
-                            dbg!(&pattern_property);
-                            dbg!(&resolved_value_type);
-                            dbg!(&resolved_type);
-                            dbg!(&alias_def);
-                        }
 
                         // Apply scope changes - first from alias definition, then from pattern property
                         let mut current_scope = resolved_type.scope_stack().clone();
@@ -378,7 +411,11 @@ impl TypeResolver {
         }
     }
 
-    fn resolve_reference_type(&self, ref_type: &ReferenceType) -> Arc<CwtType> {
+    fn resolve_reference_type(
+        &self,
+        ref_type: &ReferenceType,
+        scope_stack: &ScopeStack,
+    ) -> Arc<CwtType> {
         let cache_key = ref_type.id();
 
         // Check if we already have this reference type cached
@@ -506,13 +543,54 @@ impl TypeResolver {
                 // Return a descriptive type instead
                 CwtType::Literal(format!("subtype:{}", name))
             }
-            // For primitive-like references, return appropriate simple types
-            ReferenceType::Colour { .. } => CwtType::Simple(SimpleType::Color),
-            ReferenceType::Icon { .. } => CwtType::Simple(SimpleType::Icon),
-            ReferenceType::Filepath { .. } => CwtType::Simple(SimpleType::Filepath),
-            ReferenceType::StellarisNameFormat { .. } => CwtType::Simple(SimpleType::Localisation),
-            ReferenceType::Scope { .. } => CwtType::Simple(SimpleType::ScopeField),
-            ReferenceType::ScopeGroup { .. } => CwtType::Simple(SimpleType::ScopeField),
+            ReferenceType::Scope { key } => {
+                // If "any", then _any_ link or scope property is valid from the current scope
+                if key == "any" {
+                    let current_scope = &scope_stack.current_scope().scope_type;
+                    let mut properties = self.get_scope_link_properties(current_scope);
+                    properties.extend(scope_stack.available_scope_names());
+                    CwtType::LiteralSet(properties.into_iter().collect())
+                } else {
+                    // Otherwise, it's link properties that resolve to the specified scope type
+                    // plus scope properties that actually resolve to the specified scope type
+                    let mut properties = Vec::new();
+                    let current_scope = &scope_stack.current_scope().scope_type;
+
+                    // Resolve the scope name to get the canonical name (e.g., "country" -> "Country")
+                    if let Some(resolved_scope_name) = self.cwt_analyzer.resolve_scope_name(key) {
+                        // Add link properties that are valid from the current scope and have the specified output scope
+                        for (link_name, link_def) in self.cwt_analyzer.get_links() {
+                            if link_def.can_be_used_from(current_scope, &self.cwt_analyzer) {
+                                if let Some(link_output_scope) =
+                                    self.cwt_analyzer.resolve_scope_name(&link_def.output_scope)
+                                {
+                                    if link_output_scope == resolved_scope_name {
+                                        properties.push(link_name.clone());
+                                    }
+                                }
+                            }
+                        }
+
+                        // Add scope properties that resolve to the specified scope type
+                        for scope_property in scope_stack.available_scope_names() {
+                            if let Some(scope_context) =
+                                scope_stack.get_scope_by_name(&scope_property)
+                            {
+                                if let Some(scope_type) = self
+                                    .cwt_analyzer
+                                    .resolve_scope_name(&scope_context.scope_type)
+                                {
+                                    if scope_type == resolved_scope_name {
+                                        properties.push(scope_property);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    CwtType::LiteralSet(properties.into_iter().collect())
+                }
+            }
             // For any remaining unhandled reference types, return the original
             _ => CwtType::Reference(ref_type.clone()),
         };
@@ -635,6 +713,14 @@ impl TypeResolver {
         }
 
         Ok(new_scope)
+    }
+
+    pub fn get_all_scope_properties(&self) -> Vec<String> {
+        ScopeStack::get_all_scope_properties()
+    }
+
+    pub fn get_all_link_properties(&self) -> Vec<String> {
+        self.cwt_analyzer.get_links().keys().cloned().collect()
     }
 
     /// Get all available link properties for the current scope

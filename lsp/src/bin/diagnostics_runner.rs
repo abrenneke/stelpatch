@@ -2,12 +2,14 @@ use std::env;
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use cw_lsp::handlers::cache::FullAnalysis;
 use cw_lsp::handlers::cache::{GameDataCache, TypeCache, get_namespace_entity_type};
 use cw_lsp::handlers::diagnostics::type_validation::validate_entity_value;
 use cw_lsp::handlers::utils::extract_namespace_from_uri;
 use cw_parser::AstModule;
+use rayon::prelude::*;
 
 /// Recursively find all .txt files in a directory
 fn find_txt_files(dir: &Path) -> io::Result<Vec<std::path::PathBuf>> {
@@ -29,7 +31,7 @@ fn find_txt_files(dir: &Path) -> io::Result<Vec<std::path::PathBuf>> {
 }
 
 /// Generate diagnostics for a single file
-async fn generate_file_diagnostics(file_path: &Path, content: &str) -> usize {
+fn generate_file_diagnostics(file_path: &Path, content: &str) -> usize {
     let mut diagnostic_count = 0;
 
     // Create a fake URI for the file
@@ -40,7 +42,7 @@ async fn generate_file_diagnostics(file_path: &Path, content: &str) -> usize {
     match module.parse_input(content) {
         Ok(()) => {
             // If parsing succeeds, do type checking
-            let type_diagnostics = generate_type_diagnostics(&module, &uri, content).await;
+            let type_diagnostics = generate_type_diagnostics(&module, &uri, content);
             diagnostic_count += type_diagnostics;
         }
         Err(_error) => {
@@ -53,7 +55,7 @@ async fn generate_file_diagnostics(file_path: &Path, content: &str) -> usize {
 }
 
 /// Generate type-checking diagnostics for a successfully parsed document
-async fn generate_type_diagnostics(module: &AstModule<'_>, uri: &str, content: &str) -> usize {
+fn generate_type_diagnostics(module: &AstModule<'_>, uri: &str, content: &str) -> usize {
     let mut diagnostic_count = 0;
 
     // Check if type cache is initialized
@@ -102,8 +104,7 @@ async fn generate_type_diagnostics(module: &AstModule<'_>, uri: &str, content: &
     diagnostic_count
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         eprintln!("Usage: {} <directory>", args[0]);
@@ -131,7 +132,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("Error: Timeout waiting for caches to initialize");
             std::process::exit(1);
         }
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     let full_analysis_start = std::time::Instant::now();
@@ -149,30 +150,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let txt_files = find_txt_files(dir_path)?;
     println!("Found {} .txt files", txt_files.len());
 
-    let mut total_diagnostics = 0;
-    let mut processed_files = 0;
+    let total_diagnostics = AtomicUsize::new(0);
+    let processed_files = AtomicUsize::new(0);
 
-    // Process each file
-    for file_path in txt_files {
-        match fs::read_to_string(&file_path) {
+    // Process each file in parallel
+    txt_files
+        .par_iter()
+        .for_each(|file_path| match fs::read_to_string(&file_path) {
             Ok(content) => {
-                let diagnostics = generate_file_diagnostics(&file_path, &content).await;
-                total_diagnostics += diagnostics;
-                processed_files += 1;
-
-                if diagnostics > 0 {
-                    println!("{}: {} diagnostics", file_path.display(), diagnostics);
-                }
+                let diagnostics = generate_file_diagnostics(&file_path, &content);
+                total_diagnostics.fetch_add(diagnostics, Ordering::Relaxed);
+                processed_files.fetch_add(1, Ordering::Relaxed);
             }
             Err(e) => {
                 eprintln!("Error reading file {}: {}", file_path.display(), e);
             }
-        }
-    }
+        });
 
     println!("\nSummary:");
-    println!("Processed {} files", processed_files);
-    println!("Total diagnostics: {}", total_diagnostics);
+    println!(
+        "Processed {} files",
+        processed_files.load(Ordering::Relaxed)
+    );
+    println!(
+        "Total diagnostics: {}",
+        total_diagnostics.load(Ordering::Relaxed)
+    );
 
     Ok(())
 }

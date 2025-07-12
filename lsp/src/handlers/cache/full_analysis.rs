@@ -39,8 +39,6 @@ impl FullAnalysis {
             let duration = start.elapsed();
             eprintln!("Full analysis loaded in {:?}", duration);
 
-            dbg!(collector.value_sets());
-
             FullAnalysisResult {
                 dynamic_value_sets: collector.value_sets().clone(),
             }

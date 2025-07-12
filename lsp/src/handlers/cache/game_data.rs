@@ -9,7 +9,7 @@ use cw_model::{Entity, LoadMode, Value};
 pub struct GameDataCache {
     /// Maps namespace -> set of keys defined in that namespace
     namespaces: HashMap<String, Namespace>,
-    scripted_variables: HashMap<String, Value>,
+    pub scripted_variables: HashMap<String, Value>,
 }
 
 pub struct Namespace {

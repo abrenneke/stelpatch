@@ -177,6 +177,17 @@ impl ScopeStack {
         }
     }
 
+    pub fn get_all_scope_properties() -> Vec<String> {
+        vec![
+            "this".to_string(),
+            "root".to_string(),
+            "from".to_string(),
+            "fromfrom".to_string(),
+            "fromfromfrom".to_string(),
+            "fromfromfromfrom".to_string(),
+        ]
+    }
+
     /// Get scope by name (this, root, from, fromfrom, etc.)
     pub fn get_scope_by_name(&self, name: &str) -> Option<&ScopeContext> {
         match name {
