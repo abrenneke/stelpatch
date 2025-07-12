@@ -565,8 +565,6 @@ army = {}
 alias[trigger:exists] = scope[any]
 "#;
 
-        let result = CwtModule::from_input(input).unwrap();
-
-        dbg!(result);
+        let _result = CwtModule::from_input(input).unwrap();
     }
 }

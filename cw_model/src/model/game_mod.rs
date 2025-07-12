@@ -76,6 +76,8 @@ impl GameMod {
             "interface/**/*.gui",
             "interface/**/*.gfx",
             "events/**/*.txt",
+            "gfx/**/*.gfx",
+            "flags/**/*.txt",
         ];
 
         // Define ignore patterns for files to exclude (simple filename matching)

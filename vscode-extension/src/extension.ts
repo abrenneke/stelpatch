@@ -44,7 +44,6 @@ export function activate(context: ExtensionContext) {
 	
 	log('🚀 CW LSP Extension activating...');
 	log(`Extension path: ${context.extensionPath}`);
-
 	// Set up automatic language detection for currently open documents
 	if (workspace.textDocuments) {
 		for (const document of workspace.textDocuments) {
@@ -68,7 +67,7 @@ export function activate(context: ExtensionContext) {
 	
 	// The server is implemented as a separate cargo project
 	const serverCommand = 'cargo';
-	const serverArgs = ['run', '--bin', 'cw_lsp'];
+	const serverArgs = ['run', '--release', '--bin', 'cw_lsp'];
 	
 	// Get the path to the LSP server (assuming it's in ../lsp relative to this extension)
 	const serverWorkingDirectory = path.join(context.extensionPath, '..', 'lsp');

@@ -5,7 +5,9 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use cw_lsp::handlers::cache::FullAnalysis;
-use cw_lsp::handlers::cache::{GameDataCache, TypeCache, get_namespace_entity_type};
+use cw_lsp::handlers::cache::{
+    EntityRestructurer, GameDataCache, TypeCache, get_namespace_entity_type,
+};
 use cw_lsp::handlers::diagnostics::type_validation::validate_entity_value;
 use cw_lsp::handlers::utils::extract_namespace_from_uri;
 use cw_parser::AstModule;
@@ -134,6 +136,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
+
+    println!("Restructuring entities...");
+    let entity_restructurer =
+        EntityRestructurer::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
+    entity_restructurer.load();
 
     let full_analysis_start = std::time::Instant::now();
 

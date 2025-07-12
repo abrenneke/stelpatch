@@ -1,4 +1,4 @@
-use crate::handlers::cache::{FullAnalysis, GameDataCache};
+use crate::handlers::cache::{EntityRestructurer, FullAnalysis, GameDataCache};
 use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
@@ -43,16 +43,16 @@ impl TypeResolver {
         if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
             if let Some(path) = type_def.path.as_ref() {
                 let path = path.trim_start_matches("game/");
-                if let Some(game_data) = GameDataCache::get() {
-                    if let Some(namespace_keys) = game_data.get_namespace_entity_keys_set(&path) {
-                        let result = Some(namespace_keys);
-                        self.cache
-                            .write()
-                            .unwrap()
-                            .namespace_keys
-                            .insert(type_name.to_string(), result.clone());
-                        return result;
-                    }
+                if let Some(namespace_keys) =
+                    EntityRestructurer::get_namespace_entity_keys_set(&path)
+                {
+                    let result = Some(namespace_keys);
+                    self.cache
+                        .write()
+                        .unwrap()
+                        .namespace_keys
+                        .insert(type_name.to_string(), result.clone());
+                    return result;
                 }
             }
         }
@@ -447,18 +447,19 @@ impl TypeResolver {
                         // For Type references, we want the union of all keys in that namespace
                         // This is what the user expects when they hover over "resource" - they want to see
                         // all the possible resource keys like "energy", "minerals", etc.
-                        if let Some(game_data) = GameDataCache::get() {
-                            if let Some(namespace_keys) = game_data.get_namespace_entity_keys(&path)
-                            {
-                                found = Some(CwtType::LiteralSet(
-                                    namespace_keys.iter().cloned().collect(),
-                                ));
-                            }
+                        if let Some(namespace_keys) =
+                            crate::handlers::cache::EntityRestructurer::get_namespace_entity_keys(
+                                &path,
+                            )
+                        {
+                            found = Some(CwtType::LiteralSet(namespace_keys.into_iter().collect()));
+                        }
 
-                            // Also try the key directly in case it's already a full path
-                            if let Some(namespace_keys) = game_data.get_namespace_entity_keys(key) {
+                        // Also try the key directly in case it's already a full path
+                        if found.is_none() {
+                            if let Some(namespace_keys) = crate::handlers::cache::EntityRestructurer::get_namespace_entity_keys(key) {
                                 found = Some(CwtType::LiteralSet(
-                                    namespace_keys.iter().cloned().collect(),
+                                    namespace_keys.into_iter().collect(),
                                 ));
                             }
                         }

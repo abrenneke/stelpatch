@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::handlers::cache::{FullAnalysis, GameDataCache, TypeCache};
+use crate::handlers::cache::{EntityRestructurer, FullAnalysis, GameDataCache, TypeCache};
 use crate::handlers::diagnostics::generate_diagnostics;
 use crate::semantic_token_collector::CwSemanticTokenType;
 use tokio::sync::RwLock;
@@ -59,7 +59,21 @@ pub async fn initialized(
         }
 
         client_clone
-            .log_message(MessageType::INFO, "Caches are ready, loading full analysis")
+            .log_message(
+                MessageType::INFO,
+                "Caches are ready, restructuring entities",
+            )
+            .await;
+
+        let entity_restructurer =
+            EntityRestructurer::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
+        entity_restructurer.load();
+
+        client_clone
+            .log_message(
+                MessageType::INFO,
+                "Entity restructuring complete, loading full analysis",
+            )
             .await;
 
         let full_analysis =

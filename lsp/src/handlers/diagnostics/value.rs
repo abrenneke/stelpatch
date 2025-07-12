@@ -209,14 +209,18 @@ fn validate_scripted_variable(
     content: &str,
     current_namespace: Option<&str>,
 ) -> Option<Diagnostic> {
+    use crate::handlers::cache::EntityRestructurer;
+
     if let Some(cache) = GameDataCache::get() {
         // Check global scripted variables first
         if cache.scripted_variables.contains_key(variable_name) {
             None // Valid scripted variable
         } else if let Some(namespace_name) = current_namespace {
-            // Check only the current namespace's scripted variables
-            if let Some(namespace) = cache.get_namespaces().get(namespace_name) {
-                if namespace.scripted_variables.contains_key(variable_name) {
+            // Check only the current namespace's scripted variables using EntityRestructurer
+            if let Some(namespace_variables) =
+                EntityRestructurer::get_namespace_scripted_variables(namespace_name)
+            {
+                if namespace_variables.contains_key(variable_name) {
                     None // Valid scripted variable
                 } else {
                     Some(create_type_mismatch_diagnostic(

@@ -62,35 +62,60 @@ impl Module {
 
     pub fn get_module_info(file_path: &Path) -> (String, String) {
         let path = PathBuf::from(file_path);
-        let mut namespace = String::new();
-        let mut cur_path = path.clone();
 
-        while let Some(common_index) = cur_path
-            .components()
-            .position(|c| c.as_os_str() == "common")
-        {
-            if let Some(common_prefix) = cur_path
-                .components()
-                .take(common_index + 1)
-                .collect::<PathBuf>()
-                .to_str()
-            {
-                namespace = cur_path
-                    .strip_prefix(common_prefix)
-                    .unwrap()
-                    .parent()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string();
-                cur_path = cur_path.strip_prefix(common_prefix).unwrap().to_path_buf();
+        // Define the base directories we support
+        let base_dirs = vec!["common", "interface", "events", "gfx", "localisation"];
+
+        let mut namespace = String::new();
+        let mut found_base = false;
+
+        // Find the rightmost occurrence of ANY base directory
+        let components: Vec<_> = path.components().collect();
+        let mut rightmost_base_index = None;
+        let mut rightmost_base_dir = None;
+
+        for base_dir in base_dirs {
+            if let Some(base_index) = components.iter().rposition(|c| c.as_os_str() == base_dir) {
+                if rightmost_base_index.is_none() || base_index > rightmost_base_index.unwrap() {
+                    rightmost_base_index = Some(base_index);
+                    rightmost_base_dir = Some(base_dir);
+                }
             }
         }
 
-        namespace = ["common", &namespace]
-            .iter()
-            .collect::<PathBuf>()
-            .to_slash_lossy()
-            .to_string();
+        if let (Some(base_index), Some(base_dir)) = (rightmost_base_index, rightmost_base_dir) {
+            if let Some(base_prefix) = components
+                .iter()
+                .take(base_index + 1)
+                .collect::<PathBuf>()
+                .to_str()
+            {
+                // Get the subdirectory path after the base directory
+                let remaining_path = path.strip_prefix(base_prefix).unwrap();
+
+                if let Some(parent_dir) = remaining_path.parent() {
+                    if parent_dir.as_os_str().is_empty() {
+                        // File is directly in the base directory
+                        namespace = base_dir.to_string();
+                    } else {
+                        // File is in a subdirectory, include the subdirectory in namespace
+                        namespace = [base_dir, &parent_dir.to_string_lossy()]
+                            .iter()
+                            .collect::<PathBuf>()
+                            .to_slash_lossy()
+                            .to_string();
+                    }
+                } else {
+                    namespace = base_dir.to_string();
+                }
+                found_base = true;
+            }
+        }
+
+        // Fallback if no base directory found (shouldn't happen with proper glob patterns)
+        if !found_base {
+            namespace = "unknown".to_string();
+        }
 
         let module_name = path.file_stem().unwrap().to_str().unwrap();
 

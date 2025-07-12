@@ -211,7 +211,5 @@ alias[trigger:exists] = scope[any]
         let module = CwtModule::from_input(cwt_text).unwrap();
 
         visitor.visit_module(&module);
-
-        dbg!(data);
     }
 }

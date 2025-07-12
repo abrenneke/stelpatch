@@ -17,6 +17,8 @@ pub struct Namespace {
     pub entity_keys: Vec<String>,
     pub entity_keys_set: Arc<HashSet<String>>,
     pub scripted_variables: HashMap<String, Value>,
+    /// Individual modules in this namespace (for restructuring)
+    pub modules: HashMap<String, cw_model::Module>,
 }
 
 impl Namespace {
@@ -26,6 +28,7 @@ impl Namespace {
             entity_keys: Vec::new(),
             entity_keys_set: Arc::new(HashSet::new()),
             scripted_variables: HashMap::new(),
+            modules: HashMap::new(),
         }
     }
 }
@@ -64,6 +67,9 @@ impl GameDataCache {
             let mut namespaces = HashMap::new();
             for (namespace_name, namespace) in &base_game.namespaces {
                 let mut namespace_data = Namespace::new();
+
+                // Store individual modules for restructuring
+                namespace_data.modules = namespace.modules.clone();
 
                 let properties = &namespace.properties.kv;
 
