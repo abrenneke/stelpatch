@@ -2,8 +2,8 @@ use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::anyhow;
 use colored::*;
+use glob::glob;
 use rayon::prelude::*;
-use walkdir::WalkDir;
 
 use crate::{ModDefinition, Module, Namespace};
 
@@ -68,21 +68,71 @@ impl GameMod {
     }
 
     pub fn load(definition: ModDefinition, mode: LoadMode) -> Result<Self, anyhow::Error> {
-        let mut dir = PathBuf::from(definition.path.as_ref().unwrap());
-        dir.push("common");
+        let base_path = PathBuf::from(definition.path.as_ref().unwrap());
+
+        // Define glob patterns for different file types
+        let glob_patterns = vec![
+            "common/**/*.txt",
+            "interface/**/*.gui",
+            "interface/**/*.gfx",
+            "events/**/*.txt",
+        ];
+
+        // Define ignore patterns for files to exclude (simple filename matching)
+        let ignore_filenames = vec![
+            "99_README.txt",
+            "HOW_TO_MAKE_NEW_SHIPS.txt",
+            "readme.txt",
+            "Readme.txt",
+            "changelog.txt",
+            "CHANGELOG.txt",
+            "ChangeLog.txt",
+            "license.txt",
+            "LICENSE.txt",
+            "credits.txt",
+            "CREDITS.txt",
+            "TODO.txt",
+            "todo.txt",
+        ];
+
         let mut paths = vec![];
 
-        for entry in WalkDir::new(&dir).into_iter().filter_map(|e| e.ok()) {
-            if entry.file_type().is_file()
-                && entry.path().extension().unwrap_or_default() == "txt"
-                && entry
-                    .path()
-                    .parent()
-                    .map(|p| p.file_name().unwrap_or_default())
-                    .unwrap_or_default()
-                    != "common"
-            {
-                paths.push(entry.path().to_path_buf());
+        // Collect files matching all patterns
+        for pattern in glob_patterns {
+            let full_pattern = base_path.join(pattern);
+            let pattern_str = full_pattern.to_string_lossy();
+
+            match glob(&pattern_str) {
+                Ok(paths_iter) => {
+                    for entry in paths_iter {
+                        match entry {
+                            Ok(path) => {
+                                if path.is_file() {
+                                    // Check if this file should be ignored (simple filename matching)
+                                    let should_ignore = if let Some(filename) = path.file_name() {
+                                        if let Some(filename_str) = filename.to_str() {
+                                            ignore_filenames.contains(&filename_str)
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    };
+
+                                    if !should_ignore {
+                                        paths.push(path);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Error reading path in pattern {}: {}", pattern, e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error with glob pattern {}: {}", pattern, e);
+                }
             }
         }
 

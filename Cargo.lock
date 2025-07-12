@@ -503,6 +503,7 @@ dependencies = [
  "colored",
  "cw_parser",
  "dirs",
+ "glob",
  "indent",
  "path-slash",
  "rayon",

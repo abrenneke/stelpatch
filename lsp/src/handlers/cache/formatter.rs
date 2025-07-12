@@ -6,6 +6,7 @@ use crate::handlers::cache::resolver::TypeResolver;
 use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
 
 const MAX_UNION_MEMBERS: usize = 8;
+const MAX_LITERAL_SET_MEMBERS: usize = 30;
 
 /// A formatter for CWT types that holds references to context and configuration
 pub struct TypeFormatter<'a> {
@@ -43,7 +44,7 @@ impl<'a> TypeFormatter<'a> {
             CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(literals)) => {
                 let mut sorted: Vec<_> = literals.iter().collect();
                 sorted.sort();
-                if sorted.len() <= 6 {
+                if sorted.len() <= MAX_LITERAL_SET_MEMBERS {
                     sorted
                         .iter()
                         .map(|s| format!("\"{}\"", s))
@@ -58,7 +59,7 @@ impl<'a> TypeFormatter<'a> {
                             .map(|s| format!("\"{}\"", s))
                             .collect::<Vec<_>>()
                             .join(" | "),
-                        literals.len() - 4
+                        literals.len() - MAX_LITERAL_SET_MEMBERS
                     )
                 }
             }

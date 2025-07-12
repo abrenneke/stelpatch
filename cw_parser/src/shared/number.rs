@@ -50,7 +50,11 @@ impl<'a> AstNode<'a> for AstNumber<'a> {
 pub(crate) fn number_val<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstNumber<'a>> {
     let leading_comments = opt_ws_and_comments.parse_next(input)?;
 
-    let (value, span) = (opt(alt(('-', '+'))), digit1, opt(('.', digit1)))
+    let (value, span) = (
+        opt(alt(('-', '+'))),
+        // Both 0.11 and .11 are valid
+        alt(((digit1, opt(('.', digit1))).take(), ('.', digit1).take())),
+    )
         .take()
         .with_span()
         .context(StrContext::Label("number_val"))
@@ -60,6 +64,9 @@ pub(crate) fn number_val<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<
     let is_percentage: ModalResult<()> = peek(literal("%")).void().parse_next(input);
     if is_percentage.is_ok() {
         literal("%").void().parse_next(input)?;
+
+        // Typo in stellaris x_x
+        opt(literal("%")).void().parse_next(input)?;
     }
 
     peek(value_terminator)
