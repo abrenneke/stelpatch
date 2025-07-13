@@ -34,7 +34,7 @@ impl FullAnalysis {
             let start = std::time::Instant::now();
 
             let mut collector = DataCollector::new(self.game_data, self.type_cache.get_resolver());
-            collector.collect_from_game_data();
+            collector.collect_value_sets_from_game_data();
 
             let duration = start.elapsed();
             eprintln!("Full analysis loaded in {:?}", duration);

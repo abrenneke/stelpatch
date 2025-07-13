@@ -26,8 +26,14 @@ impl TypeResolver {
         let utils = Arc::new(ResolverUtils::new(cwt_analyzer.clone()));
         let cache = Arc::new(RwLock::new(TypeResolverCache::new()));
 
+        let subtype_handler_for_reference = Arc::new(SubtypeHandler::new(cwt_analyzer.clone()));
+
         Self {
-            reference_resolver: ReferenceResolver::new(cwt_analyzer.clone(), utils.clone()),
+            reference_resolver: ReferenceResolver::new(
+                cwt_analyzer.clone(),
+                utils.clone(),
+                subtype_handler_for_reference,
+            ),
             pattern_matcher: PatternMatcher::new(cwt_analyzer.clone(), utils.clone()),
             property_navigator: PropertyNavigator::new(cwt_analyzer.clone(), utils.clone()),
             scope_handler: ScopeHandler::new(cwt_analyzer.clone()),

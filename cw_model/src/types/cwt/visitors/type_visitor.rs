@@ -12,7 +12,7 @@ use cw_parser::{
 
 use crate::{
     ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, LocalisationRequirement,
-    ModifierSpec, RuleOptions, SeverityLevel, SkipRootKey, Subtype, SubtypeCondition,
+    ModifierSpec, Property, RuleOptions, SeverityLevel, SkipRootKey, Subtype, SubtypeCondition,
     TypeDefinition, TypeKeyFilter, TypeOptions,
 };
 
@@ -440,6 +440,7 @@ impl<'a> TypeVisitor<'a> {
 
         // Extract condition from the rule value block
         let mut condition = SubtypeCondition::Expression(subtype_name.to_string()); // fallback
+        let mut properties = HashMap::new();
 
         if let CwtValue::Block(block) = &rule.value {
             // Look for simple property conditions that define when this subtype is active
@@ -449,6 +450,9 @@ impl<'a> TypeVisitor<'a> {
                 if let cw_parser::cwt::AstCwtExpression::Rule(prop_rule) = item {
                     let prop_key = prop_rule.key.name();
 
+                    // Extract options from the individual rule (e.g., cardinality constraints)
+                    let prop_options = CwtOptions::from_rule(prop_rule);
+
                     // TODO: Handle nested block conditions with cardinality constraints
                     // For example: potential = { ## cardinality = 0..0; always = no }
                     // This should check that the potential block does NOT contain "always = no"
@@ -457,8 +461,18 @@ impl<'a> TypeVisitor<'a> {
                         continue;
                     }
 
-                    // Store the actual value directly
+                    // Store the actual value directly for condition determination
                     property_conditions.insert(prop_key.to_string(), prop_rule.value.clone());
+
+                    // Create a Property object to store the rule with its options
+                    let property_type = CwtConverter::convert_value(&prop_rule.value);
+                    let property = Property {
+                        property_type,
+                        options: prop_options.clone(),
+                        documentation: None,
+                    };
+
+                    properties.insert(prop_key.to_string(), property);
                 }
             }
 
@@ -523,7 +537,8 @@ impl<'a> TypeVisitor<'a> {
 
         let subtype_def = Subtype {
             condition,
-            properties: HashMap::new(), // No properties needed for subtype definitions
+            condition_properties: properties, // Use the properties we collected with their options
+            allowed_properties: HashMap::new(),
             options: subtype_options,
         };
 
@@ -1060,6 +1075,74 @@ types = {
     }
 
     #[test]
+    fn test_subtype_rule_options() {
+        let mut data = CwtAnalysisData::new();
+        let mut visitor = TypeVisitor::new(&mut data);
+
+        let cwt_text = r#"
+types = {
+    type[civic_or_origin] = {
+        path = "game/common/governments/civics"
+        localisation = {
+            ## required
+            Name = "$"
+            ## required
+            Description = "$_desc"
+        }
+        subtype[origin] = {
+            is_origin = yes
+        }
+        subtype[civic] = {
+            ## cardinality = 0..1
+            is_origin = no
+        }
+    }
+}
+        "#;
+
+        let module = CwtModule::from_input(cwt_text).unwrap();
+        let types_rules = module.find_rule("types");
+        let types_rules = types_rules.unwrap();
+
+        visitor.visit_rule(types_rules);
+
+        // Check that we have 1 type
+        assert_eq!(data.types.len(), 1);
+
+        let civic_or_origin = data.types.get("civic_or_origin").unwrap();
+
+        // Check subtypes
+        assert_eq!(civic_or_origin.subtypes.len(), 2);
+        assert!(civic_or_origin.subtypes.contains_key("origin"));
+        assert!(civic_or_origin.subtypes.contains_key("civic"));
+
+        // Check that the origin subtype has the is_origin property
+        let origin_subtype = civic_or_origin.subtypes.get("origin").unwrap();
+        assert!(
+            origin_subtype
+                .condition_properties
+                .contains_key("is_origin")
+        );
+        let origin_property = origin_subtype
+            .condition_properties
+            .get("is_origin")
+            .unwrap();
+        assert_eq!(origin_property.options.cardinality, None); // No cardinality specified
+
+        // Check that the civic subtype has the is_origin property with cardinality
+        let civic_subtype = civic_or_origin.subtypes.get("civic").unwrap();
+        assert!(civic_subtype.condition_properties.contains_key("is_origin"));
+        let civic_property = civic_subtype.condition_properties.get("is_origin").unwrap();
+
+        // Check that the cardinality option was properly extracted
+        assert!(civic_property.options.cardinality.is_some());
+        let cardinality = civic_property.options.cardinality.as_ref().unwrap();
+        assert_eq!(cardinality.min, Some(0));
+        assert_eq!(cardinality.max, Some(1));
+        assert_eq!(cardinality.soft, false);
+    }
+
+    #[test]
     fn test_missing_advanced_cwt_features() {
         let mut data = CwtAnalysisData::new();
         let mut visitor = TypeVisitor::new(&mut data);
@@ -1219,7 +1302,11 @@ types = {
         }
 
         // Test 7: Subtype properties
-        assert!(advanced_subtype.properties.contains_key("is_advanced"));
-        assert!(advanced_subtype.properties.contains_key("level"));
+        assert!(
+            advanced_subtype
+                .condition_properties
+                .contains_key("is_advanced")
+        );
+        assert!(advanced_subtype.condition_properties.contains_key("level"));
     }
 }

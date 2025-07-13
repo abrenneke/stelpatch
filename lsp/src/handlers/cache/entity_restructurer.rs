@@ -373,8 +373,8 @@ impl EntityRestructurer {
         Self::get()?.entities.get(namespace)?.get(entity_name)
     }
 
-    /// Get all entities in a namespace
-    pub fn get_namespace_entities(namespace: &str) -> Option<&'static HashMap<String, Entity>> {
+    /// Get all entities in a namespace as a HashMap reference
+    pub fn get_namespace_entities_map(namespace: &str) -> Option<&'static HashMap<String, Entity>> {
         Self::get()?.entities.get(namespace)
     }
 
@@ -412,6 +412,36 @@ impl EntityRestructurer {
             None
         } else {
             Some(all_keys.into_iter().collect())
+        }
+    }
+
+    /// Get entities for a namespace as a vector of (key, entity) tuples
+    pub fn get_namespace_entities(namespace: &str) -> Option<Vec<(String, Entity)>> {
+        let mut all_entities = HashMap::new();
+
+        // Add restructured entities if available
+        if let Some(restructured) = Self::get() {
+            if let Some(entities) = restructured.entities.get(namespace) {
+                all_entities.extend(entities.iter().map(|(k, v)| (k.clone(), v.clone())));
+            }
+        }
+
+        // Add original entities from GameDataCache
+        if let Some(game_data) = GameDataCache::get() {
+            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+                all_entities.extend(
+                    namespace_data
+                        .entities
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone())),
+                );
+            }
+        }
+
+        if all_entities.is_empty() {
+            None
+        } else {
+            Some(all_entities.into_iter().collect())
         }
     }
 

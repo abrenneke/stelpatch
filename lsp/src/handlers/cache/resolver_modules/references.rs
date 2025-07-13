@@ -1,4 +1,4 @@
-use super::ResolverUtils;
+use super::{ResolverUtils, SubtypeHandler};
 use crate::handlers::cache::{EntityRestructurer, FullAnalysis};
 use crate::handlers::scope::ScopeStack;
 use cw_model::types::CwtAnalyzer;
@@ -8,13 +8,19 @@ use std::sync::Arc;
 pub struct ReferenceResolver {
     pub cwt_analyzer: Arc<CwtAnalyzer>,
     pub utils: Arc<ResolverUtils>,
+    pub subtype_handler: Arc<SubtypeHandler>,
 }
 
 impl ReferenceResolver {
-    pub fn new(cwt_analyzer: Arc<CwtAnalyzer>, utils: Arc<ResolverUtils>) -> Self {
+    pub fn new(
+        cwt_analyzer: Arc<CwtAnalyzer>,
+        utils: Arc<ResolverUtils>,
+        subtype_handler: Arc<SubtypeHandler>,
+    ) -> Self {
         Self {
             cwt_analyzer,
             utils,
+            subtype_handler,
         }
     }
 
@@ -26,6 +32,44 @@ impl ReferenceResolver {
     ) -> Arc<CwtType> {
         match ref_type {
             ReferenceType::Type { key } => {
+                // Check if this is a subtype reference (contains a dot)
+                if let Some(dot_pos) = key.find('.') {
+                    let (base_type, subtype) = key.split_at(dot_pos);
+                    let subtype = &subtype[1..]; // Remove the leading dot
+
+                    // Get the base type definition
+                    let type_def = self.cwt_analyzer.get_type(base_type);
+
+                    if let Some(type_def) = type_def {
+                        if let Some(path) = type_def.path.as_ref() {
+                            // CWT paths are prefixed with "game/"
+                            let path = path.trim_start_matches("game/");
+
+                            // Get the CWT type for this namespace
+                            if let Some(cwt_type) = self.cwt_analyzer.get_type(base_type) {
+                                // Use subtype handler to filter entities by subtype
+                                let filtered_keys = self
+                                    .subtype_handler
+                                    .get_entity_keys_in_namespace_for_subtype(
+                                        path,
+                                        &cwt_type.rules,
+                                        subtype,
+                                    );
+
+                                if !filtered_keys.is_empty() {
+                                    return Arc::new(CwtType::LiteralSet(
+                                        filtered_keys.into_iter().collect(),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    // If subtype filtering failed, return the original reference
+                    return Arc::new(CwtType::Reference(ref_type.clone()));
+                }
+
+                // Handle regular type references (no subtype)
                 let type_def = self.cwt_analyzer.get_type(key);
 
                 let mut found = None;

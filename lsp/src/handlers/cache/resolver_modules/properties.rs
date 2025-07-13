@@ -12,6 +12,7 @@ use std::sync::Arc;
 use super::ResolverUtils;
 use super::patterns::PatternMatcher;
 use super::references::ReferenceResolver;
+use super::subtypes::SubtypeHandler;
 
 pub struct PropertyNavigator {
     pub cwt_analyzer: Arc<CwtAnalyzer>,
@@ -26,6 +27,7 @@ impl PropertyNavigator {
             reference_resolver: Arc::new(ReferenceResolver::new(
                 cwt_analyzer.clone(),
                 utils.clone(),
+                Arc::new(SubtypeHandler::new(cwt_analyzer.clone())),
             )),
             pattern_matcher: Arc::new(PatternMatcher::new(cwt_analyzer.clone(), utils.clone())),
             utils,
@@ -297,7 +299,11 @@ impl PropertyNavigator {
     ) -> Option<&'b Property> {
         // Check if there's a subtype definition for this block type
         if let Some(subtype_def) = block_type.subtypes.get(subtype_name) {
-            return subtype_def.properties.get(property_name);
+            // Check condition_properties first (CWT schema), then allowed_properties (game data)
+            if let Some(prop) = subtype_def.condition_properties.get(property_name) {
+                return Some(prop);
+            }
+            return subtype_def.allowed_properties.get(property_name);
         }
         None
     }
@@ -311,7 +317,7 @@ impl PropertyNavigator {
                 // Add subtype-specific properties first
                 for subtype_name in scoped_type.subtypes() {
                     if let Some(subtype_def) = block.subtypes.get(subtype_name) {
-                        properties.extend(subtype_def.properties.keys().cloned());
+                        properties.extend(subtype_def.allowed_properties.keys().cloned());
                     }
                 }
 

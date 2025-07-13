@@ -315,11 +315,17 @@ impl TypeDefinition {
     }
 
     pub fn finalize_subtype_properties(&mut self) {
-        // Sync subtype_properties with subtypes.properties
+        // Merge subtype_properties with existing subtypes.allowed_properties
+        // This adds game data properties to allowed_properties while preserving CWT schema condition_properties
         if let CwtType::Block(ref mut block_type) = self.rules {
             for (subtype_name, properties) in block_type.subtype_properties.iter() {
                 if let Some(subtype) = block_type.subtypes.get_mut(subtype_name) {
-                    subtype.properties = properties.clone();
+                    // Merge properties instead of overwriting
+                    for (prop_key, prop_value) in properties {
+                        subtype
+                            .allowed_properties
+                            .insert(prop_key.clone(), prop_value.clone());
+                    }
                 }
             }
         }

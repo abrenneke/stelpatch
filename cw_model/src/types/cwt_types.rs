@@ -4,7 +4,7 @@
 //! closely aligned with the CWT specification rather than inferred types.
 
 use crate::{SeverityLevel, TypeKeyFilter};
-use cw_parser::AstCwtRule;
+use cw_parser::{AstCwtRule, CwtCommentRangeBound};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -323,8 +323,13 @@ pub struct Subtype {
     /// Condition that activates this subtype
     pub condition: SubtypeCondition,
 
-    /// Properties that apply when this subtype is active
-    pub properties: HashMap<String, Property>,
+    /// CWT schema condition properties with cardinality constraints
+    /// These define the rules for when this subtype matches (e.g., is_origin = no with cardinality 0..1)
+    pub condition_properties: HashMap<String, Property>,
+
+    /// Game data properties that are allowed when this subtype is active
+    /// These are discovered from analyzing actual game files (e.g., traits, playable, etc.)
+    pub allowed_properties: HashMap<String, Property>,
 
     /// Options for this subtype
     pub options: CwtOptions,
@@ -713,17 +718,25 @@ impl TypeFingerprint for Property {
 
 impl TypeFingerprint for Subtype {
     fn fingerprint(&self) -> String {
-        let mut prop_fingerprints: Vec<String> = self
-            .properties
+        let mut allowed_prop_fingerprints: Vec<String> = self
+            .allowed_properties
             .iter()
             .map(|(k, v)| format!("{}:{}", k, v.fingerprint()))
             .collect();
-        prop_fingerprints.sort();
+        allowed_prop_fingerprints.sort();
+
+        let mut condition_prop_fingerprints: Vec<String> = self
+            .condition_properties
+            .iter()
+            .map(|(k, v)| format!("{}:{}", k, v.fingerprint()))
+            .collect();
+        condition_prop_fingerprints.sort();
 
         format!(
-            "{}:{}:{}",
+            "{}:{}:{}:{}",
             self.condition.fingerprint(),
-            prop_fingerprints.join(","),
+            condition_prop_fingerprints.join(","),
+            allowed_prop_fingerprints.join(","),
             self.options.fingerprint()
         )
     }
@@ -1276,6 +1289,21 @@ impl CwtOptions {
                 "path_extension" => {
                     options.path_extension =
                         Some(option.value.as_string_or_identifier().unwrap().to_string());
+                }
+                "cardinality" => {
+                    if let Some(range) = option.value.as_range() {
+                        let (min_bound, max_bound, soft) = range;
+                        let min = match min_bound {
+                            CwtCommentRangeBound::Number(n) => Some(n.parse().unwrap_or(0)),
+                            CwtCommentRangeBound::Infinity => None,
+                        };
+                        let max = match max_bound {
+                            CwtCommentRangeBound::Number(n) => Some(n.parse().unwrap_or(1)),
+                            CwtCommentRangeBound::Infinity => None,
+                        };
+                        let cardinality = Cardinality { min, max, soft };
+                        options.cardinality = Some(cardinality);
+                    }
                 }
                 _ => {}
             }

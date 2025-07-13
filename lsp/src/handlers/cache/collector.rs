@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use cw_model::{CwtType, Entity, ReferenceType};
+use cw_model::{ComplexEnumDefinition, CwtType, Entity, ReferenceType};
 use rayon::prelude::*;
 
 use crate::handlers::{
@@ -42,7 +42,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         &self.complex_enums
     }
 
-    pub fn collect_from_game_data(&mut self) {
+    pub fn collect_value_sets_from_game_data(&mut self) {
         // Collect value_sets from parallel processing
         let results: Vec<HashMap<String, HashSet<String>>> = self
             .game_data
@@ -51,7 +51,9 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
             .filter_map(|(namespace, namespace_data)| {
                 get_namespace_entity_type(namespace)
                     .and_then(|namespace_type| namespace_type.scoped_type)
-                    .map(|scoped_type| self.collect_from_namespace(namespace_data, scoped_type))
+                    .map(|scoped_type| {
+                        self.collect_value_sets_from_namespace(namespace_data, scoped_type)
+                    })
             })
             .collect();
 
@@ -66,7 +68,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         self.collect_complex_enums();
     }
 
-    fn collect_from_namespace(
+    fn collect_value_sets_from_namespace(
         &self,
         namespace_data: &Namespace,
         scoped_type: Arc<ScopedType>,
@@ -75,7 +77,9 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         let results: Vec<HashMap<String, HashSet<String>>> = namespace_data
             .entities
             .par_iter()
-            .map(|(_entity_name, entity)| self.collect_from_entity(entity, scoped_type.clone()))
+            .map(|(_entity_name, entity)| {
+                self.collect_value_sets_from_entity(entity, scoped_type.clone())
+            })
             .collect();
 
         // Merge results from this namespace
@@ -89,7 +93,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         namespace_value_sets
     }
 
-    fn collect_from_entity(
+    fn collect_value_sets_from_entity(
         &self,
         entity: &Entity,
         scoped_type: Arc<ScopedType>,
@@ -119,8 +123,8 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                     CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
                         for value in property_value.0.iter() {
                             if let Some(value) = value.value.as_entity() {
-                                let nested_results =
-                                    self.collect_from_entity(value, property_type.clone());
+                                let nested_results = self
+                                    .collect_value_sets_from_entity(value, property_type.clone());
                                 for (key, values) in nested_results {
                                     entity_value_sets.entry(key).or_default().extend(values);
                                 }
@@ -140,10 +144,11 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
 
                                     for value in property_value.0.iter() {
                                         if let Some(value) = value.value.as_entity() {
-                                            let nested_results = self.collect_from_entity(
-                                                value,
-                                                union_member_type.clone(),
-                                            );
+                                            let nested_results = self
+                                                .collect_value_sets_from_entity(
+                                                    value,
+                                                    union_member_type.clone(),
+                                                );
                                             for (key, values) in nested_results {
                                                 entity_value_sets
                                                     .entry(key)
@@ -186,7 +191,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         // Process each complex enum
         for (enum_name, enum_def) in enum_definitions {
             if let Some(complex_def) = &enum_def.complex {
-                let values = self.extract_complex_enum_values(enum_name, complex_def);
+                let values = self.extract_complex_enum_values(complex_def);
                 if !values.is_empty() {
                     self.complex_enums.insert(enum_name.to_string(), values);
                 }
@@ -194,11 +199,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         }
     }
 
-    fn extract_complex_enum_values(
-        &self,
-        enum_name: &str,
-        complex_def: &cw_model::types::ComplexEnumDefinition,
-    ) -> HashSet<String> {
+    fn extract_complex_enum_values(&self, complex_def: &ComplexEnumDefinition) -> HashSet<String> {
         let mut values = HashSet::new();
 
         // Get the namespace for the specified path
@@ -206,22 +207,13 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
 
         // Use EntityRestructurer to get entities, which handles special loading rules
         if let Some(entities) = EntityRestructurer::get_all_namespace_entities(path) {
-            // Special handling for tradition_swap - EntityRestructurer flattens tradition_swap blocks
-            // into top-level entities, so the entity names themselves are the enum values
-            if enum_name == "tradition_swap" {
-                for (entity_name, _entity) in &entities {
-                    values.insert(entity_name.clone());
-                }
-            } else {
-                // For other complex enums, use the original nested structure extraction
-                for (_entity_name, entity) in &entities {
-                    if let Some(extracted_values) = self.extract_values_from_entity(
-                        entity,
-                        &complex_def.name_structure,
-                        complex_def.start_from_root,
-                    ) {
-                        values.extend(extracted_values);
-                    }
+            for (_entity_name, entity) in &entities {
+                if let Some(extracted_values) = self.extract_values_from_entity(
+                    entity,
+                    &complex_def.name_structure,
+                    complex_def.start_from_root,
+                ) {
+                    values.extend(extracted_values);
                 }
             }
         }
@@ -231,8 +223,8 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
 
     fn extract_values_from_entity(
         &self,
-        entity: &cw_model::Entity,
-        name_structure: &cw_model::CwtType,
+        entity: &Entity,
+        name_structure: &CwtType,
         start_from_root: bool,
     ) -> Option<HashSet<String>> {
         let mut values = HashSet::new();
@@ -242,11 +234,20 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         if start_from_root {
             self.extract_values_recursive(entity, name_structure, &mut values);
         } else {
-            // Process each top-level property
-            for (_property_name, property_value) in &entity.properties.kv {
-                for value in &property_value.0 {
-                    if let Some(nested_entity) = value.value.as_entity() {
-                        self.extract_values_recursive(nested_entity, name_structure, &mut values);
+            // Process each top-level property by matching against name_structure
+            if let CwtType::Block(block_type) = name_structure {
+                for (property_name, property_value) in &entity.properties.kv {
+                    if let Some(expected_property) = block_type.properties.get(property_name) {
+                        for value in &property_value.0 {
+                            if let Some(nested_entity) = value.value.as_entity() {
+                                // Pass the inner structure instead of the entire name_structure
+                                self.extract_values_recursive(
+                                    nested_entity,
+                                    &expected_property.property_type,
+                                    &mut values,
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -261,12 +262,10 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
 
     fn extract_values_recursive(
         &self,
-        entity: &cw_model::Entity,
-        name_structure: &cw_model::CwtType,
+        entity: &Entity,
+        name_structure: &CwtType,
         values: &mut HashSet<String>,
     ) {
-        use cw_model::CwtType;
-
         match name_structure {
             CwtType::Block(block_type) => {
                 // Process each property in the block structure
@@ -288,6 +287,43 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                                             &property_type.property_type,
                                             values,
                                         );
+                                    }
+                                }
+                                CwtType::Array(array_type) => {
+                                    // Recurse into the array element type
+                                    self.extract_values_recursive(
+                                        entity,
+                                        &array_type.element_type,
+                                        values,
+                                    );
+                                }
+                                CwtType::Union(union_types) => {
+                                    // Process all union members
+                                    for union_type in union_types {
+                                        match union_type {
+                                            CwtType::Literal(literal) if literal == "enum_name" => {
+                                                // Extract all string values from the property value entities
+                                                for value in &property_value.0 {
+                                                    if let Some(property_entity) =
+                                                        value.value.as_entity()
+                                                    {
+                                                        for item in &property_entity.items {
+                                                            if let Some(string_value) =
+                                                                item.as_string()
+                                                            {
+                                                                values.insert(string_value.clone());
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            _ => {
+                                                // Recurse into other union member types
+                                                self.extract_values_recursive(
+                                                    entity, union_type, values,
+                                                );
+                                            }
+                                        }
                                     }
                                 }
                                 _ => {
@@ -313,6 +349,41 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                 // Direct enum name extraction - extract all keys as potential enum names
                 for (key, _) in &entity.properties.kv {
                     values.insert(key.clone());
+                }
+            }
+            CwtType::Array(array_type) => {
+                // For arrays, check if the element type is enum_name
+                if let CwtType::Literal(literal) = &*array_type.element_type {
+                    if literal == "enum_name" {
+                        // Extract all string values from entity items
+                        for item in &entity.items {
+                            if let Some(string_value) = item.as_string() {
+                                values.insert(string_value.clone());
+                            }
+                        }
+                    }
+                } else {
+                    // For other element types, recurse into the element type
+                    self.extract_values_recursive(entity, &array_type.element_type, values);
+                }
+            }
+            CwtType::Union(union_types) => {
+                // Process all union members
+                for union_type in union_types {
+                    match union_type {
+                        CwtType::Literal(literal) if literal == "enum_name" => {
+                            // Extract all string values from entity items
+                            for item in &entity.items {
+                                if let Some(string_value) = item.as_string() {
+                                    values.insert(string_value.clone());
+                                }
+                            }
+                        }
+                        _ => {
+                            // Recurse into other union member types
+                            self.extract_values_recursive(entity, union_type, values);
+                        }
+                    }
                 }
             }
             _ => {
