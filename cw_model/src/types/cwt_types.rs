@@ -219,6 +219,9 @@ pub enum PatternType {
 
     /// enum[key] - matches any enum value from the key
     Enum { key: String },
+
+    /// <type_key> - matches any type from the key
+    Type { key: String },
 }
 
 impl PatternType {
@@ -226,6 +229,7 @@ impl PatternType {
         match self {
             PatternType::AliasName { category } => format!("alias_name[{}]", category),
             PatternType::Enum { key } => format!("enum[{}]", key),
+            PatternType::Type { key } => format!("<{}>", key),
         }
     }
 }
@@ -686,6 +690,7 @@ impl TypeFingerprint for PatternType {
         match self {
             PatternType::AliasName { category } => format!("alias_name:{}", category),
             PatternType::Enum { key } => format!("enum:{}", key),
+            PatternType::Type { key } => format!("<{}>", key),
         }
     }
 }

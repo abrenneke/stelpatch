@@ -9,7 +9,7 @@ use cw_parser::{
         CwtValue,
     },
 };
-use std::{collections::HashMap, ops::Sub};
+use std::collections::HashMap;
 
 use crate::{
     BlockType, CwtOptions, CwtType, PatternProperty, PatternType, Property, ReferenceType,
@@ -134,6 +134,21 @@ impl CwtConverter {
                                     pattern_properties.push(PatternProperty {
                                         pattern_type: PatternType::Enum {
                                             key: enum_key.clone(),
+                                        },
+                                        value_type: value_type.clone(),
+                                        options: Default::default(),
+                                        documentation: None,
+                                    });
+
+                                    continue;
+                                }
+                                CwtReferenceType::TypeRef => {
+                                    let type_name = key_id.name.raw_value().to_string();
+                                    let value_type = Self::convert_value(&rule.value);
+
+                                    pattern_properties.push(PatternProperty {
+                                        pattern_type: PatternType::Type {
+                                            key: type_name.clone(),
                                         },
                                         value_type: value_type.clone(),
                                         options: Default::default(),

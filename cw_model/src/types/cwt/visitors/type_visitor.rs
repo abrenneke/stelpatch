@@ -11,9 +11,9 @@ use cw_parser::{
 };
 
 use crate::{
-    BlockType, ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, CwtType,
-    LocalisationRequirement, ModifierSpec, Property, RuleOptions, SeverityLevel, SimpleType,
-    SkipRootKey, Subtype, SubtypeCondition, TypeDefinition, TypeKeyFilter, TypeOptions,
+    ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, LocalisationRequirement,
+    ModifierSpec, RuleOptions, SeverityLevel, SkipRootKey, Subtype, SubtypeCondition,
+    TypeDefinition, TypeKeyFilter, TypeOptions,
 };
 
 /// Specialized visitor for type definitions

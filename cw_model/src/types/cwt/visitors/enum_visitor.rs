@@ -35,8 +35,6 @@ impl<'a> EnumVisitor<'a> {
 
     /// Check if this visitor can handle the given rule
     fn can_handle_rule(&self, rule: &AstCwtRule) -> bool {
-        let key = rule.key.name();
-
         // Only handle typed identifiers - no legacy string parsing
         if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
             let can_handle = matches!(

@@ -76,6 +76,13 @@ impl PatternMatcher {
                     false
                 }
             }
+            PatternType::Type { key: type_key } => {
+                if let Some(namespace_keys) = self.utils.get_namespace_keys_for_type_ref(type_key) {
+                    namespace_keys.contains(key)
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -112,6 +119,13 @@ impl PatternMatcher {
             PatternType::Enum { key } => {
                 if let Some(enum_def) = self.cwt_analyzer.get_enum(key) {
                     enum_def.values.iter().cloned().collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            PatternType::Type { key } => {
+                if let Some(namespace_keys) = self.utils.get_namespace_keys_for_type_ref(key) {
+                    namespace_keys.iter().cloned().collect()
                 } else {
                     Vec::new()
                 }

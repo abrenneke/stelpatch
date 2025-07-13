@@ -3,8 +3,8 @@ use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
 use cw_model::{
-    AliasDefinition, BlockType, CwtAnalyzer, CwtType, LinkDefinition, PatternProperty, Property,
-    ReferenceType,
+    AliasDefinition, AliasName, BlockType, CwtAnalyzer, CwtType, LinkDefinition, PatternProperty,
+    Property, ReferenceType,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -333,17 +333,17 @@ impl PropertyNavigator {
                 if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(key) {
                     for alias_pattern in aliases_in_category {
                         match &alias_pattern.name {
-                            cw_model::AliasName::Static(name) => {
+                            AliasName::Static(name) => {
                                 properties.push(name.clone());
                             }
-                            cw_model::AliasName::TypeRef(type_name) => {
+                            AliasName::TypeRef(type_name) => {
                                 if let Some(namespace_keys) =
                                     self.utils.get_namespace_keys_for_type_ref(type_name)
                                 {
                                     properties.extend(namespace_keys.iter().cloned());
                                 }
                             }
-                            cw_model::AliasName::Enum(enum_name) => {
+                            AliasName::Enum(enum_name) => {
                                 if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
                                     properties.extend(enum_def.values.iter().cloned());
                                 }
