@@ -11,15 +11,23 @@ pub struct ScopedType {
     cwt_type: CwtTypeOrSpecial,
     /// The scope context this type exists in
     scope_context: ScopeStack,
+    /// The active subtype, if any
+    subtype: Option<String>,
 }
 
 impl TypeFingerprint for ScopedType {
     fn fingerprint(&self) -> String {
-        format!(
+        let base = format!(
             "{}(scope:{})",
             self.cwt_type.fingerprint(),
             self.scope_context.fingerprint()
-        )
+        );
+
+        if let Some(subtype) = &self.subtype {
+            format!("{}[subtype:{}]", base, subtype)
+        } else {
+            base
+        }
     }
 }
 
@@ -47,6 +55,19 @@ impl ScopedType {
         Self {
             cwt_type,
             scope_context,
+            subtype: None,
+        }
+    }
+
+    pub fn new_with_subtype(
+        cwt_type: CwtTypeOrSpecial,
+        scope_context: ScopeStack,
+        subtype: Option<String>,
+    ) -> Self {
+        Self {
+            cwt_type,
+            scope_context,
+            subtype,
         }
     }
 
@@ -55,6 +76,19 @@ impl ScopedType {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context,
+            subtype: None,
+        }
+    }
+
+    pub fn new_cwt_with_subtype(
+        cwt_type: CwtType,
+        scope_context: ScopeStack,
+        subtype: Option<String>,
+    ) -> Self {
+        Self {
+            cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
+            scope_context,
+            subtype,
         }
     }
 
@@ -62,6 +96,7 @@ impl ScopedType {
         Self {
             cwt_type: CwtTypeOrSpecial::ScopedUnion(scoped_types),
             scope_context,
+            subtype: None,
         }
     }
 
@@ -70,6 +105,19 @@ impl ScopedType {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: ScopeStack::default_with_root(root_scope_type),
+            subtype: None,
+        }
+    }
+
+    pub fn with_root_scope_and_subtype(
+        cwt_type: CwtType,
+        root_scope_type: impl Into<String>,
+        subtype: Option<String>,
+    ) -> Self {
+        Self {
+            cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
+            scope_context: ScopeStack::default_with_root(root_scope_type),
+            subtype,
         }
     }
 
@@ -77,6 +125,15 @@ impl ScopedType {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: self.scope_context.clone(),
+            subtype: self.subtype.clone(),
+        }
+    }
+
+    pub fn child_with_subtype(&self, cwt_type: CwtType, subtype: Option<String>) -> Self {
+        Self {
+            cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
+            scope_context: self.scope_context.clone(),
+            subtype,
         }
     }
 
@@ -92,6 +149,35 @@ impl ScopedType {
 
     pub fn scope_stack_mut(&mut self) -> &mut ScopeStack {
         &mut self.scope_context
+    }
+
+    /// Get the active subtype, if any
+    pub fn subtype(&self) -> Option<&str> {
+        self.subtype.as_deref()
+    }
+
+    /// Set the active subtype
+    pub fn set_subtype(&mut self, subtype: Option<String>) {
+        self.subtype = subtype;
+    }
+
+    /// Create a new instance with a different subtype
+    pub fn with_subtype(&self, subtype: Option<String>) -> Self {
+        Self {
+            cwt_type: self.cwt_type.clone(),
+            scope_context: self.scope_context.clone(),
+            subtype,
+        }
+    }
+
+    /// Check if this scoped type has a specific subtype
+    pub fn has_subtype(&self, subtype_name: &str) -> bool {
+        self.subtype.as_deref() == Some(subtype_name)
+    }
+
+    /// Check if this scoped type has any subtype
+    pub fn has_any_subtype(&self) -> bool {
+        self.subtype.is_some()
     }
 
     /// Check if this is a scope field type
@@ -132,6 +218,7 @@ impl ScopedType {
         Self {
             cwt_type: self.cwt_type.clone(),
             scope_context: self.scope_context.branch(),
+            subtype: self.subtype.clone(),
         }
     }
 }
@@ -271,6 +358,49 @@ mod tests {
         assert!(scoped_type.is_scope_field());
         assert_eq!(scoped_type.current_scope_type(), "country");
         assert_eq!(scoped_type.root_scope_type(), "country");
+        assert_eq!(scoped_type.subtype(), None);
+    }
+
+    #[test]
+    fn test_scoped_type_with_subtype() {
+        let cwt_type = CwtType::Simple(SimpleType::ScopeField);
+        let scoped_type = ScopedType::with_root_scope_and_subtype(
+            cwt_type,
+            "country",
+            Some("pop_spawned".to_string()),
+        );
+
+        assert!(scoped_type.is_scope_field());
+        assert_eq!(scoped_type.current_scope_type(), "country");
+        assert_eq!(scoped_type.root_scope_type(), "country");
+        assert_eq!(scoped_type.subtype(), Some("pop_spawned"));
+        assert!(scoped_type.has_subtype("pop_spawned"));
+        assert!(!scoped_type.has_subtype("buildable"));
+        assert!(scoped_type.has_any_subtype());
+    }
+
+    #[test]
+    fn test_subtype_manipulation() {
+        let cwt_type = CwtType::Simple(SimpleType::ScopeField);
+        let mut scoped_type = ScopedType::with_root_scope(cwt_type, "country");
+
+        // Initially no subtype
+        assert_eq!(scoped_type.subtype(), None);
+        assert!(!scoped_type.has_any_subtype());
+
+        // Set subtype
+        scoped_type.set_subtype(Some("pop_spawned".to_string()));
+        assert_eq!(scoped_type.subtype(), Some("pop_spawned"));
+        assert!(scoped_type.has_subtype("pop_spawned"));
+        assert!(scoped_type.has_any_subtype());
+
+        // Create new instance with different subtype
+        let new_scoped_type = scoped_type.with_subtype(Some("buildable".to_string()));
+        assert_eq!(new_scoped_type.subtype(), Some("buildable"));
+        assert!(new_scoped_type.has_subtype("buildable"));
+
+        // Original should be unchanged
+        assert_eq!(scoped_type.subtype(), Some("pop_spawned"));
     }
 
     #[test]
@@ -297,7 +427,11 @@ mod tests {
     #[test]
     fn test_scoped_type_branching() {
         let cwt_type = CwtType::Simple(SimpleType::ScopeField);
-        let scoped_type = ScopedType::with_root_scope(cwt_type, "country");
+        let scoped_type = ScopedType::with_root_scope_and_subtype(
+            cwt_type,
+            "country",
+            Some("pop_spawned".to_string()),
+        );
 
         let branched = scoped_type.branch();
 
@@ -306,6 +440,7 @@ mod tests {
             scoped_type.current_scope_type(),
             branched.current_scope_type()
         );
+        assert_eq!(scoped_type.subtype(), branched.subtype());
 
         // Verify they're independent (this is more of a conceptual test)
         assert_eq!(

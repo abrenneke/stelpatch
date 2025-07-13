@@ -7,6 +7,7 @@ mod formatter;
 mod full_analysis;
 mod game_data;
 mod resolver;
+mod resolver_modules;
 mod types;
 
 // Re-exports for public API
@@ -16,3 +17,4 @@ pub use core::*;
 pub use entity_restructurer::*;
 pub use full_analysis::*;
 pub use game_data::*;
+pub use resolver_modules::*;

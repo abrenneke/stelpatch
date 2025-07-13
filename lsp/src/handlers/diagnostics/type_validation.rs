@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use cw_model::CwtType;
 use cw_parser::{AstEntityItem, AstNode, AstValue};
@@ -19,6 +19,41 @@ use crate::handlers::{
     scope::ScopeStack,
     scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
 };
+
+/// Extract property data from an AST entity for subtype condition checking
+fn extract_property_data_from_entity(entity: &cw_parser::AstEntity<'_>) -> HashMap<String, String> {
+    let mut property_data = HashMap::new();
+
+    for item in &entity.items {
+        if let AstEntityItem::Expression(expr) = item {
+            let key_name = expr.key.raw_value();
+
+            // Extract simple string values for condition matching
+            match &expr.value {
+                AstValue::String(string_val) => {
+                    property_data.insert(key_name.to_string(), string_val.raw_value().to_string());
+                }
+                AstValue::Number(num_val) => {
+                    property_data.insert(key_name.to_string(), num_val.value.value.to_string());
+                }
+                AstValue::Entity(_) => {
+                    // For entities, just mark that the property exists
+                    property_data.insert(key_name.to_string(), "{}".to_string());
+                }
+                AstValue::Color(_) => {
+                    // For colors, just mark that the property exists
+                    property_data.insert(key_name.to_string(), "color".to_string());
+                }
+                AstValue::Maths(_) => {
+                    // For math expressions, just mark that the property exists
+                    property_data.insert(key_name.to_string(), "math".to_string());
+                }
+            }
+        }
+    }
+
+    property_data
+}
 
 /// Extract possible string values from a CwtType for error messages
 fn extract_possible_values(cwt_type: &CwtType) -> Vec<String> {
@@ -68,6 +103,37 @@ pub fn validate_entity_value(
 
     match value {
         AstValue::Entity(entity) => {
+            // Check if we need to determine a subtype for this entity
+            let actual_expected_type =
+                if let CwtTypeOrSpecial::CwtType(CwtType::Block(block_type)) =
+                    expected_type.cwt_type()
+                {
+                    if !block_type.subtypes.is_empty() {
+                        // Extract property data from the entity
+                        let property_data = extract_property_data_from_entity(entity);
+
+                        // Try to determine the subtype
+                        if let Some(detected_subtype) =
+                            cache.get_resolver().determine_likely_subtype(
+                                &CwtType::Block(block_type.clone()),
+                                &property_data,
+                            )
+                        {
+                            // Create a new scoped type with the detected subtype
+                            expected_type.with_subtype(Some(detected_subtype))
+                        } else {
+                            expected_type.as_ref().clone()
+                        }
+                    } else {
+                        expected_type.as_ref().clone()
+                    }
+                } else {
+                    expected_type.as_ref().clone()
+                };
+
+            // Convert back to Arc for the rest of the validation
+            let actual_expected_type = Arc::new(actual_expected_type);
+
             // Validate each property in the entity
             for item in &entity.items {
                 if let AstEntityItem::Expression(expr) = item {
@@ -77,7 +143,7 @@ pub fn validate_entity_value(
 
                     if let PropertyNavigationResult::Success(property_type) = cache
                         .get_resolver()
-                        .navigate_to_property(expected_type.clone(), key_name)
+                        .navigate_to_property(actual_expected_type.clone(), key_name)
                     {
                         // Validate the value against the property type
                         let value_diagnostics = validate_value_against_type(
