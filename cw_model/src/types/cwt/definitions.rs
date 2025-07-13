@@ -299,6 +299,32 @@ impl TypeDefinition {
         !self.localisation.is_empty()
     }
 
+    /// Update the rules field to include subtypes
+    /// This should be called after all subtypes have been parsed
+    pub fn finalize_with_subtypes(&mut self) {
+        if !self.subtypes.is_empty() {
+            if let CwtType::Block(ref mut block_type) = self.rules {
+                // Merge subtypes into the block type
+                for (subtype_name, subtype_def) in &self.subtypes {
+                    block_type
+                        .subtypes
+                        .insert(subtype_name.clone(), subtype_def.clone());
+                }
+            }
+        }
+    }
+
+    pub fn finalize_subtype_properties(&mut self) {
+        // Sync subtype_properties with subtypes.properties
+        if let CwtType::Block(ref mut block_type) = self.rules {
+            for (subtype_name, properties) in block_type.subtype_properties.iter() {
+                if let Some(subtype) = block_type.subtypes.get_mut(subtype_name) {
+                    subtype.properties = properties.clone();
+                }
+            }
+        }
+    }
+
     /// Merge another TypeDefinition into this one
     /// The other definition's rules will replace this one's rules,
     /// but metadata will be merged intelligently

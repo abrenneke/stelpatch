@@ -9,7 +9,7 @@ use cw_parser::{
         CwtValue,
     },
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Sub};
 
 use crate::{
     BlockType, CwtOptions, CwtType, PatternProperty, PatternType, Property, ReferenceType,
@@ -116,6 +116,7 @@ impl CwtConverter {
     /// Convert a CWT block to our type system
     pub fn convert_block(block: &AstCwtBlock) -> CwtType {
         let mut properties: HashMap<String, Property> = HashMap::new();
+        let mut subtype_properties: HashMap<String, HashMap<String, Property>> = HashMap::new();
         let mut pattern_properties = Vec::new();
         let mut union_values = Vec::new();
 
@@ -165,6 +166,30 @@ impl CwtConverter {
                                             continue;
                                         }
                                     }
+                                }
+                                CwtReferenceType::Subtype => {
+                                    let subtype_name = key_id.name.raw_value().to_string();
+                                    let value_type = Self::convert_value(&rule.value);
+
+                                    let subtype_map =
+                                        subtype_properties.entry(subtype_name.clone()).or_default();
+
+                                    if let CwtType::Block(block) = value_type {
+                                        for (key, value) in block.properties.iter() {
+                                            subtype_map.insert(
+                                                key.clone(),
+                                                Property {
+                                                    property_type: value.property_type.clone(),
+                                                    options: CwtOptions::default(),
+                                                    documentation: None,
+                                                },
+                                            );
+                                        }
+                                    } else {
+                                        eprintln!("Expected block type, got {:?}", value_type);
+                                    }
+
+                                    continue;
                                 }
                                 _ => {}
                             }
@@ -240,6 +265,7 @@ impl CwtConverter {
         CwtType::Block(BlockType {
             properties,
             subtypes: HashMap::new(),
+            subtype_properties,
             pattern_properties,
             localisation: None,
             modifiers: None,

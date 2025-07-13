@@ -112,34 +112,28 @@ pub fn validate_entity_value(
                         // Extract property data from the entity
                         let property_data = extract_property_data_from_entity(entity);
 
-                        // Try to determine the subtype
-                        if let Some(detected_subtype) =
-                            cache.get_resolver().determine_likely_subtype(
-                                &CwtType::Block(block_type.clone()),
-                                &property_data,
-                            )
-                        {
-                            // Create a new scoped type with the detected subtype
-                            expected_type.with_subtype(Some(detected_subtype))
+                        // Try to determine the matching subtypes
+                        let detected_subtypes = cache
+                            .get_resolver()
+                            .determine_matching_subtypes(expected_type.clone(), &property_data);
+
+                        if !detected_subtypes.is_empty() {
+                            // Create a new scoped type with the detected subtypes
+                            Arc::new(expected_type.with_subtypes(detected_subtypes))
                         } else {
-                            expected_type.as_ref().clone()
+                            expected_type
                         }
                     } else {
-                        expected_type.as_ref().clone()
+                        expected_type
                     }
                 } else {
-                    expected_type.as_ref().clone()
+                    expected_type
                 };
-
-            // Convert back to Arc for the rest of the validation
-            let actual_expected_type = Arc::new(actual_expected_type);
 
             // Validate each property in the entity
             for item in &entity.items {
                 if let AstEntityItem::Expression(expr) = item {
                     let key_name = expr.key.raw_value();
-
-                    // eprintln!("DEBUG: Validating key '{}'", key_name);
 
                     if let PropertyNavigationResult::Success(property_type) = cache
                         .get_resolver()

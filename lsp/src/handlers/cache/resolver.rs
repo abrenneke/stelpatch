@@ -1,8 +1,8 @@
 use crate::handlers::scope::ScopeStack;
 use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
 use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType};
-use cw_model::{AliasDefinition, CwtType, ReferenceType};
-use std::collections::HashMap;
+use cw_model::{CwtType, ReferenceType};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -14,7 +14,6 @@ use crate::handlers::cache::resolver_modules::{
 pub struct TypeResolver {
     cwt_analyzer: Arc<CwtAnalyzer>,
     cache: Arc<RwLock<TypeResolverCache>>,
-    utils: Arc<ResolverUtils>,
     reference_resolver: ReferenceResolver,
     pattern_matcher: PatternMatcher,
     property_navigator: PropertyNavigator,
@@ -25,6 +24,7 @@ pub struct TypeResolver {
 impl TypeResolver {
     pub fn new(cwt_analyzer: Arc<CwtAnalyzer>) -> Self {
         let utils = Arc::new(ResolverUtils::new(cwt_analyzer.clone()));
+        let cache = Arc::new(RwLock::new(TypeResolverCache::new()));
 
         Self {
             reference_resolver: ReferenceResolver::new(cwt_analyzer.clone(), utils.clone()),
@@ -32,9 +32,8 @@ impl TypeResolver {
             property_navigator: PropertyNavigator::new(cwt_analyzer.clone(), utils.clone()),
             scope_handler: ScopeHandler::new(cwt_analyzer.clone()),
             subtype_handler: SubtypeHandler::new(cwt_analyzer.clone()),
-            utils,
             cwt_analyzer,
-            cache: Arc::new(RwLock::new(TypeResolverCache::new())),
+            cache,
         }
     }
 
@@ -47,20 +46,20 @@ impl TypeResolver {
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)) => {
                 let resolved_cwt_type =
                     self.resolve_reference_type(ref_type, scoped_type.scope_stack());
-                let result = ScopedType::new_cwt_with_subtype(
+                let result = ScopedType::new_cwt_with_subtypes(
                     (*resolved_cwt_type).clone(),
                     scoped_type.scope_stack().clone(),
-                    scoped_type.subtype().map(|s| s.to_string()),
+                    scoped_type.subtypes().clone(),
                 );
 
                 Arc::new(result)
             }
             // For comparables, unwrap to the base type
             CwtTypeOrSpecial::CwtType(CwtType::Comparable(base_type)) => {
-                let base_scoped = ScopedType::new_cwt_with_subtype(
+                let base_scoped = ScopedType::new_cwt_with_subtypes(
                     (**base_type).clone(),
                     scoped_type.scope_stack().clone(),
-                    scoped_type.subtype().map(|s| s.to_string()),
+                    scoped_type.subtypes().clone(),
                 );
                 self.resolve_type(Arc::new(base_scoped))
             }
@@ -150,38 +149,6 @@ impl TypeResolver {
         result
     }
 
-    /// Resolve an AliasMatchLeft reference using a specific property name
-    /// Returns (resolved_type, alias_definition_if_found)
-    fn resolve_alias_match_left(
-        &self,
-        category: &str,
-        property_name: &str,
-    ) -> (CwtType, Option<AliasDefinition>) {
-        let composite_key = format!("{}:{}", category, property_name);
-
-        // Check if we already have this alias match left cached
-        if let Some(cached_result) = self
-            .cache
-            .read()
-            .unwrap()
-            .alias_match_left
-            .get(&composite_key)
-        {
-            return cached_result.clone();
-        }
-
-        let result = self
-            .reference_resolver
-            .resolve_alias_match_left(category, property_name);
-
-        self.cache
-            .write()
-            .unwrap()
-            .alias_match_left
-            .insert(composite_key, result.clone());
-        result
-    }
-
     pub fn get_all_scope_properties(&self) -> Vec<String> {
         self.scope_handler.get_all_scope_properties()
     }
@@ -250,14 +217,14 @@ impl TypeResolver {
         )
     }
 
-    /// Determine the most likely subtype based on property data
-    pub fn determine_likely_subtype(
+    /// Determine all matching subtypes based on property data
+    pub fn determine_matching_subtypes(
         &self,
-        cwt_type: &CwtType,
+        scoped_type: Arc<ScopedType>,
         property_data: &HashMap<String, String>,
-    ) -> Option<String> {
+    ) -> HashSet<String> {
         self.subtype_handler
-            .determine_likely_subtype(cwt_type, property_data)
+            .determine_matching_subtypes(scoped_type, property_data)
     }
 
     /// Get all matching subtypes for given property data

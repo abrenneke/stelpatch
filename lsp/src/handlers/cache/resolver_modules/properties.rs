@@ -2,9 +2,11 @@ use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
-use cw_model::types::{CwtAnalyzer, LinkDefinition, Property as CwtProperty};
-use cw_model::{CwtType, ReferenceType};
-use std::collections::HashMap;
+use cw_model::{
+    AliasDefinition, BlockType, CwtAnalyzer, CwtType, LinkDefinition, PatternProperty, Property,
+    ReferenceType,
+};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::ResolverUtils;
@@ -42,10 +44,10 @@ impl PropertyNavigator {
             // This is a scope property - push that scope onto the current stack
             let mut new_scope_context = scoped_type.scope_stack().clone();
             new_scope_context.push_scope(scope_context.clone()).unwrap();
-            let result = ScopedType::new_with_subtype(
+            let result = ScopedType::new_with_subtypes(
                 scoped_type.cwt_type().clone(),
                 new_scope_context,
-                scoped_type.subtype().map(|s| s.to_string()),
+                scoped_type.subtypes().clone(),
             );
             return PropertyNavigationResult::Success(Arc::new(result));
         }
@@ -59,10 +61,10 @@ impl PropertyNavigator {
             new_scope_context
                 .push_scope_type(&link_def.output_scope)
                 .unwrap();
-            let result = ScopedType::new_with_subtype(
+            let result = ScopedType::new_with_subtypes(
                 scoped_type.cwt_type().clone(),
                 new_scope_context,
-                scoped_type.subtype().map(|s| s.to_string()),
+                scoped_type.subtypes().clone(),
             );
             return PropertyNavigationResult::Success(Arc::new(result));
         }
@@ -70,8 +72,13 @@ impl PropertyNavigator {
         // If not a link property, handle as regular property
         match scoped_type.cwt_type() {
             CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
-                // First, check if there's a subtype-specific property
-                if let Some(subtype_name) = scoped_type.subtype() {
+                // First, check regular properties
+                if let Some(property) = block.properties.get(property_name) {
+                    return self.handle_regular_property(scoped_type.clone(), property);
+                }
+
+                // Second, check if there's a subtype-specific property
+                for subtype_name in scoped_type.subtypes() {
                     if let Some(subtype_property) =
                         self.get_subtype_property(block, subtype_name, property_name)
                     {
@@ -83,23 +90,18 @@ impl PropertyNavigator {
                     }
                 }
 
-                // Check regular properties
-                if let Some(property) = block.properties.get(property_name) {
-                    return self.handle_regular_property(scoped_type.clone(), property);
+                // Finally, check pattern properties
+                if let Some(pattern_property) = self
+                    .pattern_matcher
+                    .key_matches_pattern(property_name, block)
+                {
+                    return self.handle_pattern_property(
+                        scoped_type.clone(),
+                        pattern_property,
+                        property_name,
+                    );
                 } else {
-                    // Check pattern properties
-                    if let Some(pattern_property) = self
-                        .pattern_matcher
-                        .key_matches_pattern(property_name, block)
-                    {
-                        return self.handle_pattern_property(
-                            scoped_type.clone(),
-                            pattern_property,
-                            property_name,
-                        );
-                    } else {
-                        PropertyNavigationResult::NotFound
-                    }
+                    PropertyNavigationResult::NotFound
                 }
             }
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::AliasMatchLeft {
@@ -126,10 +128,10 @@ impl PropertyNavigator {
                                 .apply_alias_scope_changes(scoped_type.scope_stack(), &alias_def)
                             {
                                 Ok(new_scope) => {
-                                    let property_scoped = ScopedType::new_cwt_with_subtype(
+                                    let property_scoped = ScopedType::new_cwt_with_subtypes(
                                         resolved_cwt_type,
                                         new_scope,
-                                        scoped_type.subtype().map(|s| s.to_string()),
+                                        scoped_type.subtypes().clone(),
                                     );
                                     PropertyNavigationResult::Success(Arc::new(property_scoped))
                                 }
@@ -137,19 +139,19 @@ impl PropertyNavigator {
                             }
                         } else {
                             // No scope changes - use current scope
-                            let property_scoped = ScopedType::new_cwt_with_subtype(
+                            let property_scoped = ScopedType::new_cwt_with_subtypes(
                                 resolved_cwt_type,
                                 scoped_type.scope_stack().clone(),
-                                scoped_type.subtype().map(|s| s.to_string()),
+                                scoped_type.subtypes().clone(),
                             );
                             PropertyNavigationResult::Success(Arc::new(property_scoped))
                         }
                     } else {
                         // No alias definition found - use current scope
-                        let property_scoped = ScopedType::new_cwt_with_subtype(
+                        let property_scoped = ScopedType::new_cwt_with_subtypes(
                             resolved_cwt_type,
                             scoped_type.scope_stack().clone(),
-                            scoped_type.subtype().map(|s| s.to_string()),
+                            scoped_type.subtypes().clone(),
                         );
                         PropertyNavigationResult::Success(Arc::new(property_scoped))
                     }
@@ -163,16 +165,16 @@ impl PropertyNavigator {
     fn handle_regular_property(
         &self,
         scoped_type: Arc<ScopedType>,
-        property: &CwtProperty,
+        property: &Property,
     ) -> PropertyNavigationResult {
         // Check if this property changes scope
         if property.changes_scope() {
             match property.apply_scope_changes(scoped_type.scope_stack(), &self.cwt_analyzer) {
                 Ok(new_scope) => {
-                    let property_scoped = ScopedType::new_cwt_with_subtype(
+                    let property_scoped = ScopedType::new_cwt_with_subtypes(
                         property.property_type.clone(),
                         new_scope,
-                        scoped_type.subtype().map(|s| s.to_string()),
+                        scoped_type.subtypes().clone(),
                     );
                     PropertyNavigationResult::Success(Arc::new(property_scoped))
                 }
@@ -182,23 +184,23 @@ impl PropertyNavigator {
             // Same scope context - but we may need to determine the subtype for the property type
             let property_scoped = if let CwtType::Block(property_block) = &property.property_type {
                 // If the property type is a block with subtypes, we might need to determine the subtype
-                let subtype_name = if !property_block.subtypes.is_empty() {
+                let subtypes = if !property_block.subtypes.is_empty() {
                     // For now, we don't have the actual property data to determine subtypes
                     // This would need to be integrated with the LSP context where we have actual document data
-                    None
+                    HashSet::new()
                 } else {
-                    scoped_type.subtype().map(|s| s.to_string())
+                    scoped_type.subtypes().clone()
                 };
-                ScopedType::new_cwt_with_subtype(
+                ScopedType::new_cwt_with_subtypes(
                     property.property_type.clone(),
                     scoped_type.scope_stack().clone(),
-                    subtype_name,
+                    subtypes,
                 )
             } else {
-                ScopedType::new_cwt_with_subtype(
+                ScopedType::new_cwt_with_subtypes(
                     property.property_type.clone(),
                     scoped_type.scope_stack().clone(),
-                    scoped_type.subtype().map(|s| s.to_string()),
+                    scoped_type.subtypes().clone(),
                 )
             };
             PropertyNavigationResult::Success(Arc::new(property_scoped))
@@ -209,7 +211,7 @@ impl PropertyNavigator {
     fn handle_pattern_property(
         &self,
         scoped_type: Arc<ScopedType>,
-        pattern_property: &cw_model::types::PatternProperty,
+        pattern_property: &PatternProperty,
         property_name: &str,
     ) -> PropertyNavigationResult {
         // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
@@ -245,10 +247,10 @@ impl PropertyNavigator {
             }
         }
 
-        let property_scoped = ScopedType::new_cwt_with_subtype(
+        let property_scoped = ScopedType::new_cwt_with_subtypes(
             resolved_value_type,
             current_scope,
-            scoped_type.subtype().map(|s| s.to_string()),
+            scoped_type.subtypes().clone(),
         );
         PropertyNavigationResult::Success(Arc::new(property_scoped))
     }
@@ -257,7 +259,7 @@ impl PropertyNavigator {
     fn handle_subtype_property(
         &self,
         scoped_type: Arc<ScopedType>,
-        subtype_property: &cw_model::types::Property,
+        subtype_property: &Property,
         _property_name: &str,
     ) -> PropertyNavigationResult {
         // Check if this property changes scope
@@ -266,10 +268,10 @@ impl PropertyNavigator {
                 .apply_scope_changes(scoped_type.scope_stack(), &self.cwt_analyzer)
             {
                 Ok(new_scope) => {
-                    let property_scoped = ScopedType::new_cwt_with_subtype(
+                    let property_scoped = ScopedType::new_cwt_with_subtypes(
                         subtype_property.property_type.clone(),
                         new_scope,
-                        scoped_type.subtype().map(|s| s.to_string()),
+                        scoped_type.subtypes().clone(),
                     );
                     PropertyNavigationResult::Success(Arc::new(property_scoped))
                 }
@@ -277,10 +279,10 @@ impl PropertyNavigator {
             }
         } else {
             // Same scope context
-            let property_scoped = ScopedType::new_cwt_with_subtype(
+            let property_scoped = ScopedType::new_cwt_with_subtypes(
                 subtype_property.property_type.clone(),
                 scoped_type.scope_stack().clone(),
-                scoped_type.subtype().map(|s| s.to_string()),
+                scoped_type.subtypes().clone(),
             );
             PropertyNavigationResult::Success(Arc::new(property_scoped))
         }
@@ -289,10 +291,10 @@ impl PropertyNavigator {
     /// Get subtype-specific property from a block type
     fn get_subtype_property<'b>(
         &self,
-        block_type: &'b cw_model::types::BlockType,
+        block_type: &'b BlockType,
         subtype_name: &str,
         property_name: &str,
-    ) -> Option<&'b cw_model::types::Property> {
+    ) -> Option<&'b Property> {
         // Check if there's a subtype definition for this block type
         if let Some(subtype_def) = block_type.subtypes.get(subtype_name) {
             return subtype_def.properties.get(property_name);
@@ -307,7 +309,7 @@ impl PropertyNavigator {
         match scoped_type.cwt_type() {
             CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
                 // Add subtype-specific properties first
-                if let Some(subtype_name) = scoped_type.subtype() {
+                for subtype_name in scoped_type.subtypes() {
                     if let Some(subtype_def) = block.subtypes.get(subtype_name) {
                         properties.extend(subtype_def.properties.keys().cloned());
                     }
@@ -394,7 +396,7 @@ impl PropertyNavigator {
     fn apply_alias_scope_changes(
         &self,
         scope_stack: &ScopeStack,
-        alias_def: &cw_model::types::AliasDefinition,
+        alias_def: &AliasDefinition,
     ) -> Result<ScopeStack, ScopeError> {
         let mut new_scope = scope_stack.branch();
 

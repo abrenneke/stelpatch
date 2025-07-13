@@ -84,9 +84,16 @@ impl CwtAnalysisData {
     }
 
     /// Insert or merge a type definition
-    pub fn insert_or_merge_type(&mut self, name: String, type_def: TypeDefinition) {
+    pub fn insert_or_merge_type(&mut self, name: String, mut type_def: TypeDefinition) {
+        // Finalize subtypes before storing
+        type_def.finalize_with_subtypes();
+        type_def.finalize_subtype_properties();
+
         if let Some(existing) = self.types.get_mut(&name) {
             existing.merge_with(type_def);
+            // Re-finalize after merging since merge_with may have added more subtypes
+            existing.finalize_with_subtypes();
+            existing.finalize_subtype_properties();
         } else {
             self.types.insert(name, type_def);
         }

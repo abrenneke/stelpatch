@@ -1,7 +1,8 @@
 use crate::handlers::scope::{ScopeError, ScopeStack};
+use crate::handlers::scoped_type::{CwtTypeOrSpecial, ScopedType};
 use cw_model::CwtType;
 use cw_model::types::{CwtAnalyzer, SubtypeCondition};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 pub struct SubtypeHandler {
@@ -108,28 +109,29 @@ impl SubtypeHandler {
         }
     }
 
-    /// Determine the most likely subtype based on property data
-    /// This is useful for auto-detecting subtypes in LSP contexts
-    pub fn determine_likely_subtype(
+    /// Determine all matching subtypes based on property data
+    /// This is the main method for determining active subtypes
+    pub fn determine_matching_subtypes(
         &self,
-        cwt_type: &CwtType,
+        scoped_type: Arc<ScopedType>,
         property_data: &HashMap<String, String>,
-    ) -> Option<String> {
-        match cwt_type {
-            CwtType::Block(block) => {
-                // Check each subtype condition and return the first match
+    ) -> HashSet<String> {
+        match scoped_type.cwt_type() {
+            CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
+                // Check each subtype condition and collect all matches
+                let mut matching_subtypes = HashSet::new();
                 for (subtype_name, subtype_def) in &block.subtypes {
                     if self.would_subtype_condition_match(&subtype_def.condition, property_data) {
-                        return Some(subtype_name.clone());
+                        matching_subtypes.insert(subtype_name.clone());
                     }
                 }
-                None
+                matching_subtypes
             }
-            _ => None,
+            _ => HashSet::new(),
         }
     }
 
-    /// Get all matching subtypes for given property data
+    /// Get all matching subtypes for given property data (backward compatibility)
     /// Multiple subtypes could potentially match the same data
     pub fn get_matching_subtypes(
         &self,
@@ -196,6 +198,30 @@ impl SubtypeHandler {
             }
 
             new_scope.replace_scope_from_strings(new_scopes)?;
+        }
+
+        Ok(new_scope)
+    }
+
+    /// Apply scope changes from multiple subtype definitions
+    pub fn apply_multiple_subtype_scope_changes(
+        &self,
+        scope_stack: &ScopeStack,
+        cwt_type: &CwtType,
+        active_subtypes: &HashSet<String>,
+    ) -> Result<ScopeStack, ScopeError> {
+        let mut new_scope = scope_stack.branch();
+
+        match cwt_type {
+            CwtType::Block(block) => {
+                // Apply scope changes from all active subtypes
+                for subtype_name in active_subtypes {
+                    if let Some(subtype_def) = block.subtypes.get(subtype_name) {
+                        new_scope = self.apply_subtype_scope_changes(&new_scope, subtype_def)?;
+                    }
+                }
+            }
+            _ => {}
         }
 
         Ok(new_scope)

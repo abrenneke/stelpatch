@@ -182,11 +182,8 @@ pub struct BlockType {
     /// Subtypes - conditional property sets
     pub subtypes: HashMap<String, Subtype>,
 
-    /// Alias patterns - alias_name[X] = alias_match_left[X] patterns
-    // pub alias_patterns: HashMap<String, CwtType>,
-
-    /// Enum patterns - enum[key] = type patterns
-    // pub enum_patterns: HashMap<String, CwtType>,
+    /// Subtype properties - subtype_name -> property_name -> Property
+    pub subtype_properties: HashMap<String, HashMap<String, Property>>,
 
     /// Pattern properties - properties that can match multiple keys but maintain unified cardinality
     pub pattern_properties: Vec<PatternProperty>,
@@ -203,10 +200,13 @@ pub struct BlockType {
 pub struct PatternProperty {
     /// Type of pattern
     pub pattern_type: PatternType,
+
     /// Value type for matching keys
     pub value_type: CwtType,
+
     /// CWT options/directives (includes cardinality, range, etc.)
     pub options: CwtOptions,
+
     /// Documentation
     pub documentation: Option<String>,
 }
@@ -216,6 +216,7 @@ pub struct PatternProperty {
 pub enum PatternType {
     /// alias_name[category] - matches any alias name from the category
     AliasName { category: String },
+
     /// enum[key] - matches any enum value from the key
     Enum { key: String },
 }
@@ -330,16 +331,22 @@ pub struct Subtype {
 pub enum SubtypeCondition {
     /// Property equals specific value
     PropertyEquals { key: String, value: String },
+
     /// Property does not equal specific value
     PropertyNotEquals { key: String, value: String },
+
     /// Property exists
     PropertyExists { key: String },
+
     /// Property does not exist
     PropertyNotExists { key: String },
+
     /// Type key starts with prefix
     KeyStartsWith { prefix: String },
+
     /// Type key matches filter
     KeyMatches { filter: String },
+
     /// Complex expression
     Expression(String),
 }
@@ -1065,6 +1072,7 @@ impl CwtType {
             properties: HashMap::new(),
             subtypes: HashMap::new(),
             pattern_properties: Vec::new(),
+            subtype_properties: HashMap::new(),
             localisation: None,
             modifiers: None,
         }

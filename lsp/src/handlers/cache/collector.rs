@@ -214,7 +214,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                 }
             } else {
                 // For other complex enums, use the original nested structure extraction
-                for (entity_name, entity) in &entities {
+                for (_entity_name, entity) in &entities {
                     if let Some(extracted_values) = self.extract_values_from_entity(
                         entity,
                         &complex_def.name_structure,

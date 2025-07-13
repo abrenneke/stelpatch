@@ -109,13 +109,13 @@ fn generate_type_diagnostics(module: &AstModule<'_>, uri: &str, content: &str) -
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        eprintln!("Usage: {} <directory>", args[0]);
+        eprintln!("Usage: {} <directory|file>", args[0]);
         std::process::exit(1);
     }
 
-    let dir_path = Path::new(&args[1]);
-    if !dir_path.exists() {
-        eprintln!("Error: Directory '{}' does not exist", args[1]);
+    let input_path = Path::new(&args[1]);
+    if !input_path.exists() {
+        eprintln!("Error: Path '{}' does not exist", args[1]);
         std::process::exit(1);
     }
 
@@ -151,11 +151,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let full_analysis_duration = full_analysis_start.elapsed();
     println!("Full analysis loaded in {:?}", full_analysis_duration);
 
-    println!("Caches initialized. Finding .txt files...");
+    println!("Caches initialized.");
 
-    // Find all .txt files
-    let txt_files = find_txt_files(dir_path)?;
-    println!("Found {} .txt files", txt_files.len());
+    // Determine if input is a file or directory and get list of files to process
+    let txt_files = if input_path.is_file() {
+        println!("Processing single file: {}", input_path.display());
+        vec![input_path.to_path_buf()]
+    } else if input_path.is_dir() {
+        println!("Finding .txt files in directory...");
+        let files = find_txt_files(input_path)?;
+        println!("Found {} .txt files", files.len());
+        files
+    } else {
+        eprintln!("Error: '{}' is neither a file nor a directory", args[1]);
+        std::process::exit(1);
+    };
 
     let total_diagnostics = AtomicUsize::new(0);
     let processed_files = AtomicUsize::new(0);

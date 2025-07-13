@@ -11,9 +11,9 @@ use cw_parser::{
 };
 
 use crate::{
-    ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, CwtType, LocalisationRequirement,
-    ModifierSpec, Property, RuleOptions, SeverityLevel, SimpleType, SkipRootKey, Subtype,
-    SubtypeCondition, TypeDefinition, TypeKeyFilter, TypeOptions,
+    BlockType, ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, CwtType,
+    LocalisationRequirement, ModifierSpec, Property, RuleOptions, SeverityLevel, SimpleType,
+    SkipRootKey, Subtype, SubtypeCondition, TypeDefinition, TypeKeyFilter, TypeOptions,
 };
 
 /// Specialized visitor for type definitions
@@ -435,66 +435,96 @@ impl<'a> TypeVisitor<'a> {
         subtype_name: &str,
         rule: &AstCwtRule,
     ) {
+        // Parse CWT options (metadata like display_name, starts_with, etc.)
         let subtype_options = CwtOptions::from_rule(rule);
 
-        // Create a more sophisticated condition based on the options and rule content
-        let condition = if let Some(starts_with) = &subtype_options.starts_with {
-            // Create a starts_with condition
-            SubtypeCondition::KeyStartsWith {
-                prefix: starts_with.clone(),
-            }
-        } else if let Some(type_key_filter) = &subtype_options.type_key_filter {
-            // Create a type key filter condition
-            match type_key_filter {
-                TypeKeyFilter::Specific(key) => SubtypeCondition::KeyMatches {
-                    filter: key.clone(),
-                },
-                TypeKeyFilter::Not(key) => SubtypeCondition::KeyMatches {
-                    filter: format!("!{}", key),
-                },
-                TypeKeyFilter::OneOf(keys) => SubtypeCondition::KeyMatches {
-                    filter: keys.join("|"),
-                },
-            }
-        } else {
-            // Default to expression-based condition from rule content
-            SubtypeCondition::Expression(subtype_name.to_string())
-        };
+        // Extract condition from the rule value block
+        let mut condition = SubtypeCondition::Expression(subtype_name.to_string()); // fallback
 
-        // Extract properties from the rule value if it's a block
-        let mut properties = HashMap::new();
         if let CwtValue::Block(block) = &rule.value {
+            // Look for simple property conditions that define when this subtype is active
+            let mut property_conditions = HashMap::new();
+
             for item in &block.items {
                 if let cw_parser::cwt::AstCwtExpression::Rule(prop_rule) = item {
                     let prop_key = prop_rule.key.name();
-                    // Create a property definition from the rule
-                    let property_type = match &prop_rule.value {
-                        CwtValue::String(s) => {
-                            // If the value is a string, create a literal type
-                            CwtType::Literal(s.raw_value().to_string())
-                        }
-                        CwtValue::Simple(simple) => {
-                            // Handle simple values like booleans
-                            match simple.value_type {
-                                CwtSimpleValueType::Bool => CwtType::Simple(SimpleType::Bool),
-                                CwtSimpleValueType::Float => CwtType::Simple(SimpleType::Float),
-                                CwtSimpleValueType::Int => CwtType::Simple(SimpleType::Int),
-                                _ => CwtType::Unknown,
-                            }
-                        }
-                        _ => CwtType::Unknown,
-                    };
 
-                    let prop_def = Property::simple(property_type);
-                    properties.insert(prop_key.to_string(), prop_def);
+                    // TODO: Handle nested block conditions with cardinality constraints
+                    // For example: potential = { ## cardinality = 0..0; always = no }
+                    // This should check that the potential block does NOT contain "always = no"
+                    // For now, skip block values entirely
+                    if matches!(prop_rule.value, CwtValue::Block(_)) {
+                        continue;
+                    }
+
+                    // Store the actual value directly
+                    property_conditions.insert(prop_key.to_string(), prop_rule.value.clone());
+                }
+            }
+
+            // Determine the condition based on the properties found
+            if property_conditions.len() == 1 {
+                let (key, value) = property_conditions.iter().next().unwrap();
+                match value {
+                    CwtValue::String(s) => {
+                        condition = SubtypeCondition::PropertyEquals {
+                            key: key.clone(),
+                            value: s.raw_value().to_string(),
+                        };
+                    }
+                    CwtValue::Simple(_) => {
+                        condition = SubtypeCondition::PropertyExists { key: key.clone() };
+                    }
+                    _ => {
+                        condition = SubtypeCondition::PropertyExists { key: key.clone() };
+                    }
+                }
+            } else if property_conditions.len() > 1 {
+                // Multiple conditions - create a complex expression
+                let conditions_str = property_conditions
+                    .iter()
+                    .map(|(k, v)| match v {
+                        CwtValue::String(s) => format!("{} = {}", k, s.raw_value()),
+                        _ => k.clone(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" AND ");
+                condition = SubtypeCondition::Expression(conditions_str);
+            }
+        }
+
+        // Handle CWT options that affect the condition
+        // Note: These are metadata that can modify how the condition is applied
+        if let Some(starts_with) = &subtype_options.starts_with {
+            // If there's a starts_with option, it takes precedence as it's about key matching
+            condition = SubtypeCondition::KeyStartsWith {
+                prefix: starts_with.clone(),
+            };
+        } else if let Some(type_key_filter) = &subtype_options.type_key_filter {
+            // If there's a type_key_filter, it affects key matching
+            match type_key_filter {
+                TypeKeyFilter::Specific(key) => {
+                    condition = SubtypeCondition::KeyMatches {
+                        filter: key.clone(),
+                    };
+                }
+                TypeKeyFilter::Not(key) => {
+                    condition = SubtypeCondition::KeyMatches {
+                        filter: format!("!{}", key),
+                    };
+                }
+                TypeKeyFilter::OneOf(keys) => {
+                    condition = SubtypeCondition::KeyMatches {
+                        filter: keys.join("|"),
+                    };
                 }
             }
         }
 
         let subtype_def = Subtype {
             condition,
-            properties,
-            options: subtype_options, // Could store CWT options here if needed
+            properties: HashMap::new(), // No properties needed for subtype definitions
+            options: subtype_options,
         };
 
         type_def
@@ -633,6 +663,19 @@ types = {
                 .contains_key("triggered_opinion_modifier")
         );
         assert!(opinion_modifier.subtypes.contains_key("block_triggered"));
+
+        match &opinion_modifier
+            .subtypes
+            .get("block_triggered")
+            .unwrap()
+            .condition
+        {
+            SubtypeCondition::PropertyEquals { key, value } => {
+                assert_eq!(key, "block_triggered");
+                assert_eq!(value, "yes");
+            }
+            _ => panic!("Expected PropertyEquals condition"),
+        }
 
         // Check localisation
         assert_eq!(opinion_modifier.localisation.len(), 2);
