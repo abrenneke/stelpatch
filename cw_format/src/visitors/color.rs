@@ -12,7 +12,10 @@ impl<'a> ColorVisitor<'a> {
     }
 }
 
-impl<'a> AstVisitor<'a> for ColorVisitor<'a> {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for ColorVisitor<'a>
+where
+    'a: 'ast,
+{
     fn visit_color(&mut self, node: &AstColor<'a>) -> () {
         // TODO
         // if node.leading_newlines > 0 {

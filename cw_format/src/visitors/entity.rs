@@ -62,7 +62,10 @@ fn format_entity<'a>(output: &mut String, node: &cw_parser::AstEntity<'a>) -> ()
     output.push_str("}");
 }
 
-impl<'a> AstVisitor<'a> for EntityVisitor<'a> {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for EntityVisitor<'a>
+where
+    'a: 'ast,
+{
     fn visit_entity(&mut self, node: &cw_parser::AstEntity<'a>) -> () {
         for comment in node.leading_comments.iter() {
             self.output.push_str(&format!("#{}\n", comment.text));
@@ -89,7 +92,10 @@ impl<'a> ItemVisitor<'a> {
     }
 }
 
-impl<'a> AstVisitor<'a> for ItemVisitor<'a> {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for ItemVisitor<'a>
+where
+    'a: 'ast,
+{
     fn visit_entity_item(&mut self, node: &cw_parser::AstEntityItem<'a>) -> () {
         match node {
             cw_parser::AstEntityItem::Item(item) => {

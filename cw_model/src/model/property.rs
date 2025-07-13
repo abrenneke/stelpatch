@@ -167,7 +167,10 @@ impl<'a> PropertyVisitor<'a> {
     }
 }
 
-impl<'a, 'b> cw_parser::AstVisitor<'b> for PropertyVisitor<'a> {
+impl<'a, 'b, 'ast> cw_parser::AstVisitor<'b, 'ast> for PropertyVisitor<'a>
+where
+    'b: 'ast,
+{
     fn visit_operator(&mut self, node: &cw_parser::AstOperator<'b>) -> () {
         self.property.operator = node.operator.into();
     }

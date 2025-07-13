@@ -268,12 +268,18 @@ impl SubtypeHandler {
                 let mut matching_subtypes = HashSet::new();
 
                 for (subtype_name, subtype_def) in &block.subtypes {
+                    if subtype_def.is_inverted {
+                        continue; // Handled by the else below
+                    }
+
                     if self.would_subtype_condition_match_with_subtype(
                         &subtype_def.condition,
                         property_data,
                         subtype_def,
                     ) {
                         matching_subtypes.insert(subtype_name.clone());
+                    } else {
+                        matching_subtypes.insert(format!("!{}", subtype_name));
                     }
                 }
 
@@ -295,6 +301,10 @@ impl SubtypeHandler {
                 let mut matching_subtypes = Vec::new();
 
                 for (subtype_name, subtype_def) in &block.subtypes {
+                    if subtype_def.is_inverted {
+                        continue; // Handled by the else below
+                    }
+
                     let matches = self.would_subtype_condition_match_with_subtype(
                         &subtype_def.condition,
                         property_data,
@@ -303,6 +313,8 @@ impl SubtypeHandler {
 
                     if matches {
                         matching_subtypes.push(subtype_name.clone());
+                    } else {
+                        matching_subtypes.push(format!("!{}", subtype_name));
                     }
                 }
 

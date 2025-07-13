@@ -183,8 +183,13 @@ impl CwtConverter {
                                     }
                                 }
                                 CwtReferenceType::Subtype => {
-                                    let subtype_name = key_id.name.raw_value().to_string();
                                     let value_type = Self::convert_value(&rule.value);
+
+                                    let subtype_name = if key_id.is_not {
+                                        format!("!{}", key_id.name.raw_value().to_string())
+                                    } else {
+                                        key_id.name.raw_value().to_string()
+                                    };
 
                                     let subtype_map =
                                         subtype_properties.entry(subtype_name.clone()).or_default();

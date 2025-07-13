@@ -540,6 +540,7 @@ impl<'a> TypeVisitor<'a> {
             condition_properties: properties, // Use the properties we collected with their options
             allowed_properties: HashMap::new(),
             options: subtype_options,
+            is_inverted: false,
         };
 
         type_def

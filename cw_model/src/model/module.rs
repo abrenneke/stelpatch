@@ -148,7 +148,10 @@ impl<'a> ModuleVisitor<'a> {
     }
 }
 
-impl<'a, 'b> cw_parser::AstVisitor<'b> for ModuleVisitor<'a> {
+impl<'a, 'b, 'ast> cw_parser::AstVisitor<'b, 'ast> for ModuleVisitor<'a>
+where
+    'b: 'ast,
+{
     fn visit_expression(&mut self, node: &cw_parser::AstExpression<'b>) -> () {
         let mut property = PropertyInfo::default();
         let mut property_visitor = PropertyVisitor::new(&mut property);

@@ -333,6 +333,9 @@ pub struct Subtype {
 
     /// Options for this subtype
     pub options: CwtOptions,
+
+    /// Whether this subtype is inverted (e.g., !hidden)
+    pub is_inverted: bool,
 }
 
 /// Conditions for subtype activation

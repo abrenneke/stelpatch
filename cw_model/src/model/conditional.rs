@@ -1,3 +1,5 @@
+use cw_parser::{AstConditionalBlock, AstExpression, AstValue, AstVisitor};
+
 use crate::{Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value, ValueVisitor};
 
 /// A conditional block looks like [[PARAM_NAME] key = value] and is dumb
@@ -61,15 +63,18 @@ impl<'a> ConditionalBlockVisitor<'a> {
     }
 }
 
-impl<'a, 'b> cw_parser::AstVisitor<'b> for ConditionalBlockVisitor<'a> {
-    fn visit_conditional_block(&mut self, node: &cw_parser::AstConditionalBlock<'b>) -> () {
+impl<'a, 'b, 'ast> AstVisitor<'b, 'ast> for ConditionalBlockVisitor<'a>
+where
+    'b: 'ast,
+{
+    fn visit_conditional_block(&mut self, node: &AstConditionalBlock<'b>) -> () {
         self.conditional_block.is_not = node.is_not;
         self.conditional_block.key = node.key.to_string();
 
         self.walk_conditional_block(node);
     }
 
-    fn visit_expression(&mut self, node: &cw_parser::AstExpression<'b>) -> () {
+    fn visit_expression(&mut self, node: &AstExpression<'b>) -> () {
         let mut property = PropertyInfo::default();
         let mut property_visitor = PropertyVisitor::new(&mut property);
         property_visitor.visit_expression(node);
@@ -82,7 +87,7 @@ impl<'a, 'b> cw_parser::AstVisitor<'b> for ConditionalBlockVisitor<'a> {
             .push(property);
     }
 
-    fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> () {
+    fn visit_value(&mut self, node: &AstValue<'b>) -> () {
         let mut value = Value::default();
         let mut value_visitor = ValueVisitor::new(&mut value);
         value_visitor.visit_value(node);

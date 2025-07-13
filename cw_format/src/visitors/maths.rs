@@ -10,7 +10,10 @@ impl<'a> MathsVisitor<'a> {
     }
 }
 
-impl<'a> AstVisitor<'a> for MathsVisitor<'a> {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for MathsVisitor<'a>
+where
+    'a: 'ast,
+{
     fn visit_maths(&mut self, node: &AstMaths<'a>) -> () {
         self.output.push_str(&node.value.to_string());
     }

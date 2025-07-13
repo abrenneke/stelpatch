@@ -11,7 +11,9 @@ mod resolver_modules;
 mod types;
 
 // Re-exports for public API
-pub use api::{get_entity_property_type, get_namespace_entity_type};
+pub use api::{
+    get_entity_property_type, get_entity_property_type_from_ast, get_namespace_entity_type,
+};
 pub use collector::*;
 pub use core::*;
 pub use entity_restructurer::*;

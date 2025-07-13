@@ -12,7 +12,10 @@ impl<'a> ExpressionVisitor<'a> {
     }
 }
 
-impl<'a> AstVisitor<'a> for ExpressionVisitor<'a> {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for ExpressionVisitor<'a>
+where
+    'a: 'ast,
+{
     fn visit_expression(&mut self, node: &cw_parser::AstExpression<'a>) -> () {
         let mut visitor = StringVisitor::new(self.output);
         visitor.visit_string(&node.key);

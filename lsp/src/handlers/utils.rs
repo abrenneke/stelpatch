@@ -22,7 +22,8 @@ pub fn position_to_offset(text: &str, position: Position) -> usize {
 /// Examples:
 /// file:///path/to/common/buildings/01_buildings.txt -> Some("common/buildings")
 /// file:///path/to/common/species_classes/species_classes.txt -> Some("common/species_classes")
-/// file:///path/to/events/events.txt -> None (not a namespace file)
+/// file:///path/to/events/events.txt -> Some("events")
+/// file:///path/to/interface/main.gui -> Some("interface")
 pub fn extract_namespace_from_uri(uri: &str) -> Option<String> {
     let uri = uri.replace("file://", "").replace("\\", "/");
 
@@ -43,15 +44,54 @@ pub fn extract_namespace_from_uri(uri: &str) -> Option<String> {
         &uri
     };
 
-    // Look for "common/" in the path, but we want the last occurrence
-    // to handle paths like "SteamLibrary/steamapps/common/Stellaris/common/ai_budget/file.txt"
-    if let Some(common_pos) = path.rfind("common/") {
-        let after_common = &path[common_pos..];
-        let parts: Vec<&str> = after_common.split('/').collect();
+    // Split the path into segments
+    let segments: Vec<&str> = path.split('/').collect();
 
-        // Should have at least ["common", "namespace", "filename.txt"]
-        if parts.len() >= 3 && parts[0] == "common" {
-            return Some(format!("common/{}", parts[1]));
+    // Look for known Stellaris directory patterns
+    let known_directories = [
+        "common",
+        "events",
+        "interface",
+        "localisation",
+        "gfx",
+        "sound",
+        "music",
+        "flags",
+        "map",
+        "prescripted_countries",
+        "fonts",
+        "dlc_list",
+        "effects",
+        "enums",
+        "ethics",
+        "folders",
+        "links",
+        "modifier_categories",
+        "modifier_rule",
+        "modifier",
+        "pre_triggers",
+        "scope_changes",
+        "scopes",
+        "triggers",
+    ];
+
+    // Find the last occurrence of a known directory
+    for i in (0..segments.len()).rev() {
+        if known_directories.contains(&segments[i]) {
+            let namespace_dir = segments[i];
+
+            // Include the subdirectory if it exists and is not a filename
+            if i + 1 < segments.len() {
+                let next_segment = segments[i + 1];
+                // Check if next segment is a subdirectory (no file extension) or filename
+                if !next_segment.contains('.') && i + 2 < segments.len() {
+                    // It's a subdirectory, include it
+                    return Some(format!("{}/{}", namespace_dir, next_segment));
+                }
+            }
+
+            // Return just the directory name
+            return Some(namespace_dir.to_string());
         }
     }
 
@@ -64,6 +104,7 @@ mod tests {
 
     #[test]
     fn test_extract_namespace_from_uri() {
+        // Test common directory with subdirectories
         assert_eq!(
             extract_namespace_from_uri("file:///C:/Stellaris/common/buildings/01_buildings.txt"),
             Some("common/buildings".to_string())
@@ -77,11 +118,6 @@ mod tests {
         );
 
         assert_eq!(
-            extract_namespace_from_uri("file:///path/to/events/events.txt"),
-            None
-        );
-
-        assert_eq!(
             extract_namespace_from_uri("file:///path/to/common/armies/armies.txt"),
             Some("common/armies".to_string())
         );
@@ -92,6 +128,54 @@ mod tests {
                 "file:///d%3A/SteamLibrary/steamapps/common/Stellaris/common/ai_budget/00_astral_threads_budget.txt"
             ),
             Some("common/ai_budget".to_string())
+        );
+
+        // Test non-common directories
+        assert_eq!(
+            extract_namespace_from_uri("file:///path/to/events/events.txt"),
+            Some("events".to_string())
+        );
+
+        assert_eq!(
+            extract_namespace_from_uri("file:///path/to/interface/main.gui"),
+            Some("interface".to_string())
+        );
+
+        assert_eq!(
+            extract_namespace_from_uri("file:///path/to/localisation/english/l_english.yml"),
+            Some("localisation/english".to_string())
+        );
+
+        assert_eq!(
+            extract_namespace_from_uri("file:///path/to/gfx/portraits/species.gfx"),
+            Some("gfx/portraits".to_string())
+        );
+
+        assert_eq!(
+            extract_namespace_from_uri("file:///path/to/map/galaxy.txt"),
+            Some("map".to_string())
+        );
+
+        // Test subdirectories in other directories
+        assert_eq!(
+            extract_namespace_from_uri("file:///path/to/interface/game_setup/main.gui"),
+            Some("interface/game_setup".to_string())
+        );
+
+        assert_eq!(
+            extract_namespace_from_uri("file:///path/to/gfx/portraits/species/humanoid.gfx"),
+            Some("gfx/portraits".to_string())
+        );
+
+        // Test files that don't match known directories
+        assert_eq!(
+            extract_namespace_from_uri("file:///path/to/unknown/file.txt"),
+            None
+        );
+
+        assert_eq!(
+            extract_namespace_from_uri("file:///path/to/random/folder/file.txt"),
+            None
         );
     }
 }

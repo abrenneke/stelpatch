@@ -12,7 +12,10 @@ impl<'a> ModuleVisitor<'a> {
     }
 }
 
-impl<'a> AstVisitor<'a> for ModuleVisitor<'a> {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for ModuleVisitor<'a>
+where
+    'a: 'ast,
+{
     fn visit_module(&mut self, node: &cw_parser::AstModule<'a>) -> () {
         self.output.push_str(
             &node

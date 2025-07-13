@@ -134,7 +134,10 @@ impl<'a> ValueVisitor<'a> {
     }
 }
 
-impl<'a, 'b> cw_parser::AstVisitor<'b> for ValueVisitor<'a> {
+impl<'a, 'b, 'ast> cw_parser::AstVisitor<'b, 'ast> for ValueVisitor<'a>
+where
+    'b: 'ast,
+{
     fn visit_string(&mut self, node: &cw_parser::AstString<'b>) -> () {
         *self.value = Value::String(node.value.value.to_string());
     }

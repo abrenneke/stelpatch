@@ -4,25 +4,32 @@ use tokio::sync::RwLock;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, jsonrpc::Result};
 
-use super::cache::{get_entity_property_type, get_namespace_entity_type};
+use super::cache::{
+    get_entity_property_type, get_entity_property_type_from_ast, get_namespace_entity_type,
+};
 use super::document_cache::DocumentCache;
 use super::utils::{extract_namespace_from_uri, position_to_offset};
 use cw_parser::{AstEntity, AstExpression, AstNode, AstValue, AstVisitor};
 
 /// A visitor that builds property paths for hover functionality
-struct PropertyPathBuilder<'a> {
+struct PropertyPathBuilder<'a, 'ast>
+where
+    'a: 'ast,
+{
     position_offset: usize,
     current_path: Vec<String>,
     found_property: Option<String>,
+    found_entity_context: Option<&'ast AstEntity<'a>>,
     original_input: &'a str,
 }
 
-impl<'a> PropertyPathBuilder<'a> {
+impl<'a, 'ast> PropertyPathBuilder<'a, 'ast> {
     fn new(position_offset: usize, input: &'a str) -> Self {
         Self {
             position_offset,
             current_path: Vec::new(),
             found_property: None,
+            found_entity_context: None,
             original_input: input,
         }
     }
@@ -44,8 +51,11 @@ impl<'a> PropertyPathBuilder<'a> {
     }
 }
 
-impl<'a> AstVisitor<'a> for PropertyPathBuilder<'a> {
-    fn visit_expression(&mut self, node: &AstExpression<'a>) -> () {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for PropertyPathBuilder<'a, 'ast>
+where
+    'a: 'ast,
+{
+    fn visit_expression(&mut self, node: &'ast AstExpression<'a>) -> () {
         let key_span = node.key.span(&self.original_input);
 
         // Check if the position is within this property's key
@@ -75,7 +85,23 @@ impl<'a> AstVisitor<'a> for PropertyPathBuilder<'a> {
         }
     }
 
-    fn walk_entity(&mut self, node: &AstEntity<'a>) -> () {
+    fn visit_entity(&mut self, node: &'ast AstEntity<'a>) -> () {
+        // Check if we're looking for a property within this entity
+        let entity_span = node.span(&self.original_input);
+        if self.position_offset >= entity_span.start.offset
+            && self.position_offset <= entity_span.end.offset
+        {
+            // Store this entity as context for type resolution
+            if self.found_entity_context.is_none() {
+                self.found_entity_context = Some(node);
+            }
+        }
+
+        // Continue with normal entity walking
+        self.walk_entity(node);
+    }
+
+    fn walk_entity(&mut self, node: &'ast AstEntity<'a>) -> () {
         for item in &node.items {
             self.visit_entity_item(item);
             if self.found_property.is_some() {
@@ -142,12 +168,23 @@ pub async fn hover(
                     // For top-level keys, show the namespace type (the structure of entities in this namespace)
                     get_namespace_entity_type(&namespace)
                 } else {
-                    // For nested properties, strip the entity name and look up the property path
+                    // For nested properties, use AST-based type resolution if we have entity context
                     let property_parts: Vec<&str> = property_path.split('.').collect();
                     if property_parts.len() > 1 {
                         // Skip the first part (entity name) and join the rest
                         let actual_property_path = property_parts[1..].join(".");
-                        get_entity_property_type(&namespace, &actual_property_path)
+
+                        // Try to use AST-based resolution if we have entity context
+                        if let Some(entity_context) = builder.found_entity_context {
+                            get_entity_property_type_from_ast(
+                                &namespace,
+                                entity_context,
+                                &actual_property_path,
+                            )
+                        } else {
+                            // Fallback to string-based resolution
+                            get_entity_property_type(&namespace, &actual_property_path)
+                        }
                     } else {
                         None
                     }
@@ -161,6 +198,13 @@ pub async fn hover(
                     if let Some(documentation) = &type_info.documentation {
                         if !documentation.trim().is_empty() {
                             hover_content.push_str(&format!("\n\n{}", documentation.trim()));
+                        }
+                    }
+
+                    // Add source info if available and it indicates subtype narrowing was applied
+                    if let Some(source_info) = &type_info.source_info {
+                        if source_info.contains("subtype narrowing") {
+                            hover_content.push_str(&format!("\n\n*{}*", source_info));
                         }
                     }
                 }

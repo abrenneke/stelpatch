@@ -10,7 +10,10 @@ impl<'a> NumberVisitor<'a> {
     }
 }
 
-impl<'a> AstVisitor<'a> for NumberVisitor<'a> {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for NumberVisitor<'a>
+where
+    'a: 'ast,
+{
     fn visit_number(&mut self, node: &AstNumber<'a>) -> () {
         // TODO
         // if node.leading_newlines > 0 {

@@ -129,7 +129,10 @@ impl SemanticTokenCollector {
     }
 }
 
-impl<'a> AstVisitor<'a> for SemanticTokenCollector {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for SemanticTokenCollector
+where
+    'a: 'ast,
+{
     fn visit_string(&mut self, node: &AstString<'a>) -> () {
         self.add_token(node, CwSemanticTokenType::String.as_u32()); // STRING
     }

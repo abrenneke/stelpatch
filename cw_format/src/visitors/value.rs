@@ -12,7 +12,10 @@ impl<'a> ValueVisitor<'a> {
     }
 }
 
-impl<'a> AstVisitor<'a> for ValueVisitor<'a> {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for ValueVisitor<'a>
+where
+    'a: 'ast,
+{
     fn visit_value(&mut self, node: &AstValue<'a>) -> () {
         match node {
             AstValue::String(string) => {

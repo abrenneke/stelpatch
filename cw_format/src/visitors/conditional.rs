@@ -12,7 +12,10 @@ impl<'a> ConditionalVisitor<'a> {
     }
 }
 
-impl<'a> AstVisitor<'a> for ConditionalVisitor<'a> {
+impl<'a, 'ast> AstVisitor<'a, 'ast> for ConditionalVisitor<'a>
+where
+    'a: 'ast,
+{
     fn visit_conditional_block(&mut self, node: &cw_parser::AstConditionalBlock<'a>) -> () {
         for comment in node.leading_comments.iter() {
             self.output.push_str(&format!("#{}\n", comment.text));

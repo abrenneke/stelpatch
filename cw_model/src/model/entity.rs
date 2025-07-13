@@ -155,7 +155,10 @@ impl<'a> EntityVisitor<'a> {
     }
 }
 
-impl<'a, 'b> cw_parser::AstVisitor<'b> for EntityVisitor<'a> {
+impl<'a, 'b, 'ast> cw_parser::AstVisitor<'b, 'ast> for EntityVisitor<'a>
+where
+    'b: 'ast,
+{
     fn visit_expression(&mut self, node: &cw_parser::AstExpression<'b>) -> () {
         let mut property = PropertyInfo::default();
         let mut property_visitor = PropertyVisitor::new(&mut property);
