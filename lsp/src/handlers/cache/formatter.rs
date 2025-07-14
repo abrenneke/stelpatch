@@ -92,7 +92,8 @@ impl<'a> TypeFormatter<'a> {
                     self.format_type_with_depth(
                         Arc::new(ScopedType::new_cwt(
                             *comparable.clone(),
-                            scoped_type.scope_stack().clone()
+                            scoped_type.scope_stack().clone(),
+                            scoped_type.in_scripted_effect_block().cloned(),
                         )),
                         depth + 1,
                         property_name,
@@ -196,6 +197,7 @@ impl<'a> TypeFormatter<'a> {
                     Arc::new(ScopedType::new_cwt(
                         *array_type.element_type.clone(),
                         scoped_type.scope_stack().clone(),
+                        scoped_type.in_scripted_effect_block().cloned(),
                     )),
                     depth + 1,
                     property_name,
@@ -222,6 +224,7 @@ impl<'a> TypeFormatter<'a> {
                                 Arc::new(ScopedType::new_cwt(
                                     t.clone(),
                                     scoped_type.scope_stack().clone(),
+                                    scoped_type.in_scripted_effect_block().cloned(),
                                 )),
                                 depth + 1,
                                 property_name,
@@ -238,7 +241,8 @@ impl<'a> TypeFormatter<'a> {
                             .map(|t| self.format_type_with_depth(
                                 Arc::new(ScopedType::new_cwt(
                                     t.clone(),
-                                    scoped_type.scope_stack().clone()
+                                    scoped_type.scope_stack().clone(),
+                                    scoped_type.in_scripted_effect_block().cloned(),
                                 )),
                                 depth + 1,
                                 property_name,

@@ -59,6 +59,7 @@ fn is_value_structurally_compatible_with_depth(
                 Arc::new(ScopedType::new_cwt(
                     union_type.clone(),
                     expected_type.scope_stack().clone(),
+                    expected_type.in_scripted_effect_block().cloned(),
                 )),
                 depth + 1,
             )
@@ -71,6 +72,7 @@ fn is_value_structurally_compatible_with_depth(
                 Arc::new(ScopedType::new_cwt(
                     *base_type.clone(),
                     expected_type.scope_stack().clone(),
+                    expected_type.in_scripted_effect_block().cloned(),
                 )),
                 depth + 1,
             )
@@ -111,10 +113,10 @@ fn is_value_compatible_with_simple_type_structurally(
         (AstValue::String(_), SimpleType::Scalar) => true,
         (AstValue::String(_), SimpleType::IntVariableField) => true,
         (AstValue::String(_), SimpleType::IntValueField) => true,
+        (AstValue::String(_), SimpleType::ValueField) => true,
         (AstValue::String(_), SimpleType::Bool) => true,
 
         // Variables (strings starting with @) are compatible with number types
-        (AstValue::String(s), SimpleType::ValueField) if s.raw_value().starts_with('@') => true,
         (AstValue::String(s), SimpleType::Int) if s.raw_value().starts_with('@') => true,
         (AstValue::String(s), SimpleType::Float) if s.raw_value().starts_with('@') => true,
         (AstValue::String(s), SimpleType::PercentageField) if s.raw_value().starts_with('@') => {
@@ -126,6 +128,7 @@ fn is_value_compatible_with_simple_type_structurally(
         (AstValue::Number(_), SimpleType::Int) => true,
         (AstValue::Number(_), SimpleType::Float) => true,
         (AstValue::Number(_), SimpleType::PercentageField) => true,
+        (AstValue::Number(_), SimpleType::IntValueField) => true,
 
         // Specialized types
         (AstValue::Color(_), SimpleType::Color) => true,

@@ -337,6 +337,7 @@ fn validate_value_against_type(
                 let resolved_union_type = cache.resolve_type(Arc::new(ScopedType::new_cwt(
                     union_type.clone(),
                     expected_type.scope_stack().clone(),
+                    expected_type.in_scripted_effect_block().cloned(),
                 )));
 
                 if is_value_structurally_compatible(value, resolved_union_type.clone()) {
@@ -352,6 +353,7 @@ fn validate_value_against_type(
                     let resolved_union_type = cache.resolve_type(Arc::new(ScopedType::new_cwt(
                         union_type.clone(),
                         expected_type.scope_stack().clone(),
+                        expected_type.in_scripted_effect_block().cloned(),
                     )));
 
                     if let CwtTypeOrSpecial::CwtType(cwt_type) = resolved_union_type.cwt_type() {
@@ -416,6 +418,7 @@ fn validate_value_against_type(
                 Arc::new(ScopedType::new_cwt(
                     *base_type.clone(),
                     expected_type.scope_stack().clone(),
+                    expected_type.in_scripted_effect_block().cloned(),
                 )),
                 content,
                 namespace,

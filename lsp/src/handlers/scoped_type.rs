@@ -12,10 +12,15 @@ use cw_model::{CwtAnalyzer, CwtType, PatternProperty, Property, SimpleType, Type
 pub struct ScopedType {
     /// The actual CWT type definition
     cwt_type: CwtTypeOrSpecial,
+
     /// The scope context this type exists in
     scope_context: ScopeStack,
+
     /// The active subtypes (multiple can be active at once)
     subtypes: HashSet<String>,
+
+    /// If we're inside a block that's a scripted_effect, this activates VARIABLEs. Value is the name of the scripted_effect.
+    in_scripted_effect_block: Option<String>,
 }
 
 impl std::fmt::Debug for ScopedType {
@@ -83,6 +88,7 @@ impl ScopedType {
             cwt_type,
             scope_context,
             subtypes: HashSet::new(),
+            in_scripted_effect_block: None,
         }
     }
 
@@ -90,11 +96,13 @@ impl ScopedType {
         cwt_type: CwtTypeOrSpecial,
         scope_context: ScopeStack,
         subtype: Option<String>,
+        scripted_effect_name: Option<String>,
     ) -> Self {
         Self {
             cwt_type,
             scope_context,
             subtypes: subtype.into_iter().collect(),
+            in_scripted_effect_block: scripted_effect_name,
         }
     }
 
@@ -102,20 +110,27 @@ impl ScopedType {
         cwt_type: CwtTypeOrSpecial,
         scope_context: ScopeStack,
         subtypes: HashSet<String>,
+        scripted_effect_name: Option<String>,
     ) -> Self {
         Self {
             cwt_type,
             scope_context,
             subtypes,
+            in_scripted_effect_block: scripted_effect_name,
         }
     }
 
     /// Create a new scoped type
-    pub fn new_cwt(cwt_type: CwtType, scope_context: ScopeStack) -> Self {
+    pub fn new_cwt(
+        cwt_type: CwtType,
+        scope_context: ScopeStack,
+        scripted_effect_name: Option<String>,
+    ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context,
             subtypes: HashSet::new(),
+            in_scripted_effect_block: scripted_effect_name,
         }
     }
 
@@ -123,11 +138,13 @@ impl ScopedType {
         cwt_type: CwtType,
         scope_context: ScopeStack,
         subtype: Option<String>,
+        scripted_effect_name: Option<String>,
     ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context,
             subtypes: subtype.into_iter().collect(),
+            in_scripted_effect_block: scripted_effect_name,
         }
     }
 
@@ -135,28 +152,40 @@ impl ScopedType {
         cwt_type: CwtType,
         scope_context: ScopeStack,
         subtypes: HashSet<String>,
+        scripted_effect_name: Option<String>,
     ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context,
             subtypes,
+            in_scripted_effect_block: scripted_effect_name,
         }
     }
 
-    pub fn new_scoped_union(scoped_types: Vec<ScopedType>, scope_context: ScopeStack) -> Self {
+    pub fn new_scoped_union(
+        scoped_types: Vec<ScopedType>,
+        scope_context: ScopeStack,
+        scripted_effect_name: Option<String>,
+    ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::ScopedUnion(scoped_types),
             scope_context,
             subtypes: HashSet::new(),
+            in_scripted_effect_block: scripted_effect_name,
         }
     }
 
     /// Create a scoped type with a default root scope
-    pub fn with_root_scope(cwt_type: CwtType, root_scope_type: impl Into<String>) -> Self {
+    pub fn with_root_scope(
+        cwt_type: CwtType,
+        root_scope_type: impl Into<String>,
+        scripted_effect_name: Option<String>,
+    ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: ScopeStack::default_with_root(root_scope_type),
             subtypes: HashSet::new(),
+            in_scripted_effect_block: scripted_effect_name,
         }
     }
 
@@ -164,11 +193,13 @@ impl ScopedType {
         cwt_type: CwtType,
         root_scope_type: impl Into<String>,
         subtype: Option<String>,
+        scripted_effect_name: Option<String>,
     ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: ScopeStack::default_with_root(root_scope_type),
             subtypes: subtype.into_iter().collect(),
+            in_scripted_effect_block: scripted_effect_name,
         }
     }
 
@@ -176,11 +207,13 @@ impl ScopedType {
         cwt_type: CwtType,
         root_scope_type: impl Into<String>,
         subtypes: HashSet<String>,
+        scripted_effect_name: Option<String>,
     ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: ScopeStack::default_with_root(root_scope_type),
             subtypes,
+            in_scripted_effect_block: scripted_effect_name,
         }
     }
 
@@ -189,6 +222,7 @@ impl ScopedType {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: self.scope_context.clone(),
             subtypes: self.subtypes.clone(),
+            in_scripted_effect_block: self.in_scripted_effect_block.clone(),
         }
     }
 
@@ -197,6 +231,7 @@ impl ScopedType {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: self.scope_context.clone(),
             subtypes: subtype.into_iter().collect(),
+            in_scripted_effect_block: self.in_scripted_effect_block.clone(),
         }
     }
 
@@ -205,6 +240,7 @@ impl ScopedType {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: self.scope_context.clone(),
             subtypes,
+            in_scripted_effect_block: self.in_scripted_effect_block.clone(),
         }
     }
 
@@ -220,6 +256,10 @@ impl ScopedType {
 
     pub fn scope_stack_mut(&mut self) -> &mut ScopeStack {
         &mut self.scope_context
+    }
+
+    pub fn in_scripted_effect_block(&self) -> Option<&String> {
+        self.in_scripted_effect_block.as_ref()
     }
 
     /// Get the active subtypes, if any
@@ -253,6 +293,7 @@ impl ScopedType {
             cwt_type: self.cwt_type.clone(),
             scope_context: self.scope_context.clone(),
             subtypes,
+            in_scripted_effect_block: self.in_scripted_effect_block.clone(),
         }
     }
 
@@ -263,6 +304,7 @@ impl ScopedType {
             cwt_type: self.cwt_type.clone(),
             scope_context: self.scope_context.clone(),
             subtypes,
+            in_scripted_effect_block: self.in_scripted_effect_block.clone(),
         }
     }
 
@@ -274,7 +316,12 @@ impl ScopedType {
             cwt_type: self.cwt_type.clone(),
             scope_context: self.scope_context.clone(),
             subtypes: new_subtypes,
+            in_scripted_effect_block: self.in_scripted_effect_block.clone(),
         }
+    }
+
+    pub fn set_in_scripted_effect_block(&mut self, scripted_effect_name: String) {
+        self.in_scripted_effect_block = Some(scripted_effect_name);
     }
 
     /// Check if this scoped type has a specific subtype
@@ -326,6 +373,7 @@ impl ScopedType {
             cwt_type: self.cwt_type.clone(),
             scope_context: self.scope_context.branch(),
             subtypes: self.subtypes.clone(),
+            in_scripted_effect_block: self.in_scripted_effect_block.clone(),
         }
     }
 }
@@ -460,7 +508,7 @@ mod tests {
     #[test]
     fn test_scoped_type_creation() {
         let cwt_type = CwtType::Simple(SimpleType::ScopeField);
-        let scoped_type = ScopedType::with_root_scope(cwt_type, "country");
+        let scoped_type = ScopedType::with_root_scope(cwt_type, "country", None);
 
         assert!(scoped_type.is_scope_field());
         assert_eq!(scoped_type.current_scope_type(), "country");
@@ -475,6 +523,7 @@ mod tests {
             cwt_type,
             "country",
             Some("pop_spawned".to_string()),
+            None,
         );
 
         assert!(scoped_type.is_scope_field());
@@ -492,7 +541,7 @@ mod tests {
     #[test]
     fn test_subtype_manipulation() {
         let cwt_type = CwtType::Simple(SimpleType::ScopeField);
-        let mut scoped_type = ScopedType::with_root_scope(cwt_type, "country");
+        let mut scoped_type = ScopedType::with_root_scope(cwt_type, "country", None);
 
         // Initially no subtypes
         assert!(scoped_type.subtypes().is_empty());
@@ -528,7 +577,7 @@ mod tests {
         let mut scope_manager = ScopeStack::default_with_root("country");
         scope_manager.push_scope_type("planet").unwrap();
 
-        let scoped_type = ScopedType::new_cwt(cwt_type, scope_manager);
+        let scoped_type = ScopedType::new_cwt(cwt_type, scope_manager, None);
 
         // Valid scope fields
         assert!(scoped_type.is_valid_scope_field("this"));
@@ -551,6 +600,7 @@ mod tests {
             cwt_type,
             "country",
             Some("pop_spawned".to_string()),
+            None,
         );
 
         let branched = scoped_type.branch();

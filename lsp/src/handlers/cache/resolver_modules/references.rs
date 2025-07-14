@@ -230,7 +230,7 @@ impl ReferenceResolver {
         &self,
         category: &str,
         property_name: &str,
-    ) -> (CwtType, Option<AliasDefinition>) {
+    ) -> (CwtType, Option<AliasDefinition>, Option<String>) {
         // Look up the specific alias category:property_name and return its type
         if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(category) {
             for alias_pattern in aliases_in_category {
@@ -238,7 +238,7 @@ impl ReferenceResolver {
                     match &alias_pattern.name {
                         AliasName::Static(name) => {
                             if name == property_name {
-                                return (alias_def.to.clone(), Some(alias_def.clone()));
+                                return (alias_def.to.clone(), Some(alias_def.clone()), None);
                             }
                         }
                         AliasName::TypeRef(type_name) => {
@@ -247,7 +247,23 @@ impl ReferenceResolver {
                                 self.utils.get_namespace_keys_for_type_ref(type_name)
                             {
                                 if namespace_keys.contains(&property_name.to_string()) {
-                                    return (alias_def.to.clone(), Some(alias_def.clone()));
+                                    // Special case for scripted_effect - we need to know the name
+                                    // of the scripted effect to set the scoped type context
+                                    if type_name == "scripted_effect"
+                                        || type_name == "scripted_trigger"
+                                    {
+                                        return (
+                                            alias_def.to.clone(),
+                                            Some(alias_def.clone()),
+                                            Some(property_name.to_string()),
+                                        );
+                                    } else {
+                                        return (
+                                            alias_def.to.clone(),
+                                            Some(alias_def.clone()),
+                                            None,
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -255,7 +271,7 @@ impl ReferenceResolver {
                             // Check if property_name is a valid enum value
                             if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
                                 if enum_def.values.contains(property_name) {
-                                    return (alias_def.to.clone(), Some(alias_def.clone()));
+                                    return (alias_def.to.clone(), Some(alias_def.clone()), None);
                                 }
                             }
                         }
@@ -269,6 +285,7 @@ impl ReferenceResolver {
             CwtType::Reference(ReferenceType::AliasMatchLeft {
                 key: category.to_string(),
             }),
+            None,
             None,
         )
     }

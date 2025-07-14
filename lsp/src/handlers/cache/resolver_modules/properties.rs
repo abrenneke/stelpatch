@@ -1,10 +1,11 @@
+use crate::handlers::cache::FullAnalysis;
 use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
 use cw_model::{
     AliasDefinition, AliasName, BlockType, CwtAnalyzer, CwtType, LinkDefinition, PatternProperty,
-    Property, ReferenceType,
+    PatternType, Property, ReferenceType,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -50,6 +51,7 @@ impl PropertyNavigator {
                 scoped_type.cwt_type().clone(),
                 new_scope_context,
                 scoped_type.subtypes().clone(),
+                scoped_type.in_scripted_effect_block().cloned(),
             );
             return PropertyNavigationResult::Success(Arc::new(result));
         }
@@ -91,6 +93,7 @@ impl PropertyNavigator {
                                 .clone(),
                             scoped_type.scope_stack().clone(),
                             scoped_type.subtypes().clone(),
+                            scoped_type.in_scripted_effect_block().cloned(),
                         ),
                     ));
                 }
@@ -107,6 +110,30 @@ impl PropertyNavigator {
                     );
                 }
 
+                // Sixth, check the special scripted_effect_params enum
+                if let Some(scripted_effect_name) = scoped_type.in_scripted_effect_block() {
+                    if let Some(full_analysis) = FullAnalysis::get() {
+                        if let Some(arguments) = full_analysis
+                            .scripted_effect_arguments
+                            .get(scripted_effect_name)
+                        {
+                            for pattern_property in &block.pattern_properties {
+                                if let PatternType::Enum { key } = &pattern_property.pattern_type {
+                                    if key == "scripted_effect_params" {
+                                        if arguments.contains(property_name) {
+                                            return self.handle_pattern_property(
+                                                scoped_type.clone(),
+                                                pattern_property,
+                                                property_name,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Finally, check if this property is a link property (as fallback)
                 let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
                 if let Some(link_def) = self.is_link_property(property_name, current_scope) {
@@ -119,6 +146,7 @@ impl PropertyNavigator {
                         scoped_type.cwt_type().clone(),
                         new_scope_context,
                         scoped_type.subtypes().clone(),
+                        scoped_type.in_scripted_effect_block().cloned(),
                     );
                     return PropertyNavigationResult::Success(Arc::new(result));
                 }
@@ -130,7 +158,7 @@ impl PropertyNavigator {
             })) => {
                 // For alias_match_left[category], we need to look up the specific alias
                 // category:property_name and return its type
-                let (resolved_cwt_type, alias_def) = self
+                let (resolved_cwt_type, alias_def, scripted_effect_name) = self
                     .reference_resolver
                     .resolve_alias_match_left(key, property_name);
 
@@ -151,6 +179,7 @@ impl PropertyNavigator {
                             scoped_type.cwt_type().clone(),
                             new_scope_context,
                             scoped_type.subtypes().clone(),
+                            scripted_effect_name,
                         );
                         return PropertyNavigationResult::Success(Arc::new(result));
                     }
@@ -167,6 +196,7 @@ impl PropertyNavigator {
                                         resolved_cwt_type,
                                         new_scope,
                                         scoped_type.subtypes().clone(),
+                                        scripted_effect_name,
                                     );
                                     PropertyNavigationResult::Success(Arc::new(property_scoped))
                                 }
@@ -178,6 +208,7 @@ impl PropertyNavigator {
                                 resolved_cwt_type,
                                 scoped_type.scope_stack().clone(),
                                 scoped_type.subtypes().clone(),
+                                scripted_effect_name,
                             );
                             PropertyNavigationResult::Success(Arc::new(property_scoped))
                         }
@@ -187,7 +218,9 @@ impl PropertyNavigator {
                             resolved_cwt_type,
                             scoped_type.scope_stack().clone(),
                             scoped_type.subtypes().clone(),
+                            scripted_effect_name,
                         );
+
                         PropertyNavigationResult::Success(Arc::new(property_scoped))
                     }
                 }
@@ -205,6 +238,7 @@ impl PropertyNavigator {
                         scoped_type.cwt_type().clone(),
                         new_scope_context,
                         scoped_type.subtypes().clone(),
+                        scoped_type.in_scripted_effect_block().cloned(),
                     );
                     return PropertyNavigationResult::Success(Arc::new(result));
                 }
@@ -227,6 +261,7 @@ impl PropertyNavigator {
                         property.property_type.clone(),
                         new_scope,
                         scoped_type.subtypes().clone(),
+                        scoped_type.in_scripted_effect_block().cloned(),
                     );
                     PropertyNavigationResult::Success(Arc::new(property_scoped))
                 }
@@ -247,12 +282,14 @@ impl PropertyNavigator {
                     property.property_type.clone(),
                     scoped_type.scope_stack().clone(),
                     subtypes,
+                    scoped_type.in_scripted_effect_block().cloned(),
                 )
             } else {
                 ScopedType::new_cwt_with_subtypes(
                     property.property_type.clone(),
                     scoped_type.scope_stack().clone(),
                     scoped_type.subtypes().clone(),
+                    scoped_type.in_scripted_effect_block().cloned(),
                 )
             };
 
@@ -268,17 +305,18 @@ impl PropertyNavigator {
         property_name: &str,
     ) -> PropertyNavigationResult {
         // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
-        let (resolved_value_type, alias_def) = match &pattern_property.value_type {
-            CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
-                // Resolve the AliasMatchLeft using the property name
-                let result = self
-                    .reference_resolver
-                    .resolve_alias_match_left(key, property_name);
+        let (resolved_value_type, alias_def, scripted_effect_block) =
+            match &pattern_property.value_type {
+                CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
+                    // Resolve the AliasMatchLeft using the property name
+                    let result = self
+                        .reference_resolver
+                        .resolve_alias_match_left(key, property_name);
 
-                result
-            }
-            _ => (pattern_property.value_type.clone(), None),
-        };
+                    result
+                }
+                _ => (pattern_property.value_type.clone(), None, None),
+            };
 
         // Apply scope changes - first from alias definition, then from pattern property
         let mut current_scope = scoped_type.scope_stack().clone();
@@ -307,7 +345,9 @@ impl PropertyNavigator {
             resolved_value_type,
             current_scope,
             scoped_type.subtypes().clone(),
+            scripted_effect_block,
         );
+
         PropertyNavigationResult::Success(Arc::new(property_scoped))
     }
 
@@ -328,6 +368,7 @@ impl PropertyNavigator {
                         subtype_property.property_type.clone(),
                         new_scope,
                         scoped_type.subtypes().clone(),
+                        scoped_type.in_scripted_effect_block().cloned(),
                     );
                     PropertyNavigationResult::Success(Arc::new(property_scoped))
                 }
@@ -339,6 +380,7 @@ impl PropertyNavigator {
                 subtype_property.property_type.clone(),
                 scoped_type.scope_stack().clone(),
                 scoped_type.subtypes().clone(),
+                scoped_type.in_scripted_effect_block().cloned(),
             );
             PropertyNavigationResult::Success(Arc::new(property_scoped))
         }

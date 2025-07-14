@@ -1,3 +1,5 @@
+use crate::handlers::cache::FullAnalysis;
+
 use super::ResolverUtils;
 use cw_model::types::{CwtAnalyzer, PatternProperty, PatternType};
 use cw_model::{AliasName, BlockType};

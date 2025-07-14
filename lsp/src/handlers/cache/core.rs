@@ -63,7 +63,7 @@ impl TypeCache {
                 };
 
                 let mut scoped_type =
-                    ScopedType::new_cwt(type_def.rules.clone(), Default::default());
+                    ScopedType::new_cwt(type_def.rules.clone(), Default::default(), None);
 
                 if let Some(push_scope) = type_def.rule_options.push_scope.as_ref() {
                     if let Some(scope_name) = cwt_analyzer.resolve_scope_name(push_scope) {
@@ -373,6 +373,7 @@ impl TypeCache {
             let scoped_type = Arc::new(ScopedType::new_cwt(
                 type_def.rules.clone(),
                 Default::default(),
+                None,
             ));
             return Some(TypeInfo {
                 property_path: property_path.to_string(),

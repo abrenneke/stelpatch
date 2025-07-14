@@ -17,6 +17,7 @@ use crate::handlers::{
 pub struct DataCollector<'game_data, 'resolver> {
     value_sets: HashMap<String, HashSet<String>>,
     complex_enums: HashMap<String, HashSet<String>>,
+    scripted_effect_arguments: HashMap<String, HashSet<String>>, // Also scripted triggers for convenience... might be wrong because clashes
     game_data: &'game_data GameDataCache,
     type_resolver: &'resolver TypeResolver,
 }
@@ -29,6 +30,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         Self {
             value_sets: HashMap::new(),
             complex_enums: HashMap::new(),
+            scripted_effect_arguments: HashMap::new(),
             game_data,
             type_resolver,
         }
@@ -42,7 +44,11 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         &self.complex_enums
     }
 
-    pub fn collect_value_sets_from_game_data(&mut self) {
+    pub fn scripted_effect_arguments(&self) -> &HashMap<String, HashSet<String>> {
+        &self.scripted_effect_arguments
+    }
+
+    pub fn collect_all(&mut self) {
         // Collect value_sets from parallel processing
         let results: Vec<HashMap<String, HashSet<String>>> = self
             .game_data
@@ -63,6 +69,9 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                 self.value_sets.entry(key).or_default().extend(values);
             }
         }
+
+        // Collect scripted effect arguments
+        self.collect_scripted_effect_arguments();
 
         // Collect complex enums
         self.collect_complex_enums();
@@ -140,6 +149,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                                     let union_member_type = Arc::new(ScopedType::new_cwt(
                                         union_type.clone(),
                                         property_type.scope_stack().clone(),
+                                        property_type.in_scripted_effect_block().cloned(),
                                     ));
 
                                     for value in property_value.0.iter() {
@@ -194,6 +204,37 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                 let values = self.extract_complex_enum_values(complex_def);
                 if !values.is_empty() {
                     self.complex_enums.insert(enum_name.to_string(), values);
+                }
+            }
+        }
+    }
+
+    fn collect_scripted_effect_arguments(&mut self) {
+        // Only collect from scripted_effects namespace
+        if let Some(scripted_effects_namespace) = self
+            .game_data
+            .get_namespaces()
+            .get("common/scripted_effects")
+        {
+            for (effect_name, entity) in &scripted_effects_namespace.entities {
+                let arguments = self.extract_arguments_from_entity(entity);
+                if !arguments.is_empty() {
+                    self.scripted_effect_arguments
+                        .insert(effect_name.clone(), arguments);
+                }
+            }
+        }
+
+        if let Some(scripted_triggers_namespace) = self
+            .game_data
+            .get_namespaces()
+            .get("common/scripted_triggers")
+        {
+            for (trigger_name, entity) in &scripted_triggers_namespace.entities {
+                let arguments = self.extract_arguments_from_entity(entity);
+                if !arguments.is_empty() {
+                    self.scripted_effect_arguments
+                        .insert(trigger_name.clone(), arguments);
                 }
             }
         }
@@ -388,6 +429,71 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
             }
             _ => {
                 // For other types, we don't extract values
+            }
+        }
+    }
+
+    fn extract_arguments_from_entity(&self, entity: &Entity) -> HashSet<String> {
+        let mut arguments = HashSet::new();
+        self.extract_arguments_recursive(entity, &mut arguments);
+        arguments
+    }
+
+    fn extract_arguments_recursive(&self, entity: &Entity, arguments: &mut HashSet<String>) {
+        // Extract arguments from all string values in the entity
+        for (_key, property_value) in &entity.properties.kv {
+            for value in &property_value.0 {
+                if let Some(string_value) = value.value.as_string() {
+                    self.extract_arguments_from_string(string_value, arguments);
+                } else if let Some(nested_entity) = value.value.as_entity() {
+                    self.extract_arguments_recursive(nested_entity, arguments);
+                }
+            }
+        }
+
+        // Also check items (for arrays)
+        for item in &entity.items {
+            if let Some(string_value) = item.as_string() {
+                self.extract_arguments_from_string(string_value, arguments);
+            } else if let Some(nested_entity) = item.as_entity() {
+                self.extract_arguments_recursive(nested_entity, arguments);
+            }
+        }
+    }
+
+    fn extract_arguments_from_string(&self, string_value: &str, arguments: &mut HashSet<String>) {
+        // Find all occurrences of $...$ patterns
+        let mut chars = string_value.char_indices().peekable();
+        while let Some((start_idx, ch)) = chars.next() {
+            if ch == '$' {
+                let mut end_idx = start_idx + 1;
+                let mut found_end = false;
+
+                // Find the closing $
+                while let Some((idx, ch)) = chars.next() {
+                    if ch == '$' {
+                        end_idx = idx;
+                        found_end = true;
+                        break;
+                    }
+                }
+
+                if found_end && end_idx > start_idx + 1 {
+                    // Extract the content between $ signs
+                    let content = &string_value[start_idx + 1..end_idx];
+                    if !content.is_empty() {
+                        // Handle fallback syntax: $VARIABLE|fallback$ -> extract just VARIABLE
+                        let arg_name = if let Some(pipe_pos) = content.find('|') {
+                            &content[..pipe_pos]
+                        } else {
+                            content
+                        };
+
+                        if !arg_name.is_empty() {
+                            arguments.insert(arg_name.to_string());
+                        }
+                    }
+                }
             }
         }
     }

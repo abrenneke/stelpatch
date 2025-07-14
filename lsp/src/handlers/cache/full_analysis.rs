@@ -13,6 +13,7 @@ pub struct FullAnalysis {
 pub struct FullAnalysisResult {
     pub dynamic_value_sets: HashMap<String, HashSet<String>>,
     pub complex_enums: HashMap<String, HashSet<String>>,
+    pub scripted_effect_arguments: HashMap<String, HashSet<String>>,
 }
 
 static FULL_ANALYSIS: OnceLock<FullAnalysisResult> = OnceLock::new();
@@ -34,7 +35,7 @@ impl FullAnalysis {
             let start = std::time::Instant::now();
 
             let mut collector = DataCollector::new(self.game_data, self.type_cache.get_resolver());
-            collector.collect_value_sets_from_game_data();
+            collector.collect_all();
 
             let duration = start.elapsed();
             eprintln!("Full analysis loaded in {:?}", duration);
@@ -42,6 +43,7 @@ impl FullAnalysis {
             FullAnalysisResult {
                 dynamic_value_sets: collector.value_sets().clone(),
                 complex_enums: collector.complex_enums().clone(),
+                scripted_effect_arguments: collector.scripted_effect_arguments().clone(),
             }
         });
     }

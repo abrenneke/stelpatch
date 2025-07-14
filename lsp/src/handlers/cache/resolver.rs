@@ -50,12 +50,16 @@ impl TypeResolver {
         match cwt_type {
             // For references, try to resolve to the actual type
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)) => {
-                let resolved_cwt_type =
-                    self.resolve_reference_type(ref_type, scoped_type.scope_stack());
+                let resolved_cwt_type = self.resolve_reference_type(
+                    ref_type,
+                    scoped_type.scope_stack(),
+                    scoped_type.in_scripted_effect_block().cloned(),
+                );
                 let result = ScopedType::new_cwt_with_subtypes(
                     (*resolved_cwt_type).clone(),
                     scoped_type.scope_stack().clone(),
                     scoped_type.subtypes().clone(),
+                    scoped_type.in_scripted_effect_block().cloned(),
                 );
 
                 Arc::new(result)
@@ -66,6 +70,7 @@ impl TypeResolver {
                     (**base_type).clone(),
                     scoped_type.scope_stack().clone(),
                     scoped_type.subtypes().clone(),
+                    scoped_type.in_scripted_effect_block().cloned(),
                 );
                 self.resolve_type(Arc::new(base_scoped))
             }
@@ -126,8 +131,14 @@ impl TypeResolver {
         &self,
         ref_type: &ReferenceType,
         scope_stack: &ScopeStack,
+        in_scripted_effect_block: Option<String>,
     ) -> Arc<CwtType> {
-        let cache_key = format!("{}-{}", ref_type.id(), scope_stack.to_string());
+        let cache_key = format!(
+            "{}-{}-{}",
+            ref_type.id(),
+            scope_stack.to_string(),
+            in_scripted_effect_block.clone().unwrap_or_default()
+        );
 
         // Check if we already have this reference type cached
         if let Some(cached_result) = self
@@ -257,11 +268,13 @@ impl TypeResolver {
         cwt_type: CwtType,
         scope_stack: ScopeStack,
         subtype_name: Option<String>,
+        scripted_effect_name: Option<String>,
     ) -> Arc<ScopedType> {
         Arc::new(ScopedType::new_cwt_with_subtype(
             cwt_type,
             scope_stack,
             subtype_name,
+            scripted_effect_name,
         ))
     }
 
