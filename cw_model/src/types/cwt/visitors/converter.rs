@@ -276,12 +276,6 @@ impl CwtConverter {
             }
         }
 
-        if !union_values.is_empty() {
-            union_values.dedup_by(|a, b| a.fingerprint() == b.fingerprint());
-
-            return CwtType::Union(union_values);
-        }
-
         CwtType::Block(BlockType {
             properties,
             subtypes: HashMap::new(),
@@ -289,6 +283,7 @@ impl CwtConverter {
             pattern_properties,
             localisation: None,
             modifiers: None,
+            additional_flags: union_values,
         })
     }
 

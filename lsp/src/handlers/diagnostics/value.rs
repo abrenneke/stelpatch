@@ -1,3 +1,4 @@
+use cw_model::SimpleType;
 use cw_parser::{AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
 
@@ -5,42 +6,53 @@ use crate::handlers::{
     cache::{GameDataCache, TypeCache},
     diagnostics::diagnostic::create_type_mismatch_diagnostic,
     scope::ScopeStack,
+    settings::VALIDATE_LOCALISATION,
 };
 
 /// Check if a value is compatible with a simple type with scope context, returning a diagnostic if incompatible
 pub fn is_value_compatible_with_simple_type(
     value: &AstValue<'_>,
-    simple_type: &cw_model::SimpleType,
+    simple_type: &SimpleType,
     content: &str,
     scope_manager: &ScopeStack,
     current_namespace: Option<&str>,
 ) -> Option<Diagnostic> {
-    use cw_model::SimpleType;
-
     match (value, simple_type) {
         (AstValue::String(_), SimpleType::Localisation) => {
-            // TODO: Implement proper localisation validation
-            Some(create_type_mismatch_diagnostic(
-                value.span_range(),
-                "Localisation validation not yet implemented",
-                content,
-            ))
+            if VALIDATE_LOCALISATION {
+                // TODO: Implement proper localisation validation
+                Some(create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Localisation validation not yet implemented",
+                    content,
+                ))
+            } else {
+                None
+            }
         }
         (AstValue::String(_), SimpleType::LocalisationSynced) => {
-            // TODO: Implement proper localisation validation
-            Some(create_type_mismatch_diagnostic(
-                value.span_range(),
-                "Localisation synced validation not yet implemented",
-                content,
-            ))
+            if VALIDATE_LOCALISATION {
+                // TODO: Implement proper localisation validation
+                Some(create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Localisation synced validation not yet implemented",
+                    content,
+                ))
+            } else {
+                None
+            }
         }
         (AstValue::String(_), SimpleType::LocalisationInline) => {
-            // TODO: Implement proper localisation validation
-            Some(create_type_mismatch_diagnostic(
-                value.span_range(),
-                "Inline localisation validation not yet implemented",
-                content,
-            ))
+            if VALIDATE_LOCALISATION {
+                // TODO: Implement proper localisation validation
+                Some(create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Inline localisation validation not yet implemented",
+                    content,
+                ))
+            } else {
+                None
+            }
         }
         (AstValue::String(_), SimpleType::Filepath) => {
             // TODO: Implement proper filepath validation
@@ -189,12 +201,15 @@ pub fn is_value_compatible_with_simple_type(
         (AstValue::Color(_), SimpleType::Color) => None, // Valid
         (AstValue::Maths(_), SimpleType::Maths) => None, // Valid
 
+        (AstValue::Maths(_), SimpleType::Float) => None, // Valid, calculated value
+        (AstValue::Maths(_), SimpleType::Int) => None,   // Valid, calculated value
+
         // Type mismatches
         (_, simple_type) => Some(create_type_mismatch_diagnostic(
             value.span_range(),
             &format!(
-                "Expected {:?} but got {}",
-                simple_type,
+                "Expected {} but got {}",
+                simple_type.id(),
                 get_value_type_name(value)
             ),
             content,

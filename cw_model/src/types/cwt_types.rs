@@ -77,6 +77,31 @@ pub enum SimpleType {
     Maths,
 }
 
+impl SimpleType {
+    pub fn id(&self) -> &'static str {
+        match self {
+            SimpleType::Bool => "bool",
+            SimpleType::Int => "int",
+            SimpleType::Float => "float",
+            SimpleType::Scalar => "scalar",
+            SimpleType::PercentageField => "percentage_field",
+            SimpleType::Localisation => "localisation",
+            SimpleType::LocalisationSynced => "localisation_synced",
+            SimpleType::LocalisationInline => "localisation_inline",
+            SimpleType::DateField => "date_field",
+            SimpleType::VariableField => "variable_field",
+            SimpleType::IntVariableField => "int_variable_field",
+            SimpleType::ValueField => "value_field",
+            SimpleType::IntValueField => "int_value_field",
+            SimpleType::ScopeField => "scope_field",
+            SimpleType::Filepath => "filepath",
+            SimpleType::Icon => "icon",
+            SimpleType::Color => "color",
+            SimpleType::Maths => "maths",
+        }
+    }
+}
+
 /// CWT reference types - directly maps to CWT reference syntax
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ReferenceType {
@@ -193,6 +218,9 @@ pub struct BlockType {
 
     /// Modifier generation rules
     pub modifiers: Option<ModifierSpec>,
+
+    /// Additional flags, like an array
+    pub additional_flags: Vec<CwtType>,
 }
 
 /// A property that can match multiple keys using patterns
@@ -1096,6 +1124,7 @@ impl CwtType {
             subtype_properties: HashMap::new(),
             localisation: None,
             modifiers: None,
+            additional_flags: Vec::new(),
         }
     }
 

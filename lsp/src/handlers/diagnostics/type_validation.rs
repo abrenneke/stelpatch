@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use std::collections::{HashMap, HashSet};
 
-use cw_model::CwtType;
+use cw_model::{CwtType, ReferenceType};
 use cw_parser::{AstEntityItem, AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
 
@@ -347,7 +347,11 @@ fn validate_value_against_type(
 
                 let diagnostic = create_type_mismatch_diagnostic(
                     value.span_range(),
-                    &format!("Expected one of: {}", unique_values.join(", ")),
+                    &format!(
+                        "Expected one of: {}, found: {:?}",
+                        unique_values.join(", "),
+                        std::mem::discriminant(value)
+                    ),
                     content,
                 );
                 diagnostics.push(diagnostic);
@@ -373,31 +377,11 @@ fn validate_value_against_type(
                     all_validation_results.iter().any(|diags| diags.is_empty());
 
                 if !any_validation_passed {
-                    // All compatible types have validation errors - create a comprehensive error message
-                    // showing all possible union values as a flat list
-                    let mut all_possible_values = Vec::new();
-                    for compatible_resolved_type in &compatible_resolved_types {
-                        if let CwtTypeOrSpecial::CwtType(cwt_type) =
-                            compatible_resolved_type.cwt_type()
-                        {
-                            all_possible_values.extend(extract_possible_values(cwt_type));
-                        }
+                    // All compatible types have validation errors - report the inner errors
+                    // from the first compatible type (they should be similar anyway)
+                    if let Some(first_errors) = all_validation_results.first() {
+                        diagnostics.extend(first_errors.iter().cloned());
                     }
-
-                    // Remove duplicates and sort
-                    let mut unique_values: Vec<_> = all_possible_values
-                        .into_iter()
-                        .collect::<HashSet<_>>()
-                        .into_iter()
-                        .collect();
-                    unique_values.sort();
-
-                    let diagnostic = create_type_mismatch_diagnostic(
-                        value.span_range(),
-                        &format!("Expected one of: {}", unique_values.join(", ")),
-                        content,
-                    );
-                    diagnostics.push(diagnostic);
                 }
             }
         }
@@ -418,11 +402,21 @@ fn validate_value_against_type(
             diagnostics.extend(base_diagnostics);
         }
 
+        (
+            CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::ValueSet { .. })),
+            AstValue::String(_),
+        ) => {
+            // Any string is allowed for value_set
+        }
+
         // Reference type validation
-        (CwtTypeOrSpecial::CwtType(CwtType::Reference(_)), _) => {
+        (CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)), _) => {
             let diagnostic = create_type_mismatch_diagnostic(
                 value.span_range(),
-                "Reference types are not supported yet",
+                &format!(
+                    "Reference types are not supported yet, found: {:?}",
+                    ref_type
+                ),
                 content,
             );
             diagnostics.push(diagnostic);
