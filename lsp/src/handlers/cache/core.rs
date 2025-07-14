@@ -468,7 +468,7 @@ impl TypeCache {
             ),
             scoped_type: Some(current_type.clone()),
             documentation: None,
-            source_info: Some(format!("From {} entity with subtype narrowing", namespace)),
+            source_info: None,
         })
     }
 

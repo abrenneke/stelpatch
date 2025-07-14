@@ -148,7 +148,31 @@ pub fn is_value_compatible_with_simple_type(
                 ))
             }
         }
+        (AstValue::String(s), SimpleType::Int) => {
+            let val = s.raw_value();
+            if val.starts_with("@") {
+                validate_scripted_variable(val, value.span_range(), content, current_namespace)
+            } else {
+                Some(create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Expected integer value or scripted variable",
+                    content,
+                ))
+            }
+        }
         (AstValue::Number(_), SimpleType::Float) => None, // Valid
+        (AstValue::String(s), SimpleType::Float) => {
+            let val = s.raw_value();
+            if val.starts_with("@") {
+                validate_scripted_variable(val, value.span_range(), content, current_namespace)
+            } else {
+                Some(create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "Expected float value or scripted variable",
+                    content,
+                ))
+            }
+        }
         (AstValue::Number(n), SimpleType::PercentageField) => {
             if n.value.value.ends_with("%") {
                 None // Valid percentage

@@ -158,14 +158,6 @@ impl ReferenceResolver {
                 // Invalid complex_enum on RHS
                 Arc::new(CwtType::Reference(ref_type.clone()))
             }
-            ReferenceType::AliasKeysField { key } => {
-                // Try to resolve alias keys field references
-                if let Some(resolved_type) = self.cwt_analyzer.get_single_alias(key) {
-                    Arc::new(resolved_type.clone())
-                } else {
-                    Arc::new(CwtType::Reference(ref_type.clone()))
-                }
-            }
             ReferenceType::Subtype { name } => {
                 // For subtypes, we need to look up the subtype definition
                 // This is typically used in contexts where we know the base type
@@ -201,6 +193,31 @@ impl ReferenceResolver {
                 } else {
                     Arc::new(CwtType::Reference(ref_type.clone()))
                 }
+            }
+            ReferenceType::AliasKeysField { key } => {
+                let mut properties = HashSet::new();
+                if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(key) {
+                    for alias_pattern in aliases_in_category {
+                        match &alias_pattern.name {
+                            AliasName::Static(name) => {
+                                properties.insert(name.clone());
+                            }
+                            AliasName::TypeRef(type_name) => {
+                                if let Some(namespace_keys) =
+                                    self.utils.get_namespace_keys_for_type_ref(type_name)
+                                {
+                                    properties.extend(namespace_keys.iter().cloned());
+                                }
+                            }
+                            AliasName::Enum(enum_name) => {
+                                if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
+                                    properties.extend(enum_def.values.iter().cloned());
+                                }
+                            }
+                        }
+                    }
+                }
+                Arc::new(CwtType::LiteralSet(properties))
             }
             // For any remaining unhandled reference types, return the original
             _ => Arc::new(CwtType::Reference(ref_type.clone())),

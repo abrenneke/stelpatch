@@ -92,6 +92,11 @@ impl PropertyNavigator {
                     }
                 }
 
+                // Third, check for special "scalar" key that matches any string
+                if let Some(scalar_property) = block.properties.get("scalar") {
+                    return self.handle_regular_property(scoped_type.clone(), scalar_property);
+                }
+
                 // Finally, check pattern properties
                 if let Some(pattern_property) = self
                     .pattern_matcher
