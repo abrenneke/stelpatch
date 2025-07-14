@@ -54,24 +54,7 @@ impl PropertyNavigator {
             return PropertyNavigationResult::Success(Arc::new(result));
         }
 
-        // Second, check if this property is a link property
-        let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
-
-        if let Some(link_def) = self.is_link_property(property_name, current_scope) {
-            // This is a link property - create a scoped type with the output scope
-            let mut new_scope_context = scoped_type.scope_stack().clone();
-            new_scope_context
-                .push_scope_type(&link_def.output_scope)
-                .unwrap();
-            let result = ScopedType::new_with_subtypes(
-                scoped_type.cwt_type().clone(),
-                new_scope_context,
-                scoped_type.subtypes().clone(),
-            );
-            return PropertyNavigationResult::Success(Arc::new(result));
-        }
-
-        // If not a link property, handle as regular property
+        // Handle regular properties based on the current type
         match scoped_type.cwt_type() {
             CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
                 // First, check regular properties
@@ -97,7 +80,7 @@ impl PropertyNavigator {
                     return self.handle_regular_property(scoped_type.clone(), scalar_property);
                 }
 
-                // Finally, check pattern properties
+                // Fourth, check pattern properties
                 if let Some(pattern_property) = self
                     .pattern_matcher
                     .key_matches_pattern(property_name, block)
@@ -107,9 +90,25 @@ impl PropertyNavigator {
                         pattern_property,
                         property_name,
                     );
-                } else {
-                    PropertyNavigationResult::NotFound
                 }
+
+                // Finally, check if this property is a link property (as fallback)
+                let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
+                if let Some(link_def) = self.is_link_property(property_name, current_scope) {
+                    // This is a link property - create a scoped type with the output scope
+                    let mut new_scope_context = scoped_type.scope_stack().clone();
+                    new_scope_context
+                        .push_scope_type(&link_def.output_scope)
+                        .unwrap();
+                    let result = ScopedType::new_with_subtypes(
+                        scoped_type.cwt_type().clone(),
+                        new_scope_context,
+                        scoped_type.subtypes().clone(),
+                    );
+                    return PropertyNavigationResult::Success(Arc::new(result));
+                }
+
+                PropertyNavigationResult::NotFound
             }
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::AliasMatchLeft {
                 key,
@@ -125,7 +124,21 @@ impl PropertyNavigator {
                     resolved_cwt_type,
                     CwtType::Reference(ReferenceType::AliasMatchLeft { .. })
                 ) {
-                    // No matching alias was found
+                    // No matching alias was found - check if this property is a link property as fallback
+                    let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
+                    if let Some(link_def) = self.is_link_property(property_name, current_scope) {
+                        // This is a link property - create a scoped type with the output scope
+                        let mut new_scope_context = scoped_type.scope_stack().clone();
+                        new_scope_context
+                            .push_scope_type(&link_def.output_scope)
+                            .unwrap();
+                        let result = ScopedType::new_with_subtypes(
+                            scoped_type.cwt_type().clone(),
+                            new_scope_context,
+                            scoped_type.subtypes().clone(),
+                        );
+                        return PropertyNavigationResult::Success(Arc::new(result));
+                    }
                     PropertyNavigationResult::NotFound
                 } else {
                     // We found a matching alias - check if it has scope changes
@@ -164,7 +177,24 @@ impl PropertyNavigator {
                     }
                 }
             }
-            _ => PropertyNavigationResult::NotFound,
+            _ => {
+                // For other types, check if this property is a link property as fallback
+                let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
+                if let Some(link_def) = self.is_link_property(property_name, current_scope) {
+                    // This is a link property - create a scoped type with the output scope
+                    let mut new_scope_context = scoped_type.scope_stack().clone();
+                    new_scope_context
+                        .push_scope_type(&link_def.output_scope)
+                        .unwrap();
+                    let result = ScopedType::new_with_subtypes(
+                        scoped_type.cwt_type().clone(),
+                        new_scope_context,
+                        scoped_type.subtypes().clone(),
+                    );
+                    return PropertyNavigationResult::Success(Arc::new(result));
+                }
+                PropertyNavigationResult::NotFound
+            }
         }
     }
 
@@ -210,6 +240,7 @@ impl PropertyNavigator {
                     scoped_type.subtypes().clone(),
                 )
             };
+
             PropertyNavigationResult::Success(Arc::new(property_scoped))
         }
     }
@@ -225,8 +256,11 @@ impl PropertyNavigator {
         let (resolved_value_type, alias_def) = match &pattern_property.value_type {
             CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
                 // Resolve the AliasMatchLeft using the property name
-                self.reference_resolver
-                    .resolve_alias_match_left(key, property_name)
+                let result = self
+                    .reference_resolver
+                    .resolve_alias_match_left(key, property_name);
+
+                result
             }
             _ => (pattern_property.value_type.clone(), None),
         };

@@ -32,7 +32,7 @@ impl fmt::Display for ScopeContext {
 
 /// A stack-based scope management system for tracking scope context
 /// as we navigate through CWT properties that have push_scope and replace_scope
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ScopeStack {
     /// Stack of scopes, with the most recent (current) scope at the end
     scopes: Vec<ScopeContext>,
@@ -269,6 +269,19 @@ impl ScopeStack {
     /// Create a copy of the stack for branching (e.g., when exploring different paths)
     pub fn branch(&self) -> Self {
         self.clone()
+    }
+}
+
+impl std::fmt::Debug for ScopeStack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self == &ScopeStack::default() {
+            write!(f, "ScopeStack::default()")
+        } else {
+            write!(f, "ScopeStack {{")?;
+            write!(f, "scopes: {:?}, ", self.scopes)?;
+            write!(f, "root: {:?}, ", self.root)?;
+            write!(f, "}}")
+        }
     }
 }
 

@@ -199,7 +199,7 @@ impl ReferenceType {
 }
 
 /// Block/object types with properties and subtypes
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct BlockType {
     /// Regular properties
     pub properties: HashMap<String, Property>,
@@ -223,8 +223,67 @@ pub struct BlockType {
     pub additional_flags: Vec<CwtType>,
 }
 
+impl std::fmt::Debug for BlockType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BlockType {{")?;
+
+        if self.properties.is_empty() {
+            write!(f, "properties: {{}}")?;
+        } else {
+            write!(f, "properties: {{ ")?;
+            for (key, property) in &self.properties {
+                write!(f, "{}: {:?}, ", key, property)?;
+            }
+            write!(f, " }}")?;
+        }
+
+        if !self.subtypes.is_empty() {
+            write!(f, "subtypes: {{ ")?;
+            for (key, subtype) in &self.subtypes {
+                write!(f, "{}: {:?}, ", key, subtype)?;
+            }
+            write!(f, " }}")?;
+        }
+
+        if !self.subtype_properties.is_empty() {
+            write!(f, "subtype_properties: {{ ")?;
+            for (key, properties) in &self.subtype_properties {
+                write!(f, "{}: {{ ", key)?;
+                for (prop_key, prop) in properties {
+                    write!(f, "{}: {:?}, ", prop_key, prop)?;
+                }
+            }
+        }
+
+        if !self.pattern_properties.is_empty() {
+            write!(f, "pattern_properties: {{ ")?;
+            for pattern in &self.pattern_properties {
+                write!(f, "{:?}, ", pattern)?;
+            }
+            write!(f, " }}")?;
+        }
+
+        if self.localisation.is_some() {
+            write!(f, "localisation: {:?}, ", self.localisation)?;
+        }
+
+        if self.modifiers.is_some() {
+            write!(f, "modifiers: {:?}, ", self.modifiers)?;
+        }
+
+        if !self.additional_flags.is_empty() {
+            write!(f, "additional_flags: {{ ")?;
+            for flag in &self.additional_flags {
+                write!(f, "{:?}, ", flag)?;
+            }
+            write!(f, " }}")?;
+        }
+        write!(f, "}}")
+    }
+}
+
 /// A property that can match multiple keys using patterns
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct PatternProperty {
     /// Type of pattern
     pub pattern_type: PatternType,
@@ -237,6 +296,40 @@ pub struct PatternProperty {
 
     /// Documentation
     pub documentation: Option<String>,
+}
+
+impl std::fmt::Debug for PatternProperty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let options = if self.options == CwtOptions::default() {
+            String::new()
+        } else {
+            format!("({:?})", self.options)
+        };
+
+        let documentation = if self.documentation.is_some() {
+            format!("({:?})", self.documentation)
+        } else {
+            String::new()
+        };
+
+        match &self.pattern_type {
+            PatternType::AliasName { category } => {
+                write!(f, "alias_name[{}]{}{}", category, options, documentation)
+            }
+            PatternType::Enum { key } => write!(f, "enum[{}]{}{}", key, options, documentation),
+            PatternType::Type { key } => write!(f, "<{}>{}{}", key, options, documentation),
+        }
+    }
+}
+
+impl std::fmt::Display for PatternProperty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.pattern_type {
+            PatternType::AliasName { category } => write!(f, "alias_name[{}]", category),
+            PatternType::Enum { key } => write!(f, "enum[{}]", key),
+            PatternType::Type { key } => write!(f, "<{}>", key),
+        }
+    }
 }
 
 /// Types of patterns that can match multiple keys
@@ -333,7 +426,7 @@ pub enum AliasName {
 }
 
 /// A property in a block type
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Property {
     /// Type of this property
     pub property_type: CwtType,
@@ -343,6 +436,20 @@ pub struct Property {
 
     /// Documentation
     pub documentation: Option<String>,
+}
+
+impl std::fmt::Debug for Property {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Property {{")?;
+        write!(f, "property_type: {:?}, ", self.property_type)?;
+        if self.options != CwtOptions::default() {
+            write!(f, "options: {:?}, ", self.options)?;
+        }
+        if self.documentation.is_some() {
+            write!(f, "documentation: {:?}, ", self.documentation)?;
+        }
+        write!(f, "}}")
+    }
 }
 
 /// Subtype definition - properties that apply under certain conditions
@@ -428,46 +535,138 @@ pub enum RangeBound {
 }
 
 /// CWT options/directives that can apply to any type
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct CwtOptions {
     /// Required field
     pub required: bool,
+
     /// Primary field
     pub primary: bool,
+
     /// Optional field (explicit)
     pub optional: bool,
+
     /// Severity level
     pub severity: Option<SeverityLevel>,
+
     /// Display name
     pub display_name: Option<String>,
+
     /// Abbreviation
     pub abbreviation: Option<String>,
+
     /// Starts with constraint
     pub starts_with: Option<String>,
+
     /// Push scope
     pub push_scope: Option<String>,
+
     /// Replace scope mappings
     pub replace_scope: Option<HashMap<String, String>>,
+
     /// Scope constraint
     pub scope: Option<Vec<String>>,
+
     /// Type key filter
     pub type_key_filter: Option<TypeKeyFilter>,
+
     /// Graph related types
     pub graph_related_types: Option<Vec<String>>,
+
     /// Unique constraint
     pub unique: bool,
+
     /// Skip root key configurations
     pub skip_root_key: Option<Vec<String>>,
+
     /// Path constraints
     pub path_strict: bool,
+
     pub path_file: Option<String>,
+
     pub path_extension: Option<String>,
+
     /// Type per file
     pub type_per_file: bool,
+
     /// Range constraints (for numeric types)
     pub range: Option<Range>,
+
     /// Cardinality constraints
     pub cardinality: Option<Cardinality>,
+}
+
+impl std::fmt::Debug for CwtOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let default = CwtOptions::default();
+
+        if self == &default {
+            write!(f, "CwtOptions::default()")
+        } else {
+            write!(f, "CwtOptions {{ ")?;
+            if self.required != default.required {
+                write!(f, "required: {:?}, ", self.required)?;
+            }
+            if self.primary != default.primary {
+                write!(f, "primary: {:?}, ", self.primary)?;
+            }
+            if self.optional != default.optional {
+                write!(f, "optional: {:?}, ", self.optional)?;
+            }
+            if self.severity != default.severity {
+                write!(f, "severity: {:?}, ", self.severity)?;
+            }
+            if self.display_name != default.display_name {
+                write!(f, "display_name: {:?}, ", self.display_name)?;
+            }
+            if self.abbreviation != default.abbreviation {
+                write!(f, "abbreviation: {:?}, ", self.abbreviation)?;
+            }
+            if self.starts_with != default.starts_with {
+                write!(f, "starts_with: {:?}, ", self.starts_with)?;
+            }
+            if self.push_scope != default.push_scope {
+                write!(f, "push_scope: {:?}, ", self.push_scope)?;
+            }
+            if self.replace_scope != default.replace_scope {
+                write!(f, "replace_scope: {:?}, ", self.replace_scope)?;
+            }
+            if self.scope != default.scope {
+                write!(f, "scope: {:?}, ", self.scope)?;
+            }
+            if self.type_key_filter != default.type_key_filter {
+                write!(f, "type_key_filter: {:?}, ", self.type_key_filter)?;
+            }
+            if self.graph_related_types != default.graph_related_types {
+                write!(f, "graph_related_types: {:?}, ", self.graph_related_types)?;
+            }
+            if self.unique != default.unique {
+                write!(f, "unique: {:?}, ", self.unique)?;
+            }
+            if self.skip_root_key != default.skip_root_key {
+                write!(f, "skip_root_key: {:?}, ", self.skip_root_key)?;
+            }
+            if self.path_strict != default.path_strict {
+                write!(f, "path_strict: {:?}, ", self.path_strict)?;
+            }
+            if self.path_file != default.path_file {
+                write!(f, "path_file: {:?}, ", self.path_file)?;
+            }
+            if self.path_extension != default.path_extension {
+                write!(f, "path_extension: {:?}, ", self.path_extension)?;
+            }
+            if self.type_per_file != default.type_per_file {
+                write!(f, "type_per_file: {:?}, ", self.type_per_file)?;
+            }
+            if self.range != default.range {
+                write!(f, "range: {:?}, ", self.range)?;
+            }
+            if self.cardinality != default.cardinality {
+                write!(f, "cardinality: {:?}, ", self.cardinality)?;
+            }
+            write!(f, "}}")
+        }
+    }
 }
 
 /// Localisation specification

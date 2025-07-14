@@ -1,1 +1,0 @@
-   Compiling cw_lsp v0.1.0 (D:\dev\stelpatch\lsp)

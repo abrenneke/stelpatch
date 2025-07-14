@@ -8,7 +8,7 @@ use cw_model::{CwtAnalyzer, CwtType, PatternProperty, Property, SimpleType, Type
 
 /// A wrapper that combines a CWT type with its scope context
 /// This ensures that types always carry information about what scope they exist in
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq)]
 pub struct ScopedType {
     /// The actual CWT type definition
     cwt_type: CwtTypeOrSpecial,
@@ -16,6 +16,27 @@ pub struct ScopedType {
     scope_context: ScopeStack,
     /// The active subtypes (multiple can be active at once)
     subtypes: HashSet<String>,
+}
+
+impl std::fmt::Debug for ScopedType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.scope_context == ScopeStack::default() && self.subtypes.is_empty() {
+            write!(f, "{:?}", self.cwt_type)
+        } else {
+            write!(f, "ScopedType {{")?;
+            write!(f, "cwt_type: {:?}, ", self.cwt_type)?;
+
+            if self.scope_context != ScopeStack::default() {
+                write!(f, "scope_context: {:?}, ", self.scope_context)?;
+            }
+
+            if !self.subtypes.is_empty() {
+                write!(f, "subtypes: {:?}, ", self.subtypes)?;
+            }
+
+            write!(f, "}}")
+        }
+    }
 }
 
 impl TypeFingerprint for ScopedType {
@@ -37,7 +58,7 @@ impl TypeFingerprint for ScopedType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CwtTypeOrSpecial {
     CwtType(CwtType),
     ScopedUnion(Vec<ScopedType>),

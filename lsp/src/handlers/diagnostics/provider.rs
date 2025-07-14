@@ -125,6 +125,10 @@ impl<'client> DiagnosticsProvider<'client> {
             }
         };
 
+        if namespace == "common/tradable_actions" {
+            eprintln!("DEBUG: namespace_type: {:?}", namespace_type);
+        }
+
         // Validate each entity in the module
         let validation_start = Instant::now();
         for item in &module.items {
