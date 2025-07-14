@@ -492,6 +492,15 @@ pub struct ModifierSpec {
     pub subtypes: HashMap<String, HashMap<String, String>>,
 }
 
+impl Default for ModifierSpec {
+    fn default() -> Self {
+        Self {
+            modifiers: HashMap::new(),
+            subtypes: HashMap::new(),
+        }
+    }
+}
+
 /// CWT type definition - top-level type in the registry
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CwtTypeDefinition {

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
 use std::{collections::HashMap, sync::OnceLock};
 
 use cw_games::stellaris::BaseGame;
@@ -8,7 +9,7 @@ use cw_model::{Entity, LoadMode, Value};
 /// Cache for actual game data keys from namespaces (e.g., "energy", "minerals" from resources namespace)
 pub struct GameDataCache {
     /// Maps namespace -> set of keys defined in that namespace
-    namespaces: HashMap<String, Namespace>,
+    pub namespaces: HashMap<String, Namespace>,
     pub scripted_variables: HashMap<String, Value>,
 }
 
@@ -104,10 +105,21 @@ impl GameDataCache {
                 global_scripted_variables.len()
             );
 
-            GameDataCache {
+            let mut cache = GameDataCache {
                 namespaces,
                 scripted_variables: global_scripted_variables,
+            };
+
+            // Load modifiers and integrate them into the cache
+            let start = Instant::now();
+
+            if let Err(e) = crate::handlers::modifiers::integrate_modifiers_into_cache(&mut cache) {
+                eprintln!("Warning: Failed to load modifiers: {}", e);
+            } else {
+                eprintln!("Loaded modifiers into cache in {:?}", start.elapsed());
             }
+
+            cache
         })
     }
 

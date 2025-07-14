@@ -71,6 +71,11 @@ impl CwtAnalyzer {
         &self.data.single_aliases
     }
 
+    /// Get a specific scope group
+    pub fn get_scope_group(&self, name: &str) -> Option<&ScopeGroupDefinition> {
+        self.data.scope_groups.get(name)
+    }
+
     /// Get all defined links
     pub fn get_links(&self) -> &HashMap<String, super::definitions::LinkDefinition> {
         &self.data.links
@@ -171,6 +176,10 @@ impl CwtAnalyzer {
     /// Check if a link is defined
     pub fn has_link(&self, name: &str) -> bool {
         self.data.links.contains_key(name)
+    }
+
+    pub fn add_type(&mut self, name: &str, type_definition: TypeDefinition) {
+        self.data.types.insert(name.to_string(), type_definition);
     }
 
     /// Resolves a scope alias to a scope's canonical name

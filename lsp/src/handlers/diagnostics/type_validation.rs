@@ -91,7 +91,7 @@ pub fn validate_entity_value(
     let mut diagnostics = Vec::new();
 
     // Prevent infinite recursion
-    if depth > 10 {
+    if depth > 20 {
         eprintln!("DEBUG: Max recursion depth reached at depth {}", depth);
         return diagnostics;
     }
@@ -182,7 +182,7 @@ fn validate_value_against_type(
     let mut diagnostics = Vec::new();
 
     // Prevent infinite recursion
-    if depth > 10 {
+    if depth > 20 {
         eprintln!("DEBUG: Max recursion depth reached at depth {}", depth);
         return diagnostics;
     }

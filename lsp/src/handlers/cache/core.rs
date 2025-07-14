@@ -1,5 +1,5 @@
-use cw_model::CwtType;
 use cw_model::types::CwtAnalyzer;
+use cw_model::{CwtType, TypeDefinition};
 use cw_parser::CwtModuleCell;
 use std::collections::HashMap;
 use std::fs;
@@ -40,7 +40,7 @@ impl TypeCache {
             eprintln!("Initializing type cache");
 
             // Load CWT files - these contain all the type definitions we need
-            let cwt_analyzer = Self::load_cwt_files();
+            let mut cwt_analyzer = Self::load_cwt_files();
 
             eprintln!("Building cache from CWT types");
 
@@ -91,6 +91,22 @@ impl TypeCache {
                 // Store the type rules for this namespace
                 namespace_types.insert(namespace, Arc::new(scoped_type));
             }
+
+            // Modifiers are loaded separately so artificially add a modifier type
+            cwt_analyzer.add_type(
+                "modifier",
+                TypeDefinition {
+                    path: Some("game/modifiers".to_string()),
+                    name_field: None,
+                    skip_root_key: None,
+                    localisation: HashMap::new(),
+                    rules: CwtType::Unknown,
+                    subtypes: HashMap::new(),
+                    options: Default::default(),
+                    rule_options: Default::default(),
+                    modifiers: Default::default(),
+                },
+            );
 
             eprintln!(
                 "Built type cache with {} CWT types",

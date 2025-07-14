@@ -350,7 +350,9 @@ impl TypeDefinition {
     /// but metadata will be merged intelligently
     pub fn merge_with(&mut self, other: TypeDefinition) {
         // Always take the new rules
-        self.rules = other.rules;
+        if other.rules != CwtType::Unknown {
+            self.rules = other.rules;
+        }
 
         // Merge metadata - prefer non-None values
         if other.path.is_some() {

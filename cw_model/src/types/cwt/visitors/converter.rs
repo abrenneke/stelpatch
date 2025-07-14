@@ -3,7 +3,7 @@
 //! This module provides utilities for converting CWT AST values to our CwtType system.
 
 use cw_parser::{
-    AstCwtIdentifierOrString,
+    AstCwtExpression, AstCwtIdentifierOrString,
     cwt::{
         AstCwtBlock, AstCwtIdentifier, CwtReferenceType, CwtSimpleValue, CwtSimpleValueType,
         CwtValue,
@@ -123,7 +123,7 @@ impl CwtConverter {
         // Process all items in the block normally
         for item in &block.items {
             match item {
-                cw_parser::cwt::AstCwtExpression::Rule(rule) => {
+                AstCwtExpression::Rule(rule) => {
                     match &rule.key {
                         AstCwtIdentifierOrString::Identifier(key_id) => {
                             match key_id.identifier_type {
@@ -256,11 +256,11 @@ impl CwtConverter {
                         properties.insert(key_string, property_def);
                     }
                 }
-                cw_parser::cwt::AstCwtExpression::Value(value) => {
+                AstCwtExpression::Value(value) => {
                     let value_type = Self::convert_value(value);
                     union_values.push(value_type);
                 }
-                cw_parser::cwt::AstCwtExpression::Identifier(id) => {
+                AstCwtExpression::Identifier(id) => {
                     // Handle identifiers in blocks
                     let value = id.name.raw_value().to_string();
                     let property_def = Property {

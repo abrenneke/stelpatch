@@ -11,6 +11,7 @@ use cw_lsp::handlers::cache::{
 use cw_lsp::handlers::diagnostics::type_validation::validate_entity_value;
 use cw_lsp::handlers::utils::extract_namespace_from_uri;
 use cw_parser::AstModule;
+use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
 /// Recursively find all .txt files in a directory
@@ -170,10 +171,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let total_diagnostics = AtomicUsize::new(0);
     let processed_files = AtomicUsize::new(0);
 
-    // Process each file in parallel
-    txt_files
-        .par_iter()
-        .for_each(|file_path| match fs::read_to_string(&file_path) {
+    // Create progress bar
+    let progress_bar = ProgressBar::new(txt_files.len() as u64);
+    progress_bar.set_style(
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+            )
+            .unwrap()
+            .progress_chars("#>-"),
+    );
+
+    println!("Processing files...");
+
+    // Process each file in parallel with progress bar
+    txt_files.par_iter().for_each(|file_path| {
+        match fs::read_to_string(&file_path) {
             Ok(content) => {
                 let diagnostics = generate_file_diagnostics(&file_path, &content);
                 total_diagnostics.fetch_add(diagnostics, Ordering::Relaxed);
@@ -182,7 +195,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(e) => {
                 eprintln!("Error reading file {}: {}", file_path.display(), e);
             }
-        });
+        }
+        progress_bar.inc(1);
+    });
+
+    progress_bar.finish_with_message("Processing complete!");
 
     println!("\nSummary:");
     println!(

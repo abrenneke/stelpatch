@@ -180,11 +180,17 @@ impl ScopeStack {
     pub fn get_all_scope_properties() -> Vec<String> {
         vec![
             "this".to_string(),
+            "THIS".to_string(),
             "root".to_string(),
+            "ROOT".to_string(),
             "from".to_string(),
+            "FROM".to_string(),
             "fromfrom".to_string(),
+            "FROMFROM".to_string(),
             "fromfromfrom".to_string(),
+            "FROMFROMFROM".to_string(),
             "fromfromfromfrom".to_string(),
+            "FROMFROMFROMFROM".to_string(),
         ]
     }
 
@@ -203,19 +209,28 @@ impl ScopeStack {
 
     /// Get all available scope names at the current depth
     pub fn available_scope_names(&self) -> Vec<String> {
-        let mut names = vec!["this".to_string(), "root".to_string()];
+        let mut names = vec![
+            "this".to_string(),
+            "root".to_string(),
+            "THIS".to_string(),
+            "ROOT".to_string(),
+        ];
 
         if self.scopes.len() >= 2 {
             names.push("from".to_string());
+            names.push("FROM".to_string());
         }
         if self.scopes.len() >= 3 {
             names.push("fromfrom".to_string());
+            names.push("FROMFROM".to_string());
         }
         if self.scopes.len() >= 4 {
             names.push("fromfromfrom".to_string());
+            names.push("FROMFROMFROM".to_string());
         }
         if self.scopes.len() >= 5 {
             names.push("fromfromfromfrom".to_string());
+            names.push("FROMFROMFROMFROM".to_string());
         }
         names
     }

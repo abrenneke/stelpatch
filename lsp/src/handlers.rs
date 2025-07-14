@@ -10,6 +10,7 @@ mod document;
 pub mod document_cache;
 mod formatting;
 mod hover;
+mod modifiers;
 mod scope;
 mod scoped_type;
 mod semantic_tokens;

@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use cw_model::{GameMod, LoadMode, ModDefinition};
+use cw_model::{GameMod, LoadMode, ModDefinition, Modifier, parse_modifier_log};
 use lazy_static::lazy_static;
 use winreg::{RegKey, enums::HKEY_CURRENT_USER};
 
@@ -104,6 +104,11 @@ impl BaseGame {
 
         stellaris_path
     }
+
+    /// Loads modifiers from the Stellaris logs directory
+    pub fn load_modifiers() -> Result<Vec<Modifier>, anyhow::Error> {
+        load_stellaris_modifiers()
+    }
 }
 
 /// Gets /Users/Username/Documents/Paradox Interactive/Stellaris
@@ -123,4 +128,37 @@ pub fn stellaris_documents_dir() -> Result<PathBuf, anyhow::Error> {
     .iter()
     .collect::<PathBuf>();
     Ok(path.into())
+}
+
+/// Gets the path to the modifiers log file
+pub fn stellaris_modifiers_log_path() -> Result<PathBuf, anyhow::Error> {
+    let docs_dir = stellaris_documents_dir()?;
+    let path = docs_dir
+        .join("logs")
+        .join("script_documentation")
+        .join("modifiers.log");
+    Ok(path)
+}
+
+/// Loads and parses modifiers from the Stellaris modifiers log
+pub fn load_stellaris_modifiers() -> Result<Vec<Modifier>, anyhow::Error> {
+    let log_path = stellaris_modifiers_log_path()?;
+
+    if !log_path.exists() {
+        return Err(anyhow!(
+            "Modifiers log not found at: {}",
+            log_path.display()
+        ));
+    }
+
+    let log_content = std::fs::read_to_string(&log_path)
+        .map_err(|e| anyhow!("Failed to read modifiers log: {}", e))?;
+
+    let modifiers = parse_modifier_log(&log_content);
+
+    if modifiers.is_empty() {
+        return Err(anyhow!("No modifiers found in log file"));
+    }
+
+    Ok(modifiers)
 }

@@ -6,12 +6,12 @@
 use std::collections::HashMap;
 
 use cw_parser::{
-    AstCwtBlock, AstCwtIdentifierOrString, AstCwtRule, CwtOperator, CwtReferenceType,
-    CwtSimpleValueType, CwtValue, CwtVisitor,
+    AstCwtBlock, AstCwtExpression, AstCwtIdentifierOrString, AstCwtRule, CwtOperator,
+    CwtReferenceType, CwtSimpleValueType, CwtValue, CwtVisitor,
 };
 
 use crate::{
-    ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, LocalisationRequirement,
+    ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, CwtType, LocalisationRequirement,
     ModifierSpec, Property, RuleOptions, SeverityLevel, SkipRootKey, Subtype, SubtypeCondition,
     TypeDefinition, TypeKeyFilter, TypeOptions,
 };
@@ -69,7 +69,7 @@ impl<'a> TypeVisitor<'a> {
                     modifiers: HashMap::new(),
                     subtypes: HashMap::new(),
                 },
-                rules: CwtConverter::convert_value(&rule.value),
+                rules: CwtType::Unknown,
                 options: TypeOptions::default(),
                 rule_options: options,
             };
@@ -120,7 +120,7 @@ impl<'a> TypeVisitor<'a> {
         let mut skip_root_key_rules = Vec::new();
 
         for item in &block.items {
-            if let cw_parser::cwt::AstCwtExpression::Rule(rule) = item {
+            if let AstCwtExpression::Rule(rule) = item {
                 // Check if this is a subtype rule
                 if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
                     if matches!(identifier.identifier_type, CwtReferenceType::Subtype) {
