@@ -171,12 +171,8 @@ impl ReferenceResolver {
                     let current_scope = &scope_stack.current_scope().scope_type;
                     let mut properties = self.get_scope_link_properties(current_scope);
 
-                    // If current scope is unknown, add all possible scope properties as fallback
-                    if current_scope == "unknown" {
-                        properties.extend(ScopeStack::get_all_scope_properties());
-                    } else {
-                        properties.extend(scope_stack.available_scope_names());
-                    }
+                    // Add available scope properties (handles "unknown" scopes automatically)
+                    properties.extend(scope_stack.available_scope_names());
 
                     Arc::new(CwtType::LiteralSet(properties.into_iter().collect()))
                 } else {
@@ -324,8 +320,8 @@ impl ReferenceResolver {
 
                 // Add scope properties that resolve to the specified scope type
                 if is_unknown_scope {
-                    // If scope is unknown, add all possible scope properties as fallback
-                    for scope_property in ScopeStack::get_all_scope_properties() {
+                    // If scope is unknown, add all available scope properties as fallback
+                    for scope_property in scope_stack.available_scope_names() {
                         all_properties.insert(scope_property);
                     }
                 } else {

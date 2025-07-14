@@ -5,7 +5,7 @@
 
 use cw_parser::{AstCwtIdentifierOrString, AstCwtRule, CwtVisitor};
 
-use crate::{ConversionError, CwtAnalysisData, CwtConverter, RuleOptions, TypeDefinition};
+use crate::{ConversionError, CwtAnalysisData, CwtConverter, CwtType, RuleOptions, TypeDefinition};
 
 /// Specialized visitor for regular rule definitions
 pub struct RuleVisitor<'a> {
@@ -201,5 +201,58 @@ ambient_object = {
         // Check that we have 1 type with string key
         assert_eq!(data.types.len(), 1);
         assert!(data.types.contains_key("string_key_rule"));
+    }
+
+    #[test]
+    fn test_rule_visitor_with_nested_types() {
+        let mut data = CwtAnalysisData::new();
+        let mut visitor = RuleVisitor::new(&mut data);
+
+        let cwt_text = r#"
+tradable_actions = {
+    fire_and_forget = bool
+    ai_weight = {
+        weight = float
+        modifier = {
+            factor = float
+            weight = float
+        }
+    }
+}
+        "#;
+
+        let module = CwtModule::from_input(cwt_text).unwrap();
+        visitor.visit_module(&module);
+
+        // Check that we have the main type
+        assert_eq!(data.types.len(), 1);
+        assert!(data.types.contains_key("tradable_actions"));
+
+        // Verify the nested structure exists
+        let tradable_actions_type = &data.types["tradable_actions"];
+        if let CwtType::Block(block) = &tradable_actions_type.rules {
+            // Should have ai_weight property
+            assert!(block.properties.contains_key("ai_weight"));
+
+            // ai_weight should itself be a block
+            let ai_weight_prop = &block.properties["ai_weight"];
+            if let CwtType::Block(ai_weight_block) = &ai_weight_prop.property_type {
+                // Should have modifier property
+                assert!(ai_weight_block.properties.contains_key("modifier"));
+
+                // modifier should be a block with factor and weight
+                let modifier_prop = &ai_weight_block.properties["modifier"];
+                if let CwtType::Block(modifier_block) = &modifier_prop.property_type {
+                    assert!(modifier_block.properties.contains_key("factor"));
+                    assert!(modifier_block.properties.contains_key("weight"));
+                } else {
+                    panic!("modifier should be a block type");
+                }
+            } else {
+                panic!("ai_weight should be a block type");
+            }
+        } else {
+            panic!("tradable_actions should be a block type");
+        }
     }
 }

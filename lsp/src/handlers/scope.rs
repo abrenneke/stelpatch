@@ -145,6 +145,8 @@ impl ScopeStack {
     pub fn from_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 2 {
             Some(&self.scopes[self.scopes.len() - 2])
+        } else if self.current_scope().scope_type == "unknown" {
+            Some(self.current_scope())
         } else {
             None
         }
@@ -154,6 +156,8 @@ impl ScopeStack {
     pub fn fromfrom_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 3 {
             Some(&self.scopes[self.scopes.len() - 3])
+        } else if self.current_scope().scope_type == "unknown" {
+            Some(self.current_scope())
         } else {
             None
         }
@@ -163,6 +167,8 @@ impl ScopeStack {
     pub fn fromfromfrom_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 4 {
             Some(&self.scopes[self.scopes.len() - 4])
+        } else if self.current_scope().scope_type == "unknown" {
+            Some(self.current_scope())
         } else {
             None
         }
@@ -172,6 +178,8 @@ impl ScopeStack {
     pub fn fromfromfromfrom_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 5 {
             Some(&self.scopes[self.scopes.len() - 5])
+        } else if self.current_scope().scope_type == "unknown" {
+            Some(self.current_scope())
         } else {
             None
         }
@@ -209,6 +217,11 @@ impl ScopeStack {
 
     /// Get all available scope names at the current depth
     pub fn available_scope_names(&self) -> Vec<String> {
+        // If current scope is "unknown", return all possible scope properties as fallback
+        if self.current_scope().scope_type == "unknown" {
+            return Self::get_all_scope_properties();
+        }
+
         let mut names = vec![
             "this".to_string(),
             "root".to_string(),

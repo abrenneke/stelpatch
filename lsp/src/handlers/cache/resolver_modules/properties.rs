@@ -383,7 +383,8 @@ impl PropertyNavigator {
     /// Check if a property name is a link property for the current scope
     fn is_link_property(&self, property_name: &str, scope: &str) -> Option<&LinkDefinition> {
         if let Some(link_def) = self.cwt_analyzer.get_link(property_name) {
-            if link_def.can_be_used_from(scope, &self.cwt_analyzer) {
+            // If current scope is "unknown", treat it as a fallback that can navigate anywhere
+            if scope == "unknown" || link_def.can_be_used_from(scope, &self.cwt_analyzer) {
                 return Some(link_def);
             }
         }
@@ -394,8 +395,12 @@ impl PropertyNavigator {
     fn get_scope_link_properties(&self, scope: &str) -> Vec<String> {
         let mut link_properties = Vec::new();
 
+        // If current scope is "unknown", treat it as a fallback that can navigate anywhere
+        let is_unknown_scope = scope == "unknown";
+
         for (link_name, link_def) in self.cwt_analyzer.get_links() {
-            if link_def.can_be_used_from(scope, &self.cwt_analyzer) {
+            // If scope is unknown, allow all links as fallback, otherwise use normal validation
+            if is_unknown_scope || link_def.can_be_used_from(scope, &self.cwt_analyzer) {
                 link_properties.push(link_name.clone());
             }
         }
