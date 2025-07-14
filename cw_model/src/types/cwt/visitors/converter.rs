@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use crate::{
     BlockType, CwtOptions, CwtType, PatternProperty, PatternType, Property, ReferenceType,
-    SimpleType, TypeFingerprint,
+    SimpleType,
 };
 
 /// Converter for CWT values to CwtType

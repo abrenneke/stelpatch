@@ -17,6 +17,18 @@ pub enum AstValue<'a> {
     Maths(AstMaths<'a>),
 }
 
+impl<'a> AstValue<'a> {
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Self::String(_) => "string",
+            Self::Number(_) => "number",
+            Self::Entity(_) => "entity",
+            Self::Color(_) => "color",
+            Self::Maths(_) => "maths",
+        }
+    }
+}
+
 impl<'a> From<AstString<'a>> for AstValue<'a> {
     fn from(value: AstString<'a>) -> Self {
         Self::String(value)

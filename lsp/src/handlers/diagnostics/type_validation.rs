@@ -77,6 +77,7 @@ fn extract_possible_values(cwt_type: &CwtType) -> Vec<String> {
         CwtType::Comparable(base_type) => extract_possible_values(base_type),
         CwtType::Reference(_) => vec!["<reference>".to_string()],
         CwtType::Unknown => vec!["<unknown>".to_string()],
+        CwtType::Any => vec!["<any>".to_string()],
     }
 }
 
@@ -263,6 +264,27 @@ fn validate_value_against_type(
                 diagnostics.push(diagnostic);
             }
         }
+
+        (CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(set)), AstValue::Number(num)) => {
+            // A number is valid if when converted to a string, it is in the set
+            let number_str = num.value.value;
+            if !set.iter().any(|s| s == &number_str) {
+                let diagnostic = create_value_mismatch_diagnostic(
+                    value.span_range(),
+                    &format!(
+                        "Expected one of {} but got '{}'",
+                        set.iter()
+                            .map(|s| format!("\"{}\"", s))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        number_str
+                    ),
+                    content,
+                );
+                diagnostics.push(diagnostic);
+            }
+        }
+
         (CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(_)), _) => {
             // Expected a string from literal set but got something else
             let diagnostic = create_type_mismatch_diagnostic(
@@ -350,7 +372,7 @@ fn validate_value_against_type(
                     &format!(
                         "Expected one of: {}, found: {:?}",
                         unique_values.join(", "),
-                        std::mem::discriminant(value)
+                        value.type_name(),
                     ),
                     content,
                 );
@@ -420,6 +442,10 @@ fn validate_value_against_type(
                 content,
             );
             diagnostics.push(diagnostic);
+        }
+
+        (CwtTypeOrSpecial::CwtType(CwtType::Any), _) => {
+            // Any type is valid for anything
         }
 
         // Unknown type - don't validate

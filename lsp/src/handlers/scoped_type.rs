@@ -533,10 +533,11 @@ mod tests {
         // Valid scope fields
         assert!(scoped_type.is_valid_scope_field("this"));
         assert!(scoped_type.is_valid_scope_field("root"));
-        assert!(scoped_type.is_valid_scope_field("from"));
+        assert!(scoped_type.is_valid_scope_field("prev")); // Stack-based previous scope
 
         // Invalid scope field
         assert!(!scoped_type.is_valid_scope_field("invalid"));
+        assert!(!scoped_type.is_valid_scope_field("from")); // Explicit scope reference not set
 
         // Test validation
         assert!(scoped_type.validate_scope_field("this").is_ok());

@@ -1,5 +1,5 @@
 use cw_model::types::CwtAnalyzer;
-use cw_model::{CwtType, TypeDefinition};
+use cw_model::{BlockType, CwtType, Property, ReferenceType, SimpleType, TypeDefinition};
 use cw_parser::CwtModuleCell;
 use std::collections::HashMap;
 use std::fs;
@@ -102,6 +102,55 @@ impl TypeCache {
                     localisation: HashMap::new(),
                     rules: CwtType::Unknown,
                     subtypes: HashMap::new(),
+                    options: Default::default(),
+                    rule_options: Default::default(),
+                    modifiers: Default::default(),
+                },
+            );
+
+            let mut inline_script_block = BlockType {
+                properties: HashMap::new(),
+                subtypes: HashMap::new(),
+                subtype_properties: HashMap::new(),
+                pattern_properties: vec![],
+                localisation: None,
+                modifiers: Default::default(),
+                additional_flags: Default::default(),
+            };
+
+            inline_script_block.properties.insert(
+                "script".to_string(),
+                Property {
+                    property_type: CwtType::Reference(ReferenceType::InlineScript),
+                    documentation: None,
+                    options: Default::default(),
+                },
+            );
+
+            inline_script_block.properties.insert(
+                "scalar".to_string(),
+                Property {
+                    property_type: CwtType::Any,
+                    documentation: None,
+                    options: Default::default(),
+                },
+            );
+
+            // inline_script is special, it can appear anywhere and is not defined in the cwt files
+            cwt_analyzer.add_type(
+                "$inline_script",
+                TypeDefinition {
+                    path: Some("game/$inline_scripts".to_string()),
+                    name_field: None,
+                    skip_root_key: None,
+                    subtypes: HashMap::new(),
+                    localisation: HashMap::new(),
+                    rules: CwtType::Union(vec![
+                        // inline_script = {}
+                        CwtType::Block(inline_script_block),
+                        // inline_script = "path/to/script"
+                        CwtType::Simple(SimpleType::Scalar),
+                    ]),
                     options: Default::default(),
                     rule_options: Default::default(),
                     modifiers: Default::default(),

@@ -257,7 +257,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     GameDataCache::initialize_in_background();
 
     // Wait for caches to be initialized
-    let timeout = std::time::Duration::from_secs(30);
+    let timeout = std::time::Duration::from_secs(60);
     let start = std::time::Instant::now();
 
     while !TypeCache::is_initialized() || !GameDataCache::is_initialized() {

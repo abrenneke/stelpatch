@@ -282,6 +282,8 @@ impl<'a> TypeFormatter<'a> {
                     )
                 }
             }
+
+            CwtTypeOrSpecial::CwtType(CwtType::Any) => "any".to_string(),
         }
     }
 }

@@ -5,7 +5,7 @@
 
 use cw_parser::{AstCwtIdentifierOrString, AstCwtRule, CwtVisitor};
 
-use crate::{ConversionError, CwtAnalysisData, CwtConverter, CwtType, RuleOptions, TypeDefinition};
+use crate::{ConversionError, CwtAnalysisData, CwtConverter, RuleOptions, TypeDefinition};
 
 /// Specialized visitor for regular rule definitions
 pub struct RuleVisitor<'a> {
@@ -93,6 +93,8 @@ impl<'a> CwtVisitor<'a> for RuleVisitor<'a> {
 #[cfg(test)]
 mod tests {
     use cw_parser::CwtModule;
+
+    use crate::CwtType;
 
     use super::*;
 

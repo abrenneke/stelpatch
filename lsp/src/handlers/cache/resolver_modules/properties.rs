@@ -80,7 +80,22 @@ impl PropertyNavigator {
                     return self.handle_regular_property(scoped_type.clone(), scalar_property);
                 }
 
-                // Fourth, check pattern properties
+                // Fourth, check for special inline_script property
+                if property_name == "inline_script" {
+                    return PropertyNavigationResult::Success(Arc::new(
+                        ScopedType::new_cwt_with_subtypes(
+                            self.cwt_analyzer
+                                .get_type("$inline_script")
+                                .unwrap()
+                                .rules
+                                .clone(),
+                            scoped_type.scope_stack().clone(),
+                            scoped_type.subtypes().clone(),
+                        ),
+                    ));
+                }
+
+                // Fifth, check pattern properties
                 if let Some(pattern_property) = self
                     .pattern_matcher
                     .key_matches_pattern(property_name, block)

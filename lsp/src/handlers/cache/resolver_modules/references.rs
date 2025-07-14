@@ -2,7 +2,7 @@ use super::{ResolverUtils, SubtypeHandler};
 use crate::handlers::cache::{EntityRestructurer, FullAnalysis};
 use crate::handlers::scope::ScopeStack;
 use cw_model::types::CwtAnalyzer;
-use cw_model::{AliasDefinition, AliasName, CwtType, ReferenceType};
+use cw_model::{AliasDefinition, AliasName, CwtType, ReferenceType, SimpleType};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -215,6 +215,10 @@ impl ReferenceResolver {
                 }
                 Arc::new(CwtType::LiteralSet(properties))
             }
+            // Right now, inline_script validates to a string,
+            // but eventually it should validate to a union of all possible paths to
+            // inline script files
+            ReferenceType::InlineScript => Arc::new(CwtType::Simple(SimpleType::Scalar)),
             // For any remaining unhandled reference types, return the original
             _ => Arc::new(CwtType::Reference(ref_type.clone())),
         }

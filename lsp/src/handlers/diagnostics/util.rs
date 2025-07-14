@@ -49,6 +49,7 @@ pub fn get_type_name(cwt_type: &CwtType) -> String {
             _ => format!("reference {:?}", ref_type),
         },
         CwtType::Unknown => "unknown".to_string(),
+        CwtType::Any => "any".to_string(),
     }
 }
 

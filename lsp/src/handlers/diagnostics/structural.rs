@@ -113,6 +113,14 @@ fn is_value_compatible_with_simple_type_structurally(
         (AstValue::String(_), SimpleType::IntValueField) => true,
         (AstValue::String(_), SimpleType::Bool) => true,
 
+        // Variables (strings starting with @) are compatible with number types
+        (AstValue::String(s), SimpleType::ValueField) if s.raw_value().starts_with('@') => true,
+        (AstValue::String(s), SimpleType::Int) if s.raw_value().starts_with('@') => true,
+        (AstValue::String(s), SimpleType::Float) if s.raw_value().starts_with('@') => true,
+        (AstValue::String(s), SimpleType::PercentageField) if s.raw_value().starts_with('@') => {
+            true
+        }
+
         // Number-based types
         (AstValue::Number(_), SimpleType::ValueField) => true,
         (AstValue::Number(_), SimpleType::Int) => true,

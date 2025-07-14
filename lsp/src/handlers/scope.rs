@@ -35,9 +35,16 @@ impl fmt::Display for ScopeContext {
 #[derive(Clone, PartialEq, Eq)]
 pub struct ScopeStack {
     /// Stack of scopes, with the most recent (current) scope at the end
+    /// This is accessed via prev/prevprev/prevprevprev/prevprevprevprev
     scopes: Vec<ScopeContext>,
     /// Root scope (independent of the stack, only changeable by replace_scope)
     root: ScopeContext,
+    /// Explicit scope references (from/fromfrom/fromfromfrom/fromfromfromfrom)
+    /// These are like root - explicit references, not stack positions
+    from: Option<ScopeContext>,
+    fromfrom: Option<ScopeContext>,
+    fromfromfrom: Option<ScopeContext>,
+    fromfromfromfrom: Option<ScopeContext>,
     /// Maximum allowed stack depth to prevent infinite recursion
     max_depth: usize,
 }
@@ -49,7 +56,11 @@ impl ScopeStack {
         Self {
             scopes: vec![initial_scope.clone()],
             root: initial_scope, // Root is initialized but only changeable by replace_scope
-            max_depth: 50,       // Reasonable limit to prevent stack overflow
+            from: None,
+            fromfrom: None,
+            fromfromfrom: None,
+            fromfromfromfrom: None,
+            max_depth: 50, // Reasonable limit to prevent stack overflow
         }
     }
 
@@ -76,7 +87,7 @@ impl ScopeStack {
     }
 
     /// Replace the entire scope context based on replace_scope specification
-    /// This rebuilds the stack from deepest to shallowest scope
+    /// This rebuilds the stack from deepest to shallowest scope and sets explicit references
     pub fn replace_scope(
         &mut self,
         replacements: HashMap<String, ScopeContext>,
@@ -84,17 +95,17 @@ impl ScopeStack {
         // Clear the current stack
         self.scopes.clear();
 
-        // Build new stack from deepest to shallowest
-        // Order: fromfromfromfrom, fromfromfrom, fromfrom, from, this
-        let scope_order = [
-            "fromfromfromfrom",
-            "fromfromfrom",
-            "fromfrom",
-            "from",
+        // Build new stack from deepest to shallowest for prev scopes
+        // Order: prevprevprevprev, prevprevprev, prevprev, prev, this
+        let stack_order = [
+            "prevprevprevprev",
+            "prevprevprev",
+            "prevprev",
+            "prev",
             "this",
         ];
 
-        for &scope_name in &scope_order {
+        for &scope_name in &stack_order {
             if let Some(scope) = replacements.get(scope_name) {
                 if self.scopes.len() >= self.max_depth {
                     return Err(ScopeError::StackOverflow {
@@ -104,6 +115,12 @@ impl ScopeStack {
                 self.scopes.push(scope.clone());
             }
         }
+
+        // Set explicit scope references
+        self.from = replacements.get("from").cloned();
+        self.fromfrom = replacements.get("fromfrom").cloned();
+        self.fromfromfrom = replacements.get("fromfromfrom").cloned();
+        self.fromfromfromfrom = replacements.get("fromfromfromfrom").cloned();
 
         // Set root if specified (only replace_scope can change root)
         if let Some(root_scope) = replacements.get("root") {
@@ -141,8 +158,60 @@ impl ScopeStack {
         &self.root
     }
 
-    /// Get the parent scope (equivalent to `from` in Stellaris)
+    /// Get the explicit from scope (equivalent to `from` in Stellaris)
     pub fn from_scope(&self) -> Option<&ScopeContext> {
+        if let Some(from) = self.from.as_ref() {
+            return Some(from);
+        }
+
+        if self.current_scope().scope_type == "unknown" {
+            return Some(self.current_scope());
+        }
+
+        None
+    }
+
+    /// Get the explicit fromfrom scope (equivalent to `fromfrom` in Stellaris)
+    pub fn fromfrom_scope(&self) -> Option<&ScopeContext> {
+        if let Some(fromfrom) = self.fromfrom.as_ref() {
+            return Some(fromfrom);
+        }
+
+        if self.current_scope().scope_type == "unknown" {
+            return Some(self.current_scope());
+        }
+
+        None
+    }
+
+    /// Get the explicit fromfromfrom scope (equivalent to `fromfromfrom` in Stellaris)
+    pub fn fromfromfrom_scope(&self) -> Option<&ScopeContext> {
+        if let Some(fromfromfrom) = self.fromfromfrom.as_ref() {
+            return Some(fromfromfrom);
+        }
+
+        if self.current_scope().scope_type == "unknown" {
+            return Some(self.current_scope());
+        }
+
+        None
+    }
+
+    /// Get the explicit fromfromfromfrom scope (equivalent to `fromfromfromfrom` in Stellaris)
+    pub fn fromfromfromfrom_scope(&self) -> Option<&ScopeContext> {
+        if let Some(fromfromfromfrom) = self.fromfromfromfrom.as_ref() {
+            return Some(fromfromfromfrom);
+        }
+
+        if self.current_scope().scope_type == "unknown" {
+            return Some(self.current_scope());
+        }
+
+        None
+    }
+
+    /// Get the previous scope in the stack (equivalent to `prev` in Stellaris)
+    pub fn prev_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 2 {
             Some(&self.scopes[self.scopes.len() - 2])
         } else if self.current_scope().scope_type == "unknown" {
@@ -152,8 +221,8 @@ impl ScopeStack {
         }
     }
 
-    /// Get the grandparent scope (equivalent to `fromfrom` in Stellaris)
-    pub fn fromfrom_scope(&self) -> Option<&ScopeContext> {
+    /// Get the scope two levels back in the stack (equivalent to `prevprev` in Stellaris)
+    pub fn prevprev_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 3 {
             Some(&self.scopes[self.scopes.len() - 3])
         } else if self.current_scope().scope_type == "unknown" {
@@ -163,8 +232,8 @@ impl ScopeStack {
         }
     }
 
-    /// Get the great-grandparent scope (equivalent to `fromfromfrom` in Stellaris)
-    pub fn fromfromfrom_scope(&self) -> Option<&ScopeContext> {
+    /// Get the scope three levels back in the stack (equivalent to `prevprevprev` in Stellaris)
+    pub fn prevprevprev_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 4 {
             Some(&self.scopes[self.scopes.len() - 4])
         } else if self.current_scope().scope_type == "unknown" {
@@ -174,8 +243,8 @@ impl ScopeStack {
         }
     }
 
-    /// Get the great-great-grandparent scope (equivalent to `fromfromfromfrom` in Stellaris)
-    pub fn fromfromfromfrom_scope(&self) -> Option<&ScopeContext> {
+    /// Get the scope four levels back in the stack (equivalent to `prevprevprevprev` in Stellaris)
+    pub fn prevprevprevprev_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 5 {
             Some(&self.scopes[self.scopes.len() - 5])
         } else if self.current_scope().scope_type == "unknown" {
@@ -199,10 +268,18 @@ impl ScopeStack {
             "FROMFROMFROM".to_string(),
             "fromfromfromfrom".to_string(),
             "FROMFROMFROMFROM".to_string(),
+            "prev".to_string(),
+            "PREV".to_string(),
+            "prevprev".to_string(),
+            "PREVPREV".to_string(),
+            "prevprevprev".to_string(),
+            "PREVPREVPREV".to_string(),
+            "prevprevprevprev".to_string(),
+            "PREVPREVPREVPREV".to_string(),
         ]
     }
 
-    /// Get scope by name (this, root, from, fromfrom, etc.)
+    /// Get scope by name (this, root, from, fromfrom, prev, prevprev, etc.)
     pub fn get_scope_by_name(&self, name: &str) -> Option<&ScopeContext> {
         match name {
             "this" | "THIS" => Some(self.current_scope()),
@@ -211,6 +288,10 @@ impl ScopeStack {
             "fromfrom" | "FROMFROM" => self.fromfrom_scope(),
             "fromfromfrom" | "FROMFROMFROM" => self.fromfromfrom_scope(),
             "fromfromfromfrom" | "FROMFROMFROMFROM" => self.fromfromfromfrom_scope(),
+            "prev" | "PREV" => self.prev_scope(),
+            "prevprev" | "PREVPREV" => self.prevprev_scope(),
+            "prevprevprev" | "PREVPREVPREV" => self.prevprevprev_scope(),
+            "prevprevprevprev" | "PREVPREVPREVPREV" => self.prevprevprevprev_scope(),
             _ => None,
         }
     }
@@ -229,21 +310,40 @@ impl ScopeStack {
             "ROOT".to_string(),
         ];
 
-        if self.scopes.len() >= 2 {
+        // Add explicit scope references if they exist
+        if self.from.is_some() {
             names.push("from".to_string());
             names.push("FROM".to_string());
         }
-        if self.scopes.len() >= 3 {
+        if self.fromfrom.is_some() {
             names.push("fromfrom".to_string());
             names.push("FROMFROM".to_string());
         }
-        if self.scopes.len() >= 4 {
+        if self.fromfromfrom.is_some() {
             names.push("fromfromfrom".to_string());
             names.push("FROMFROMFROM".to_string());
         }
-        if self.scopes.len() >= 5 {
+        if self.fromfromfromfrom.is_some() {
             names.push("fromfromfromfrom".to_string());
             names.push("FROMFROMFROMFROM".to_string());
+        }
+
+        // Add stack-based scope references if they exist
+        if self.scopes.len() >= 2 {
+            names.push("prev".to_string());
+            names.push("PREV".to_string());
+        }
+        if self.scopes.len() >= 3 {
+            names.push("prevprev".to_string());
+            names.push("PREVPREV".to_string());
+        }
+        if self.scopes.len() >= 4 {
+            names.push("prevprevprev".to_string());
+            names.push("PREVPREVPREV".to_string());
+        }
+        if self.scopes.len() >= 5 {
+            names.push("prevprevprevprev".to_string());
+            names.push("PREVPREVPREVPREV".to_string());
         }
         names
     }
@@ -280,6 +380,10 @@ impl std::fmt::Debug for ScopeStack {
             write!(f, "ScopeStack {{")?;
             write!(f, "scopes: {:?}, ", self.scopes)?;
             write!(f, "root: {:?}, ", self.root)?;
+            write!(f, "from: {:?}, ", self.from)?;
+            write!(f, "fromfrom: {:?}, ", self.fromfrom)?;
+            write!(f, "fromfromfrom: {:?}, ", self.fromfromfrom)?;
+            write!(f, "fromfromfromfrom: {:?}, ", self.fromfromfromfrom)?;
             write!(f, "}}")
         }
     }
@@ -293,7 +397,33 @@ impl TypeFingerprint for ScopeStack {
             .map(|s| s.fingerprint())
             .collect::<Vec<_>>()
             .join(",");
-        format!("{}|{}", self.root.fingerprint(), scopes_fingerprint)
+
+        let explicit_scopes = format!(
+            "{}|{}|{}|{}",
+            self.from
+                .as_ref()
+                .map(|s| s.fingerprint())
+                .unwrap_or_default(),
+            self.fromfrom
+                .as_ref()
+                .map(|s| s.fingerprint())
+                .unwrap_or_default(),
+            self.fromfromfrom
+                .as_ref()
+                .map(|s| s.fingerprint())
+                .unwrap_or_default(),
+            self.fromfromfromfrom
+                .as_ref()
+                .map(|s| s.fingerprint())
+                .unwrap_or_default(),
+        );
+
+        format!(
+            "{}|{}|{}",
+            self.root.fingerprint(),
+            scopes_fingerprint,
+            explicit_scopes
+        )
     }
 }
 
@@ -354,126 +484,270 @@ mod tests {
         // Test initial state
         assert_eq!(stack.current_scope().scope_type, "country");
         assert_eq!(stack.root_scope().scope_type, "country");
+        assert_eq!(stack.prev_scope(), None);
         assert_eq!(stack.from_scope(), None);
         assert_eq!(stack.depth(), 1);
 
-        // Test push scope
+        // Test push scope (this affects the stack, not explicit references)
         stack.push_scope(ScopeContext::new("planet")).unwrap();
         assert_eq!(stack.current_scope().scope_type, "planet");
         assert_eq!(stack.root_scope().scope_type, "country");
-        assert_eq!(stack.from_scope().unwrap().scope_type, "country");
+        assert_eq!(stack.prev_scope().unwrap().scope_type, "country");
+        assert_eq!(stack.from_scope(), None); // Still no explicit from reference
         assert_eq!(stack.depth(), 2);
 
         // Test another push
         stack.push_scope(ScopeContext::new("pop")).unwrap();
         assert_eq!(stack.current_scope().scope_type, "pop");
-        assert_eq!(stack.from_scope().unwrap().scope_type, "planet");
-        assert_eq!(stack.fromfrom_scope().unwrap().scope_type, "country");
+        assert_eq!(stack.prev_scope().unwrap().scope_type, "planet");
+        assert_eq!(stack.prevprev_scope().unwrap().scope_type, "country");
+        assert_eq!(stack.from_scope(), None); // Still no explicit from reference
         assert_eq!(stack.depth(), 3);
     }
 
     #[test]
-    fn test_scope_names() {
+    fn test_explicit_scope_references() {
         let mut stack = ScopeStack::new(ScopeContext::new("country"));
-        stack.push_scope(ScopeContext::new("planet")).unwrap();
-        stack.push_scope(ScopeContext::new("pop")).unwrap();
 
-        assert_eq!(stack.get_scope_by_name("this").unwrap().scope_type, "pop");
-        assert_eq!(
-            stack.get_scope_by_name("root").unwrap().scope_type,
-            "country"
-        );
-        assert_eq!(
-            stack.get_scope_by_name("from").unwrap().scope_type,
-            "planet"
-        );
-        assert_eq!(
-            stack.get_scope_by_name("fromfrom").unwrap().scope_type,
-            "country"
-        );
-        assert_eq!(stack.get_scope_by_name("fromfromfrom"), None);
-
-        let available = stack.available_scope_names();
-        assert_eq!(available, vec!["this", "root", "from", "fromfrom"]);
-    }
-
-    #[test]
-    fn test_scope_context_manager() {
-        let mut manager = ScopeStack::new(ScopeContext::new("country"));
-
-        // Test push scope
-        manager.push_scope_type("planet").unwrap();
-        assert_eq!(manager.current_scope().scope_type, "planet");
-
-        // Test replace_scope functionality
+        // Set explicit scope references via replace_scope
         let mut replacements = HashMap::new();
         replacements.insert("this".to_string(), ScopeContext::new("pop"));
         replacements.insert("from".to_string(), ScopeContext::new("planet"));
-        replacements.insert("fromfrom".to_string(), ScopeContext::new("country"));
-        replacements.insert("root".to_string(), ScopeContext::new("empire"));
-
-        manager.replace_scope(replacements).unwrap();
-
-        // After replace_scope, the stack should be rebuilt
-        assert_eq!(manager.current_scope().scope_type, "pop");
-        assert_eq!(manager.from_scope().unwrap().scope_type, "planet");
-        assert_eq!(manager.fromfrom_scope().unwrap().scope_type, "country");
-        assert_eq!(manager.root_scope().scope_type, "empire");
-
-        // Test validation
-        assert!(manager.validate_scope_name("root").is_ok());
-        assert!(manager.validate_scope_name("this").is_ok());
-        assert!(manager.validate_scope_name("from").is_ok());
-        assert!(manager.validate_scope_name("fromfrom").is_ok());
-        assert!(manager.validate_scope_name("invalid").is_err());
-    }
-
-    #[test]
-    fn test_replace_scope() {
-        let mut stack = ScopeStack::new(ScopeContext::new("original_root"));
-
-        // Push some scopes first
-        stack
-            .push_scope(ScopeContext::new("original_scope1"))
-            .unwrap();
-        stack
-            .push_scope(ScopeContext::new("original_scope2"))
-            .unwrap();
-
-        // Verify original state
-        assert_eq!(stack.current_scope().scope_type, "original_scope2");
-        assert_eq!(stack.root_scope().scope_type, "original_root");
-        assert_eq!(stack.depth(), 3);
-
-        // Now replace the scope context
-        let mut replacements = HashMap::new();
-        replacements.insert("this".to_string(), ScopeContext::new("planet"));
-        replacements.insert("from".to_string(), ScopeContext::new("ship"));
-        replacements.insert("fromfrom".to_string(), ScopeContext::new("country"));
+        replacements.insert("fromfrom".to_string(), ScopeContext::new("system"));
         replacements.insert("root".to_string(), ScopeContext::new("empire"));
 
         stack.replace_scope(replacements).unwrap();
 
-        // Verify the new state
-        assert_eq!(stack.current_scope().scope_type, "planet");
-        assert_eq!(stack.from_scope().unwrap().scope_type, "ship");
-        assert_eq!(stack.fromfrom_scope().unwrap().scope_type, "country");
+        // Test explicit references
+        assert_eq!(stack.current_scope().scope_type, "pop");
         assert_eq!(stack.root_scope().scope_type, "empire");
+        assert_eq!(stack.from_scope().unwrap().scope_type, "planet");
+        assert_eq!(stack.fromfrom_scope().unwrap().scope_type, "system");
+        assert_eq!(stack.fromfromfrom_scope(), None);
+
+        // Test that stack-based scopes are independent
+        assert_eq!(stack.prev_scope(), None); // No stack depth for prev
+        assert_eq!(stack.depth(), 1); // Only "this" in the stack
+    }
+
+    #[test]
+    fn test_stack_vs_explicit_scopes() {
+        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+
+        // Build up a stack and set explicit references
+        let mut replacements = HashMap::new();
+        replacements.insert("this".to_string(), ScopeContext::new("pop"));
+        replacements.insert("prev".to_string(), ScopeContext::new("planet"));
+        replacements.insert("prevprev".to_string(), ScopeContext::new("system"));
+        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
+        replacements.insert("fromfrom".to_string(), ScopeContext::new("ship"));
+        replacements.insert("root".to_string(), ScopeContext::new("empire"));
+
+        stack.replace_scope(replacements).unwrap();
+
+        // Test stack-based scopes
+        assert_eq!(stack.current_scope().scope_type, "pop");
+        assert_eq!(stack.prev_scope().unwrap().scope_type, "planet");
+        assert_eq!(stack.prevprev_scope().unwrap().scope_type, "system");
         assert_eq!(stack.depth(), 3);
+
+        // Test explicit scopes
+        assert_eq!(stack.from_scope().unwrap().scope_type, "fleet");
+        assert_eq!(stack.fromfrom_scope().unwrap().scope_type, "ship");
+        assert_eq!(stack.root_scope().scope_type, "empire");
+    }
+
+    #[test]
+    fn test_scope_name_resolution() {
+        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+
+        // Set up both stack and explicit scopes
+        let mut replacements = HashMap::new();
+        replacements.insert("this".to_string(), ScopeContext::new("pop"));
+        replacements.insert("prev".to_string(), ScopeContext::new("planet"));
+        replacements.insert("prevprev".to_string(), ScopeContext::new("system"));
+        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
+        replacements.insert("fromfrom".to_string(), ScopeContext::new("ship"));
+        replacements.insert("root".to_string(), ScopeContext::new("empire"));
+
+        stack.replace_scope(replacements).unwrap();
+
+        // Test scope name resolution
+        assert_eq!(stack.get_scope_by_name("this").unwrap().scope_type, "pop");
+        assert_eq!(
+            stack.get_scope_by_name("root").unwrap().scope_type,
+            "empire"
+        );
+        assert_eq!(
+            stack.get_scope_by_name("prev").unwrap().scope_type,
+            "planet"
+        );
+        assert_eq!(
+            stack.get_scope_by_name("prevprev").unwrap().scope_type,
+            "system"
+        );
+        assert_eq!(stack.get_scope_by_name("from").unwrap().scope_type, "fleet");
+        assert_eq!(
+            stack.get_scope_by_name("fromfrom").unwrap().scope_type,
+            "ship"
+        );
+        assert_eq!(stack.get_scope_by_name("fromfromfrom"), None);
+        assert_eq!(stack.get_scope_by_name("prevprevprev"), None);
+
+        // Test case variations
+        assert_eq!(stack.get_scope_by_name("THIS").unwrap().scope_type, "pop");
+        assert_eq!(
+            stack.get_scope_by_name("ROOT").unwrap().scope_type,
+            "empire"
+        );
+        assert_eq!(stack.get_scope_by_name("FROM").unwrap().scope_type, "fleet");
+        assert_eq!(
+            stack.get_scope_by_name("PREV").unwrap().scope_type,
+            "planet"
+        );
+    }
+
+    #[test]
+    fn test_available_scope_names() {
+        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+
+        // Initially, only this and root are available
+        let mut available = stack.available_scope_names();
+        available.sort();
+        let mut expected = vec!["this", "root", "THIS", "ROOT"];
+        expected.sort();
+        assert_eq!(available, expected);
+
+        // Add stack scopes
+        stack.push_scope(ScopeContext::new("planet")).unwrap();
+        stack.push_scope(ScopeContext::new("pop")).unwrap();
+
+        let mut available = stack.available_scope_names();
+        available.sort();
+        let mut expected = vec![
+            "this", "root", "THIS", "ROOT", "prev", "PREV", "prevprev", "PREVPREV",
+        ];
+        expected.sort();
+        assert_eq!(available, expected);
+
+        // Add explicit scopes via replace_scope
+        let mut replacements = HashMap::new();
+        replacements.insert("this".to_string(), ScopeContext::new("pop"));
+        replacements.insert("prev".to_string(), ScopeContext::new("planet"));
+        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
+        replacements.insert("fromfrom".to_string(), ScopeContext::new("ship"));
+
+        stack.replace_scope(replacements).unwrap();
+
+        let mut available = stack.available_scope_names();
+        available.sort();
+        let mut expected = vec![
+            "this", "root", "THIS", "ROOT", "prev", "PREV", "from", "FROM", "fromfrom", "FROMFROM",
+        ];
+        expected.sort();
+        assert_eq!(available, expected);
+    }
+
+    #[test]
+    fn test_replace_scope_with_all_levels() {
+        let mut stack = ScopeStack::new(ScopeContext::new("original_root"));
+
+        // Test with all levels including prevprevprevprev and fromfromfromfrom
+        let mut replacements = HashMap::new();
+        replacements.insert("this".to_string(), ScopeContext::new("pop"));
+        replacements.insert("prev".to_string(), ScopeContext::new("planet"));
+        replacements.insert("prevprev".to_string(), ScopeContext::new("system"));
+        replacements.insert("prevprevprev".to_string(), ScopeContext::new("sector"));
+        replacements.insert("prevprevprevprev".to_string(), ScopeContext::new("country"));
+        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
+        replacements.insert("fromfrom".to_string(), ScopeContext::new("ship"));
+        replacements.insert("fromfromfrom".to_string(), ScopeContext::new("component"));
+        replacements.insert("fromfromfromfrom".to_string(), ScopeContext::new("weapon"));
+        replacements.insert("root".to_string(), ScopeContext::new("empire"));
+
+        stack.replace_scope(replacements).unwrap();
+
+        // Verify stack scopes
+        assert_eq!(stack.current_scope().scope_type, "pop");
+        assert_eq!(stack.prev_scope().unwrap().scope_type, "planet");
+        assert_eq!(stack.prevprev_scope().unwrap().scope_type, "system");
+        assert_eq!(stack.prevprevprev_scope().unwrap().scope_type, "sector");
+        assert_eq!(
+            stack.prevprevprevprev_scope().unwrap().scope_type,
+            "country"
+        );
+        assert_eq!(stack.depth(), 5);
+
+        // Verify explicit scopes
+        assert_eq!(stack.from_scope().unwrap().scope_type, "fleet");
+        assert_eq!(stack.fromfrom_scope().unwrap().scope_type, "ship");
+        assert_eq!(stack.fromfromfrom_scope().unwrap().scope_type, "component");
+        assert_eq!(stack.fromfromfromfrom_scope().unwrap().scope_type, "weapon");
+        assert_eq!(stack.root_scope().scope_type, "empire");
+
+        // Test scope name resolution for all levels
+        assert_eq!(stack.get_scope_by_name("this").unwrap().scope_type, "pop");
+        assert_eq!(
+            stack.get_scope_by_name("prev").unwrap().scope_type,
+            "planet"
+        );
+        assert_eq!(
+            stack.get_scope_by_name("prevprev").unwrap().scope_type,
+            "system"
+        );
+        assert_eq!(
+            stack.get_scope_by_name("prevprevprev").unwrap().scope_type,
+            "sector"
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name("prevprevprevprev")
+                .unwrap()
+                .scope_type,
+            "country"
+        );
+        assert_eq!(stack.get_scope_by_name("from").unwrap().scope_type, "fleet");
+        assert_eq!(
+            stack.get_scope_by_name("fromfrom").unwrap().scope_type,
+            "ship"
+        );
+        assert_eq!(
+            stack.get_scope_by_name("fromfromfrom").unwrap().scope_type,
+            "component"
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name("fromfromfromfrom")
+                .unwrap()
+                .scope_type,
+            "weapon"
+        );
+        assert_eq!(
+            stack.get_scope_by_name("root").unwrap().scope_type,
+            "empire"
+        );
+    }
+
+    #[test]
+    fn test_replace_scope_partial() {
+        let mut stack = ScopeStack::new(ScopeContext::new("original_root"));
 
         // Test partial replacement (only some scopes specified)
         let mut partial_replacements = HashMap::new();
         partial_replacements.insert("this".to_string(), ScopeContext::new("pop"));
-        partial_replacements.insert("from".to_string(), ScopeContext::new("district"));
-        // No fromfrom, fromfromfrom, or root specified
+        partial_replacements.insert("prev".to_string(), ScopeContext::new("planet"));
+        partial_replacements.insert("from".to_string(), ScopeContext::new("fleet"));
+        // No prevprev, fromfrom, or root specified
 
         stack.replace_scope(partial_replacements).unwrap();
 
-        // Should only have this and from, root should remain the same
+        // Should only have specified scopes
         assert_eq!(stack.current_scope().scope_type, "pop");
-        assert_eq!(stack.from_scope().unwrap().scope_type, "district");
+        assert_eq!(stack.prev_scope().unwrap().scope_type, "planet");
+        assert_eq!(stack.prevprev_scope(), None);
+        assert_eq!(stack.from_scope().unwrap().scope_type, "fleet");
         assert_eq!(stack.fromfrom_scope(), None);
-        assert_eq!(stack.root_scope().scope_type, "empire"); // Root unchanged
+        assert_eq!(stack.root_scope().scope_type, "original_root"); // Root unchanged
         assert_eq!(stack.depth(), 2);
     }
 
@@ -489,75 +763,31 @@ mod tests {
         assert_eq!(stack.current_scope().scope_type, "original_root");
         assert_eq!(stack.root_scope().scope_type, "original_root");
         assert_eq!(stack.depth(), 1);
+        assert_eq!(stack.prev_scope(), None);
         assert_eq!(stack.from_scope(), None);
     }
 
     #[test]
-    fn test_replace_scope_with_fromfromfromfrom() {
-        let mut stack = ScopeStack::new(ScopeContext::new("original_root"));
+    fn test_push_scope_affects_stack_only() {
+        let mut stack = ScopeStack::new(ScopeContext::new("country"));
 
-        // Test with all levels including fromfromfromfrom
+        // Set explicit from reference
         let mut replacements = HashMap::new();
-        replacements.insert("this".to_string(), ScopeContext::new("pop"));
-        replacements.insert("from".to_string(), ScopeContext::new("planet"));
-        replacements.insert("fromfrom".to_string(), ScopeContext::new("system"));
-        replacements.insert("fromfromfrom".to_string(), ScopeContext::new("sector"));
-        replacements.insert("fromfromfromfrom".to_string(), ScopeContext::new("country"));
-        replacements.insert("root".to_string(), ScopeContext::new("empire"));
-
+        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
         stack.replace_scope(replacements).unwrap();
 
-        // Verify all levels
+        // Now push some scopes
+        stack.push_scope(ScopeContext::new("planet")).unwrap();
+        stack.push_scope(ScopeContext::new("pop")).unwrap();
+
+        // Explicit from should be unchanged
+        assert_eq!(stack.from_scope().unwrap().scope_type, "fleet");
+
+        // Stack should have new scopes
         assert_eq!(stack.current_scope().scope_type, "pop");
-        assert_eq!(stack.from_scope().unwrap().scope_type, "planet");
-        assert_eq!(stack.fromfrom_scope().unwrap().scope_type, "system");
-        assert_eq!(stack.fromfromfrom_scope().unwrap().scope_type, "sector");
-        assert_eq!(
-            stack.fromfromfromfrom_scope().unwrap().scope_type,
-            "country"
-        );
-        assert_eq!(stack.root_scope().scope_type, "empire");
-        assert_eq!(stack.depth(), 5);
-
-        // Test scope name resolution
-        assert_eq!(stack.get_scope_by_name("this").unwrap().scope_type, "pop");
-        assert_eq!(
-            stack.get_scope_by_name("from").unwrap().scope_type,
-            "planet"
-        );
-        assert_eq!(
-            stack.get_scope_by_name("fromfrom").unwrap().scope_type,
-            "system"
-        );
-        assert_eq!(
-            stack.get_scope_by_name("fromfromfrom").unwrap().scope_type,
-            "sector"
-        );
-        assert_eq!(
-            stack
-                .get_scope_by_name("fromfromfromfrom")
-                .unwrap()
-                .scope_type,
-            "country"
-        );
-        assert_eq!(
-            stack.get_scope_by_name("root").unwrap().scope_type,
-            "empire"
-        );
-
-        // Test available scope names
-        let available = stack.available_scope_names();
-        assert_eq!(
-            available,
-            vec![
-                "this",
-                "root",
-                "from",
-                "fromfrom",
-                "fromfromfrom",
-                "fromfromfromfrom"
-            ]
-        );
+        assert_eq!(stack.prev_scope().unwrap().scope_type, "planet");
+        assert_eq!(stack.prevprev_scope().unwrap().scope_type, "country");
+        assert_eq!(stack.depth(), 3);
     }
 
     #[test]
@@ -573,5 +803,33 @@ mod tests {
             result,
             Err(ScopeError::StackOverflow { max_depth: 3 })
         ));
+    }
+
+    #[test]
+    fn test_validation() {
+        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+
+        // Set up some scopes
+        let mut replacements = HashMap::new();
+        replacements.insert("this".to_string(), ScopeContext::new("pop"));
+        replacements.insert("prev".to_string(), ScopeContext::new("planet"));
+        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
+        stack.replace_scope(replacements).unwrap();
+
+        // Test valid scope names
+        assert!(stack.validate_scope_name("this").is_ok());
+        assert!(stack.validate_scope_name("root").is_ok());
+        assert!(stack.validate_scope_name("prev").is_ok());
+        assert!(stack.validate_scope_name("from").is_ok());
+        assert!(stack.is_valid_scope_name("THIS"));
+        assert!(stack.is_valid_scope_name("ROOT"));
+        assert!(stack.is_valid_scope_name("PREV"));
+        assert!(stack.is_valid_scope_name("FROM"));
+
+        // Test invalid scope names
+        assert!(stack.validate_scope_name("invalid").is_err());
+        assert!(stack.validate_scope_name("prevprev").is_err()); // Not available at depth 2
+        assert!(stack.validate_scope_name("fromfrom").is_err()); // Not set
+        assert!(!stack.is_valid_scope_name("nonexistent"));
     }
 }

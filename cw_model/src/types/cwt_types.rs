@@ -43,6 +43,9 @@ pub enum CwtType {
 
     /// Comparable types (for triggers with == operator)
     Comparable(Box<CwtType>),
+
+    /// Any type
+    Any,
 }
 
 impl CwtType {
@@ -162,6 +165,9 @@ pub enum ReferenceType {
 
     /// Subtype reference: subtype[name]
     Subtype { name: String },
+
+    /// Inline script reference: inline_script
+    InlineScript,
 }
 
 impl ReferenceType {
@@ -194,6 +200,7 @@ impl ReferenceType {
             ReferenceType::Colour { format } => format!("colour[{}]", format),
             ReferenceType::StellarisNameFormat { key } => format!("stellaris_name_format[{}]", key),
             ReferenceType::Subtype { name } => format!("subtype[{}]", name),
+            ReferenceType::InlineScript => "inline_script".to_string(),
         }
     }
 }
@@ -794,6 +801,7 @@ impl TypeFingerprint for CwtType {
                 format!("literal_set:{}", sorted_values.join("|"))
             }
             CwtType::Comparable(base_type) => format!("comparable:{}", base_type.fingerprint()),
+            CwtType::Any => "any".to_string(),
         }
     }
 }
@@ -855,6 +863,7 @@ impl TypeFingerprint for ReferenceType {
             ReferenceType::Colour { format } => format!("colour:{}", format),
             ReferenceType::StellarisNameFormat { key } => format!("stellaris_name_format:{}", key),
             ReferenceType::Subtype { name } => format!("subtype:{}", name),
+            ReferenceType::InlineScript => "inline_script".to_string(),
         }
     }
 }
