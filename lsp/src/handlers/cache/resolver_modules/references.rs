@@ -88,16 +88,6 @@ impl ReferenceResolver {
                         {
                             found = Some(CwtType::LiteralSet(namespace_keys.into_iter().collect()));
                         }
-
-                        // Also try the key directly in case it's already a full path
-                        if found.is_none() {
-                            if let Some(namespace_keys) =
-                                EntityRestructurer::get_namespace_entity_keys(key)
-                            {
-                                found =
-                                    Some(CwtType::LiteralSet(namespace_keys.into_iter().collect()));
-                            }
-                        }
                     }
                 }
 

@@ -13,41 +13,27 @@ use super::super::utils::extract_namespace_from_uri;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use tower_lsp::Client;
-
-pub struct ClientDiagnosticsProvider<'client> {
-    client: &'client Client,
-    provider: DiagnosticsProvider,
-}
-
-impl<'client> ClientDiagnosticsProvider<'client> {
-    pub fn new(client: &'client Client, provider: DiagnosticsProvider) -> Self {
-        Self { client, provider }
-    }
-
-    pub async fn generate_diagnostics(&self, uri: &str) {
-        let diagnostics = self.provider.generate_diagnostics(uri);
-
-        // Publish diagnostics to the client
-        self.client
-            .publish_diagnostics(Url::parse(uri).unwrap(), diagnostics, None)
-            .await;
-    }
-}
 
 /// Provider for generating diagnostics with shared state
 pub struct DiagnosticsProvider {
     documents: Arc<RwLock<HashMap<String, String>>>,
+    log: bool,
 }
 
 impl DiagnosticsProvider {
     /// Create a new diagnostics provider
-    pub fn new(documents: Arc<RwLock<HashMap<String, String>>>) -> Self {
-        Self { documents }
+    pub fn new(documents: Arc<RwLock<HashMap<String, String>>>, log: bool) -> Self {
+        Self { documents, log }
     }
 
     /// Generate diagnostics for a document by attempting to parse it and type-check it
     pub fn generate_diagnostics(&self, uri: &str) -> Vec<Diagnostic> {
+        let start_time = Instant::now();
+
+        if self.log {
+            eprintln!("🔍 Starting diagnostics generation for: {}", uri);
+        }
+
         let documents_guard = self.documents.read().unwrap();
         if let Some(content) = documents_guard.get(uri) {
             let mut diagnostics = Vec::new();
@@ -56,20 +42,40 @@ impl DiagnosticsProvider {
             let mut module = AstModule::new();
             match module.parse_input(content) {
                 Ok(()) => {
+                    if self.log {
+                        eprintln!("✅ Parsing successful for: {}", uri);
+                    }
                     // If parsing succeeds, do type checking
                     let type_diagnostics = self.generate_type_diagnostics(&module, uri, content);
 
                     diagnostics.extend(type_diagnostics);
                 }
                 Err(error) => {
+                    if self.log {
+                        eprintln!("❌ Parsing failed for: {} - {}", uri, error);
+                    }
                     // If parsing fails, add parsing error
                     let diagnostic = create_diagnostic_from_parse_error(&error, content);
                     diagnostics.push(diagnostic);
                 }
             }
 
+            let elapsed = start_time.elapsed();
+            if self.log {
+                eprintln!(
+                    "🏁 Finished diagnostics for: {} | {} diagnostics generated | took {:?}",
+                    uri,
+                    diagnostics.len(),
+                    elapsed
+                );
+            }
+
             diagnostics
         } else {
+            let elapsed = start_time.elapsed();
+            if self.log {
+                eprintln!("❓ Document not found: {} | took {:?}", uri, elapsed);
+            }
             Vec::new()
         }
     }
@@ -81,7 +87,6 @@ impl DiagnosticsProvider {
         uri: &str,
         content: &str,
     ) -> Vec<Diagnostic> {
-        let type_check_start = Instant::now();
         let mut diagnostics = Vec::new();
 
         // Check if type cache is initialized
@@ -122,7 +127,6 @@ impl DiagnosticsProvider {
         }
 
         // Validate each entity in the module
-        let validation_start = Instant::now();
         for item in &module.items {
             if let AstEntityItem::Expression(expr) = item {
                 if expr.key.raw_value().starts_with("@") {
@@ -210,21 +214,43 @@ impl DiagnosticsProvider {
 
     /// Generate diagnostics for content directly (synchronous version for parallel processing)
     pub fn generate_diagnostics_for_content(&self, uri: &str, content: &str) -> Vec<Diagnostic> {
+        let start_time = Instant::now();
+
+        if self.log {
+            eprintln!("🔍 Starting diagnostics generation for content: {}", uri);
+        }
+
         let mut diagnostics = Vec::new();
 
         // First, try to parse the content
         let mut module = AstModule::new();
         match module.parse_input(content) {
             Ok(()) => {
+                if self.log {
+                    eprintln!("✅ Parsing successful for content: {}", uri);
+                }
                 // If parsing succeeds, do type checking
                 let type_diagnostics = self.generate_type_diagnostics(&module, uri, content);
                 diagnostics.extend(type_diagnostics);
             }
             Err(error) => {
+                if self.log {
+                    eprintln!("❌ Parsing failed for content: {} - {}", uri, error);
+                }
                 // If parsing fails, add parsing error
                 let diagnostic = create_diagnostic_from_parse_error(&error, content);
                 diagnostics.push(diagnostic);
             }
+        }
+
+        let elapsed = start_time.elapsed();
+        if self.log {
+            eprintln!(
+                "🏁 Finished diagnostics for content: {} | {} diagnostics generated | took {:?}",
+                uri,
+                diagnostics.len(),
+                elapsed
+            );
         }
 
         diagnostics

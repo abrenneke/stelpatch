@@ -9,7 +9,7 @@ use cw_model::{
 };
 use cw_parser::AstEntity;
 
-use crate::handlers::cache::{GameDataCache, TypeCache};
+use crate::handlers::cache::{GameDataCache, ModDataCache, TypeCache};
 
 /// Special property key used to store the original structural key
 /// This is needed for subtype determination when entities are restructured
@@ -261,8 +261,9 @@ impl EntityRestructurer {
         for (_module_name, module) in &namespace_data.modules {
             // Process each property in the module
             for (key, property_list) in &module.properties.kv {
-                if let Some(first_property) = property_list.0.first() {
-                    if let Value::Entity(entity) = &first_property.value {
+                // Process all properties, not just the first one, to handle duplicate keys
+                for property_info in &property_list.0 {
+                    if let Value::Entity(entity) = &property_info.value {
                         original_count += 1;
 
                         // Check if this entity passes the type_key_filter
@@ -485,8 +486,7 @@ impl EntityRestructurer {
         }
 
         // Add mod entity keys
-        if let Some(mod_keys) = super::game_data::ModDataCache::get_namespace_entity_keys(namespace)
-        {
+        if let Some(mod_keys) = ModDataCache::get_namespace_entity_keys(namespace) {
             all_keys.extend(mod_keys.iter().cloned());
         }
 

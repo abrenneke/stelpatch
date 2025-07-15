@@ -255,7 +255,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create DiagnosticsProvider
     let documents = Arc::new(RwLock::new(HashMap::new()));
-    let provider = DiagnosticsProvider::new(documents.clone());
+    let provider = DiagnosticsProvider::new(documents.clone(), false);
 
     // Process each file in parallel with progress bar
     txt_files.par_iter().for_each(|file_path| {
