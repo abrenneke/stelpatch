@@ -19,6 +19,7 @@ pub struct GameDataCache {
 #[derive(Clone)]
 pub struct Namespace {
     pub entities: HashMap<String, Entity>,
+    pub values: Vec<String>,
     pub entity_keys: Vec<String>,
     pub entity_keys_set: Arc<HashSet<String>>,
     pub scripted_variables: HashMap<String, Value>,
@@ -30,6 +31,7 @@ impl Namespace {
     pub fn new() -> Self {
         Self {
             entities: HashMap::new(),
+            values: Vec::new(),
             entity_keys: Vec::new(),
             entity_keys_set: Arc::new(HashSet::new()),
             scripted_variables: HashMap::new(),
@@ -98,6 +100,12 @@ impl GameDataCache {
                                 .entities
                                 .insert(key.to_string(), entity.clone());
                         }
+                    }
+                }
+
+                for value in &namespace.values {
+                    if let Value::String(string) = value {
+                        namespace_data.values.push(string.clone());
                     }
                 }
 

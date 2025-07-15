@@ -35,6 +35,7 @@ pub fn integrate_modifiers_into_cache(
         entity_keys_set,
         scripted_variables: HashMap::new(),
         modules: HashMap::new(),
+        values: Vec::new(),
     };
 
     // Insert the modifiers namespace into the game data cache

@@ -246,7 +246,29 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         // Get the namespace for the specified path
         let path = complex_def.path.trim_start_matches("game/");
 
-        // Use EntityRestructurer to get entities, which handles special loading rules
+        // Check if this is a flat list extraction pattern (name = { enum_name })
+        // This happens when enum_name is in additional_flags, meaning extract all values directly
+        let is_flat_list_pattern = match &complex_def.name_structure {
+            CwtType::Block(block_type) => {
+                // Check if additional_flags contains enum_name literal
+                block_type
+                    .additional_flags
+                    .iter()
+                    .any(|flag| matches!(flag, CwtType::Literal(lit) if lit == "enum_name"))
+            }
+            CwtType::Literal(lit) if lit == "enum_name" => true,
+            _ => false,
+        };
+
+        // For flat list patterns, try to get flat string values (for cases like component_tags)
+        if is_flat_list_pattern {
+            if let Some(namespace_values) = EntityRestructurer::get_namespace_values(path) {
+                values.extend(namespace_values.into_iter());
+                return values;
+            }
+        }
+
+        // Fall back to structured entity extraction
         if let Some(entities) = EntityRestructurer::get_all_namespace_entities(path) {
             for (_entity_name, entity) in &entities {
                 if let Some(extracted_values) = self.extract_values_from_entity(
@@ -280,13 +302,24 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                 for (property_name, property_value) in &entity.properties.kv {
                     if let Some(expected_property) = block_type.properties.get(property_name) {
                         for value in &property_value.0 {
-                            if let Some(nested_entity) = value.value.as_entity() {
-                                // Pass the inner structure instead of the entire name_structure
-                                self.extract_values_recursive(
-                                    nested_entity,
-                                    &expected_property.property_type,
-                                    &mut values,
-                                );
+                            match &expected_property.property_type {
+                                CwtType::Literal(literal) if literal == "enum_name" => {
+                                    // Handle direct string values for enum_name
+                                    if let Some(string_value) = value.value.as_string() {
+                                        values.insert(string_value.clone());
+                                    }
+                                }
+                                _ => {
+                                    // Handle nested entities for other types
+                                    if let Some(nested_entity) = value.value.as_entity() {
+                                        // Pass the inner structure instead of the entire name_structure
+                                        self.extract_values_recursive(
+                                            nested_entity,
+                                            &expected_property.property_type,
+                                            &mut values,
+                                        );
+                                    }
+                                }
                             }
                         }
                     }

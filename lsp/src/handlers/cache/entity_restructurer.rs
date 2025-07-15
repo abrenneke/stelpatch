@@ -616,6 +616,18 @@ impl EntityRestructurer {
         }
     }
 
+    pub fn get_namespace_values(namespace: &str) -> Option<Vec<String>> {
+        if let Some(game_data) = GameDataCache::get() {
+            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+                Some(namespace_data.values.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     /// Check if a namespace has restructured entities
     pub fn has_restructured_entities(namespace: &str) -> bool {
         Self::get()

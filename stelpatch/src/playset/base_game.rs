@@ -8,7 +8,7 @@ use std::{
 use anyhow::anyhow;
 use lasso::ThreadedRodeo;
 use lazy_static::lazy_static;
-use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+use winreg::{RegKey, enums::HKEY_CURRENT_USER};
 
 use super::{
     game_mod::{GameMod, LoadMode},
@@ -124,9 +124,7 @@ mod tests {
     use crate::playset::{base_game::BaseGame, game_mod::LoadMode};
 
     #[test]
-    fn test_get_install_directory_windows() {
-        // dbg!(BaseGame::get_install_directory_windows());
-    }
+    fn test_get_install_directory_windows() {}
 
     #[test]
     fn load_base_game_as_mod() {

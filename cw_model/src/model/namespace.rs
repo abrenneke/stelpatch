@@ -51,8 +51,4 @@ impl Namespace {
         }
         None
     }
-
-    // pub fn get_entity(&self, entity_name: &str) -> Option<&Entity> {
-    // self.entities.get(entity_name).map(|v| v.entity())
-    // }
 }

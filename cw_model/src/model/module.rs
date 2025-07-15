@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use cw_parser::{AstModuleCell, AstVisitor};
+use cw_parser::{AstModuleCell, AstValue, AstVisitor};
 use path_slash::PathBufExt;
 
 use crate::{Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value};
@@ -163,5 +163,16 @@ where
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(property);
+    }
+
+    fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> () {
+        match node {
+            AstValue::String(string) => {
+                self.module
+                    .values
+                    .push(Value::String(string.raw_value().to_string()));
+            }
+            _ => {}
+        }
     }
 }

@@ -122,7 +122,6 @@ impl DiagnosticsProvider {
         };
 
         if let CwtTypeOrSpecial::CwtType(CwtType::Unknown) = namespace_type.cwt_type() {
-            dbg!(&namespace);
             panic!("Namespace type is unknown");
         }
 
