@@ -3,6 +3,7 @@ use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
+use crate::handlers::utils::contains_scripted_argument;
 use cw_model::{
     AliasDefinition, AliasName, BlockType, CwtAnalyzer, CwtType, LinkDefinition, PatternProperty,
     PatternType, Property, ReferenceType,
@@ -82,6 +83,12 @@ impl PropertyNavigator {
                     return self.handle_regular_property(scoped_type.clone(), scalar_property);
                 }
 
+                if let Some(int_property) = block.properties.get("int") {
+                    if property_name.parse::<i32>().is_ok() {
+                        return self.handle_regular_property(scoped_type.clone(), int_property);
+                    }
+                }
+
                 // Fourth, check for special inline_script property
                 if property_name == "inline_script" {
                     return PropertyNavigationResult::Success(Arc::new(
@@ -132,6 +139,18 @@ impl PropertyNavigator {
                             }
                         }
                     }
+                }
+
+                // If it's a scripted argument, this could be really anything
+                if contains_scripted_argument(property_name) {
+                    return PropertyNavigationResult::Success(Arc::new(
+                        ScopedType::new_cwt_with_subtypes(
+                            CwtType::Any,
+                            scoped_type.scope_stack().clone(),
+                            scoped_type.subtypes().clone(),
+                            scoped_type.in_scripted_effect_block().cloned(),
+                        ),
+                    ));
                 }
 
                 // Finally, check if this property is a link property (as fallback)

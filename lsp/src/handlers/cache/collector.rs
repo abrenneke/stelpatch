@@ -459,6 +459,31 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                 self.extract_arguments_recursive(nested_entity, arguments);
             }
         }
+
+        // Also check conditional blocks
+        for (condition, conditional_block) in &entity.conditional_blocks {
+            arguments.insert(condition.clone());
+
+            // Extract arguments from conditional block properties
+            for (_key, property_value) in &conditional_block.properties.kv {
+                for value in &property_value.0 {
+                    if let Some(string_value) = value.value.as_string() {
+                        self.extract_arguments_from_string(string_value, arguments);
+                    } else if let Some(nested_entity) = value.value.as_entity() {
+                        self.extract_arguments_recursive(nested_entity, arguments);
+                    }
+                }
+            }
+
+            // Extract arguments from conditional block items
+            for item in &conditional_block.items {
+                if let Some(string_value) = item.as_string() {
+                    self.extract_arguments_from_string(string_value, arguments);
+                } else if let Some(nested_entity) = item.as_entity() {
+                    self.extract_arguments_recursive(nested_entity, arguments);
+                }
+            }
+        }
     }
 
     fn extract_arguments_from_string(&self, string_value: &str, arguments: &mut HashSet<String>) {

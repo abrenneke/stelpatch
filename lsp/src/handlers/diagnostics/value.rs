@@ -1,12 +1,15 @@
+use std::ops::Range;
+
 use cw_model::SimpleType;
 use cw_parser::{AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
 
 use crate::handlers::{
-    cache::{GameDataCache, TypeCache},
+    cache::{EntityRestructurer, GameDataCache, TypeCache},
     diagnostics::diagnostic::create_type_mismatch_diagnostic,
     scope::ScopeStack,
     settings::VALIDATE_LOCALISATION,
+    utils::contains_scripted_argument,
 };
 
 /// Check if a value is compatible with a simple type with scope context, returning a diagnostic if incompatible
@@ -128,6 +131,8 @@ pub fn is_value_compatible_with_simple_type(
             let val = s.raw_value();
             if val.starts_with("@") {
                 validate_scripted_variable(val, value.span_range(), content, current_namespace)
+            } else if val.starts_with("$") && val.ends_with("$") {
+                None // Argument in scripted effect
             } else {
                 // TODO: Handle other value references
                 Some(create_type_mismatch_diagnostic(
@@ -152,6 +157,8 @@ pub fn is_value_compatible_with_simple_type(
             let val = s.raw_value();
             if val.starts_with("@") {
                 validate_scripted_variable(val, value.span_range(), content, current_namespace)
+            } else if val.starts_with("$") && val.ends_with("$") {
+                None // Argument in scripted effect
             } else {
                 Some(create_type_mismatch_diagnostic(
                     value.span_range(),
@@ -165,6 +172,8 @@ pub fn is_value_compatible_with_simple_type(
             let val = s.raw_value();
             if val.starts_with("@") {
                 validate_scripted_variable(val, value.span_range(), content, current_namespace)
+            } else if val.starts_with("$") && val.ends_with("$") {
+                None // Argument in scripted effect
             } else {
                 Some(create_type_mismatch_diagnostic(
                     value.span_range(),
@@ -199,6 +208,8 @@ pub fn is_value_compatible_with_simple_type(
             let val = s.raw_value();
             if val.starts_with("@") {
                 validate_scripted_variable(val, value.span_range(), content, current_namespace)
+            } else if val.starts_with("$") && val.ends_with("$") {
+                None // Argument in scripted effect
             } else {
                 // TODO: Handle other value references
                 Some(create_type_mismatch_diagnostic(
@@ -213,6 +224,8 @@ pub fn is_value_compatible_with_simple_type(
             let val = s.raw_value();
             if val == "yes" || val == "no" {
                 None // Valid boolean
+            } else if val.starts_with("$") && val.ends_with("$") {
+                None // Argument in scripted effect
             } else {
                 Some(create_type_mismatch_diagnostic(
                     value.span_range(),
@@ -244,11 +257,14 @@ pub fn is_value_compatible_with_simple_type(
 /// Validate a scripted variable reference
 fn validate_scripted_variable(
     variable_name: &str,
-    span_range: std::ops::Range<usize>,
+    span_range: Range<usize>,
     content: &str,
     current_namespace: Option<&str>,
 ) -> Option<Diagnostic> {
-    use crate::handlers::cache::EntityRestructurer;
+    // We can have dynamic variables like foo_$ARGUMENT$_name
+    if contains_scripted_argument(variable_name) {
+        return None; // It's probably fine
+    }
 
     if let Some(cache) = GameDataCache::get() {
         // Check global scripted variables first

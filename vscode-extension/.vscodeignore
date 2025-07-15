@@ -1,0 +1,31 @@
+# Source files
+src/
+tsconfig.json
+*.ts
+
+# Build artifacts
+out/test/
+out/**/*.map
+
+# Dependencies
+node_modules/
+
+# Development files
+.vscode/
+.gitignore
+.eslintrc.json
+.prettierrc
+*.log
+
+# Package files
+*.vsix
+
+# Documentation
+README.md
+CHANGELOG.md
+
+# Keep server directory - this contains the bundled LSP executable
+!server/
+
+# Keep config directory - this contains the CWT configuration files
+!config/ 

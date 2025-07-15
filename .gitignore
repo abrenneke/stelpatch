@@ -4,3 +4,6 @@ stelpatch.code-workspace
 
 changes.txt
 profile.json.gz
+*.vsix
+vscode-extension/server
+vscode-extension/config

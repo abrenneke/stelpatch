@@ -98,6 +98,17 @@ pub fn extract_namespace_from_uri(uri: &str) -> Option<String> {
     None
 }
 
+pub fn contains_scripted_argument(identifier: &str) -> bool {
+    if let Some(first_dollar_index) = identifier.find('$') {
+        if let Some(last_dollar_index) = identifier.rfind('$') {
+            if first_dollar_index != last_dollar_index {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

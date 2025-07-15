@@ -65,52 +65,75 @@ export function activate(context: ExtensionContext) {
 	context.subscriptions.push(onDidOpenTextDocument);
 	context.subscriptions.push(onDidSaveTextDocument);
 	
-	// The server is implemented as a separate cargo project
-	const serverCommand = 'cargo';
-	const serverArgs = ['run', '--release', '--bin', 'cw_lsp'];
+	// Try bundled executable first, fall back to cargo for development
+	const executableName = process.platform === 'win32' ? 'cw_lsp.exe' : 'cw_lsp';
+	const serverExecutable = path.join(context.extensionPath, 'server', executableName);
+	log(`Checking for bundled executable: ${serverExecutable}`);
 	
-	// Get the path to the LSP server (assuming it's in ../lsp relative to this extension)
-	const serverWorkingDirectory = path.join(context.extensionPath, '..', 'lsp');
-	log(`Server working directory: ${serverWorkingDirectory}`);
+	let serverOptions: ServerOptions;
 	
-	// Check if the LSP server directory exists
-	if (!fs.existsSync(serverWorkingDirectory)) {
-		log(`❌ ERROR: LSP server directory does not exist: ${serverWorkingDirectory}`);
-		window.showErrorMessage(`CW LSP: Server directory not found at ${serverWorkingDirectory}`);
-		return;
-	}
-	
-	// Check if Cargo.toml exists in the server directory
-	const cargoTomlPath = path.join(serverWorkingDirectory, 'Cargo.toml');
-	if (!fs.existsSync(cargoTomlPath)) {
-		log(`❌ ERROR: Cargo.toml not found at: ${cargoTomlPath}`);
-		window.showErrorMessage(`CW LSP: Cargo.toml not found in server directory`);
-		return;
-	}
-	
-	log('✅ Server directory and Cargo.toml found');
-
-	const serverOptions: ServerOptions = {
-		run: { 
-			command: serverCommand, 
-			args: serverArgs,
-			options: {
-				cwd: serverWorkingDirectory
+	if (fs.existsSync(serverExecutable)) {
+		// Production mode: use bundled executable
+		log('✅ Using bundled LSP server executable');
+		serverOptions = {
+			run: { 
+				command: serverExecutable
+			},
+			debug: {
+				command: serverExecutable
 			}
-		},
-		debug: {
-			command: serverCommand,
-			args: serverArgs,
-			options: {
-				cwd: serverWorkingDirectory
-			}
+		};
+		log('📋 Server options configured (bundled):');
+		log(`  Command: ${serverExecutable}`);
+	} else {
+		// Development mode: compile with cargo
+		log('🔄 Bundled executable not found, falling back to cargo (development mode)');
+		
+		const serverCommand = 'cargo';
+		const serverArgs = ['run', '--release', '--bin', 'cw_lsp'];
+		const serverWorkingDirectory = path.join(context.extensionPath, '..', 'lsp');
+		
+		log(`Server working directory: ${serverWorkingDirectory}`);
+		
+		// Check if the LSP server directory exists
+		if (!fs.existsSync(serverWorkingDirectory)) {
+			log(`❌ ERROR: LSP server directory does not exist: ${serverWorkingDirectory}`);
+			window.showErrorMessage(`CW LSP: Server directory not found at ${serverWorkingDirectory}`);
+			return;
 		}
-	};
-
-	log('📋 Server options configured:');
-	log(`  Command: ${serverCommand}`);
-	log(`  Args: ${JSON.stringify(serverArgs)}`);
-	log(`  Working directory: ${serverWorkingDirectory}`);
+		
+		// Check if Cargo.toml exists in the server directory
+		const cargoTomlPath = path.join(serverWorkingDirectory, 'Cargo.toml');
+		if (!fs.existsSync(cargoTomlPath)) {
+			log(`❌ ERROR: Cargo.toml not found at: ${cargoTomlPath}`);
+			window.showErrorMessage(`CW LSP: Cargo.toml not found in server directory`);
+			return;
+		}
+		
+		log('✅ Server directory and Cargo.toml found');
+		
+		serverOptions = {
+			run: { 
+				command: serverCommand, 
+				args: serverArgs,
+				options: {
+					cwd: serverWorkingDirectory
+				}
+			},
+			debug: {
+				command: serverCommand,
+				args: serverArgs,
+				options: {
+					cwd: serverWorkingDirectory
+				}
+			}
+		};
+		
+		log('📋 Server options configured (cargo):');
+		log(`  Command: ${serverCommand}`);
+		log(`  Args: ${JSON.stringify(serverArgs)}`);
+		log(`  Working directory: ${serverWorkingDirectory}`);
+	}
 
 	// Options to control the language client
 	const clientOptions: LanguageClientOptions = {
@@ -146,7 +169,6 @@ export function activate(context: ExtensionContext) {
 		
 		if (event.newState === State.Running) {
 			log('✅ LSP server is now running!');
-			window.showInformationMessage('CW LSP: Server started successfully');
 		} else if (event.newState === State.Stopped) {
 			log('🛑 LSP server stopped');
 			if (event.oldState === State.Starting) {

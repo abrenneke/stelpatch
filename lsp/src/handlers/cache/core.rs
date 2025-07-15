@@ -2,6 +2,7 @@ use cw_model::types::CwtAnalyzer;
 use cw_model::{BlockType, CwtType, Property, ReferenceType, SimpleType, TypeDefinition};
 use cw_parser::CwtModuleCell;
 use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -172,17 +173,50 @@ impl TypeCache {
         })
     }
 
-    /// Load CWT files from the hardcoded path
+    /// Load CWT files from a path relative to the executable
     fn load_cwt_files() -> CwtAnalyzer {
-        eprintln!("Loading CWT files from hardcoded path");
+        eprintln!("Loading CWT files from relative path");
 
-        let cwt_path = r"D:\dev\github\cwtools-stellaris-config\config";
-        let dir_path = Path::new(cwt_path);
+        // First try to load from relative path (for bundled extension)
+        let cwt_path = if let Ok(exe_path) = env::current_exe() {
+            // Get the directory containing the executable (server/)
+            if let Some(exe_dir) = exe_path.parent() {
+                // Get the parent directory (extension root)
+                if let Some(ext_root) = exe_dir.parent() {
+                    // Join with config directory
+                    let relative_config = ext_root.join("config");
+                    eprintln!("Trying relative config path: {}", relative_config.display());
+                    if relative_config.exists() {
+                        Some(relative_config)
+                    } else {
+                        eprintln!(
+                            "Relative config path doesn't exist, falling back to hardcoded path"
+                        );
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Fall back to hardcoded path if relative path doesn't work
+        let dir_path = cwt_path.unwrap_or_else(|| {
+            eprintln!("Using hardcoded config path");
+            Path::new(r"D:\dev\github\cwtools-stellaris-config\config").to_path_buf()
+        });
 
         let mut cwt_analyzer = CwtAnalyzer::new();
 
         if !dir_path.exists() {
-            eprintln!("Warning: CWT directory '{}' does not exist", cwt_path);
+            eprintln!(
+                "Warning: CWT directory '{}' does not exist",
+                dir_path.display()
+            );
             return cwt_analyzer;
         }
 
@@ -203,7 +237,7 @@ impl TypeCache {
             Ok(())
         }
 
-        if let Err(e) = visit_dir(dir_path, &mut cwt_files) {
+        if let Err(e) = visit_dir(&dir_path, &mut cwt_files) {
             eprintln!("Error reading directory {}: {}", dir_path.display(), e);
         }
 
