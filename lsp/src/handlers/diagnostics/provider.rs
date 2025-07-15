@@ -48,54 +48,28 @@ impl DiagnosticsProvider {
 
     /// Generate diagnostics for a document by attempting to parse it and type-check it
     pub fn generate_diagnostics(&self, uri: &str) -> Vec<Diagnostic> {
-        let start_time = Instant::now();
-        eprintln!("DEBUG: Starting diagnostics generation for {}", uri);
-
         let documents_guard = self.documents.read().unwrap();
         if let Some(content) = documents_guard.get(uri) {
             let mut diagnostics = Vec::new();
 
             // First, try to parse the content
-            let parse_start = Instant::now();
             let mut module = AstModule::new();
             match module.parse_input(content) {
                 Ok(()) => {
-                    let parse_duration = parse_start.elapsed();
-                    eprintln!(
-                        "DEBUG: Parsing completed in {:?} for {}",
-                        parse_duration, uri
-                    );
-
                     // If parsing succeeds, do type checking
-                    let type_check_start = Instant::now();
                     let type_diagnostics = self.generate_type_diagnostics(&module, uri, content);
-                    let type_check_duration = type_check_start.elapsed();
-                    eprintln!(
-                        "DEBUG: Type checking completed in {:?} for {}",
-                        type_check_duration, uri
-                    );
 
                     diagnostics.extend(type_diagnostics);
                 }
                 Err(error) => {
-                    let parse_duration = parse_start.elapsed();
-                    eprintln!("DEBUG: Parsing failed in {:?} for {}", parse_duration, uri);
-
                     // If parsing fails, add parsing error
                     let diagnostic = create_diagnostic_from_parse_error(&error, content);
                     diagnostics.push(diagnostic);
                 }
             }
 
-            let total_duration = start_time.elapsed();
-            eprintln!(
-                "DEBUG: Total diagnostics generation completed in {:?} for {}",
-                total_duration, uri
-            );
-
             diagnostics
         } else {
-            eprintln!("DEBUG: No content found for {}", uri);
             Vec::new()
         }
     }
@@ -231,66 +205,27 @@ impl DiagnosticsProvider {
                 diagnostics.extend(entity_diagnostics);
             }
         }
-        let validation_duration = validation_start.elapsed();
-        eprintln!(
-            "DEBUG: Entity validation took {:?} for namespace '{}'",
-            validation_duration, namespace
-        );
-
-        let total_type_check_duration = type_check_start.elapsed();
-        eprintln!(
-            "DEBUG: Generated {} diagnostics in {:?} for namespace '{}'",
-            diagnostics.len(),
-            total_type_check_duration,
-            namespace
-        );
         diagnostics
     }
 
     /// Generate diagnostics for content directly (synchronous version for parallel processing)
     pub fn generate_diagnostics_for_content(&self, uri: &str, content: &str) -> Vec<Diagnostic> {
-        let start_time = Instant::now();
-        eprintln!("DEBUG: Starting diagnostics generation for {}", uri);
-
         let mut diagnostics = Vec::new();
 
         // First, try to parse the content
-        let parse_start = Instant::now();
         let mut module = AstModule::new();
         match module.parse_input(content) {
             Ok(()) => {
-                let parse_duration = parse_start.elapsed();
-                eprintln!(
-                    "DEBUG: Parsing completed in {:?} for {}",
-                    parse_duration, uri
-                );
-
                 // If parsing succeeds, do type checking
-                let type_check_start = Instant::now();
                 let type_diagnostics = self.generate_type_diagnostics(&module, uri, content);
-                let type_check_duration = type_check_start.elapsed();
-                eprintln!(
-                    "DEBUG: Type checking completed in {:?} for {}",
-                    type_check_duration, uri
-                );
-
                 diagnostics.extend(type_diagnostics);
             }
             Err(error) => {
-                let parse_duration = parse_start.elapsed();
-                eprintln!("DEBUG: Parsing failed in {:?} for {}", parse_duration, uri);
-
                 // If parsing fails, add parsing error
                 let diagnostic = create_diagnostic_from_parse_error(&error, content);
                 diagnostics.push(diagnostic);
             }
         }
-
-        let total_duration = start_time.elapsed();
-        eprintln!(
-            "DEBUG: Total diagnostics generation completed in {:?} for {}",
-            total_duration, uri
-        );
 
         diagnostics
     }

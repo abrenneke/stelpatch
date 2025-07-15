@@ -90,7 +90,7 @@ pub struct RestructureInfo {
     pub restructured_entity_count: usize,
 }
 
-static RESTRUCTURED_ENTITIES: RwLock<Option<RestructuredEntities>> = RwLock::new(None);
+static RESTRUCTURED_ENTITIES: RwLock<Option<Arc<RestructuredEntities>>> = RwLock::new(None);
 
 impl EntityRestructurer {
     /// Create a new EntityRestructurer
@@ -129,7 +129,7 @@ impl EntityRestructurer {
     }
 
     /// Get the restructured entities result
-    pub fn get() -> Option<RestructuredEntities> {
+    pub fn get() -> Option<Arc<RestructuredEntities>> {
         RESTRUCTURED_ENTITIES.read().unwrap().clone()
     }
 
@@ -180,7 +180,7 @@ impl EntityRestructurer {
 
         // Double-check after acquiring write lock
         if cache.is_none() {
-            *cache = Some(restructured);
+            *cache = Some(Arc::new(restructured));
         }
     }
 
@@ -844,10 +844,10 @@ mod tests {
         // First, simulate that the cache is already initialized
         {
             let mut cache = RESTRUCTURED_ENTITIES.write().unwrap();
-            *cache = Some(RestructuredEntities {
+            *cache = Some(Arc::new(RestructuredEntities {
                 entities: HashMap::new(),
                 restructured_namespaces: HashMap::new(),
-            });
+            }));
         }
 
         // Verify it's initialized
