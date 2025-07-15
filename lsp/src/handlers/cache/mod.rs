@@ -5,7 +5,7 @@ mod core;
 mod entity_restructurer;
 mod formatter;
 mod full_analysis;
-mod game_data;
+pub mod game_data;
 mod resolver;
 mod resolver_modules;
 mod types;

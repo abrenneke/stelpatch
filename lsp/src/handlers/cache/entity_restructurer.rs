@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, OnceLock},
+    sync::{Arc, RwLock},
 };
 
 use cw_model::{Entity, SkipRootKey, TypeKeyFilter, Value};
@@ -61,6 +61,7 @@ pub struct EntityRestructurer {
 }
 
 /// Result of entity restructuring
+#[derive(Clone)]
 pub struct RestructuredEntities {
     /// Namespace -> Entity Name -> Entity
     /// For special types, entities are indexed by their name_field value
@@ -70,6 +71,7 @@ pub struct RestructuredEntities {
 }
 
 /// Information about how a namespace was restructured
+#[derive(Clone)]
 pub struct RestructureInfo {
     pub skip_root_key: Option<String>,
     pub name_field: Option<String>,
@@ -77,7 +79,7 @@ pub struct RestructureInfo {
     pub restructured_entity_count: usize,
 }
 
-static RESTRUCTURED_ENTITIES: OnceLock<RestructuredEntities> = OnceLock::new();
+static RESTRUCTURED_ENTITIES: RwLock<Option<RestructuredEntities>> = RwLock::new(None);
 
 impl EntityRestructurer {
     /// Create a new EntityRestructurer
@@ -89,42 +91,59 @@ impl EntityRestructurer {
     }
 
     /// Get the restructured entities result
-    pub fn get() -> Option<&'static RestructuredEntities> {
-        RESTRUCTURED_ENTITIES.get()
+    pub fn get() -> Option<RestructuredEntities> {
+        RESTRUCTURED_ENTITIES.read().unwrap().clone()
     }
 
     /// Check if the restructurer has been initialized
     pub fn is_initialized() -> bool {
-        RESTRUCTURED_ENTITIES.get().is_some()
+        RESTRUCTURED_ENTITIES.read().unwrap().is_some()
+    }
+
+    /// Reset the restructured entities cache, forcing re-initialization on next access
+    pub fn reset() {
+        eprintln!("Resetting EntityRestructurer cache");
+        let mut cache = RESTRUCTURED_ENTITIES.write().unwrap();
+        *cache = None;
     }
 
     /// Load and process all entities that need restructuring
     pub fn load(&self) {
-        RESTRUCTURED_ENTITIES.get_or_init(|| {
-            let start = std::time::Instant::now();
+        // Check if already initialized
+        if Self::is_initialized() {
+            return;
+        }
 
-            let mut restructured = RestructuredEntities {
-                entities: HashMap::new(),
-                restructured_namespaces: HashMap::new(),
-            };
+        // Compute the result without holding the lock
+        let start = std::time::Instant::now();
 
-            self.process_all_namespaces(&mut restructured);
+        let mut restructured = RestructuredEntities {
+            entities: HashMap::new(),
+            restructured_namespaces: HashMap::new(),
+        };
 
-            let duration = start.elapsed();
-            eprintln!("Entity restructuring completed in {:?}", duration);
-            eprintln!(
-                "Restructured {} namespaces: {}",
-                restructured.restructured_namespaces.len(),
-                restructured
-                    .restructured_namespaces
-                    .keys()
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", "),
-            );
+        self.process_all_namespaces(&mut restructured);
 
+        let duration = start.elapsed();
+        eprintln!("Entity restructuring completed in {:?}", duration);
+        eprintln!(
+            "Restructured {} namespaces: {}",
+            restructured.restructured_namespaces.len(),
             restructured
-        });
+                .restructured_namespaces
+                .keys()
+                .cloned()
+                .collect::<Vec<String>>()
+                .join(", "),
+        );
+
+        // Now acquire the lock only to store the result
+        let mut cache = RESTRUCTURED_ENTITIES.write().unwrap();
+
+        // Double-check after acquiring write lock
+        if cache.is_none() {
+            *cache = Some(restructured);
+        }
     }
 
     /// Process all namespaces that need restructuring
@@ -369,13 +388,36 @@ impl EntityRestructurer {
     }
 
     /// Get an entity by name from a namespace, handling special loading rules
-    pub fn get_entity(namespace: &str, entity_name: &str) -> Option<&'static Entity> {
-        Self::get()?.entities.get(namespace)?.get(entity_name)
+    pub fn get_entity(namespace: &str, entity_name: &str) -> Option<Entity> {
+        // Check restructured entities first
+        if let Some(restructured) = Self::get() {
+            if let Some(entities) = restructured.entities.get(namespace) {
+                if let Some(entity) = entities.get(entity_name) {
+                    return Some(entity.clone());
+                }
+            }
+        }
+
+        // Check mod data
+        if let Some(entity) = super::ModDataCache::get_entity(namespace, entity_name) {
+            return Some(entity);
+        }
+
+        // Fall back to original GameDataCache
+        if let Some(game_data) = GameDataCache::get() {
+            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+                namespace_data.entities.get(entity_name).cloned()
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
-    /// Get all entities in a namespace as a HashMap reference
-    pub fn get_namespace_entities_map(namespace: &str) -> Option<&'static HashMap<String, Entity>> {
-        Self::get()?.entities.get(namespace)
+    /// Get all entities in a namespace as a HashMap
+    pub fn get_namespace_entities_map(namespace: &str) -> Option<HashMap<String, Entity>> {
+        Self::get()?.entities.get(namespace).cloned()
     }
 
     /// Check if a namespace was restructured
@@ -386,8 +428,8 @@ impl EntityRestructurer {
     }
 
     /// Get restructure info for a namespace
-    pub fn get_restructure_info(namespace: &str) -> Option<&'static RestructureInfo> {
-        Self::get()?.restructured_namespaces.get(namespace)
+    pub fn get_restructure_info(namespace: &str) -> Option<RestructureInfo> {
+        Self::get()?.restructured_namespaces.get(namespace).cloned()
     }
 
     /// Get entity keys for a namespace, using restructured keys if available
@@ -399,6 +441,12 @@ impl EntityRestructurer {
             if let Some(entities) = restructured.entities.get(namespace) {
                 all_keys.extend(entities.keys().cloned());
             }
+        }
+
+        // Add mod entity keys
+        if let Some(mod_keys) = super::game_data::ModDataCache::get_namespace_entity_keys(namespace)
+        {
+            all_keys.extend(mod_keys.iter().cloned());
         }
 
         // Add original entity keys from GameDataCache
@@ -458,6 +506,13 @@ impl EntityRestructurer {
             eprintln!("WARN: EntityRestructurer not initialized");
         }
 
+        // Add mod entity keys
+        if let Some(mod_keys_set) =
+            super::game_data::ModDataCache::get_namespace_entity_keys_set(namespace)
+        {
+            all_keys.extend(mod_keys_set.iter().cloned());
+        }
+
         // Add original entity keys from GameDataCache
         if let Some(game_data) = GameDataCache::get() {
             if let Some(original_keys_set) = game_data.get_namespace_entity_keys_set(namespace) {
@@ -473,18 +528,24 @@ impl EntityRestructurer {
     }
 
     /// Get a specific entity from a namespace, using restructured entities if available
-    pub fn get_namespace_entity(namespace: &str, entity_name: &str) -> Option<&'static Entity> {
+    pub fn get_namespace_entity(namespace: &str, entity_name: &str) -> Option<Entity> {
         if let Some(restructured) = Self::get() {
             if let Some(entities) = restructured.entities.get(namespace) {
                 // Use restructured entities
-                return entities.get(entity_name);
+                return entities.get(entity_name).cloned();
             }
+        }
+
+        // Check mod data next
+        if let Some(mod_entity) = super::game_data::ModDataCache::get_entity(namespace, entity_name)
+        {
+            return Some(mod_entity);
         }
 
         // Fall back to original GameDataCache
         if let Some(game_data) = GameDataCache::get() {
             if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
-                namespace_data.entities.get(entity_name)
+                namespace_data.entities.get(entity_name).cloned()
             } else {
                 None
             }
@@ -523,14 +584,103 @@ impl EntityRestructurer {
 
     /// Get scripted variables for a namespace (always from original GameDataCache)
     pub fn get_namespace_scripted_variables(namespace: &str) -> Option<HashMap<String, Value>> {
+        let mut all_variables = HashMap::new();
+
+        // Add base game variables first
         if let Some(game_data) = GameDataCache::get() {
             if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
-                Some(namespace_data.scripted_variables.clone())
-            } else {
-                None
+                all_variables.extend(
+                    namespace_data
+                        .scripted_variables
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone())),
+                );
             }
-        } else {
+        }
+
+        // Add mod variables (can override base game variables)
+        if let Some(mod_variables) =
+            super::game_data::ModDataCache::get_namespace_scripted_variables(namespace)
+        {
+            all_variables.extend(mod_variables);
+        }
+
+        if all_variables.is_empty() {
             None
+        } else {
+            Some(all_variables)
+        }
+    }
+
+    /// Get all entities in a namespace, using restructured entities if available
+    pub fn get_all_entities(namespace: &str) -> Option<Vec<Entity>> {
+        let mut all_entities = Vec::new();
+
+        // Add restructured entities if available
+        if let Some(restructured) = Self::get() {
+            if let Some(entities) = restructured.entities.get(namespace) {
+                all_entities.extend(entities.values().cloned());
+            }
+        }
+
+        // Add mod entities
+        let mod_namespaces = super::game_data::ModDataCache::get_namespaces();
+        if let Some(mod_namespace) = mod_namespaces.get(namespace) {
+            all_entities.extend(mod_namespace.entities.values().cloned());
+        }
+
+        // Add original entities from GameDataCache
+        if let Some(game_data) = GameDataCache::get() {
+            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+                all_entities.extend(namespace_data.entities.values().cloned());
+            }
+        }
+
+        if all_entities.is_empty() {
+            None
+        } else {
+            Some(all_entities)
+        }
+    }
+
+    /// Get all entities in a namespace as a HashMap, using restructured entities if available
+    pub fn get_all_entities_map(namespace: &str) -> Option<HashMap<String, Entity>> {
+        let mut all_entities = HashMap::new();
+
+        // Add original entities from GameDataCache first
+        if let Some(game_data) = GameDataCache::get() {
+            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+                all_entities.extend(
+                    namespace_data
+                        .entities
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone())),
+                );
+            }
+        }
+
+        // Add mod entities (can override base game entities)
+        let mod_namespaces = super::game_data::ModDataCache::get_namespaces();
+        if let Some(mod_namespace) = mod_namespaces.get(namespace) {
+            all_entities.extend(
+                mod_namespace
+                    .entities
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone())),
+            );
+        }
+
+        // Add restructured entities if available (can override both base and mod entities)
+        if let Some(restructured) = Self::get() {
+            if let Some(entities) = restructured.entities.get(namespace) {
+                all_entities.extend(entities.iter().map(|(k, v)| (k.clone(), v.clone())));
+            }
+        }
+
+        if all_entities.is_empty() {
+            None
+        } else {
+            Some(all_entities)
         }
     }
 }
@@ -541,4 +691,45 @@ struct TypeDefinitionInfo {
     pub skip_root_key: Option<SkipRootKey>,
     pub name_field: Option<String>,
     pub type_key_filter: Option<TypeKeyFilter>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_reset_functionality() {
+        // Test that reset clears the cache and allows reinitialization
+
+        // First, simulate that the cache is already initialized
+        {
+            let mut cache = RESTRUCTURED_ENTITIES.write().unwrap();
+            *cache = Some(RestructuredEntities {
+                entities: HashMap::new(),
+                restructured_namespaces: HashMap::new(),
+            });
+        }
+
+        // Verify it's initialized
+        assert!(EntityRestructurer::is_initialized());
+
+        // Reset the cache
+        EntityRestructurer::reset();
+
+        // Verify it's no longer initialized
+        assert!(!EntityRestructurer::is_initialized());
+
+        // Verify get() returns None after reset
+        assert!(EntityRestructurer::get().is_none());
+    }
+
+    #[test]
+    fn test_reset_method_exists() {
+        // Simple test to verify that the reset method exists and can be called
+        // This ensures the trigger functionality is available
+        EntityRestructurer::reset();
+
+        // After reset, should not be initialized
+        assert!(!EntityRestructurer::is_initialized());
+    }
 }

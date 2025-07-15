@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::OnceLock,
+    sync::RwLock,
 };
 
 use crate::handlers::cache::{DataCollector, GameDataCache, TypeCache};
@@ -10,13 +10,14 @@ pub struct FullAnalysis {
     type_cache: &'static TypeCache,
 }
 
+#[derive(Clone)]
 pub struct FullAnalysisResult {
     pub dynamic_value_sets: HashMap<String, HashSet<String>>,
     pub complex_enums: HashMap<String, HashSet<String>>,
     pub scripted_effect_arguments: HashMap<String, HashSet<String>>,
 }
 
-static FULL_ANALYSIS: OnceLock<FullAnalysisResult> = OnceLock::new();
+static FULL_ANALYSIS: RwLock<Option<FullAnalysisResult>> = RwLock::new(None);
 
 impl FullAnalysis {
     pub fn new(game_data: &'static GameDataCache, type_cache: &'static TypeCache) -> Self {
@@ -26,25 +27,91 @@ impl FullAnalysis {
         }
     }
 
-    pub fn get() -> Option<&'static FullAnalysisResult> {
-        FULL_ANALYSIS.get()
+    pub fn get() -> Option<FullAnalysisResult> {
+        FULL_ANALYSIS.read().unwrap().clone()
+    }
+
+    /// Check if the full analysis has been initialized
+    pub fn is_initialized() -> bool {
+        FULL_ANALYSIS.read().unwrap().is_some()
+    }
+
+    /// Reset the full analysis cache, forcing re-initialization on next access
+    pub fn reset() {
+        eprintln!("Resetting FullAnalysis cache");
+        let mut cache = FULL_ANALYSIS.write().unwrap();
+        *cache = None;
     }
 
     pub fn load(&self) {
-        FULL_ANALYSIS.get_or_init(|| {
-            let start = std::time::Instant::now();
+        // Check if already initialized
+        if Self::is_initialized() {
+            return;
+        }
 
-            let mut collector = DataCollector::new(self.game_data, self.type_cache.get_resolver());
-            collector.collect_all();
+        // Compute the result without holding the lock
+        let start = std::time::Instant::now();
 
-            let duration = start.elapsed();
-            eprintln!("Full analysis loaded in {:?}", duration);
+        let mut collector = DataCollector::new(self.game_data, self.type_cache.get_resolver());
+        collector.collect_all();
 
-            FullAnalysisResult {
-                dynamic_value_sets: collector.value_sets().clone(),
-                complex_enums: collector.complex_enums().clone(),
-                scripted_effect_arguments: collector.scripted_effect_arguments().clone(),
-            }
-        });
+        let duration = start.elapsed();
+        eprintln!("Full analysis loaded in {:?}", duration);
+
+        let result = FullAnalysisResult {
+            dynamic_value_sets: collector.value_sets().clone(),
+            complex_enums: collector.complex_enums().clone(),
+            scripted_effect_arguments: collector.scripted_effect_arguments().clone(),
+        };
+
+        // Now acquire the lock only to store the result
+        let mut cache = FULL_ANALYSIS.write().unwrap();
+
+        // Double-check after acquiring write lock
+        if cache.is_none() {
+            *cache = Some(result);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_reset_functionality() {
+        // Test that reset clears the cache and allows reinitialization
+
+        // First, simulate that the cache is already initialized
+        {
+            let mut cache = FULL_ANALYSIS.write().unwrap();
+            *cache = Some(FullAnalysisResult {
+                dynamic_value_sets: HashMap::new(),
+                complex_enums: HashMap::new(),
+                scripted_effect_arguments: HashMap::new(),
+            });
+        }
+
+        // Verify it's initialized
+        assert!(FullAnalysis::is_initialized());
+
+        // Reset the cache
+        FullAnalysis::reset();
+
+        // Verify it's no longer initialized
+        assert!(!FullAnalysis::is_initialized());
+
+        // Verify get() returns None after reset
+        assert!(FullAnalysis::get().is_none());
+    }
+
+    #[test]
+    fn test_reset_method_exists() {
+        // Simple test to verify that the reset method exists and can be called
+        // This ensures the trigger functionality is available
+        FullAnalysis::reset();
+
+        // After reset, should not be initialized
+        assert!(!FullAnalysis::is_initialized());
     }
 }

@@ -5,11 +5,10 @@ use cw_parser::{AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
 
 use crate::handlers::{
-    cache::{EntityRestructurer, GameDataCache, TypeCache},
+    cache::{EntityRestructurer, GameDataCache, ModDataCache, TypeCache},
     diagnostics::diagnostic::create_type_mismatch_diagnostic,
     scope::ScopeStack,
     settings::VALIDATE_LOCALISATION,
-    utils::contains_scripted_argument,
 };
 
 /// Check if a value is compatible with a simple type with scope context, returning a diagnostic if incompatible
@@ -260,18 +259,32 @@ fn validate_scripted_variable(
     span_range: Range<usize>,
     content: &str,
     current_namespace: Option<&str>,
-) -> Option<Diagnostic> {
-    // We can have dynamic variables like foo_$ARGUMENT$_name
-    if contains_scripted_argument(variable_name) {
-        return None; // It's probably fine
-    }
+) -> Option<tower_lsp::lsp_types::Diagnostic> {
+    validate_scripted_variable_exists(variable_name, span_range, content, current_namespace)
+}
 
+/// Check if a scripted variable exists in the game data
+fn validate_scripted_variable_exists(
+    variable_name: &str,
+    span_range: Range<usize>,
+    content: &str,
+    current_namespace: Option<&str>,
+) -> Option<tower_lsp::lsp_types::Diagnostic> {
     if let Some(cache) = GameDataCache::get() {
-        // Check global scripted variables first
+        // Check global scripted variables from base game
         if cache.scripted_variables.contains_key(variable_name) {
-            None // Valid scripted variable
-        } else if let Some(namespace_name) = current_namespace {
-            // Check only the current namespace's scripted variables using EntityRestructurer
+            return None; // Valid scripted variable
+        }
+
+        // Check global scripted variables from mod data
+        let mod_scripted_variables = ModDataCache::get_scripted_variables();
+        if mod_scripted_variables.contains_key(variable_name) {
+            return None; // Valid scripted variable
+        }
+
+        if let Some(namespace_name) = current_namespace {
+            // Check namespace-specific scripted variables using EntityRestructurer
+            // (This will automatically include both base game and mod data)
             if let Some(namespace_variables) =
                 EntityRestructurer::get_namespace_scripted_variables(namespace_name)
             {

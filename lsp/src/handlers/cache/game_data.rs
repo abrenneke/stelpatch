@@ -1,10 +1,13 @@
+use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
-use std::{collections::HashMap, sync::OnceLock};
 
 use cw_games::stellaris::BaseGame;
-use cw_model::{Entity, LoadMode, Value};
+use cw_model::{Entity, GameMod, LoadMode, Value};
+
+use crate::handlers::cache::EntityRestructurer;
+use crate::handlers::cache::FullAnalysis;
 
 /// Cache for actual game data keys from namespaces (e.g., "energy", "minerals" from resources namespace)
 pub struct GameDataCache {
@@ -13,6 +16,7 @@ pub struct GameDataCache {
     pub scripted_variables: HashMap<String, Value>,
 }
 
+#[derive(Clone)]
 pub struct Namespace {
     pub entities: HashMap<String, Entity>,
     pub entity_keys: Vec<String>,
@@ -31,6 +35,12 @@ impl Namespace {
             scripted_variables: HashMap::new(),
             modules: HashMap::new(),
         }
+    }
+
+    /// Update the entity keys and set after modifications
+    pub fn update_keys(&mut self) {
+        self.entity_keys = self.entities.keys().cloned().collect();
+        self.entity_keys_set = Arc::new(self.entities.keys().cloned().collect());
     }
 }
 
@@ -92,9 +102,7 @@ impl GameDataCache {
                 }
 
                 // Pre-compute entity keys for fast access
-                namespace_data.entity_keys = namespace_data.entities.keys().cloned().collect();
-                namespace_data.entity_keys_set =
-                    Arc::new(namespace_data.entities.keys().cloned().collect());
+                namespace_data.update_keys();
 
                 namespaces.insert(namespace_name.clone(), namespace_data);
             }
@@ -149,5 +157,158 @@ impl GameDataCache {
     /// Check if the game data cache is initialized
     pub fn is_initialized() -> bool {
         GAME_DATA_CACHE.get().is_some()
+    }
+}
+
+/// Global cache for mod data that can be modified at runtime
+pub struct ModDataCache {
+    /// Maps namespace -> set of keys defined in that namespace
+    pub namespaces: HashMap<String, Namespace>,
+    pub scripted_variables: HashMap<String, Value>,
+}
+
+static MOD_DATA_CACHE: OnceLock<RwLock<ModDataCache>> = OnceLock::new();
+
+impl ModDataCache {
+    /// Get the global mod data cache
+    pub fn get() -> &'static RwLock<ModDataCache> {
+        MOD_DATA_CACHE.get_or_init(|| {
+            RwLock::new(ModDataCache {
+                namespaces: HashMap::new(),
+                scripted_variables: HashMap::new(),
+            })
+        })
+    }
+
+    /// Merge mod data into the cache and trigger restructuring
+    pub fn merge_mod_data(game_mod: &GameMod) {
+        let cache_lock = Self::get();
+        let mut cache = cache_lock.write().unwrap();
+
+        eprintln!("Merging mod data: {}", game_mod.definition.name);
+
+        let mut added_entities = 0;
+        let mut added_variables = 0;
+
+        // Process each namespace in the mod
+        for (namespace_name, namespace) in &game_mod.namespaces {
+            let properties = &namespace.properties.kv;
+
+            for (key, value) in properties {
+                if namespace_name == "common/scripted_variables" {
+                    cache
+                        .scripted_variables
+                        .insert(key.to_string(), value.0.first().unwrap().value.clone());
+                    added_variables += 1;
+                } else if key.starts_with("@") {
+                    let namespace_data = cache
+                        .namespaces
+                        .entry(namespace_name.clone())
+                        .or_insert_with(Namespace::new);
+                    namespace_data
+                        .scripted_variables
+                        .insert(key.to_string(), value.0.first().unwrap().value.clone());
+                    added_variables += 1;
+                } else {
+                    if let Some(entity) = value.0.first().unwrap().value.as_entity() {
+                        let namespace_data = cache
+                            .namespaces
+                            .entry(namespace_name.clone())
+                            .or_insert_with(Namespace::new);
+                        namespace_data
+                            .entities
+                            .insert(key.to_string(), entity.clone());
+                        added_entities += 1;
+                    }
+                }
+            }
+        }
+
+        // Update keys for all modified namespaces
+        for namespace_data in cache.namespaces.values_mut() {
+            namespace_data.update_keys();
+        }
+
+        eprintln!(
+            "Merged mod '{}': {} entities, {} variables across {} namespaces",
+            game_mod.definition.name,
+            added_entities,
+            added_variables,
+            game_mod.namespaces.len()
+        );
+
+        // Drop the lock before triggering restructuring
+        drop(cache);
+
+        // Trigger entity restructuring to include the new mod data
+        Self::trigger_restructuring();
+    }
+
+    /// Trigger entity restructuring and full analysis to include mod data
+    fn trigger_restructuring() {
+        // Reset the EntityRestructurer so it will reload with the new mod data
+        // This is a simple approach - in a more sophisticated system we might
+        // incrementally update the restructurer
+        eprintln!("Triggering entity restructuring and full analysis to include mod data");
+
+        // Reset the EntityRestructurer cache to force re-initialization
+        // with the new mod data included
+        EntityRestructurer::reset();
+        FullAnalysis::reset();
+
+        // The next time EntityRestructurer and FullAnalysis methods are called, they will
+        // automatically reload and include the new mod data
+    }
+
+    /// Get all keys defined in a namespace from mod data only
+    pub fn get_namespace_entity_keys(namespace: &str) -> Option<Vec<String>> {
+        let cache = Self::get().read().unwrap();
+        if let Some(mod_namespace) = cache.namespaces.get(namespace) {
+            Some(mod_namespace.entity_keys.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Get all keys defined in a namespace as a HashSet from mod data only
+    pub fn get_namespace_entity_keys_set(namespace: &str) -> Option<Arc<HashSet<String>>> {
+        let cache = Self::get().read().unwrap();
+        if let Some(mod_namespace) = cache.namespaces.get(namespace) {
+            Some(mod_namespace.entity_keys_set.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Get a specific entity from mod data only
+    pub fn get_entity(namespace: &str, entity_name: &str) -> Option<Entity> {
+        let cache = Self::get().read().unwrap();
+        if let Some(mod_namespace) = cache.namespaces.get(namespace) {
+            mod_namespace.entities.get(entity_name).cloned()
+        } else {
+            None
+        }
+    }
+
+    /// Get all namespaces from mod data
+    pub fn get_namespaces() -> HashMap<String, Namespace> {
+        let cache = Self::get().read().unwrap();
+        cache.namespaces.clone()
+    }
+
+    /// Get scripted variables from mod data
+    pub fn get_scripted_variables() -> HashMap<String, Value> {
+        let cache = Self::get().read().unwrap();
+        cache.scripted_variables.clone()
+    }
+
+    /// Get namespace scripted variables from mod data
+    pub fn get_namespace_scripted_variables(namespace: &str) -> Option<HashMap<String, Value>> {
+        let cache = Self::get().read().unwrap();
+        if let Some(mod_namespace) = cache.namespaces.get(namespace) {
+            Some(mod_namespace.scripted_variables.clone())
+        } else {
+            None
+        }
     }
 }

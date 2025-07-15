@@ -10,6 +10,7 @@ mod document;
 pub mod document_cache;
 mod formatting;
 mod hover;
+pub mod mod_detection;
 mod modifiers;
 mod scope;
 mod scoped_type;
@@ -33,11 +34,11 @@ impl LanguageServer for CwLspServer {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        document::did_open(&self.client, &self.documents, &self.document_cache, params).await;
+        document::did_open(self, params).await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        document::did_change(&self.client, &self.documents, &self.document_cache, params).await;
+        document::did_change(self, params).await;
     }
 
     async fn semantic_tokens_full(
