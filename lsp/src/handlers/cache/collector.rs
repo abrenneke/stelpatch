@@ -55,7 +55,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
             .get_namespaces()
             .par_iter()
             .filter_map(|(namespace, namespace_data)| {
-                get_namespace_entity_type(namespace)
+                get_namespace_entity_type(namespace, None) // TODO: Add file_path
                     .and_then(|namespace_type| namespace_type.scoped_type)
                     .map(|scoped_type| {
                         self.collect_value_sets_from_namespace(namespace_data, scoped_type)

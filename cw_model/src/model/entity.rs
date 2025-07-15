@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use cw_parser::{AstEntity, AstValue, AstVisitor};
 use indent::indent_all_by;
 
 use crate::{
@@ -143,6 +144,13 @@ pub enum EntityMergeMode {
 
     /// Who knows!
     Unknown,
+}
+
+pub fn entity_from_ast<'a>(ast: &AstEntity<'a>) -> Entity {
+    let mut entity = Entity::new();
+    let mut entity_visitor = EntityVisitor::new(&mut entity);
+    entity_visitor.visit_entity(ast);
+    entity
 }
 
 pub(crate) struct EntityVisitor<'a> {

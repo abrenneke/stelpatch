@@ -1,18 +1,16 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use colored::Colorize;
 use cw_lsp::handlers::cache::FullAnalysis;
-use cw_lsp::handlers::cache::{
-    EntityRestructurer, GameDataCache, TypeCache, get_namespace_entity_type,
-};
-use cw_lsp::handlers::diagnostics::type_validation::validate_entity_value;
-use cw_lsp::handlers::utils::extract_namespace_from_uri;
-use cw_parser::AstModule;
+use cw_lsp::handlers::cache::{EntityRestructurer, GameDataCache, TypeCache};
+use cw_lsp::handlers::diagnostics::provider::DiagnosticsProvider;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use tower_lsp::lsp_types::Diagnostic;
@@ -77,110 +75,25 @@ fn find_txt_files(dir: &Path) -> io::Result<Vec<std::path::PathBuf>> {
     Ok(txt_files)
 }
 
-/// Generate diagnostics for a single file
+/// Generate diagnostics for a single file using DiagnosticsProvider
 fn generate_file_diagnostics(
     file_path: &Path,
     content: &str,
+    provider: &DiagnosticsProvider,
     print_diagnostics: bool,
 ) -> (usize, Vec<Diagnostic>) {
-    let mut all_diagnostics = Vec::new();
-
     // Create a fake URI for the file
     let uri = format!("file://{}", file_path.display());
 
-    // First, try to parse the content
-    let mut module = AstModule::new();
-    match module.parse_input(content) {
-        Ok(()) => {
-            // If parsing succeeds, do type checking
-            let type_diagnostics = generate_type_diagnostics(&module, &uri, content);
-            let diagnostic_count = type_diagnostics.len();
+    // Use the DiagnosticsProvider to generate diagnostics with content directly
+    let diagnostics = provider.generate_diagnostics_for_content(&uri, content);
+    let diagnostic_count = diagnostics.len();
 
-            if print_diagnostics {
-                all_diagnostics.extend(type_diagnostics);
-            }
-
-            return (diagnostic_count, all_diagnostics);
-        }
-        Err(error) => {
-            // If parsing fails, create a diagnostic for the parse error
-            if print_diagnostics {
-                let diagnostic = Diagnostic {
-                    range: tower_lsp::lsp_types::Range {
-                        start: tower_lsp::lsp_types::Position {
-                            line: 0,
-                            character: 0,
-                        },
-                        end: tower_lsp::lsp_types::Position {
-                            line: 0,
-                            character: 0,
-                        },
-                    },
-                    severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
-                    code: None,
-                    code_description: None,
-                    source: Some("parser".to_string()),
-                    message: format!("Parse error: {}", error),
-                    related_information: None,
-                    tags: None,
-                    data: None,
-                };
-                all_diagnostics.push(diagnostic);
-            }
-
-            return (1, all_diagnostics);
-        }
+    if print_diagnostics {
+        (diagnostic_count, diagnostics)
+    } else {
+        (diagnostic_count, Vec::new())
     }
-}
-
-/// Generate type-checking diagnostics for a successfully parsed document
-fn generate_type_diagnostics(module: &AstModule<'_>, uri: &str, content: &str) -> Vec<Diagnostic> {
-    let mut all_diagnostics = Vec::new();
-
-    // Check if type cache is initialized
-    if !TypeCache::is_initialized() {
-        return all_diagnostics;
-    }
-
-    if !GameDataCache::is_initialized() {
-        return all_diagnostics;
-    }
-
-    // Extract namespace from URI
-    let namespace = match extract_namespace_from_uri(uri) {
-        Some(ns) => ns,
-        None => {
-            return all_diagnostics;
-        }
-    };
-
-    // Get type information for this namespace
-    let type_info = match get_namespace_entity_type(&namespace) {
-        Some(info) => info,
-        None => {
-            return all_diagnostics;
-        }
-    };
-
-    let namespace_type = match &type_info.scoped_type {
-        Some(t) => t.clone(),
-        None => {
-            return all_diagnostics;
-        }
-    };
-
-    // Validate each entity in the module
-    for item in &module.items {
-        if let cw_parser::AstEntityItem::Expression(expr) = item {
-            // Top-level keys are entity names - they can be anything, so don't validate them
-            // Instead, validate their VALUES against the namespace structure
-            let entity_diagnostics =
-                validate_entity_value(&expr.value, namespace_type.clone(), content, &namespace, 0);
-            all_diagnostics.extend(entity_diagnostics);
-        }
-    }
-
-    all_diagnostics
 }
 
 fn print_diagnostic(file_path: &Path, diagnostic: &Diagnostic, show_file_path: bool) {
@@ -340,12 +253,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("{}", "Processing files...".yellow().bold());
 
+    // Create DiagnosticsProvider
+    let documents = Arc::new(RwLock::new(HashMap::new()));
+    let provider = DiagnosticsProvider::new(documents.clone());
+
     // Process each file in parallel with progress bar
     txt_files.par_iter().for_each(|file_path| {
         match fs::read_to_string(&file_path) {
             Ok(content) => {
-                let (diagnostic_count, diagnostics) =
-                    generate_file_diagnostics(&file_path, &content, args.print_diagnostics);
+                let (diagnostic_count, diagnostics) = generate_file_diagnostics(
+                    &file_path,
+                    &content,
+                    &provider,
+                    args.print_diagnostics,
+                );
                 total_diagnostics.fetch_add(diagnostic_count, Ordering::Relaxed);
                 processed_files.fetch_add(1, Ordering::Relaxed);
 

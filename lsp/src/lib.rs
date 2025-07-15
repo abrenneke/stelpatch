@@ -1,8 +1,7 @@
 use cw_model::GameMod;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use tower_lsp::Client;
 
 pub mod handlers;
@@ -28,17 +27,17 @@ impl CwLspServer {
         }
     }
 
-    pub async fn get_cached_mod(&self, mod_path: &PathBuf) -> Option<GameMod> {
-        let cache = self.mod_cache.read().await;
+    pub fn get_cached_mod(&self, mod_path: &PathBuf) -> Option<GameMod> {
+        let cache = self.mod_cache.read().unwrap();
         cache.get(mod_path).cloned()
     }
 
-    pub async fn cache_mod(&self, mod_path: PathBuf, game_mod: GameMod) {
-        let mut cache = self.mod_cache.write().await;
+    pub fn cache_mod(&self, mod_path: PathBuf, game_mod: GameMod) {
+        let mut cache = self.mod_cache.write().unwrap();
         cache.insert(mod_path, game_mod);
     }
 
-    pub async fn merge_mod_data(&self, game_mod: &GameMod) {
+    pub fn merge_mod_data(&self, game_mod: &GameMod) {
         ModDataCache::merge_mod_data(game_mod);
     }
 }

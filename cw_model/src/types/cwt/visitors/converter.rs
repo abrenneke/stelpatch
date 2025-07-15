@@ -114,7 +114,7 @@ impl CwtConverter {
     }
 
     /// Convert a CWT block to our type system
-    pub fn convert_block(block: &AstCwtBlock) -> CwtType {
+    pub fn convert_block(block: &AstCwtBlock, type_name: Option<String>) -> CwtType {
         let mut properties: HashMap<String, Property> = HashMap::new();
         let mut subtype_properties: HashMap<String, HashMap<String, Property>> = HashMap::new();
         let mut pattern_properties = Vec::new();
@@ -129,7 +129,7 @@ impl CwtConverter {
                             match key_id.identifier_type {
                                 CwtReferenceType::Enum => {
                                     let enum_key = key_id.name.raw_value().to_string();
-                                    let value_type = Self::convert_value(&rule.value);
+                                    let value_type = Self::convert_value(&rule.value, None);
 
                                     pattern_properties.push(PatternProperty {
                                         pattern_type: PatternType::Enum {
@@ -144,7 +144,7 @@ impl CwtConverter {
                                 }
                                 CwtReferenceType::TypeRef => {
                                     let type_name = key_id.name.raw_value().to_string();
-                                    let value_type = Self::convert_value(&rule.value);
+                                    let value_type = Self::convert_value(&rule.value, None);
 
                                     pattern_properties.push(PatternProperty {
                                         pattern_type: PatternType::Type {
@@ -167,7 +167,7 @@ impl CwtConverter {
                                         }
                                         // Handle alias[foo:x] = bar
                                         AstCwtIdentifierOrString::String(key_str) => {
-                                            let value_type = Self::convert_value(&rule.value);
+                                            let value_type = Self::convert_value(&rule.value, None);
                                             pattern_properties.push(PatternProperty {
                                                 pattern_type: PatternType::AliasName {
                                                     category: key_str.raw_value().to_string(),
@@ -183,7 +183,7 @@ impl CwtConverter {
                                     }
                                 }
                                 CwtReferenceType::Subtype => {
-                                    let value_type = Self::convert_value(&rule.value);
+                                    let value_type = Self::convert_value(&rule.value, None);
 
                                     let subtype_name = if key_id.is_not {
                                         format!("!{}", key_id.name.raw_value().to_string())
@@ -218,7 +218,7 @@ impl CwtConverter {
                     }
 
                     let key = rule.key.name();
-                    let value_type = Self::convert_value(&rule.value);
+                    let value_type = Self::convert_value(&rule.value, None);
                     let property_def = Property {
                         property_type: value_type,
                         options: CwtOptions::default(),
@@ -257,7 +257,7 @@ impl CwtConverter {
                     }
                 }
                 AstCwtExpression::Value(value) => {
-                    let value_type = Self::convert_value(value);
+                    let value_type = Self::convert_value(value, None);
                     union_values.push(value_type);
                 }
                 AstCwtExpression::Identifier(id) => {
@@ -277,6 +277,7 @@ impl CwtConverter {
         }
 
         CwtType::Block(BlockType {
+            type_name: type_name.unwrap_or_default(),
             properties,
             subtypes: HashMap::new(),
             subtype_properties,
@@ -288,11 +289,11 @@ impl CwtConverter {
     }
 
     /// Convert a CWT value to our type system
-    pub fn convert_value(value: &CwtValue) -> CwtType {
+    pub fn convert_value(value: &CwtValue, type_name: Option<String>) -> CwtType {
         match value {
             CwtValue::Simple(simple) => Self::convert_simple_value(simple),
             CwtValue::Identifier(identifier) => Self::convert_identifier(identifier),
-            CwtValue::Block(block) => Self::convert_block(block),
+            CwtValue::Block(block) => Self::convert_block(block, type_name),
             CwtValue::String(s) => CwtType::Literal(s.raw_value().to_string()),
         }
     }

@@ -59,7 +59,7 @@ impl<'a> AliasVisitor<'a> {
         if let Some(identifier) = &rule.key.as_identifier() {
             if let Some(scope) = &identifier.name.scope {
                 let category = scope.raw_value();
-                let new_to_type = CwtConverter::convert_value(&rule.value);
+                let new_to_type = CwtConverter::convert_value(&rule.value, None);
                 let options = CwtOptions::from_rule(rule);
 
                 match &identifier.name.key {
@@ -150,7 +150,7 @@ impl<'a> AliasVisitor<'a> {
     fn process_single_alias(&mut self, rule: &AstCwtRule) {
         if let Some(identifier) = &rule.key.as_identifier() {
             let name = identifier.name.key.name();
-            let new_alias_type = CwtConverter::convert_value(&rule.value);
+            let new_alias_type = CwtConverter::convert_value(&rule.value, None);
             let _options = CwtOptions::from_rule(rule); // Extract options even if not used for single aliases
 
             if let Some(existing_type) = self.data.single_aliases.get_mut(name) {

@@ -1,4 +1,15 @@
 use tower_lsp::lsp_types::Position;
+use tower_lsp::{Client, lsp_types::MessageType};
+
+/// Log a message synchronously by using block_in_place
+pub fn log_message_sync(client: &Client, message_type: MessageType, message: String) {
+    let client = client.clone();
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async move {
+            client.log_message(message_type, message).await;
+        })
+    });
+}
 
 /// Convert LSP position to byte offset in the document
 pub fn position_to_offset(text: &str, position: Position) -> usize {

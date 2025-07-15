@@ -414,10 +414,6 @@ impl PropertyNavigator {
     ) -> Option<&'b Property> {
         // Check if there's a subtype definition for this block type
         if let Some(subtype_def) = block_type.subtypes.get(subtype_name) {
-            // Check condition_properties first (CWT schema), then allowed_properties (game data)
-            if let Some(prop) = subtype_def.condition_properties.get(property_name) {
-                return Some(prop);
-            }
             return subtype_def.allowed_properties.get(property_name);
         }
         None

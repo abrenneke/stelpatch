@@ -4,7 +4,7 @@ use super::types::TypeInfo;
 use cw_parser;
 
 /// Get type information for a namespace entity (top-level entity structure)
-pub fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
+pub fn get_namespace_entity_type(namespace: &str, file_path: Option<&str>) -> Option<TypeInfo> {
     if !TypeCache::is_initialized() {
         return Some(TypeInfo {
             property_path: "entity".to_string(),
@@ -19,7 +19,7 @@ pub fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
     let resolver = cache.get_resolver();
     let formatter = TypeFormatter::new(resolver, 30);
 
-    if let Some(namespace_type) = cache.get_namespace_type(namespace) {
+    if let Some(namespace_type) = cache.get_namespace_type(namespace, file_path) {
         let scoped_type = namespace_type.clone();
         Some(TypeInfo {
             property_path: "entity".to_string(),
@@ -47,7 +47,11 @@ pub fn get_namespace_entity_type(namespace: &str) -> Option<TypeInfo> {
 
 /// Get type information for a property within a namespace entity
 /// The property_path should be just the property path without the entity name
-pub fn get_entity_property_type(namespace: &str, property_path: &str) -> Option<TypeInfo> {
+pub fn get_entity_property_type(
+    namespace: &str,
+    property_path: &str,
+    file_path: Option<&str>,
+) -> Option<TypeInfo> {
     if !TypeCache::is_initialized() {
         return Some(TypeInfo {
             property_path: property_path.to_string(),
@@ -59,7 +63,7 @@ pub fn get_entity_property_type(namespace: &str, property_path: &str) -> Option<
     }
 
     let cache = TypeCache::get().unwrap();
-    cache.get_property_type(namespace, property_path)
+    cache.get_property_type(namespace, property_path, file_path)
 }
 
 /// Get type information for a property by navigating through an AST entity
@@ -76,6 +80,7 @@ pub fn get_entity_property_type_from_ast(
     namespace: &str,
     entity: &cw_parser::AstEntity<'_>,
     property_path: &str,
+    file_path: Option<&str>,
 ) -> Option<TypeInfo> {
     if !TypeCache::is_initialized() {
         return Some(TypeInfo {
@@ -88,5 +93,5 @@ pub fn get_entity_property_type_from_ast(
     }
 
     let cache = TypeCache::get().unwrap();
-    cache.get_property_type_from_ast(namespace, entity, property_path)
+    cache.get_property_type_from_ast(namespace, entity, property_path, file_path)
 }

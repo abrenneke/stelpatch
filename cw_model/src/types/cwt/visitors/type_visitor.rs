@@ -465,7 +465,7 @@ impl<'a> TypeVisitor<'a> {
                     property_conditions.insert(prop_key.to_string(), prop_rule.value.clone());
 
                     // Create a Property object to store the rule with its options
-                    let property_type = CwtConverter::convert_value(&prop_rule.value);
+                    let property_type = CwtConverter::convert_value(&prop_rule.value, None);
                     let property = Property {
                         property_type,
                         options: prop_options.clone(),

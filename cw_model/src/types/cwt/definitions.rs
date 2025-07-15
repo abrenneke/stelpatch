@@ -358,6 +358,11 @@ impl TypeDefinition {
         if other.path.is_some() {
             self.path = other.path;
         }
+
+        if self.path.is_none() {
+            panic!("Type has no path: {}", self.name_field.clone().unwrap());
+        }
+
         if other.name_field.is_some() {
             self.name_field = other.name_field;
         }

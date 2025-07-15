@@ -208,6 +208,8 @@ impl ReferenceType {
 /// Block/object types with properties and subtypes
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct BlockType {
+    pub type_name: String,
+
     /// Regular properties
     pub properties: HashMap<String, Property>,
 
@@ -1333,8 +1335,9 @@ impl CwtType {
     }
 
     /// Create a block type
-    pub fn block() -> BlockType {
+    pub fn block(name: impl Into<String>) -> BlockType {
         BlockType {
+            type_name: name.into(),
             properties: HashMap::new(),
             subtypes: HashMap::new(),
             pattern_properties: Vec::new(),
@@ -1650,7 +1653,7 @@ mod tests {
     #[test]
     fn test_complex_type_fingerprint() {
         // Test fingerprint for complex block type
-        let mut block = CwtType::block();
+        let mut block = CwtType::block("test_block");
         block.properties.insert(
             "key1".to_string(),
             Property::simple(CwtType::simple(SimpleType::Int)),

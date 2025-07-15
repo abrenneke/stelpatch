@@ -1,3 +1,4 @@
+use crate::handlers::cache::ORIGINAL_KEY_PROPERTY;
 use crate::handlers::cache::entity_restructurer::EntityRestructurer;
 use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{CwtTypeOrSpecial, ScopedType};
@@ -201,6 +202,18 @@ impl SubtypeHandler {
         property_data: &HashMap<String, String>,
         subtype_def: &cw_model::types::Subtype,
     ) -> bool {
+        // Special case for KeyMatches - we need to check if the original key matches the filter
+        // e.g.
+        // ## type_key_filter = "utility_component_template"
+        // subtype[utility_component_template] = {}
+        if let SubtypeCondition::KeyMatches { filter } = condition {
+            if let Some(original_key) = property_data.get(ORIGINAL_KEY_PROPERTY) {
+                if original_key.contains(filter) {
+                    return true;
+                }
+            }
+        }
+
         // Extract the property key from the condition
         let property_key = match condition {
             SubtypeCondition::PropertyEquals { key, .. } => Some(key),
@@ -223,16 +236,6 @@ impl SubtypeHandler {
         self.would_subtype_condition_match_with_cardinality(condition, property_data, &cardinality)
     }
 
-    /// Check if a subtype condition would be satisfied (original method - now calls cardinality-aware version)
-    pub fn would_subtype_condition_match(
-        &self,
-        condition: &SubtypeCondition,
-        property_data: &HashMap<String, String>,
-    ) -> bool {
-        // Call the cardinality-aware version with no cardinality constraint (original behavior)
-        self.would_subtype_condition_match_with_cardinality(condition, property_data, &None)
-    }
-
     /// Check if a subtype condition would be satisfied for a specific property key
     /// This is useful for checking conditions that depend on the property key being accessed
     pub fn would_subtype_condition_match_for_key(
@@ -251,7 +254,9 @@ impl SubtypeHandler {
                 accessing_key.contains(filter)
             }
             // For other conditions, fall back to the regular check
-            _ => self.would_subtype_condition_match(condition, property_data),
+            _ => {
+                self.would_subtype_condition_match_with_cardinality(condition, property_data, &None)
+            }
         }
     }
 
@@ -286,41 +291,6 @@ impl SubtypeHandler {
                 matching_subtypes
             }
             _ => HashSet::new(),
-        }
-    }
-
-    /// Get all matching subtypes for given property data (backward compatibility)
-    /// Multiple subtypes could potentially match the same data
-    pub fn get_matching_subtypes(
-        &self,
-        cwt_type: &CwtType,
-        property_data: &HashMap<String, String>,
-    ) -> Vec<String> {
-        match cwt_type {
-            CwtType::Block(block) => {
-                let mut matching_subtypes = Vec::new();
-
-                for (subtype_name, subtype_def) in &block.subtypes {
-                    if subtype_def.is_inverted {
-                        continue; // Handled by the else below
-                    }
-
-                    let matches = self.would_subtype_condition_match_with_subtype(
-                        &subtype_def.condition,
-                        property_data,
-                        subtype_def,
-                    );
-
-                    if matches {
-                        matching_subtypes.push(subtype_name.clone());
-                    } else {
-                        matching_subtypes.push(format!("!{}", subtype_name));
-                    }
-                }
-
-                matching_subtypes
-            }
-            _ => Vec::new(),
         }
     }
 

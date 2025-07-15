@@ -509,6 +509,7 @@ dependencies = [
  "cw_model",
  "cw_parser",
  "dashmap 6.1.0",
+ "futures",
  "indicatif",
  "rayon",
  "self_cell",

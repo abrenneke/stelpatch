@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, jsonrpc::Result};
 
@@ -111,7 +110,7 @@ where
     }
 }
 
-pub async fn hover(
+pub fn hover(
     _client: &Client,
     documents: &Arc<RwLock<HashMap<String, String>>>,
     document_cache: &DocumentCache,
@@ -124,7 +123,7 @@ pub async fn hover(
         .to_string();
     let position = params.text_document_position_params.position;
 
-    let documents = documents.read().await;
+    let documents = documents.read().expect("Failed to read documents");
     let content = match documents.get(&uri) {
         Some(content) => content,
         None => return Ok(None),
@@ -134,7 +133,7 @@ pub async fn hover(
     let offset = position_to_offset(content, position);
 
     // Use document cache to get parsed AST
-    let cached_document = document_cache.get(&uri).await;
+    let cached_document = document_cache.get(&uri);
 
     let cached_document = match cached_document {
         Some(cached_document) => cached_document,
@@ -166,7 +165,7 @@ pub async fn hover(
             if crate::handlers::cache::TypeCache::is_initialized() {
                 let type_info = if is_top_level_key {
                     // For top-level keys, show the namespace type (the structure of entities in this namespace)
-                    get_namespace_entity_type(&namespace)
+                    get_namespace_entity_type(&namespace, Some(&uri))
                 } else {
                     // For nested properties, use AST-based type resolution if we have entity context
                     let property_parts: Vec<&str> = property_path.split('.').collect();
@@ -180,10 +179,11 @@ pub async fn hover(
                                 &namespace,
                                 entity_context,
                                 &actual_property_path,
+                                Some(&uri),
                             )
                         } else {
                             // Fallback to string-based resolution
-                            get_entity_property_type(&namespace, &actual_property_path)
+                            get_entity_property_type(&namespace, &actual_property_path, Some(&uri))
                         }
                     } else {
                         None

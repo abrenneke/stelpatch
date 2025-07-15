@@ -3,9 +3,17 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use cw_model::{Entity, SkipRootKey, TypeKeyFilter, Value};
+use cw_model::{
+    Entity, Operator, PropertyInfo, PropertyInfoList, SkipRootKey, TypeKeyFilter, Value,
+    entity_from_ast,
+};
+use cw_parser::AstEntity;
 
 use crate::handlers::cache::{GameDataCache, TypeCache};
+
+/// Special property key used to store the original structural key
+/// This is needed for subtype determination when entities are restructured
+pub const ORIGINAL_KEY_PROPERTY: &str = "_original_key";
 
 /// Post-processor that restructures entities according to type definitions
 ///
@@ -14,6 +22,9 @@ use crate::handlers::cache::{GameDataCache, TypeCache};
 /// 2. `name_field`: Use a field within an entity as the key instead of structural key
 ///
 /// These can be used independently or together.
+///
+/// When restructuring occurs, the original structural key is preserved in a special
+/// property `_original_key` to enable subtype determination.
 ///
 /// # Examples
 ///
@@ -26,8 +37,8 @@ use crate::handlers::cache::{GameDataCache, TypeCache};
 /// }
 ///
 /// // After restructuring:
-/// // entities["namespace"]["entity_a"] = { prop = value }
-/// // entities["namespace"]["entity_b"] = { prop = value }
+/// // entities["namespace"]["entity_a"] = { prop = value, _original_key = "entity_a" }
+/// // entities["namespace"]["entity_b"] = { prop = value, _original_key = "entity_b" }
 /// ```
 ///
 /// ## Name Field Only
@@ -39,7 +50,7 @@ use crate::handlers::cache::{GameDataCache, TypeCache};
 /// }
 ///
 /// // After restructuring:
-/// // entities["namespace"]["actual_entity_name"] = { name = "actual_entity_name", prop = value }
+/// // entities["namespace"]["actual_entity_name"] = { name = "actual_entity_name", prop = value, _original_key = "some_key" }
 /// ```
 ///
 /// ## Both Skip Root Key and Name Field (like sprites)
@@ -53,7 +64,7 @@ use crate::handlers::cache::{GameDataCache, TypeCache};
 /// }
 ///
 /// // After restructuring:
-/// // entities["interface"]["GFX_my_sprite"] = { name = "GFX_my_sprite", textureFile = "..." }
+/// // entities["interface"]["GFX_my_sprite"] = { name = "GFX_my_sprite", textureFile = "...", _original_key = "spriteType" }
 /// ```
 pub struct EntityRestructurer {
     game_data: &'static GameDataCache,
@@ -88,6 +99,33 @@ impl EntityRestructurer {
             game_data,
             type_cache,
         }
+    }
+
+    /// Add the original structural key to an entity as a special property
+    /// This preserves the key information needed for subtype determination
+    fn add_original_key_to_entity(&self, mut entity: Entity, original_key: &str) -> Entity {
+        entity
+            .properties
+            .kv
+            .entry(ORIGINAL_KEY_PROPERTY.to_string())
+            .or_insert_with(PropertyInfoList::new)
+            .0
+            .push(PropertyInfo {
+                operator: Operator::Equals,
+                value: Value::String(original_key.to_string()),
+            });
+
+        entity
+    }
+
+    /// Extract the original key from an entity (if it was stored during restructuring)
+    pub fn get_original_key_from_entity(entity: &Entity) -> Option<String> {
+        if let Some(property_list) = entity.properties.kv.get(ORIGINAL_KEY_PROPERTY) {
+            if let Some(first_property) = property_list.0.first() {
+                return Some(first_property.value.to_string());
+            }
+        }
+        None
     }
 
     /// Get the restructured entities result
@@ -258,9 +296,12 @@ impl EntityRestructurer {
                                 .iter()
                                 .find(|type_def| type_def.name_field.is_some());
                             if let Some(entity_name) = name_field_type_def.and_then(|type_def| {
-                                self.extract_name_from_entity(entity, &type_def.name_field)
+                                Self::extract_name_from_entity(entity, &type_def.name_field)
                             }) {
-                                restructured_entities.insert(entity_name, entity.clone());
+                                // Add original key to entity to preserve subtype information
+                                let entity_with_original_key =
+                                    self.add_original_key_to_entity(entity.clone(), key);
+                                restructured_entities.insert(entity_name, entity_with_original_key);
                             } else {
                                 // Fallback to original key if name field not found
                                 restructured_entities.insert(key.clone(), entity.clone());
@@ -357,13 +398,17 @@ impl EntityRestructurer {
                     // Determine the entity name based on whether we have a name field
                     let entity_name = if name_field.is_some() {
                         // Use name field if available, fallback to structural key
-                        self.extract_name_from_entity(child_entity, name_field)
+                        Self::extract_name_from_entity(child_entity, name_field)
                             .unwrap_or_else(|| child_key.clone())
                     } else {
                         // No name field, use the structural key
                         child_key.clone()
                     };
-                    result.insert(entity_name, child_entity.clone());
+
+                    // Add original key to entity to preserve subtype information
+                    let entity_with_original_key =
+                        self.add_original_key_to_entity(child_entity.clone(), child_key);
+                    result.insert(entity_name, entity_with_original_key);
                 }
             }
         }
@@ -372,11 +417,7 @@ impl EntityRestructurer {
     }
 
     /// Extract the name field value from an entity
-    fn extract_name_from_entity(
-        &self,
-        entity: &Entity,
-        name_field: &Option<String>,
-    ) -> Option<String> {
+    fn extract_name_from_entity(entity: &Entity, name_field: &Option<String>) -> Option<String> {
         if let Some(field_name) = name_field {
             if let Some(property_list) = entity.properties.kv.get(field_name) {
                 if let Some(first_property) = property_list.0.first() {
@@ -683,6 +724,103 @@ impl EntityRestructurer {
             Some(all_entities)
         }
     }
+
+    /// Convert an AstEntity to Entity and apply restructuring logic for subtype narrowing
+    /// Returns (effective_entity_key, restructured_entity) that can be used for correct subtype determination
+    pub fn get_effective_entity_for_subtype_narrowing(
+        namespace: &str,
+        container_key: &str,
+        entity_key: &str,
+        ast_entity: &AstEntity,
+    ) -> (String, Entity) {
+        let mut entity = entity_from_ast(ast_entity);
+
+        // Check if this namespace needs restructuring
+        if let Some(restructured) = Self::get() {
+            if let Some(info) = restructured.restructured_namespaces.get(namespace) {
+                if info.skip_root_key.as_ref() == Some(&container_key.to_string()) {
+                    // This is a skipped container scenario - the entity should be extracted from a container
+                    // In this case, the AST entity we received is actually the nested entity, so we use it directly
+                    // but we need to determine the effective key and add original key property
+
+                    let effective_key = if let Some(name_field) = &info.name_field {
+                        Self::extract_name_from_entity(&entity, &Some(name_field.clone()))
+                            .unwrap_or_else(|| entity_key.to_string())
+                    } else {
+                        entity_key.to_string()
+                    };
+
+                    // Add original key to entity for subtype determination
+                    Self::add_original_key_to_entity_static(&mut entity, entity_key);
+
+                    return (effective_key, entity);
+                } else if let Some(name_field) = &info.name_field {
+                    // Name field scenario - use name field for key, add original key to entity
+                    let effective_key =
+                        Self::extract_name_from_entity(&entity, &Some(name_field.clone()))
+                            .unwrap_or_else(|| entity_key.to_string());
+
+                    // Add original key to entity for subtype determination
+                    Self::add_original_key_to_entity_static(&mut entity, entity_key);
+
+                    return (effective_key, entity);
+                }
+            }
+        }
+
+        // No restructuring applies, return as-is
+        (entity_key.to_string(), entity)
+    }
+
+    /// Static version of add_original_key_to_entity for use in static contexts
+    fn add_original_key_to_entity_static(entity: &mut Entity, original_key: &str) {
+        entity
+            .properties
+            .kv
+            .entry(ORIGINAL_KEY_PROPERTY.to_string())
+            .or_insert_with(PropertyInfoList::new)
+            .0
+            .push(PropertyInfo {
+                operator: Operator::Equals,
+                value: Value::String(original_key.to_string()),
+            });
+    }
+
+    /// Helper to get restructuring info for a namespace without needing the full cache
+    pub fn get_namespace_restructure_info(namespace: &str) -> Option<RestructureInfo> {
+        if !TypeCache::is_initialized() || !GameDataCache::is_initialized() {
+            return None;
+        }
+
+        let type_cache = TypeCache::get()?;
+
+        // Get type definitions that need restructuring for this namespace
+        for (_type_name, type_def) in type_cache.get_cwt_analyzer().get_types() {
+            if type_def.skip_root_key.is_some() || type_def.name_field.is_some() {
+                if let Some(path) = &type_def.path {
+                    let ns = if let Some(stripped) = path.strip_prefix("game/") {
+                        stripped.to_string()
+                    } else {
+                        path.clone()
+                    };
+
+                    if ns == namespace {
+                        return Some(RestructureInfo {
+                            skip_root_key: type_def.skip_root_key.as_ref().and_then(|s| match s {
+                                SkipRootKey::Specific(key) => Some(key.clone()),
+                                _ => None,
+                            }),
+                            name_field: type_def.name_field.clone(),
+                            original_entity_count: 0, // Not relevant for this use case
+                            restructured_entity_count: 0, // Not relevant for this use case
+                        });
+                    }
+                }
+            }
+        }
+
+        None
+    }
 }
 
 /// Simplified type definition info for restructuring
@@ -696,6 +834,8 @@ struct TypeDefinitionInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cw_model::{Entity, Operator, PropertyInfo, PropertyInfoList, Value};
+    use std::collections::HashMap;
 
     #[test]
     fn test_reset_functionality() {
@@ -731,5 +871,47 @@ mod tests {
 
         // After reset, should not be initialized
         assert!(!EntityRestructurer::is_initialized());
+    }
+
+    #[test]
+    fn test_original_key_preservation() {
+        // Test that the original key is preserved when restructuring entities
+        // We'll test the helper methods directly since we can't create valid static references
+
+        // Create a test entity
+        let mut entity = Entity::new();
+        entity.properties.kv.insert("name".to_string(), {
+            let mut list = PropertyInfoList::new();
+            list.0.push(PropertyInfo {
+                operator: Operator::Equals,
+                value: Value::String("test_entity".to_string()),
+            });
+            list
+        });
+
+        // Test adding original key
+        let original_key = "spriteType";
+
+        // We need to create a mock EntityRestructurer to test the method
+        // Since we can't create it properly, we'll test the concept by creating the entity manually
+        let mut entity_with_key = entity.clone();
+        entity_with_key
+            .properties
+            .kv
+            .entry(ORIGINAL_KEY_PROPERTY.to_string())
+            .or_insert_with(PropertyInfoList::new)
+            .0
+            .push(PropertyInfo {
+                operator: Operator::Equals,
+                value: Value::String(original_key.to_string()),
+            });
+
+        // Test that we can extract the original key
+        let extracted_key = EntityRestructurer::get_original_key_from_entity(&entity_with_key);
+        assert_eq!(extracted_key, Some("spriteType".to_string()));
+
+        // Test that entities without original key return None
+        let extracted_key_none = EntityRestructurer::get_original_key_from_entity(&entity);
+        assert_eq!(extracted_key_none, None);
     }
 }

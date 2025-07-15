@@ -1,3 +1,4 @@
+use super::utils::log_message_sync;
 use anyhow::{Result, anyhow};
 use cw_games::stellaris::STELLARIS_INSTALL_PATH;
 use cw_model::{GameMod, LoadMode, ModDefinition};
@@ -39,7 +40,7 @@ pub fn find_descriptor_mod(mut path: PathBuf) -> Option<PathBuf> {
 }
 
 /// Load mod dependencies recursively
-pub async fn load_mod_dependencies(
+pub fn load_mod_dependencies(
     mod_definition: &ModDefinition,
     client: &Client,
     loaded_mods: &mut HashMap<String, GameMod>,
@@ -51,40 +52,37 @@ pub async fn load_mod_dependencies(
             continue;
         }
 
-        client
-            .log_message(
-                tower_lsp::lsp_types::MessageType::INFO,
-                format!("Loading dependency: {}", dependency),
-            )
-            .await;
+        log_message_sync(
+            client,
+            tower_lsp::lsp_types::MessageType::INFO,
+            format!("Loading dependency: {}", dependency),
+        );
 
         // Try to find the dependency mod
         // This is a simplified approach - in a real implementation,
         // you'd need to search the mod directories for the dependency
         // For now, we'll just log that a dependency was found
-        client
-            .log_message(
-                tower_lsp::lsp_types::MessageType::INFO,
-                format!("Dependency {} would be loaded here", dependency),
-            )
-            .await;
+        log_message_sync(
+            client,
+            tower_lsp::lsp_types::MessageType::INFO,
+            format!("Dependency {} would be loaded here", dependency),
+        );
     }
 
     Ok(())
 }
 
 /// Load a mod from a descriptor.mod file with dependency resolution
-pub async fn load_mod_from_descriptor_with_dependencies(
+pub fn load_mod_from_descriptor_with_dependencies(
     descriptor_path: &Path,
     client: &Client,
     loaded_mods: &mut HashMap<String, GameMod>,
 ) -> Result<GameMod> {
-    client
-        .log_message(
-            tower_lsp::lsp_types::MessageType::INFO,
-            format!("Loading mod from descriptor: {}", descriptor_path.display()),
-        )
-        .await;
+    log_message_sync(
+        client,
+        tower_lsp::lsp_types::MessageType::INFO,
+        format!("Loading mod from descriptor: {}", descriptor_path.display()),
+    );
 
     // Parse the descriptor.mod file
     let mut mod_definition = ModDefinition::load_from_file(descriptor_path)?;
@@ -96,7 +94,7 @@ pub async fn load_mod_from_descriptor_with_dependencies(
     mod_definition.path = Some(mod_dir.to_path_buf());
 
     // Load dependencies first
-    load_mod_dependencies(&mod_definition, client, loaded_mods).await?;
+    load_mod_dependencies(&mod_definition, client, loaded_mods)?;
 
     // Load the mod using the existing GameMod::load functionality
     let game_mod = GameMod::load(mod_definition, LoadMode::Parallel)?;
@@ -104,24 +102,22 @@ pub async fn load_mod_from_descriptor_with_dependencies(
     // Add to loaded mods cache
     loaded_mods.insert(game_mod.definition.name.clone(), game_mod.clone());
 
-    client
-        .log_message(
-            tower_lsp::lsp_types::MessageType::INFO,
-            format!("Successfully loaded mod: {}", game_mod.definition.name),
-        )
-        .await;
+    log_message_sync(
+        client,
+        tower_lsp::lsp_types::MessageType::INFO,
+        format!("Successfully loaded mod: {}", game_mod.definition.name),
+    );
 
     Ok(game_mod)
 }
 
 /// Load a mod from a descriptor.mod file
-pub async fn load_mod_from_descriptor(descriptor_path: &Path, client: &Client) -> Result<GameMod> {
-    client
-        .log_message(
-            tower_lsp::lsp_types::MessageType::INFO,
-            format!("Loading mod from descriptor: {}", descriptor_path.display()),
-        )
-        .await;
+pub fn load_mod_from_descriptor(descriptor_path: &Path, client: &Client) -> Result<GameMod> {
+    log_message_sync(
+        client,
+        tower_lsp::lsp_types::MessageType::INFO,
+        format!("Loading mod from descriptor: {}", descriptor_path.display()),
+    );
 
     // Parse the descriptor.mod file
     let mut mod_definition = ModDefinition::load_from_file(descriptor_path)?;
@@ -135,25 +131,24 @@ pub async fn load_mod_from_descriptor(descriptor_path: &Path, client: &Client) -
     // Load the mod using the existing GameMod::load functionality
     let game_mod = GameMod::load(mod_definition, LoadMode::Parallel)?;
 
-    client
-        .log_message(
-            tower_lsp::lsp_types::MessageType::INFO,
-            format!("Successfully loaded mod: {}", game_mod.definition.name),
-        )
-        .await;
+    log_message_sync(
+        client,
+        tower_lsp::lsp_types::MessageType::INFO,
+        format!("Successfully loaded mod: {}", game_mod.definition.name),
+    );
 
     Ok(game_mod)
 }
 
 /// Check if a file is a mod file and load the mod if needed
-pub async fn handle_mod_file(file_path: &Path, client: &Client) -> Result<Option<GameMod>> {
+pub fn handle_mod_file(file_path: &Path, client: &Client) -> Result<Option<GameMod>> {
     let mut temp_cache = HashMap::new();
-    handle_mod_file_with_cache(file_path, client, &mut temp_cache).await
+    handle_mod_file_with_cache(file_path, client, &mut temp_cache)
 }
 
 /// Check if a file is a mod file and load the mod if needed
 /// Returns a GameMod if the file is part of a mod, None if it's a base game file
-pub async fn handle_mod_file_with_cache(
+pub fn handle_mod_file_with_cache(
     file_path: &Path,
     client: &Client,
     mod_cache: &mut HashMap<PathBuf, GameMod>,
@@ -173,49 +168,49 @@ pub async fn handle_mod_file_with_cache(
 
         // Check if mod is already cached
         if let Some(cached_mod) = mod_cache.get(&mod_dir) {
-            client
-                .log_message(
-                    tower_lsp::lsp_types::MessageType::INFO,
-                    format!("Using cached mod: {}", cached_mod.definition.name),
-                )
-                .await;
+            log_message_sync(
+                client,
+                tower_lsp::lsp_types::MessageType::INFO,
+                format!("Using cached mod: {}", cached_mod.definition.name),
+            );
             return Ok(Some(cached_mod.clone()));
         }
 
-        client
-            .log_message(
-                tower_lsp::lsp_types::MessageType::INFO,
-                format!("Found descriptor.mod at: {}", descriptor_path.display()),
-            )
-            .await;
+        log_message_sync(
+            client,
+            tower_lsp::lsp_types::MessageType::INFO,
+            format!("Found descriptor.mod at: {}", descriptor_path.display()),
+        );
 
-        // Use dependency-aware loading
+        // Use dependency-aware loading (with block_in_place for the async call)
         let mut loaded_mods = HashMap::new();
-        match load_mod_from_descriptor_with_dependencies(&descriptor_path, client, &mut loaded_mods)
-            .await
-        {
+        let load_result = {
+            let descriptor_path = descriptor_path.clone();
+            let client = client.clone();
+            load_mod_from_descriptor_with_dependencies(&descriptor_path, &client, &mut loaded_mods)
+        };
+
+        match load_result {
             Ok(game_mod) => {
                 // Cache the mod
                 mod_cache.insert(mod_dir, game_mod.clone());
                 Ok(Some(game_mod))
             }
             Err(e) => {
-                client
-                    .log_message(
-                        tower_lsp::lsp_types::MessageType::ERROR,
-                        format!("Failed to load mod: {}", e),
-                    )
-                    .await;
+                log_message_sync(
+                    client,
+                    tower_lsp::lsp_types::MessageType::ERROR,
+                    format!("Failed to load mod: {}", e),
+                );
                 Err(e)
             }
         }
     } else {
-        client
-            .log_message(
-                tower_lsp::lsp_types::MessageType::INFO,
-                format!("No descriptor.mod found for file: {}", file_path.display()),
-            )
-            .await;
+        log_message_sync(
+            client,
+            tower_lsp::lsp_types::MessageType::INFO,
+            format!("No descriptor.mod found for file: {}", file_path.display()),
+        );
         Ok(None)
     }
 }

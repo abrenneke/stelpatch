@@ -34,11 +34,11 @@ impl LanguageServer for CwLspServer {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        document::did_open(self, params).await;
+        document::did_open(self, params);
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        document::did_change(self, params).await;
+        document::did_change(self, params);
     }
 
     async fn semantic_tokens_full(
@@ -51,7 +51,6 @@ impl LanguageServer for CwLspServer {
             &self.document_cache,
             params,
         )
-        .await
     }
 
     async fn semantic_tokens_range(
@@ -64,16 +63,14 @@ impl LanguageServer for CwLspServer {
             &self.document_cache,
             params,
         )
-        .await
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        hover::hover(&self.client, &self.documents, &self.document_cache, params).await
+        hover::hover(&self.client, &self.documents, &self.document_cache, params)
     }
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         formatting::document_formatting(&self.client, &self.documents, &self.document_cache, params)
-            .await
     }
 
     async fn range_formatting(
@@ -86,6 +83,5 @@ impl LanguageServer for CwLspServer {
             &self.document_cache,
             params,
         )
-        .await
     }
 }

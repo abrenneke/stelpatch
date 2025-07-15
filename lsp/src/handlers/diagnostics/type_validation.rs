@@ -104,33 +104,6 @@ pub fn validate_entity_value(
 
     match value {
         AstValue::Entity(entity) => {
-            // Check if we need to determine a subtype for this entity
-            let actual_expected_type =
-                if let CwtTypeOrSpecial::CwtType(CwtType::Block(block_type)) =
-                    expected_type.cwt_type()
-                {
-                    if !block_type.subtypes.is_empty() {
-                        // Extract property data from the entity
-                        let property_data = extract_property_data_from_entity(entity);
-
-                        // Try to determine the matching subtypes
-                        let detected_subtypes = cache
-                            .get_resolver()
-                            .determine_matching_subtypes(expected_type.clone(), &property_data);
-
-                        if !detected_subtypes.is_empty() {
-                            // Create a new scoped type with the detected subtypes
-                            Arc::new(expected_type.with_subtypes(detected_subtypes))
-                        } else {
-                            expected_type
-                        }
-                    } else {
-                        expected_type
-                    }
-                } else {
-                    expected_type
-                };
-
             // Validate each property in the entity
             for item in &entity.items {
                 if let AstEntityItem::Expression(expr) = item {
@@ -138,7 +111,7 @@ pub fn validate_entity_value(
 
                     if let PropertyNavigationResult::Success(property_type) = cache
                         .get_resolver()
-                        .navigate_to_property(actual_expected_type.clone(), key_name)
+                        .navigate_to_property(expected_type.clone(), key_name)
                     {
                         // Validate the value against the property type
                         let value_diagnostics = validate_value_against_type(

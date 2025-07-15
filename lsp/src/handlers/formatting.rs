@@ -1,20 +1,19 @@
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use tower_lsp::Client;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 
 use crate::handlers::document_cache::DocumentCache;
 
-pub async fn document_formatting(
+pub fn document_formatting(
     _client: &Client,
     documents: &Arc<RwLock<HashMap<String, String>>>,
     _document_cache: &DocumentCache,
     params: DocumentFormattingParams,
 ) -> Result<Option<Vec<TextEdit>>> {
     let uri = params.text_document.uri.to_string();
-    let documents = documents.read().await;
+    let documents = documents.read().expect("Failed to read documents");
 
     let Some(content) = documents.get(&uri) else {
         return Ok(None);
@@ -42,14 +41,14 @@ pub async fn document_formatting(
     Ok(Some(vec![edit]))
 }
 
-pub async fn document_range_formatting(
+pub fn document_range_formatting(
     _client: &Client,
     documents: &Arc<RwLock<HashMap<String, String>>>,
     _document_cache: &DocumentCache,
     params: DocumentRangeFormattingParams,
 ) -> Result<Option<Vec<TextEdit>>> {
     let uri = params.text_document.uri.to_string();
-    let documents = documents.read().await;
+    let documents = documents.read().expect("Failed to read documents");
 
     let Some(content) = documents.get(&uri) else {
         return Ok(None);

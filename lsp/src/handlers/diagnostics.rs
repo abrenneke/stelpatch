@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
-use tokio::sync::RwLock;
 use tower_lsp::Client;
 
 pub mod diagnostic;
@@ -17,6 +16,7 @@ pub async fn generate_diagnostics(
     documents: &Arc<RwLock<HashMap<String, String>>>,
     uri: &str,
 ) {
-    let provider = provider::DiagnosticsProvider::new(client, documents.clone());
-    provider.generate_diagnostics(uri).await;
+    let provider = provider::DiagnosticsProvider::new(documents.clone());
+    let client_provider = provider::ClientDiagnosticsProvider::new(client, provider);
+    client_provider.generate_diagnostics(uri).await;
 }

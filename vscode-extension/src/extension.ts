@@ -45,11 +45,12 @@ export function activate(context: ExtensionContext) {
 	log('🚀 CW LSP Extension activating...');
 	log(`Extension path: ${context.extensionPath}`);
 	// Set up automatic language detection for currently open documents
-	if (workspace.textDocuments) {
-		for (const document of workspace.textDocuments) {
-			setLanguageForDocument(document);
-		}
-	}
+	// Seems buggy, so disabled for now
+	// if (workspace.textDocuments) {
+	// 	for (const document of workspace.textDocuments) {
+	// 		setLanguageForDocument(document);
+	// 	}
+	// }
 
 	// Listen for when documents are opened
 	const onDidOpenTextDocument = workspace.onDidOpenTextDocument((document) => {

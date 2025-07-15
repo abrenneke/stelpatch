@@ -15,6 +15,7 @@ cw_games = { path = "../cw_games" }
 cw_model = { path = "../cw_model" }
 cw_parser = { path = "../cw_parser" }
 dashmap = "6.1"
+futures = "0.3"
 indicatif = { version = "0.17", features = ["rayon"] }
 rayon = "1.10.0"
 self_cell = "1.2.0"

@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::handlers::cache::{EntityRestructurer, FullAnalysis, GameDataCache, TypeCache};
 use crate::handlers::diagnostics::generate_diagnostics;
 use crate::semantic_token_collector::CwSemanticTokenType;
-use tokio::sync::RwLock;
 use tower_lsp::Client;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -53,7 +52,9 @@ pub async fn initialized(
 
     let client_clone = client.clone();
 
-    tokio::task::spawn(async move {
+    let documents = documents.clone();
+
+    tokio::task::spawn_local(async move {
         while !TypeCache::is_initialized() || !GameDataCache::is_initialized() {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
@@ -80,7 +81,7 @@ pub async fn initialized(
             FullAnalysis::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
         full_analysis.load();
 
-        let documents_guard = documents.read().await;
+        let documents_guard = documents.read().unwrap();
         for uri in documents_guard.keys() {
             generate_diagnostics(&client_clone, &documents, uri).await;
         }

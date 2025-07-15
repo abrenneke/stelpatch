@@ -15,7 +15,7 @@ use super::types::TypeInfo;
 
 /// Cache for Stellaris type information that's loaded once and shared across requests
 pub struct TypeCache {
-    namespace_types: HashMap<String, Arc<ScopedType>>,
+    namespace_types: HashMap<String, Vec<Arc<ScopedType>>>,
     cwt_analyzer: Arc<CwtAnalyzer>,
     resolver: TypeResolver,
 }
@@ -46,7 +46,7 @@ impl TypeCache {
             eprintln!("Building cache from CWT types");
 
             // Pre-compute entity types for quick lookups
-            let mut namespace_types = HashMap::new();
+            let mut namespace_types: HashMap<String, Vec<Arc<ScopedType>>> = HashMap::new();
             for (type_name, type_def) in cwt_analyzer.get_types() {
                 // Extract namespace from the path
                 let namespace = if let Some(path) = &type_def.path {
@@ -56,11 +56,11 @@ impl TypeCache {
                     if path.starts_with("game/") {
                         path.strip_prefix("game/").unwrap_or(type_name).to_string()
                     } else {
-                        path.clone()
+                        path.to_string()
                     }
                 } else {
-                    // Fallback to type name if no path
-                    type_name.clone()
+                    eprintln!("Type has no path: {}", type_name);
+                    continue;
                 };
 
                 let mut scoped_type =
@@ -90,7 +90,10 @@ impl TypeCache {
                 }
 
                 // Store the type rules for this namespace
-                namespace_types.insert(namespace, Arc::new(scoped_type));
+                namespace_types
+                    .entry(namespace)
+                    .or_default()
+                    .push(Arc::new(scoped_type));
             }
 
             // Modifiers are loaded separately so artificially add a modifier type
@@ -110,6 +113,7 @@ impl TypeCache {
             );
 
             let mut inline_script_block = BlockType {
+                type_name: "$inline_script".to_string(),
                 properties: HashMap::new(),
                 subtypes: HashMap::new(),
                 subtype_properties: HashMap::new(),
@@ -272,17 +276,78 @@ impl TypeCache {
     }
 
     /// Get type information for a specific namespace
-    pub fn get_namespace_type(&self, namespace: &str) -> Option<Arc<ScopedType>> {
+    pub fn get_namespace_types(&self, namespace: &str) -> Option<Vec<Arc<ScopedType>>> {
         self.namespace_types.get(namespace).cloned()
+    }
+
+    pub fn get_namespace_type(
+        &self,
+        namespace: &str,
+        file_path: Option<&str>,
+    ) -> Option<Arc<ScopedType>> {
+        if let Some(namespace_types) = self.get_namespace_types(namespace) {
+            if namespace_types.is_empty() {
+                return None;
+            }
+
+            // If the type def has a file_path... try to match the file_path to the type def,
+            // this takes precence over the union type
+            if let Some(file_path) = file_path {
+                for scoped_type in &namespace_types {
+                    if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) = scoped_type.cwt_type()
+                    {
+                        if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                            if let Some(path) = type_def.path.as_ref() {
+                                if path.contains(file_path) {
+                                    return Some(scoped_type.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            let mut union_types = vec![];
+            for scoped_type in &namespace_types {
+                if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) = scoped_type.cwt_type() {
+                    union_types.push(CwtType::Block(block.clone()));
+                }
+            }
+
+            if union_types.is_empty() {
+                return None;
+            }
+
+            if union_types.len() == 1 {
+                return Some(Arc::new(ScopedType::new_cwt(
+                    union_types[0].clone(),
+                    Default::default(),
+                    None,
+                )));
+            }
+
+            return Some(Arc::new(ScopedType::new_cwt(
+                CwtType::Union(union_types),
+                Default::default(),
+                None,
+            )));
+        }
+
+        None
     }
 
     /// Get type information for a specific property path in a namespace
     /// Path format: "property" or "property.nested.field"
-    pub fn get_property_type(&self, namespace: &str, property_path: &str) -> Option<TypeInfo> {
+    pub fn get_property_type(
+        &self,
+        namespace: &str,
+        property_path: &str,
+        file_path: Option<&str>,
+    ) -> Option<TypeInfo> {
         let formatter = TypeFormatter::new(&self.resolver, 30);
 
         // First try to get from namespace types (game data)
-        if let Some(namespace_type) = self.get_namespace_type(namespace) {
+        if let Some(namespace_type) = self.get_namespace_type(namespace, file_path) {
             let path_parts: Vec<&str> = property_path.split('.').collect();
             let mut current_type = namespace_type.clone();
             let mut current_path = String::new();
@@ -439,18 +504,19 @@ impl TypeCache {
         namespace: &str,
         entity: &cw_parser::AstEntity<'_>,
         property_path: &str,
+        file_path: Option<&str>,
     ) -> Option<TypeInfo> {
         let formatter = TypeFormatter::new(&self.resolver, 30);
 
         // Get the base namespace type
-        let namespace_type = self.get_namespace_type(namespace)?;
+        let namespace_type = self.get_namespace_type(namespace, file_path)?;
 
         // Extract property data from the entity for subtype narrowing
         let property_data = self.extract_property_data_from_entity(entity);
 
         // Apply subtype narrowing to the namespace type
         let narrowed_namespace_type =
-            self.narrow_type_with_subtypes(namespace_type, &property_data);
+            self.narrow_type_with_subtypes(namespace_type.clone(), &property_data); // Start with the first type
 
         // Navigate to the property with the narrowed type
         let path_parts: Vec<&str> = property_path.split('.').collect();

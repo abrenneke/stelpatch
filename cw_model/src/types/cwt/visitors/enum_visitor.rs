@@ -110,7 +110,7 @@ impl<'a> EnumVisitor<'a> {
             values: HashSet::new(),
             complex: Some(ComplexEnumDefinition {
                 path: String::new(),
-                name_structure: CwtConverter::convert_value(&rule.value),
+                name_structure: CwtConverter::convert_value(&rule.value, None),
                 start_from_root: false,
             }),
         };
@@ -164,7 +164,7 @@ impl<'a> EnumVisitor<'a> {
                             }
                         }
                         "name" => {
-                            complex.name_structure = CwtConverter::convert_value(&rule.value);
+                            complex.name_structure = CwtConverter::convert_value(&rule.value, None);
                         }
                         _ => {}
                     }

@@ -182,7 +182,7 @@ where
 }
 
 /// Generate semantic tokens for the given content
-pub async fn generate_semantic_tokens(content: &str) -> Vec<SemanticToken> {
+pub fn generate_semantic_tokens(content: &str) -> Vec<SemanticToken> {
     // Parse the content using cw_parser
     let mut module = AstModule::new();
 
@@ -193,7 +193,7 @@ pub async fn generate_semantic_tokens(content: &str) -> Vec<SemanticToken> {
 
         // Try to provide basic tokens even if full parsing fails
         // This gives users some syntax highlighting even when there are errors
-        return generate_basic_tokens(content).await;
+        return generate_basic_tokens(content);
     }
 
     // Create a visitor to collect semantic tokens
@@ -207,7 +207,7 @@ pub async fn generate_semantic_tokens(content: &str) -> Vec<SemanticToken> {
 
 /// Generate basic semantic tokens when full parsing fails
 /// This provides minimal syntax highlighting for common patterns
-async fn generate_basic_tokens(content: &str) -> Vec<SemanticToken> {
+fn generate_basic_tokens(content: &str) -> Vec<SemanticToken> {
     let mut tokens = Vec::new();
 
     // Simple regex-based tokenization for basic syntax highlighting

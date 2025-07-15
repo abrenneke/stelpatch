@@ -46,7 +46,7 @@ impl<'a> RuleVisitor<'a> {
             let options = RuleOptions::from_rule(rule);
 
             // Convert the rule definition to an inferred type
-            let rule_type = CwtConverter::convert_value(&rule.value);
+            let rule_type = CwtConverter::convert_value(&rule.value, Some(name.clone()));
 
             // Store the rule definition as a TypeDefinition (merge with existing if present)
             let mut type_def = TypeDefinition::new(rule_type);
