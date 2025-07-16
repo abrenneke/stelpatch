@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use colored::Colorize;
 use cw_lsp::handlers::cache::FullAnalysis;
-use cw_lsp::handlers::cache::{EntityRestructurer, GameDataCache, TypeCache};
+use cw_lsp::handlers::cache::{EntityRestructurer, FileIndex, GameDataCache, TypeCache};
 use cw_lsp::handlers::diagnostics::provider::DiagnosticsProvider;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
@@ -168,12 +168,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize caches in background
     TypeCache::initialize_in_background();
     GameDataCache::initialize_in_background();
+    FileIndex::initialize_in_background();
 
     // Wait for caches to be initialized
     let timeout = std::time::Duration::from_secs(60);
     let start = std::time::Instant::now();
 
-    while !TypeCache::is_initialized() || !GameDataCache::is_initialized() {
+    while !TypeCache::is_initialized()
+        || !GameDataCache::is_initialized()
+        || !FileIndex::is_initialized()
+    {
         if start.elapsed() > timeout {
             eprintln!(
                 "{} {}",

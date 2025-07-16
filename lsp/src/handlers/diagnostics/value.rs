@@ -5,7 +5,7 @@ use cw_parser::{AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
 
 use crate::handlers::{
-    cache::{EntityRestructurer, GameDataCache, ModDataCache, TypeCache},
+    cache::{EntityRestructurer, FileIndex, GameDataCache, ModDataCache, TypeCache},
     diagnostics::diagnostic::create_type_mismatch_diagnostic,
     scope::ScopeStack,
     settings::VALIDATE_LOCALISATION,
@@ -56,13 +56,24 @@ pub fn is_value_compatible_with_simple_type(
                 None
             }
         }
-        (AstValue::String(_), SimpleType::Filepath) => {
-            // TODO: Implement proper filepath validation
-            Some(create_type_mismatch_diagnostic(
-                value.span_range(),
-                "Filepath validation not yet implemented",
-                content,
-            ))
+        (AstValue::String(string), SimpleType::Filepath) => {
+            if let Some(file_index) = FileIndex::get() {
+                if file_index.file_exists(string.raw_value()) {
+                    None
+                } else {
+                    Some(create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Filepath does not exist",
+                        content,
+                    ))
+                }
+            } else {
+                Some(create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    "File index not initialized, cannot validate filepath",
+                    content,
+                ))
+            }
         }
         (AstValue::String(_), SimpleType::Icon) => {
             // TODO: Implement proper icon validation

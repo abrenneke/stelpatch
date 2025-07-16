@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::handlers::cache::{EntityRestructurer, FullAnalysis, GameDataCache, TypeCache};
+use crate::handlers::cache::{
+    EntityRestructurer, FileIndex, FullAnalysis, GameDataCache, TypeCache,
+};
 use crate::handlers::diagnostics::generate_diagnostics;
 use crate::handlers::utils::log_message_sync;
 use crate::semantic_token_collector::CwSemanticTokenType;
@@ -50,13 +52,17 @@ pub async fn initialized(
 ) {
     TypeCache::initialize_in_background();
     GameDataCache::initialize_in_background();
+    FileIndex::initialize_in_background();
 
     let client_clone = client.clone();
 
     let documents = documents.clone();
 
     std::thread::spawn(move || {
-        while !TypeCache::is_initialized() || !GameDataCache::is_initialized() {
+        while !TypeCache::is_initialized()
+            || !GameDataCache::is_initialized()
+            || !FileIndex::is_initialized()
+        {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
