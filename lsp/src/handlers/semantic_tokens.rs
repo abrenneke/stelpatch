@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 use tower_lsp::Client;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -24,8 +25,23 @@ pub fn semantic_tokens_full(
 
     let documents_guard = documents.read().unwrap();
     if let Some(content) = documents_guard.get(&uri) {
+        let start_time = Instant::now();
+
         // Use document cache for efficient token generation
-        let token_data = document_cache.get_semantic_tokens(&uri, content, None);
+        let token_data = document_cache.get_semantic_tokens(&uri, content, None, None);
+
+        let duration = start_time.elapsed();
+        log_message_sync(
+            client,
+            MessageType::INFO,
+            format!(
+                "Semantic tokens (full) generated {} tokens in {:.2}ms for: {}",
+                token_data.len(),
+                duration.as_secs_f64() * 1000.0,
+                uri
+            ),
+        );
+
         Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
             result_id: None,
             data: token_data,
@@ -58,10 +74,25 @@ pub fn semantic_tokens_range(
 
     let documents_guard = documents.read().unwrap();
     if let Some(content) = documents_guard.get(&uri) {
-        // Use document cache for efficient token generation
-        // Note: For range requests, we're still generating full tokens
-        // A more advanced implementation could optimize this
-        let token_data = document_cache.get_semantic_tokens(&uri, content, None);
+        let start_time = Instant::now();
+
+        // Use document cache for efficient token generation with range filtering
+        let token_data =
+            document_cache.get_semantic_tokens(&uri, content, None, Some(params.range));
+
+        let duration = start_time.elapsed();
+        log_message_sync(
+            client,
+            MessageType::INFO,
+            format!(
+                "Semantic tokens (range) generated {} tokens in {:.2}ms for range {:?} in: {}",
+                token_data.len(),
+                duration.as_secs_f64() * 1000.0,
+                params.range,
+                uri
+            ),
+        );
+
         Ok(Some(SemanticTokensRangeResult::Tokens(SemanticTokens {
             result_id: None,
             data: token_data,

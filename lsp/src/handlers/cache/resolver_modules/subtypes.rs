@@ -3,7 +3,7 @@ use crate::handlers::cache::entity_restructurer::EntityRestructurer;
 use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{CwtTypeOrSpecial, ScopedType};
 use cw_model::types::{CwtAnalyzer, SubtypeCondition};
-use cw_model::{CwtType, Entity, Value};
+use cw_model::{CwtType, Entity, TypeKeyFilter, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -29,29 +29,28 @@ impl SubtypeHandler {
             return property_data.keys().any(|key| key.starts_with(starts_with));
         } else if let Some(type_key_filter) = &subtype_def.options.type_key_filter {
             return match type_key_filter {
-                cw_model::types::TypeKeyFilter::Specific(key) => {
-                    // Check if the original key matches the filter
-                    if let Some(original_key) = property_data.get(ORIGINAL_KEY_PROPERTY) {
-                        original_key.contains(key)
-                    } else {
-                        false
-                    }
+                TypeKeyFilter::Specific(key) => {
+                    // Check if the entity has the specific key OR if the original key matches
+                    property_data.contains_key(key)
+                        || property_data
+                            .get(ORIGINAL_KEY_PROPERTY)
+                            .map_or(false, |original_key| original_key.contains(key))
                 }
-                cw_model::types::TypeKeyFilter::Not(key) => {
-                    // Check if the original key does NOT match the filter
-                    if let Some(original_key) = property_data.get(ORIGINAL_KEY_PROPERTY) {
-                        !original_key.contains(key)
-                    } else {
-                        true // If no original key, it doesn't match the excluded pattern
-                    }
+                TypeKeyFilter::Not(key) => {
+                    // Check if the entity does NOT have the specific key AND the original key doesn't match
+                    !property_data.contains_key(key)
+                        && property_data
+                            .get(ORIGINAL_KEY_PROPERTY)
+                            .map_or(true, |original_key| !original_key.contains(key))
                 }
-                cw_model::types::TypeKeyFilter::OneOf(keys) => {
-                    // Check if the original key matches any of the filters
-                    if let Some(original_key) = property_data.get(ORIGINAL_KEY_PROPERTY) {
-                        keys.iter().any(|key| original_key.contains(key))
-                    } else {
-                        false
-                    }
+                TypeKeyFilter::OneOf(keys) => {
+                    // Check if the entity has any of the specified keys OR if the original key matches any
+                    keys.iter().any(|key| property_data.contains_key(key))
+                        || property_data
+                            .get(ORIGINAL_KEY_PROPERTY)
+                            .map_or(false, |original_key| {
+                                keys.iter().any(|key| original_key.contains(key))
+                            })
                 }
             };
         }
@@ -393,87 +392,6 @@ impl SubtypeHandler {
                 matching_subtypes
             }
             _ => HashSet::new(),
-        }
-    }
-
-    /// Get all subtype names and their condition descriptions for a given type
-    pub fn get_subtype_conditions(&self, cwt_type: &CwtType) -> Vec<(String, String)> {
-        match cwt_type {
-            CwtType::Block(block) => block
-                .subtypes
-                .iter()
-                .map(|(name, subtype)| {
-                    let description = self.describe_subtype_conditions(subtype, name);
-                    (name.clone(), description)
-                })
-                .collect(),
-            _ => Vec::new(),
-        }
-    }
-
-    /// Create a human-readable description of subtype conditions
-    fn describe_subtype_conditions(
-        &self,
-        subtype_def: &cw_model::types::Subtype,
-        subtype_name: &str,
-    ) -> String {
-        // Handle CWT options first
-        if let Some(starts_with) = &subtype_def.options.starts_with {
-            return format!("key starts with '{}'", starts_with);
-        } else if let Some(type_key_filter) = &subtype_def.options.type_key_filter {
-            return match type_key_filter {
-                cw_model::types::TypeKeyFilter::Specific(key) => {
-                    format!("key matches '{}'", key)
-                }
-                cw_model::types::TypeKeyFilter::Not(key) => {
-                    format!("key does not match '{}'", key)
-                }
-                cw_model::types::TypeKeyFilter::OneOf(keys) => {
-                    format!("key matches any of [{}]", keys.join(", "))
-                }
-            };
-        }
-
-        // Describe condition_properties
-        let property_conditions: Vec<String> = subtype_def
-            .condition_properties
-            .iter()
-            .filter_map(|(key, property)| {
-                match &property.property_type {
-                    CwtType::Literal(value) => Some(format!("{} = {}", key, value)),
-                    CwtType::Simple(_) => Some(format!("{} exists", key)),
-                    CwtType::Block(_) => {
-                        // Include block properties with their cardinality constraints
-                        if let Some(cardinality) = &property.options.cardinality {
-                            if cardinality.max == Some(0) {
-                                Some(format!("{} must not exist (cardinality 0..0)", key))
-                            } else if cardinality.min == Some(0) {
-                                Some(format!(
-                                    "{} is optional (cardinality 0..{})",
-                                    key,
-                                    cardinality.max.map_or("∞".to_string(), |m| m.to_string())
-                                ))
-                            } else {
-                                Some(format!(
-                                    "{} required (cardinality {}..{})",
-                                    key,
-                                    cardinality.min.unwrap_or(0),
-                                    cardinality.max.map_or("∞".to_string(), |m| m.to_string())
-                                ))
-                            }
-                        } else {
-                            Some(format!("{} block exists", key))
-                        }
-                    }
-                    _ => Some(format!("{} exists", key)),
-                }
-            })
-            .collect();
-
-        if property_conditions.is_empty() {
-            format!("always matches ({})", subtype_name)
-        } else {
-            property_conditions.join(" AND ")
         }
     }
 

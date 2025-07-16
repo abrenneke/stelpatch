@@ -55,6 +55,21 @@ impl CwtType {
             _ => None,
         }
     }
+
+    pub fn get_type_name(&self) -> &str {
+        match self {
+            CwtType::Simple(_) => "",
+            CwtType::Reference(_) => "",
+            CwtType::Block(block_type) => &block_type.type_name,
+            CwtType::Unknown => "",
+            CwtType::Array(_) => "",
+            CwtType::Union(_) => "",
+            CwtType::Literal(_) => "",
+            CwtType::LiteralSet(_) => "",
+            CwtType::Comparable(_) => "",
+            CwtType::Any => "",
+        }
+    }
 }
 
 /// Simple CWT primitive types - directly maps to CWT simple values

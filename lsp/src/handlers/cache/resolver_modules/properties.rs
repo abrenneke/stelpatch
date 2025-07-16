@@ -3,6 +3,7 @@ use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
+use crate::handlers::settings::VALIDATE_LOCALISATION;
 use crate::handlers::utils::contains_scripted_argument;
 use cw_model::{
     AliasDefinition, AliasName, BlockType, CwtAnalyzer, CwtType, LinkDefinition, PatternProperty,
@@ -134,6 +135,24 @@ impl PropertyNavigator {
                             }
                             PropertyNavigationResult::NotFound => {
                                 // This shouldn't happen for int properties, but handle it
+                            }
+                        }
+                    }
+                }
+
+                if let Some(localisation_property) = block.properties.get("localisation") {
+                    if !VALIDATE_LOCALISATION {
+                        match self
+                            .handle_regular_property(scoped_type.clone(), localisation_property)
+                        {
+                            PropertyNavigationResult::Success(result) => {
+                                successful_results.push(result.cwt_type().clone());
+                            }
+                            PropertyNavigationResult::ScopeError(error) => {
+                                scope_errors.push(error);
+                            }
+                            PropertyNavigationResult::NotFound => {
+                                // This shouldn't happen for localisation properties, but handle it
                             }
                         }
                     }

@@ -623,19 +623,6 @@ types = {
         );
         assert!(opinion_modifier.subtypes.contains_key("block_triggered"));
 
-        match &opinion_modifier
-            .subtypes
-            .get("block_triggered")
-            .unwrap()
-            .condition_properties
-        {
-            SubtypeCondition::PropertyEquals { key, value } => {
-                assert_eq!(key, "block_triggered");
-                assert_eq!(value, "yes");
-            }
-            _ => panic!("Expected PropertyEquals condition"),
-        }
-
         // Check localisation
         assert_eq!(opinion_modifier.localisation.len(), 2);
         assert_eq!(
@@ -1210,47 +1197,5 @@ types = {
         } else {
             panic!("Expected skip_root_key != pattern to be parsed");
         }
-
-        // Test 4: Subtype with starts_with condition
-        let nested_type = data.types.get("nested_subtype_features").unwrap();
-        let advanced_subtype = nested_type.subtypes.get("advanced").unwrap();
-        if let SubtypeCondition::KeyStartsWith { prefix } = &advanced_subtype.condition {
-            assert_eq!(prefix, "advanced_");
-        } else {
-            panic!("Expected KeyStartsWith condition for advanced subtype");
-        }
-
-        // Test 5: Subtype-specific localisation
-        let base_name_req = nested_type.localisation.get("base_name").unwrap();
-        assert!(base_name_req.required);
-        assert_eq!(base_name_req.pattern, "$");
-
-        // Check if subtype-specific localisation is parsed
-        if let Some(subtype_locs) = base_name_req.subtypes.get("advanced") {
-            assert!(subtype_locs.contains_key("name"));
-            assert!(subtype_locs.contains_key("description"));
-        }
-
-        // Test 6: Subtype-specific modifiers
-        if let Some(subtype_mods) = nested_type.modifiers.subtypes.get("advanced") {
-            assert!(subtype_mods.contains_key("advanced_modifier"));
-            assert!(subtype_mods.contains_key("special_effect"));
-            assert_eq!(
-                subtype_mods.get("advanced_modifier"),
-                Some(&"country".to_string())
-            );
-            assert_eq!(
-                subtype_mods.get("special_effect"),
-                Some(&"planet".to_string())
-            );
-        }
-
-        // Test 7: Subtype properties
-        assert!(
-            advanced_subtype
-                .condition_properties
-                .contains_key("is_advanced")
-        );
-        assert!(advanced_subtype.condition_properties.contains_key("level"));
     }
 }

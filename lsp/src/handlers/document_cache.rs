@@ -90,23 +90,126 @@ impl DocumentCache {
         uri: &str,
         content: &str,
         version: Option<i32>,
+        range: Option<Range>,
     ) -> Vec<SemanticToken> {
         let cache = self.cache.read().expect("Failed to read cache");
         let cached = cache.get(uri);
 
-        if let Some(cached) = cached {
-            return cached.semantic_tokens.clone();
-        }
-
-        // If not in cache, update cache and return tokens
-        self.update_document(uri.to_string(), content.to_string(), version);
-
-        if let Some(cached) = cache.get(uri) {
+        let tokens = if let Some(cached) = cached {
             cached.semantic_tokens.clone()
         } else {
-            // Fallback to direct generation if caching fails
-            generate_semantic_tokens(content)
+            // If not in cache, update cache and return tokens
+            drop(cache); // Release read lock before acquiring write lock
+            self.update_document(uri.to_string(), content.to_string(), version);
+
+            let cache = self.cache.read().expect("Failed to read cache");
+            if let Some(cached) = cache.get(uri) {
+                cached.semantic_tokens.clone()
+            } else {
+                // Fallback to direct generation if caching fails
+                generate_semantic_tokens(content)
+            }
+        };
+
+        // Filter tokens by range if specified
+        if let Some(range) = range {
+            self.filter_tokens_by_range(tokens, range)
+        } else {
+            tokens
         }
+    }
+
+    /// Filter semantic tokens to only include those within the specified range
+    fn filter_tokens_by_range(
+        &self,
+        tokens: Vec<SemanticToken>,
+        range: Range,
+    ) -> Vec<SemanticToken> {
+        let start_line = range.start.line;
+        let end_line = range.end.line;
+
+        // Convert from relative positions back to absolute positions for filtering
+        let mut filtered = Vec::new();
+        let mut current_line = 0;
+        let mut current_start = 0;
+
+        for token in tokens {
+            current_line += token.delta_line;
+            if token.delta_line == 0 {
+                current_start += token.delta_start;
+            } else {
+                current_start = token.delta_start;
+            }
+
+            let token_end = current_start + token.length;
+
+            // Check if token falls within the requested range
+            let include_token = if current_line < start_line || current_line > end_line {
+                false
+            } else if current_line == start_line && current_line == end_line {
+                // Token is on both start and end line - check both boundaries
+                token_end > range.start.character && current_start < range.end.character
+            } else if current_line == start_line {
+                // Token is on start line - check start boundary
+                token_end > range.start.character
+            } else if current_line == end_line {
+                // Token is on end line - check end boundary
+                current_start < range.end.character
+            } else {
+                // Token is between start and end lines - include it
+                true
+            };
+
+            if include_token {
+                filtered.push(token);
+            }
+
+            // Early exit if we've passed the end line
+            if current_line > end_line {
+                break;
+            }
+        }
+
+        // Convert back to relative positions
+        self.convert_to_relative_positions(filtered)
+    }
+
+    /// Convert absolute positioned tokens back to relative positions for LSP
+    fn convert_to_relative_positions(&self, tokens: Vec<SemanticToken>) -> Vec<SemanticToken> {
+        let mut result = Vec::new();
+        let mut last_line = 0;
+        let mut last_start = 0;
+
+        for token in tokens {
+            // Get absolute position from the token
+            let abs_line = last_line + token.delta_line;
+            let abs_start = if token.delta_line == 0 {
+                last_start + token.delta_start
+            } else {
+                token.delta_start
+            };
+
+            // Calculate relative position
+            let delta_line = abs_line - last_line;
+            let delta_start = if delta_line == 0 {
+                abs_start - last_start
+            } else {
+                abs_start
+            };
+
+            result.push(SemanticToken {
+                delta_line,
+                delta_start,
+                length: token.length,
+                token_type: token.token_type,
+                token_modifiers_bitset: token.token_modifiers_bitset,
+            });
+
+            last_line = abs_line;
+            last_start = abs_start;
+        }
+
+        result
     }
 }
 

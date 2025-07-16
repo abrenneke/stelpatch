@@ -69,6 +69,17 @@ pub enum CwtTypeOrSpecial {
     ScopedUnion(Vec<ScopedType>),
 }
 
+impl CwtTypeOrSpecial {
+    pub fn get_type_name(&self) -> &str {
+        match self {
+            CwtTypeOrSpecial::CwtType(cwt_type) => cwt_type.get_type_name(),
+            CwtTypeOrSpecial::ScopedUnion(scoped_types) => {
+                scoped_types.first().unwrap().get_type_name()
+            }
+        }
+    }
+}
+
 impl TypeFingerprint for CwtTypeOrSpecial {
     fn fingerprint(&self) -> String {
         match self {
@@ -90,6 +101,10 @@ impl ScopedType {
             subtypes: HashSet::new(),
             in_scripted_effect_block: None,
         }
+    }
+
+    pub fn get_type_name(&self) -> &str {
+        self.cwt_type.get_type_name()
     }
 
     pub fn new_with_subtype(

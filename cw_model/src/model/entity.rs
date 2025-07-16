@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cw_parser::{AstEntity, AstValue, AstVisitor};
+use cw_parser::{AstEntity, AstModule, AstValue, AstVisitor};
 use indent::indent_all_by;
 
 use crate::{
@@ -150,6 +150,13 @@ pub fn entity_from_ast<'a>(ast: &AstEntity<'a>) -> Entity {
     let mut entity = Entity::new();
     let mut entity_visitor = EntityVisitor::new(&mut entity);
     entity_visitor.visit_entity(ast);
+    entity
+}
+
+pub fn entity_from_module_ast<'a>(ast: &AstModule<'a>) -> Entity {
+    let mut entity = Entity::new();
+    let mut entity_visitor = EntityVisitor::new(&mut entity);
+    entity_visitor.visit_module(ast);
     entity
 }
 

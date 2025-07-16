@@ -7,3 +7,4 @@ profile.json.gz
 *.vsix
 vscode-extension/server
 vscode-extension/config
+lsp/output.txt

@@ -1,13 +1,13 @@
-use cw_model::{CwtType, SimpleType};
-use cw_parser::{AstEntityItem, AstModule, AstValue};
+use cw_model::{CwtType, SimpleType, entity_from_module_ast};
+use cw_parser::{AstEntityItem, AstModule, AstNode, AstValue};
 use tower_lsp::lsp_types::*;
 
-use crate::handlers::cache::{
-    EntityRestructurer, GameDataCache, TypeCache, get_namespace_entity_type,
+use crate::handlers::cache::{EntityRestructurer, GameDataCache, TypeCache};
+use crate::handlers::diagnostics::diagnostic::{
+    create_diagnostic_from_parse_error, create_unexpected_key_diagnostic,
 };
-use crate::handlers::diagnostics::diagnostic::create_diagnostic_from_parse_error;
 use crate::handlers::diagnostics::type_validation::validate_entity_value;
-use crate::handlers::scoped_type::{CwtTypeOrSpecial, ScopedType};
+use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
 
 use super::super::utils::extract_namespace_from_uri;
 use std::collections::HashMap;
@@ -125,7 +125,74 @@ impl DiagnosticsProvider {
             panic!("Namespace type is unknown");
         }
 
-        // Validate each entity in the module
+        let type_def = type_cache
+            .get_cwt_analyzer()
+            .get_type(&namespace_type.get_type_name());
+
+        // Check if we should treat the entire file as a single entity
+        if let Some(type_def) = type_def {
+            if type_def.options.type_per_file {
+                let entity = entity_from_module_ast(module);
+
+                // Extract property data from the entity for subtype narrowing
+                let mut property_data = HashMap::new();
+                for (key, property_list) in &entity.properties.kv {
+                    if let Some(first_property) = property_list.0.first() {
+                        property_data.insert(key.clone(), first_property.value.to_string());
+                    }
+                }
+
+                // Perform subtype narrowing at the file level
+                let validation_type = if let Some(type_cache) = TypeCache::get() {
+                    let matching_subtypes = type_cache
+                        .get_resolver()
+                        .determine_matching_subtypes(namespace_type.clone(), &property_data);
+
+                    if !matching_subtypes.is_empty() {
+                        Arc::new(namespace_type.with_subtypes(matching_subtypes))
+                    } else {
+                        namespace_type.clone()
+                    }
+                } else {
+                    namespace_type.clone()
+                };
+
+                // Validate each top-level property in the module as if it were an entity property
+                for item in &module.items {
+                    if let AstEntityItem::Expression(expr) = item {
+                        let key_name = expr.key.raw_value();
+
+                        if let PropertyNavigationResult::Success(property_type) = type_cache
+                            .get_resolver()
+                            .navigate_to_property(validation_type.clone(), key_name)
+                        {
+                            // Validate the value against the property type
+                            let value_diagnostics = validate_entity_value(
+                                &expr.value,
+                                property_type,
+                                content,
+                                &namespace,
+                                1,
+                            );
+                            diagnostics.extend(value_diagnostics);
+                        } else {
+                            // Create diagnostic for unexpected property
+                            let diagnostic = create_unexpected_key_diagnostic(
+                                expr.key.span_range(),
+                                key_name,
+                                &namespace,
+                                content,
+                            );
+                            diagnostics.push(diagnostic);
+                        }
+                    }
+                }
+
+                return diagnostics;
+            }
+        }
+
+        // Standard behavior: validate each entity in the module separately
         for item in &module.items {
             if let AstEntityItem::Expression(expr) = item {
                 if expr.key.raw_value().starts_with("@") {
