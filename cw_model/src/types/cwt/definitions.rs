@@ -48,20 +48,28 @@ pub struct TypeDefinition {
 pub struct TypeOptions {
     /// Whether this type is unique
     pub unique: bool,
+
     /// Whether to start types from file root
     pub type_per_file: bool,
+
     /// Path strictness
     pub path_strict: bool,
+
     /// Specific file to match
     pub path_file: Option<String>,
+
     /// File extension filter
     pub path_extension: Option<String>,
+
     /// Graph related types
     pub graph_related_types: Vec<String>,
+
     /// Starts with filter
     pub starts_with: Option<String>,
+
     /// Severity level for errors
     pub severity: Option<SeverityLevel>,
+
     /// Type key filter
     pub type_key_filter: Option<TypeKeyFilter>,
 }

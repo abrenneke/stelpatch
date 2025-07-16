@@ -38,11 +38,17 @@ impl PropertyNavigator {
     }
 
     /// Navigate to a property from a given scoped type
+    /// Supports complex properties like "root.owner" which are treated as chained navigation
     pub fn navigate_to_property(
         &self,
         scoped_type: Arc<ScopedType>,
         property_name: &str,
     ) -> PropertyNavigationResult {
+        // Handle complex properties (containing dots) by navigating through each part
+        if property_name.contains('.') {
+            return self.navigate_to_complex_property(scoped_type, property_name);
+        }
+
         // First, check if this property is a scope property (from, fromfrom, etc.)
         if let Some(scope_context) = scoped_type.scope_stack().get_scope_by_name(property_name) {
             // This is a scope property - push that scope onto the current stack
@@ -60,9 +66,23 @@ impl PropertyNavigator {
         // Handle regular properties based on the current type
         match scoped_type.cwt_type() {
             CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
+                // Collect ALL possible matches instead of returning early
+                let mut successful_results = Vec::new();
+                let mut scope_errors = Vec::new();
+
                 // First, check regular properties
                 if let Some(property) = block.properties.get(property_name) {
-                    return self.handle_regular_property(scoped_type.clone(), property);
+                    match self.handle_regular_property(scoped_type.clone(), property) {
+                        PropertyNavigationResult::Success(result) => {
+                            successful_results.push(result.cwt_type().clone());
+                        }
+                        PropertyNavigationResult::ScopeError(error) => {
+                            scope_errors.push(error);
+                        }
+                        PropertyNavigationResult::NotFound => {
+                            // This shouldn't happen for regular properties, but handle it
+                        }
+                    }
                 }
 
                 // Second, check if there's a subtype-specific property
@@ -70,38 +90,63 @@ impl PropertyNavigator {
                     if let Some(subtype_property) =
                         self.get_subtype_property(block, subtype_name, property_name)
                     {
-                        return self.handle_subtype_property(
+                        match self.handle_subtype_property(
                             scoped_type.clone(),
                             subtype_property,
                             property_name,
-                        );
+                        ) {
+                            PropertyNavigationResult::Success(result) => {
+                                successful_results.push(result.cwt_type().clone());
+                            }
+                            PropertyNavigationResult::ScopeError(error) => {
+                                scope_errors.push(error);
+                            }
+                            PropertyNavigationResult::NotFound => {
+                                // This shouldn't happen for subtype properties, but handle it
+                            }
+                        }
                     }
                 }
 
                 // Third, check for special "scalar" key that matches any string
                 if let Some(scalar_property) = block.properties.get("scalar") {
-                    return self.handle_regular_property(scoped_type.clone(), scalar_property);
+                    match self.handle_regular_property(scoped_type.clone(), scalar_property) {
+                        PropertyNavigationResult::Success(result) => {
+                            successful_results.push(result.cwt_type().clone());
+                        }
+                        PropertyNavigationResult::ScopeError(error) => {
+                            scope_errors.push(error);
+                        }
+                        PropertyNavigationResult::NotFound => {
+                            // This shouldn't happen for scalar properties, but handle it
+                        }
+                    }
                 }
 
                 if let Some(int_property) = block.properties.get("int") {
                     if property_name.parse::<i32>().is_ok() {
-                        return self.handle_regular_property(scoped_type.clone(), int_property);
+                        match self.handle_regular_property(scoped_type.clone(), int_property) {
+                            PropertyNavigationResult::Success(result) => {
+                                successful_results.push(result.cwt_type().clone());
+                            }
+                            PropertyNavigationResult::ScopeError(error) => {
+                                scope_errors.push(error);
+                            }
+                            PropertyNavigationResult::NotFound => {
+                                // This shouldn't happen for int properties, but handle it
+                            }
+                        }
                     }
                 }
 
                 // Fourth, check for special inline_script property
                 if property_name == "inline_script" {
-                    return PropertyNavigationResult::Success(Arc::new(
-                        ScopedType::new_cwt_with_subtypes(
-                            self.cwt_analyzer
-                                .get_type("$inline_script")
-                                .unwrap()
-                                .rules
-                                .clone(),
-                            scoped_type.scope_stack().clone(),
-                            scoped_type.subtypes().clone(),
-                            scoped_type.in_scripted_effect_block().cloned(),
-                        ),
+                    successful_results.push(CwtTypeOrSpecial::CwtType(
+                        self.cwt_analyzer
+                            .get_type("$inline_script")
+                            .unwrap()
+                            .rules
+                            .clone(),
                     ));
                 }
 
@@ -110,11 +155,21 @@ impl PropertyNavigator {
                     .pattern_matcher
                     .key_matches_pattern(property_name, block)
                 {
-                    return self.handle_pattern_property(
+                    match self.handle_pattern_property(
                         scoped_type.clone(),
                         pattern_property,
                         property_name,
-                    );
+                    ) {
+                        PropertyNavigationResult::Success(result) => {
+                            successful_results.push(result.cwt_type().clone());
+                        }
+                        PropertyNavigationResult::ScopeError(error) => {
+                            scope_errors.push(error);
+                        }
+                        PropertyNavigationResult::NotFound => {
+                            // This shouldn't happen for pattern properties, but handle it
+                        }
+                    }
                 }
 
                 // Sixth, check the special scripted_effect_params enum
@@ -128,11 +183,22 @@ impl PropertyNavigator {
                                 if let PatternType::Enum { key } = &pattern_property.pattern_type {
                                     if key == "scripted_effect_params" {
                                         if arguments.contains(property_name) {
-                                            return self.handle_pattern_property(
+                                            match self.handle_pattern_property(
                                                 scoped_type.clone(),
                                                 pattern_property,
                                                 property_name,
-                                            );
+                                            ) {
+                                                PropertyNavigationResult::Success(result) => {
+                                                    successful_results
+                                                        .push(result.cwt_type().clone());
+                                                }
+                                                PropertyNavigationResult::ScopeError(error) => {
+                                                    scope_errors.push(error);
+                                                }
+                                                PropertyNavigationResult::NotFound => {
+                                                    // This shouldn't happen for scripted_effect_params, but handle it
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -143,34 +209,66 @@ impl PropertyNavigator {
 
                 // If it's a scripted argument, this could be really anything
                 if contains_scripted_argument(property_name) {
-                    return PropertyNavigationResult::Success(Arc::new(
-                        ScopedType::new_cwt_with_subtypes(
-                            CwtType::Any,
-                            scoped_type.scope_stack().clone(),
-                            scoped_type.subtypes().clone(),
-                            scoped_type.in_scripted_effect_block().cloned(),
-                        ),
-                    ));
+                    successful_results.push(CwtTypeOrSpecial::CwtType(CwtType::Any));
                 }
 
                 // Finally, check if this property is a link property (as fallback)
                 let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
-                if let Some(link_def) = self.is_link_property(property_name, current_scope) {
-                    // This is a link property - create a scoped type with the output scope
-                    let mut new_scope_context = scoped_type.scope_stack().clone();
-                    new_scope_context
-                        .push_scope_type(&link_def.output_scope)
-                        .unwrap();
-                    let result = ScopedType::new_with_subtypes(
-                        scoped_type.cwt_type().clone(),
-                        new_scope_context,
-                        scoped_type.subtypes().clone(),
-                        scoped_type.in_scripted_effect_block().cloned(),
-                    );
-                    return PropertyNavigationResult::Success(Arc::new(result));
+                if let Some(_link_def) = self.is_link_property(property_name, current_scope) {
+                    // For link properties, we maintain the current type but note scope change
+                    // Since we're collecting multiple results, we can't easily apply scope changes here
+                    // The type remains the same, but the consumer should be aware this is a link
+                    match scoped_type.cwt_type() {
+                        CwtTypeOrSpecial::CwtType(cwt_type) => {
+                            successful_results.push(CwtTypeOrSpecial::CwtType(cwt_type.clone()));
+                        }
+                        scoped_union => {
+                            successful_results.push(scoped_union.clone());
+                        }
+                    }
                 }
 
-                PropertyNavigationResult::NotFound
+                // Combine all successful results
+                match successful_results.len() {
+                    0 => {
+                        // No successful results - if we have scope errors, return the first one
+                        if let Some(error) = scope_errors.into_iter().next() {
+                            PropertyNavigationResult::ScopeError(error)
+                        } else {
+                            PropertyNavigationResult::NotFound
+                        }
+                    }
+                    1 => {
+                        // Single result - return it directly
+                        let result_type = successful_results.into_iter().next().unwrap();
+                        let result_scoped = ScopedType::new_with_subtypes(
+                            result_type,
+                            scoped_type.scope_stack().clone(),
+                            scoped_type.subtypes().clone(),
+                            scoped_type.in_scripted_effect_block().cloned(),
+                        );
+                        PropertyNavigationResult::Success(Arc::new(result_scoped))
+                    }
+                    _ => {
+                        // Multiple results - create a union of them
+                        let union_type = CwtType::Union(
+                            successful_results
+                                .into_iter()
+                                .map(|t| match t {
+                                    CwtTypeOrSpecial::CwtType(t) => t,
+                                    CwtTypeOrSpecial::ScopedUnion(_) => CwtType::Any, // Fallback for scoped unions
+                                })
+                                .collect(),
+                        );
+                        let result_scoped = ScopedType::new_with_subtypes(
+                            CwtTypeOrSpecial::CwtType(union_type),
+                            scoped_type.scope_stack().clone(),
+                            scoped_type.subtypes().clone(),
+                            scoped_type.in_scripted_effect_block().cloned(),
+                        );
+                        PropertyNavigationResult::Success(Arc::new(result_scoped))
+                    }
+                }
             }
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::AliasMatchLeft {
                 key,
@@ -244,6 +342,76 @@ impl PropertyNavigator {
                     }
                 }
             }
+            CwtTypeOrSpecial::CwtType(CwtType::Union(union)) => {
+                // For unions, try each type in the union and if there are multiple matches, make
+                // a union of the results
+                let mut successful_results = Vec::new();
+                let mut scope_errors = Vec::new();
+
+                for union_type in union {
+                    // Create a temporary scoped type with this union member type
+                    let temp_scoped_type = Arc::new(ScopedType::new_cwt_with_subtypes(
+                        union_type.clone(),
+                        scoped_type.scope_stack().clone(),
+                        scoped_type.subtypes().clone(),
+                        scoped_type.in_scripted_effect_block().cloned(),
+                    ));
+
+                    // Try to navigate to the property with this type
+                    match self.navigate_to_property(temp_scoped_type, property_name) {
+                        PropertyNavigationResult::Success(result) => {
+                            successful_results.push(result.cwt_type().clone());
+                        }
+                        PropertyNavigationResult::ScopeError(error) => {
+                            scope_errors.push(error);
+                        }
+                        PropertyNavigationResult::NotFound => {
+                            // Continue to next union member
+                        }
+                    }
+                }
+
+                match successful_results.len() {
+                    0 => {
+                        // No successful results - if we have scope errors, return the first one
+                        if let Some(error) = scope_errors.into_iter().next() {
+                            PropertyNavigationResult::ScopeError(error)
+                        } else {
+                            PropertyNavigationResult::NotFound
+                        }
+                    }
+                    1 => {
+                        // Single result - return it directly
+                        let result_type = successful_results.into_iter().next().unwrap();
+                        let result_scoped = ScopedType::new_with_subtypes(
+                            result_type,
+                            scoped_type.scope_stack().clone(),
+                            scoped_type.subtypes().clone(),
+                            scoped_type.in_scripted_effect_block().cloned(),
+                        );
+                        PropertyNavigationResult::Success(Arc::new(result_scoped))
+                    }
+                    _ => {
+                        // Multiple results - create a union of them
+                        let union_type = CwtType::Union(
+                            successful_results
+                                .into_iter()
+                                .map(|t| match t {
+                                    CwtTypeOrSpecial::CwtType(t) => t,
+                                    CwtTypeOrSpecial::ScopedUnion(_) => unreachable!(), // probably?
+                                })
+                                .collect(),
+                        );
+                        let result_scoped = ScopedType::new_with_subtypes(
+                            CwtTypeOrSpecial::CwtType(union_type),
+                            scoped_type.scope_stack().clone(),
+                            scoped_type.subtypes().clone(),
+                            scoped_type.in_scripted_effect_block().cloned(),
+                        );
+                        PropertyNavigationResult::Success(Arc::new(result_scoped))
+                    }
+                }
+            }
             _ => {
                 // For other types, check if this property is a link property as fallback
                 let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
@@ -264,6 +432,31 @@ impl PropertyNavigator {
                 PropertyNavigationResult::NotFound
             }
         }
+    }
+
+    /// Navigate to a complex property (containing dots) by navigating through each part sequentially
+    fn navigate_to_complex_property(
+        &self,
+        mut current_scoped_type: Arc<ScopedType>,
+        property_path: &str,
+    ) -> PropertyNavigationResult {
+        let parts: Vec<&str> = property_path.split('.').collect();
+
+        for part in parts {
+            match self.navigate_to_property(current_scoped_type, part) {
+                PropertyNavigationResult::Success(result) => {
+                    current_scoped_type = result;
+                }
+                PropertyNavigationResult::ScopeError(error) => {
+                    return PropertyNavigationResult::ScopeError(error);
+                }
+                PropertyNavigationResult::NotFound => {
+                    return PropertyNavigationResult::NotFound;
+                }
+            }
+        }
+
+        PropertyNavigationResult::Success(current_scoped_type)
     }
 
     /// Handle navigation to a regular property

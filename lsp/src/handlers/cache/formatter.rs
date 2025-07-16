@@ -100,7 +100,7 @@ impl<'a> TypeFormatter<'a> {
                     )
                 )
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
+            CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
                 // Show:
                 // - The root obj
                 // - The properties of the root obj
@@ -110,23 +110,24 @@ impl<'a> TypeFormatter<'a> {
 
                 if depth >= 1 {
                     if available_properties.is_empty() {
-                        return "{}".to_string();
+                        return format!("{} {{}}", block.type_name);
                     } else {
                         return format!(
-                            "{{ /* ... +{} properties */ }}",
+                            "{} {{ /* ... +{} properties */ }}",
+                            block.type_name,
                             available_properties.len()
                         );
                     }
                 }
 
                 if available_properties.is_empty() {
-                    return "{}".to_string();
+                    return format!("{} {{}}", block.type_name);
                 }
 
                 let mut sorted_properties: Vec<_> = available_properties.iter().collect();
                 sorted_properties.sort();
 
-                let mut lines = vec!["{".to_string()];
+                let mut lines = vec![format!("{} {{", block.type_name)];
                 let mut line_count = 1;
                 let mut properties_shown = 0;
 

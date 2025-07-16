@@ -6,6 +6,7 @@ use cw_model::{CwtType, ReferenceType};
 use cw_parser::{AstEntityItem, AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
 
+use crate::handlers::utils::contains_scripted_argument;
 use crate::handlers::{
     cache::TypeCache,
     diagnostics::{
@@ -219,22 +220,25 @@ fn validate_value_against_type(
             CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(valid_values)),
             AstValue::String(string_value),
         ) => {
-            if !valid_values.contains(string_value.raw_value()) {
-                let valid_list: Vec<_> = valid_values.iter().collect();
-                let diagnostic = create_value_mismatch_diagnostic(
-                    value.span_range(),
-                    &format!(
-                        "Expected one of {} but got '{}'",
-                        valid_list
-                            .iter()
-                            .map(|v| format!("\"{}\"", v))
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        string_value.raw_value()
-                    ),
-                    content,
-                );
-                diagnostics.push(diagnostic);
+            // Allow $ARGUMENT$ to be used as a value
+            if !contains_scripted_argument(string_value.raw_value()) {
+                if !valid_values.contains(string_value.raw_value()) {
+                    let valid_list: Vec<_> = valid_values.iter().collect();
+                    let diagnostic = create_value_mismatch_diagnostic(
+                        value.span_range(),
+                        &format!(
+                            "Expected one of {} but got '{}'",
+                            valid_list
+                                .iter()
+                                .map(|v| format!("\"{}\"", v))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            string_value.raw_value()
+                        ),
+                        content,
+                    );
+                    diagnostics.push(diagnostic);
+                }
             }
         }
 
