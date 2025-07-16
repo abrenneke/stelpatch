@@ -210,20 +210,6 @@ impl TypeResolver {
             .get_subtype_definition(cwt_type, subtype_name)
     }
 
-    /// Check if a subtype condition would be satisfied for a specific property key
-    pub fn would_subtype_condition_match_for_key(
-        &self,
-        condition: &cw_model::types::SubtypeCondition,
-        property_data: &HashMap<String, String>,
-        accessing_key: &str,
-    ) -> bool {
-        self.subtype_handler.would_subtype_condition_match_for_key(
-            condition,
-            property_data,
-            accessing_key,
-        )
-    }
-
     /// Determine all matching subtypes based on property data
     pub fn determine_matching_subtypes(
         &self,

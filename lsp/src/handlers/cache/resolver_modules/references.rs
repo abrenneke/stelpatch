@@ -61,6 +61,11 @@ impl ReferenceResolver {
                                     return Arc::new(CwtType::LiteralSet(
                                         filtered_keys.into_iter().collect(),
                                     ));
+                                } else {
+                                    eprintln!(
+                                        "No filtered keys found for: {}.{}, path: {}",
+                                        base_type, subtype, path
+                                    );
                                 }
                             }
                         }

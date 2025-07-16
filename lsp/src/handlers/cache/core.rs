@@ -292,13 +292,20 @@ impl TypeCache {
 
             // If the type def has a file_path... try to match the file_path to the type def,
             // this takes precence over the union type
-            if let Some(file_path) = file_path {
-                for scoped_type in &namespace_types {
-                    if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) = scoped_type.cwt_type()
-                    {
-                        if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+            for scoped_type in &namespace_types {
+                if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) = scoped_type.cwt_type() {
+                    if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                        if let Some(path_file) = type_def.options.path_file.as_ref() {
+                            // path_file == file_path
+                            if let Some(file_path) = file_path {
+                                if path_file.contains(file_path) {
+                                    return Some(scoped_type.clone());
+                                }
+                            }
+
+                            // Path == namespace
                             if let Some(path) = type_def.path.as_ref() {
-                                if path.contains(file_path) {
+                                if path.trim_start_matches("game/") == namespace {
                                     return Some(scoped_type.clone());
                                 }
                             }

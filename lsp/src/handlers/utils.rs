@@ -84,20 +84,21 @@ pub fn extract_namespace_from_uri(uri: &str) -> Option<String> {
     // Find the last occurrence of a known directory
     for i in (0..segments.len()).rev() {
         if known_directories.contains(&segments[i]) {
-            let namespace_dir = segments[i];
+            let mut namespace_parts = vec![segments[i]];
 
-            // Include the subdirectory if it exists and is not a filename
-            if i + 1 < segments.len() {
-                let next_segment = segments[i + 1];
-                // Check if next segment is a subdirectory (no file extension) or filename
-                if !next_segment.contains('.') && i + 2 < segments.len() {
-                    // It's a subdirectory, include it
-                    return Some(format!("{}/{}", namespace_dir, next_segment));
+            // Include all subdirectories until we reach a file (segment with extension)
+            let mut j = i + 1;
+            while j < segments.len() {
+                let segment = segments[j];
+                // If this segment contains a dot, it's likely a file, so stop
+                if segment.contains('.') {
+                    break;
                 }
+                namespace_parts.push(segment);
+                j += 1;
             }
 
-            // Return just the directory name
-            return Some(namespace_dir.to_string());
+            return Some(namespace_parts.join("/"));
         }
     }
 
@@ -147,6 +148,14 @@ mod tests {
             Some("common/ai_budget".to_string())
         );
 
+        // Test case with nested subdirectories in common
+        assert_eq!(
+            extract_namespace_from_uri(
+                "file:///D:/SteamLibrary/steamapps/common/Stellaris/common/governments/civics/00_civics.txt"
+            ),
+            Some("common/governments/civics".to_string())
+        );
+
         // Test non-common directories
         assert_eq!(
             extract_namespace_from_uri("file:///path/to/events/events.txt"),
@@ -181,7 +190,7 @@ mod tests {
 
         assert_eq!(
             extract_namespace_from_uri("file:///path/to/gfx/portraits/species/humanoid.gfx"),
-            Some("gfx/portraits".to_string())
+            Some("gfx/portraits/species".to_string())
         );
 
         // Test files that don't match known directories

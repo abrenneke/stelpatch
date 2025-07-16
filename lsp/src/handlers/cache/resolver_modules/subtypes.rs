@@ -2,7 +2,7 @@ use crate::handlers::cache::ORIGINAL_KEY_PROPERTY;
 use crate::handlers::cache::entity_restructurer::EntityRestructurer;
 use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{CwtTypeOrSpecial, ScopedType};
-use cw_model::types::{CwtAnalyzer, SubtypeCondition};
+use cw_model::types::CwtAnalyzer;
 use cw_model::{CwtType, Entity, TypeKeyFilter, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -91,10 +91,27 @@ impl SubtypeHandler {
                 // Then check value conditions
                 match expected_value {
                     Some(value) => {
-                        // PropertyEquals: check if property exists and has the expected value
-                        property_data
-                            .get(key)
-                            .map_or(false, |actual_value| actual_value == value)
+                        // PropertyEquals: handle absent properties with cardinality constraints
+                        if !property_data.contains_key(key) {
+                            // Property is absent - check if cardinality allows this
+                            if let Some(card) = &property.options.cardinality {
+                                if card.min.unwrap_or(1) == 0 {
+                                    // Cardinality allows absence - treat as matching the condition
+                                    true
+                                } else {
+                                    // Property is required but absent - doesn't match
+                                    false
+                                }
+                            } else {
+                                // No cardinality constraint: property is required but absent
+                                false
+                            }
+                        } else {
+                            // Property is present - check if value matches
+                            property_data
+                                .get(key)
+                                .map_or(false, |actual_value| actual_value == value)
+                        }
                     }
                     None => {
                         // PropertyExists or block: check based on cardinality
@@ -204,164 +221,6 @@ impl SubtypeHandler {
                     .get(property_key)
                     .and_then(|prop| prop.options.cardinality.clone())
             })
-    }
-
-    /// Check if a subtype condition would be satisfied with cardinality constraints
-    /// This is the cardinality-aware version of would_subtype_condition_match
-    pub fn would_subtype_condition_match_with_cardinality(
-        &self,
-        condition: &SubtypeCondition,
-        property_data: &HashMap<String, String>,
-        cardinality: &Option<cw_model::types::Cardinality>,
-    ) -> bool {
-        match condition {
-            SubtypeCondition::PropertyEquals { key, value } => {
-                // First check if the property satisfies cardinality constraints
-                if !self.property_satisfies_cardinality(key, property_data, cardinality) {
-                    return false;
-                }
-
-                // For PropertyEquals with cardinality that allows absence (min = 0),
-                // absence should count as matching the condition
-                if !property_data.contains_key(key) {
-                    // Property is absent - check if cardinality allows this
-                    if let Some(card) = cardinality {
-                        if card.min == Some(0) {
-                            // Cardinality allows absence - treat as matching the condition
-                            return true;
-                        }
-                    }
-                    // Property is required but absent - doesn't match
-                    return false;
-                }
-
-                // Property is present - check if value matches
-                property_data
-                    .get(key)
-                    .map_or(false, |prop_value| prop_value == value)
-            }
-            SubtypeCondition::PropertyNotEquals { key, value } => {
-                // First check if the property satisfies cardinality constraints
-                if !self.property_satisfies_cardinality(key, property_data, cardinality) {
-                    return false;
-                }
-
-                // For PropertyNotEquals, if cardinality allows absence and property is absent,
-                // then absence counts as "not equal" to any specific value
-                if !property_data.contains_key(key) {
-                    // Property is absent - this counts as "not equal" to the value
-                    return true;
-                }
-
-                // Property is present - check if it doesn't equal the value
-                property_data
-                    .get(key)
-                    .map_or(true, |prop_value| prop_value != value)
-            }
-            SubtypeCondition::PropertyExists { key } => {
-                // For PropertyExists, the property must actually exist
-                // But we also need to respect cardinality constraints
-                if !property_data.contains_key(key) {
-                    // Property doesn't exist
-                    return false;
-                }
-
-                // Property exists, now check if it satisfies cardinality constraints
-                self.property_satisfies_cardinality(key, property_data, cardinality)
-            }
-            SubtypeCondition::PropertyNotExists { key } => {
-                // For PropertyNotExists, the property should not exist
-                // But we also need to respect cardinality constraints
-                if let Some(card) = cardinality {
-                    if card.min.unwrap_or(0) > 0 {
-                        // If cardinality requires the property to be present, this condition can't be satisfied
-                        return false;
-                    }
-                }
-                !property_data.contains_key(key)
-            }
-            SubtypeCondition::KeyStartsWith { prefix } => {
-                // For key-based conditions, cardinality doesn't apply directly
-                // Fall back to original logic
-                property_data.keys().any(|key| key.starts_with(prefix))
-            }
-            SubtypeCondition::KeyMatches { filter } => {
-                // For key-based conditions, cardinality doesn't apply directly
-                // Fall back to original logic
-                property_data.keys().any(|key| key.contains(filter))
-            }
-            SubtypeCondition::Expression(_expr) => {
-                // Complex expressions would require a full parser/evaluator
-                // For now, return false - this could be extended in the future
-                false
-            }
-        }
-    }
-
-    /// Check if a subtype condition would be satisfied using property-specific cardinality
-    /// This method extracts the cardinality from the subtype definition's properties
-    pub fn would_subtype_condition_match_with_subtype(
-        &self,
-        condition: &SubtypeCondition,
-        property_data: &HashMap<String, String>,
-        subtype_def: &cw_model::types::Subtype,
-    ) -> bool {
-        // Special case for KeyMatches - we need to check if the original key matches the filter
-        // e.g.
-        // ## type_key_filter = "utility_component_template"
-        // subtype[utility_component_template] = {}
-        if let SubtypeCondition::KeyMatches { filter } = condition {
-            if let Some(original_key) = property_data.get(ORIGINAL_KEY_PROPERTY) {
-                if original_key.contains(filter) {
-                    return true;
-                }
-            }
-        }
-
-        // Extract the property key from the condition
-        let property_key = match condition {
-            SubtypeCondition::PropertyEquals { key, .. } => Some(key),
-            SubtypeCondition::PropertyNotEquals { key, .. } => Some(key),
-            SubtypeCondition::PropertyExists { key } => Some(key),
-            SubtypeCondition::PropertyNotExists { key } => Some(key),
-            SubtypeCondition::KeyStartsWith { .. } => None,
-            SubtypeCondition::KeyMatches { .. } => None,
-            SubtypeCondition::Expression(_) => None,
-        };
-
-        // Get the cardinality for this specific property
-        let cardinality = if let Some(key) = property_key {
-            self.get_property_cardinality_from_subtype(subtype_def, key)
-        } else {
-            None
-        };
-
-        // Call the cardinality-aware version with the property-specific cardinality
-        self.would_subtype_condition_match_with_cardinality(condition, property_data, &cardinality)
-    }
-
-    /// Check if a subtype condition would be satisfied for a specific property key
-    /// This is useful for checking conditions that depend on the property key being accessed
-    pub fn would_subtype_condition_match_for_key(
-        &self,
-        condition: &SubtypeCondition,
-        property_data: &HashMap<String, String>,
-        accessing_key: &str,
-    ) -> bool {
-        match condition {
-            SubtypeCondition::KeyStartsWith { prefix } => {
-                // Check if the key being accessed starts with the prefix
-                accessing_key.starts_with(prefix)
-            }
-            SubtypeCondition::KeyMatches { filter } => {
-                // Check if the key being accessed matches the filter
-                accessing_key.contains(filter)
-            }
-            // For other conditions, fall back to the regular check
-            _ => {
-                self.would_subtype_condition_match_with_cardinality(condition, property_data, &None)
-            }
-        }
     }
 
     /// Determine all matching subtypes based on property data
@@ -514,7 +373,7 @@ impl SubtypeHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cw_model::types::{Cardinality, SubtypeCondition};
+    use cw_model::types::Cardinality;
     use std::collections::HashMap;
 
     #[test]
@@ -555,375 +414,80 @@ mod tests {
     }
 
     #[test]
-    fn test_cardinality_aware_property_equals() {
-        let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));
-        let condition = SubtypeCondition::PropertyEquals {
-            key: "is_origin".to_string(),
-            value: "yes".to_string(),
-        };
+    fn test_does_subtype_match_civic_without_is_origin() {
+        use cw_model::types::{Cardinality, Property, Subtype};
+        use std::collections::HashMap;
 
-        let mut property_data = HashMap::new();
-        property_data.insert("is_origin".to_string(), "yes".to_string());
-
-        // Test with no cardinality (default requirement)
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &property_data,
-            &None
-        ));
-
-        // Test with cardinality 0..1 (optional)
-        let optional_cardinality = Some(Cardinality::optional());
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &property_data,
-            &optional_cardinality
-        ));
-
-        // Test with missing property
-        let empty_data = HashMap::new();
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &empty_data,
-            &None
-        ));
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &empty_data,
-            &optional_cardinality
-        ));
-
-        // Test with wrong value
-        let mut wrong_data = HashMap::new();
-        wrong_data.insert("is_origin".to_string(), "no".to_string());
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &wrong_data,
-            &None
-        ));
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &wrong_data,
-            &optional_cardinality
-        ));
-    }
-
-    #[test]
-    fn test_cardinality_aware_property_not_equals() {
-        let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));
-        let condition = SubtypeCondition::PropertyNotEquals {
-            key: "is_origin".to_string(),
-            value: "yes".to_string(),
-        };
-
-        // Test with cardinality 0..1 (optional) - missing property should match "not equals yes"
-        let optional_cardinality = Some(Cardinality::optional());
-        let empty_data = HashMap::new();
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &empty_data,
-            &optional_cardinality
-        ));
-
-        // Test with property set to "no"
-        let mut property_data = HashMap::new();
-        property_data.insert("is_origin".to_string(), "no".to_string());
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &property_data,
-            &optional_cardinality
-        ));
-
-        // Test with property set to "yes" (should not match)
-        let mut wrong_data = HashMap::new();
-        wrong_data.insert("is_origin".to_string(), "yes".to_string());
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &wrong_data,
-            &optional_cardinality
-        ));
-    }
-
-    #[test]
-    fn test_civic_or_origin_subtype_scenario() {
         let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));
 
-        // Simulate the civic_or_origin scenario from the user's example
-        let origin_condition = SubtypeCondition::PropertyEquals {
-            key: "is_origin".to_string(),
-            value: "yes".to_string(),
+        // Create a mock civic subtype definition similar to the real one
+        // subtype[civic] = { ## cardinality = 0..1; is_origin = no }
+        let mut civic_subtype = Subtype {
+            condition_properties: HashMap::new(),
+            allowed_properties: HashMap::new(),
+            options: Default::default(),
+            is_inverted: false,
         };
+        let condition_property = Property::optional(CwtType::Literal("no".to_string()));
+        civic_subtype
+            .condition_properties
+            .insert("is_origin".to_string(), condition_property);
 
-        let civic_condition = SubtypeCondition::PropertyNotEquals {
-            key: "is_origin".to_string(),
-            value: "yes".to_string(),
+        // Test case 1: Civic without is_origin property (should match)
+        let civic_data_without_is_origin = HashMap::new();
+        let result1 = handler.does_subtype_match(&civic_subtype, &civic_data_without_is_origin);
+        println!("Civic without is_origin: {}", result1);
+        assert!(
+            result1,
+            "Civic without is_origin property should match civic subtype"
+        );
+
+        // Test case 2: Civic with is_origin = no (should match)
+        let mut civic_data_with_no = HashMap::new();
+        civic_data_with_no.insert("is_origin".to_string(), "no".to_string());
+        let result2 = handler.does_subtype_match(&civic_subtype, &civic_data_with_no);
+        println!("Civic with is_origin=no: {}", result2);
+        assert!(
+            result2,
+            "Civic with is_origin = no should match civic subtype"
+        );
+
+        // Test case 3: Civic with is_origin = yes (should NOT match)
+        let mut civic_data_with_yes = HashMap::new();
+        civic_data_with_yes.insert("is_origin".to_string(), "yes".to_string());
+        let result3 = handler.does_subtype_match(&civic_subtype, &civic_data_with_yes);
+        println!("Civic with is_origin=yes: {}", result3);
+        assert!(
+            !result3,
+            "Civic with is_origin = yes should NOT match civic subtype"
+        );
+
+        // Now test origin subtype (required property)
+        let mut origin_subtype = Subtype {
+            condition_properties: HashMap::new(),
+            allowed_properties: HashMap::new(),
+            options: Default::default(),
+            is_inverted: false,
         };
+        let origin_condition_property = Property::required(CwtType::Literal("yes".to_string()));
+        origin_subtype
+            .condition_properties
+            .insert("is_origin".to_string(), origin_condition_property);
 
-        let no_cardinality = None; // Origin subtype has no cardinality (required)
-        let optional_cardinality = Some(Cardinality::optional()); // Civic subtype has cardinality 0..1
-
-        // Test case 1: is_origin = yes -> should match origin, not civic
-        let mut origin_data = HashMap::new();
-        origin_data.insert("is_origin".to_string(), "yes".to_string());
-
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &origin_condition,
-            &origin_data,
-            &no_cardinality
-        ));
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &civic_condition,
-            &origin_data,
-            &optional_cardinality
-        ));
-
-        // Test case 2: is_origin = no -> should match civic, not origin
-        let mut civic_data = HashMap::new();
-        civic_data.insert("is_origin".to_string(), "no".to_string());
-
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &origin_condition,
-            &civic_data,
-            &no_cardinality
-        ));
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &civic_condition,
-            &civic_data,
-            &optional_cardinality
-        ));
-
-        // Test case 3: is_origin absent -> should match civic (due to cardinality 0..1), not origin
-        let empty_data = HashMap::new();
-
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &origin_condition,
-            &empty_data,
-            &no_cardinality
-        ));
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &civic_condition,
-            &empty_data,
-            &optional_cardinality
-        ));
-    }
-
-    #[test]
-    fn test_property_exists_with_cardinality() {
-        let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));
-        let condition = SubtypeCondition::PropertyExists {
-            key: "test_key".to_string(),
-        };
-
-        let mut property_data = HashMap::new();
-        property_data.insert("test_key".to_string(), "test_value".to_string());
-
-        // Test with no cardinality (default requirement)
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &property_data,
-            &None
-        ));
-
-        // Test with cardinality 0..1 (optional)
-        let optional_cardinality = Some(Cardinality::optional());
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &property_data,
-            &optional_cardinality
-        ));
-
-        // Test with missing property
-        let empty_data = HashMap::new();
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &empty_data,
-            &None
-        ));
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &empty_data,
-            &optional_cardinality
-        ));
-    }
-
-    #[test]
-    fn test_property_not_exists_with_cardinality() {
-        let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));
-        let condition = SubtypeCondition::PropertyNotExists {
-            key: "test_key".to_string(),
-        };
-
-        // Test with cardinality 0..1 (optional) - property absence should match
-        let optional_cardinality = Some(Cardinality::optional());
-        let empty_data = HashMap::new();
-        assert!(handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &empty_data,
-            &optional_cardinality
-        ));
-
-        // Test with required cardinality - property absence should not match PropertyNotExists
-        let required_cardinality = Some(Cardinality::required());
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &empty_data,
-            &required_cardinality
-        ));
-
-        // Test with property present - should not match PropertyNotExists
-        let mut property_data = HashMap::new();
-        property_data.insert("test_key".to_string(), "test_value".to_string());
-        assert!(!handler.would_subtype_condition_match_with_cardinality(
-            &condition,
-            &property_data,
-            &optional_cardinality
-        ));
-    }
-
-    #[test]
-    fn test_cardinality_zero_minimum_handling() {
-        let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));
-
-        // Test PropertyNotEquals with cardinality 0..1 - absent property should match
-        let civic_condition = SubtypeCondition::PropertyNotEquals {
-            key: "is_origin".to_string(),
-            value: "yes".to_string(),
-        };
-        let optional_cardinality = Some(Cardinality::optional()); // 0..1
-
-        // Case 1: Property is absent - should match PropertyNotEquals (absent ≠ "yes")
-        let empty_data = HashMap::new();
+        // Test case 4: Origin without is_origin property (should NOT match)
+        let result4 = handler.does_subtype_match(&origin_subtype, &civic_data_without_is_origin);
+        println!("Origin without is_origin: {}", result4);
         assert!(
-            handler.would_subtype_condition_match_with_cardinality(
-                &civic_condition,
-                &empty_data,
-                &optional_cardinality
-            ),
-            "Absent property should match PropertyNotEquals with cardinality 0..1"
+            !result4,
+            "Entity without is_origin property should NOT match origin subtype"
         );
 
-        // Case 2: Property is "no" - should match PropertyNotEquals ("no" ≠ "yes")
-        let mut civic_data = HashMap::new();
-        civic_data.insert("is_origin".to_string(), "no".to_string());
+        // Test case 5: Origin with is_origin = yes (should match)
+        let result5 = handler.does_subtype_match(&origin_subtype, &civic_data_with_yes);
+        println!("Origin with is_origin=yes: {}", result5);
         assert!(
-            handler.would_subtype_condition_match_with_cardinality(
-                &civic_condition,
-                &civic_data,
-                &optional_cardinality
-            ),
-            "Property 'no' should match PropertyNotEquals 'yes'"
-        );
-
-        // Case 3: Property is "yes" - should NOT match PropertyNotEquals ("yes" == "yes")
-        let mut origin_data = HashMap::new();
-        origin_data.insert("is_origin".to_string(), "yes".to_string());
-        assert!(
-            !handler.would_subtype_condition_match_with_cardinality(
-                &civic_condition,
-                &origin_data,
-                &optional_cardinality
-            ),
-            "Property 'yes' should NOT match PropertyNotEquals 'yes'"
-        );
-
-        // Test PropertyEquals with cardinality 0..1 - absent property should NOT match
-        let origin_condition = SubtypeCondition::PropertyEquals {
-            key: "is_origin".to_string(),
-            value: "yes".to_string(),
-        };
-
-        // Case 4: Property is absent - should match PropertyEquals with cardinality 0..1
-        assert!(
-            handler.would_subtype_condition_match_with_cardinality(
-                &origin_condition,
-                &empty_data,
-                &optional_cardinality
-            ),
-            "Absent property should match PropertyEquals with cardinality 0..1"
-        );
-
-        // Case 5: Property is "yes" - should match PropertyEquals ("yes" == "yes")
-        assert!(
-            handler.would_subtype_condition_match_with_cardinality(
-                &origin_condition,
-                &origin_data,
-                &optional_cardinality
-            ),
-            "Property 'yes' should match PropertyEquals 'yes'"
-        );
-    }
-
-    #[test]
-    fn test_cardinality_zero_max_forbidden() {
-        let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));
-        let mut property_data = HashMap::new();
-        property_data.insert("forbidden_key".to_string(), "some_value".to_string());
-
-        // Test with cardinality 0..0 (forbidden - must not be present)
-        let forbidden_cardinality = Some(Cardinality {
-            min: Some(0),
-            max: Some(0),
-            soft: false,
-        });
-
-        // Property is present - should fail cardinality check (violates max = 0)
-        assert!(
-            !handler.property_satisfies_cardinality(
-                "forbidden_key",
-                &property_data,
-                &forbidden_cardinality
-            ),
-            "Property present should fail 0..0 cardinality (forbidden)"
-        );
-
-        // Property is absent - should pass cardinality check
-        assert!(
-            handler.property_satisfies_cardinality(
-                "missing_key",
-                &property_data,
-                &forbidden_cardinality
-            ),
-            "Property absent should pass 0..0 cardinality (forbidden)"
-        );
-
-        // Test with condition matching - PropertyExists should fail if property is forbidden
-        let exists_condition = SubtypeCondition::PropertyExists {
-            key: "forbidden_key".to_string(),
-        };
-
-        // Property exists but is forbidden by cardinality - should fail
-        assert!(
-            !handler.would_subtype_condition_match_with_cardinality(
-                &exists_condition,
-                &property_data,
-                &forbidden_cardinality
-            ),
-            "PropertyExists should fail for forbidden property even if present"
-        );
-
-        // Test PropertyNotExists with forbidden cardinality - should pass for absent property
-        let not_exists_condition = SubtypeCondition::PropertyNotExists {
-            key: "forbidden_key".to_string(),
-        };
-
-        let empty_data = HashMap::new();
-        assert!(
-            handler.would_subtype_condition_match_with_cardinality(
-                &not_exists_condition,
-                &empty_data,
-                &forbidden_cardinality
-            ),
-            "PropertyNotExists should pass for absent forbidden property"
-        );
-
-        // PropertyNotExists should fail if property exists (even with forbidden cardinality)
-        assert!(
-            !handler.would_subtype_condition_match_with_cardinality(
-                &not_exists_condition,
-                &property_data,
-                &forbidden_cardinality
-            ),
-            "PropertyNotExists should fail if forbidden property is present"
+            result5,
+            "Entity with is_origin = yes should match origin subtype"
         );
     }
 }
