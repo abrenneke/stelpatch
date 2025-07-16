@@ -2,7 +2,7 @@
   "name": "cw-lsp-client",
   "displayName": "CW LSP - Stellaris Mod Language Support",
   "description": "Language server support for Stellaris game files with syntax highlighting, diagnostics, and IntelliSense",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "publisher": "abrenneke",
   "author": "Andy Brenneke",
   "license": "MIT",

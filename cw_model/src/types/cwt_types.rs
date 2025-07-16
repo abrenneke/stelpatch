@@ -464,9 +464,6 @@ impl std::fmt::Debug for Property {
 /// Subtype definition - properties that apply under certain conditions
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Subtype {
-    /// Condition that activates this subtype
-    pub condition: SubtypeCondition,
-
     /// CWT schema condition properties with cardinality constraints
     /// These define the rules for when this subtype matches (e.g., is_origin = no with cardinality 0..1)
     pub condition_properties: HashMap<String, Property>,
@@ -983,8 +980,7 @@ impl TypeFingerprint for Subtype {
         condition_prop_fingerprints.sort();
 
         format!(
-            "{}:{}:{}:{}",
-            self.condition.fingerprint(),
+            "{}:{}:{}",
             condition_prop_fingerprints.join(","),
             allowed_prop_fingerprints.join(","),
             self.options.fingerprint()

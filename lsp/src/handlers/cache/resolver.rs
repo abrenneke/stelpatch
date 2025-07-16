@@ -234,11 +234,8 @@ impl TypeResolver {
             .determine_matching_subtypes(scoped_type, property_data)
     }
 
-    /// Get all subtype names and their conditions for a given type
-    pub fn get_subtype_conditions<'a>(
-        &self,
-        cwt_type: &'a CwtType,
-    ) -> Vec<(String, &'a cw_model::types::SubtypeCondition)> {
+    /// Get all subtype names and their condition descriptions for a given type
+    pub fn get_subtype_conditions(&self, cwt_type: &CwtType) -> Vec<(String, String)> {
         self.subtype_handler.get_subtype_conditions(cwt_type)
     }
 

@@ -162,7 +162,7 @@ impl DiagnosticsProvider {
                     let container_key = expr.key.raw_value();
                     let entity_key = container_key; // For top-level entities, these are the same
 
-                    let (effective_key, effective_entity) =
+                    let (_effective_key, effective_entity) =
                         EntityRestructurer::get_effective_entity_for_subtype_narrowing(
                             &namespace,
                             container_key,
@@ -170,29 +170,22 @@ impl DiagnosticsProvider {
                             ast_entity,
                         );
 
-                    // If the effective key is different, we need to perform subtype narrowing
-                    if effective_key != entity_key {
-                        // Extract property data from the effective entity for subtype narrowing
-                        let mut property_data = HashMap::new();
-                        for (key, property_list) in &effective_entity.properties.kv {
-                            if let Some(first_property) = property_list.0.first() {
-                                property_data.insert(key.clone(), first_property.value.to_string());
-                            }
+                    // Extract property data from the effective entity for subtype narrowing
+                    let mut property_data = HashMap::new();
+                    for (key, property_list) in &effective_entity.properties.kv {
+                        if let Some(first_property) = property_list.0.first() {
+                            property_data.insert(key.clone(), first_property.value.to_string());
                         }
+                    }
 
-                        // Perform subtype narrowing with the effective entity data
-                        if let Some(type_cache) = TypeCache::get() {
-                            let matching_subtypes =
-                                type_cache.get_resolver().determine_matching_subtypes(
-                                    namespace_type.clone(),
-                                    &property_data,
-                                );
+                    // Perform subtype narrowing with the effective entity data
+                    if let Some(type_cache) = TypeCache::get() {
+                        let matching_subtypes = type_cache
+                            .get_resolver()
+                            .determine_matching_subtypes(namespace_type.clone(), &property_data);
 
-                            if !matching_subtypes.is_empty() {
-                                Arc::new(namespace_type.with_subtypes(matching_subtypes))
-                            } else {
-                                namespace_type.clone()
-                            }
+                        if !matching_subtypes.is_empty() {
+                            Arc::new(namespace_type.with_subtypes(matching_subtypes))
                         } else {
                             namespace_type.clone()
                         }

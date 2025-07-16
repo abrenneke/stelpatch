@@ -16,6 +16,111 @@ impl SubtypeHandler {
         Self { cwt_analyzer }
     }
 
+    /// Directly evaluate if a subtype matches based on its condition_properties and options
+    /// This replaces the condition derivation + matching approach
+    fn does_subtype_match(
+        &self,
+        subtype_def: &cw_model::types::Subtype,
+        property_data: &HashMap<String, String>,
+    ) -> bool {
+        // Handle CWT options that affect matching first (these take precedence)
+        if let Some(starts_with) = &subtype_def.options.starts_with {
+            // Check if any key in property_data starts with the prefix
+            return property_data.keys().any(|key| key.starts_with(starts_with));
+        } else if let Some(type_key_filter) = &subtype_def.options.type_key_filter {
+            return match type_key_filter {
+                cw_model::types::TypeKeyFilter::Specific(key) => {
+                    // Check if the original key matches the filter
+                    if let Some(original_key) = property_data.get(ORIGINAL_KEY_PROPERTY) {
+                        original_key.contains(key)
+                    } else {
+                        false
+                    }
+                }
+                cw_model::types::TypeKeyFilter::Not(key) => {
+                    // Check if the original key does NOT match the filter
+                    if let Some(original_key) = property_data.get(ORIGINAL_KEY_PROPERTY) {
+                        !original_key.contains(key)
+                    } else {
+                        true // If no original key, it doesn't match the excluded pattern
+                    }
+                }
+                cw_model::types::TypeKeyFilter::OneOf(keys) => {
+                    // Check if the original key matches any of the filters
+                    if let Some(original_key) = property_data.get(ORIGINAL_KEY_PROPERTY) {
+                        keys.iter().any(|key| original_key.contains(key))
+                    } else {
+                        false
+                    }
+                }
+            };
+        }
+
+        // Evaluate condition_properties directly
+        let property_conditions: Vec<_> = subtype_def
+            .condition_properties
+            .iter()
+            .filter_map(|(key, property)| {
+                // Consider all properties including blocks for cardinality evaluation
+                match &property.property_type {
+                    CwtType::Literal(value) => Some((key.clone(), Some(value.clone()), property)),
+                    CwtType::Simple(_) => Some((key.clone(), None, property)), // Exists condition
+                    CwtType::Block(_) => Some((key.clone(), None, property)), // Block existence with cardinality
+                    _ => Some((key.clone(), None, property)), // Default to exists condition
+                }
+            })
+            .collect();
+
+        // If no conditions, fallback to true (subtype always matches)
+        if property_conditions.is_empty() {
+            return true;
+        }
+
+        // Evaluate all conditions (they must all match - AND logic)
+        property_conditions
+            .iter()
+            .all(|(key, expected_value, property)| {
+                // Check cardinality constraints first
+                if !self.property_satisfies_cardinality(
+                    key,
+                    property_data,
+                    &property.options.cardinality,
+                ) {
+                    return false;
+                }
+
+                // Then check value conditions
+                match expected_value {
+                    Some(value) => {
+                        // PropertyEquals: check if property exists and has the expected value
+                        property_data
+                            .get(key)
+                            .map_or(false, |actual_value| actual_value == value)
+                    }
+                    None => {
+                        // PropertyExists or block: check based on cardinality
+                        if let Some(cardinality) = &property.options.cardinality {
+                            if cardinality.max == Some(0) {
+                                // Cardinality 0..0 means property must NOT exist
+                                !property_data.contains_key(key)
+                            } else {
+                                // Other cardinalities: property should exist if min > 0
+                                if cardinality.min.unwrap_or(0) > 0 {
+                                    property_data.contains_key(key)
+                                } else {
+                                    // Optional property - always matches
+                                    true
+                                }
+                            }
+                        } else {
+                            // No cardinality constraint: property should exist (default requirement)
+                            property_data.contains_key(key)
+                        }
+                    }
+                }
+            })
+    }
+
     /// Get all available subtypes for a given type
     pub fn get_available_subtypes(&self, cwt_type: &CwtType) -> Vec<String> {
         match cwt_type {
@@ -277,11 +382,8 @@ impl SubtypeHandler {
                         continue; // Handled by the else below
                     }
 
-                    if self.would_subtype_condition_match_with_subtype(
-                        &subtype_def.condition,
-                        property_data,
-                        subtype_def,
-                    ) {
+                    // Directly evaluate if the subtype matches
+                    if self.does_subtype_match(subtype_def, property_data) {
                         matching_subtypes.insert(subtype_name.clone());
                     } else {
                         matching_subtypes.insert(format!("!{}", subtype_name));
@@ -294,18 +396,84 @@ impl SubtypeHandler {
         }
     }
 
-    /// Get all subtype names and their conditions for a given type
-    pub fn get_subtype_conditions<'b>(
-        &self,
-        cwt_type: &'b CwtType,
-    ) -> Vec<(String, &'b SubtypeCondition)> {
+    /// Get all subtype names and their condition descriptions for a given type
+    pub fn get_subtype_conditions(&self, cwt_type: &CwtType) -> Vec<(String, String)> {
         match cwt_type {
             CwtType::Block(block) => block
                 .subtypes
                 .iter()
-                .map(|(name, subtype)| (name.clone(), &subtype.condition))
+                .map(|(name, subtype)| {
+                    let description = self.describe_subtype_conditions(subtype, name);
+                    (name.clone(), description)
+                })
                 .collect(),
             _ => Vec::new(),
+        }
+    }
+
+    /// Create a human-readable description of subtype conditions
+    fn describe_subtype_conditions(
+        &self,
+        subtype_def: &cw_model::types::Subtype,
+        subtype_name: &str,
+    ) -> String {
+        // Handle CWT options first
+        if let Some(starts_with) = &subtype_def.options.starts_with {
+            return format!("key starts with '{}'", starts_with);
+        } else if let Some(type_key_filter) = &subtype_def.options.type_key_filter {
+            return match type_key_filter {
+                cw_model::types::TypeKeyFilter::Specific(key) => {
+                    format!("key matches '{}'", key)
+                }
+                cw_model::types::TypeKeyFilter::Not(key) => {
+                    format!("key does not match '{}'", key)
+                }
+                cw_model::types::TypeKeyFilter::OneOf(keys) => {
+                    format!("key matches any of [{}]", keys.join(", "))
+                }
+            };
+        }
+
+        // Describe condition_properties
+        let property_conditions: Vec<String> = subtype_def
+            .condition_properties
+            .iter()
+            .filter_map(|(key, property)| {
+                match &property.property_type {
+                    CwtType::Literal(value) => Some(format!("{} = {}", key, value)),
+                    CwtType::Simple(_) => Some(format!("{} exists", key)),
+                    CwtType::Block(_) => {
+                        // Include block properties with their cardinality constraints
+                        if let Some(cardinality) = &property.options.cardinality {
+                            if cardinality.max == Some(0) {
+                                Some(format!("{} must not exist (cardinality 0..0)", key))
+                            } else if cardinality.min == Some(0) {
+                                Some(format!(
+                                    "{} is optional (cardinality 0..{})",
+                                    key,
+                                    cardinality.max.map_or("∞".to_string(), |m| m.to_string())
+                                ))
+                            } else {
+                                Some(format!(
+                                    "{} required (cardinality {}..{})",
+                                    key,
+                                    cardinality.min.unwrap_or(0),
+                                    cardinality.max.map_or("∞".to_string(), |m| m.to_string())
+                                ))
+                            }
+                        } else {
+                            Some(format!("{} block exists", key))
+                        }
+                    }
+                    _ => Some(format!("{} exists", key)),
+                }
+            })
+            .collect();
+
+        if property_conditions.is_empty() {
+            format!("always matches ({})", subtype_name)
+        } else {
+            property_conditions.join(" AND ")
         }
     }
 
@@ -334,11 +502,8 @@ impl SubtypeHandler {
         for (entity_key, entity) in entities {
             let property_data = self.extract_property_data_from_entity(&entity);
 
-            if self.would_subtype_condition_match_with_subtype(
-                &subtype_def.condition,
-                &property_data,
-                subtype_def,
-            ) {
+            // Directly evaluate if the subtype matches
+            if self.does_subtype_match(subtype_def, &property_data) {
                 matching_keys.push(entity_key);
             }
         }
@@ -767,6 +932,80 @@ mod tests {
                 &optional_cardinality
             ),
             "Property 'yes' should match PropertyEquals 'yes'"
+        );
+    }
+
+    #[test]
+    fn test_cardinality_zero_max_forbidden() {
+        let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));
+        let mut property_data = HashMap::new();
+        property_data.insert("forbidden_key".to_string(), "some_value".to_string());
+
+        // Test with cardinality 0..0 (forbidden - must not be present)
+        let forbidden_cardinality = Some(Cardinality {
+            min: Some(0),
+            max: Some(0),
+            soft: false,
+        });
+
+        // Property is present - should fail cardinality check (violates max = 0)
+        assert!(
+            !handler.property_satisfies_cardinality(
+                "forbidden_key",
+                &property_data,
+                &forbidden_cardinality
+            ),
+            "Property present should fail 0..0 cardinality (forbidden)"
+        );
+
+        // Property is absent - should pass cardinality check
+        assert!(
+            handler.property_satisfies_cardinality(
+                "missing_key",
+                &property_data,
+                &forbidden_cardinality
+            ),
+            "Property absent should pass 0..0 cardinality (forbidden)"
+        );
+
+        // Test with condition matching - PropertyExists should fail if property is forbidden
+        let exists_condition = SubtypeCondition::PropertyExists {
+            key: "forbidden_key".to_string(),
+        };
+
+        // Property exists but is forbidden by cardinality - should fail
+        assert!(
+            !handler.would_subtype_condition_match_with_cardinality(
+                &exists_condition,
+                &property_data,
+                &forbidden_cardinality
+            ),
+            "PropertyExists should fail for forbidden property even if present"
+        );
+
+        // Test PropertyNotExists with forbidden cardinality - should pass for absent property
+        let not_exists_condition = SubtypeCondition::PropertyNotExists {
+            key: "forbidden_key".to_string(),
+        };
+
+        let empty_data = HashMap::new();
+        assert!(
+            handler.would_subtype_condition_match_with_cardinality(
+                &not_exists_condition,
+                &empty_data,
+                &forbidden_cardinality
+            ),
+            "PropertyNotExists should pass for absent forbidden property"
+        );
+
+        // PropertyNotExists should fail if property exists (even with forbidden cardinality)
+        assert!(
+            !handler.would_subtype_condition_match_with_cardinality(
+                &not_exists_condition,
+                &property_data,
+                &forbidden_cardinality
+            ),
+            "PropertyNotExists should fail if forbidden property is present"
         );
     }
 }

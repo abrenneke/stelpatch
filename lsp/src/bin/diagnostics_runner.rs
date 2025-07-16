@@ -215,7 +215,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         vec![input_path.to_path_buf()]
     } else if input_path.is_dir() {
-        println!("{}", "Finding .txt files in directory...".yellow().bold());
+        println!(
+            "{} {}",
+            "Finding .txt files in directory...".yellow().bold(),
+            input_path.display().to_string().bright_white()
+        );
         let files = find_txt_files(input_path)?;
         println!(
             "{} {}",
