@@ -82,7 +82,7 @@ pub struct RestructuredEntities {
 }
 
 /// Information about how a namespace was restructured
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RestructureInfo {
     pub skip_root_key: Option<String>,
     pub name_field: Option<String>,
@@ -431,6 +431,8 @@ impl EntityRestructurer {
 
     /// Get an entity by name from a namespace, handling special loading rules
     pub fn get_entity(namespace: &str, entity_name: &str) -> Option<Entity> {
+        let namespace = TypeCache::get_actual_namespace(namespace);
+
         // Check restructured entities first
         if let Some(restructured) = Self::get() {
             if let Some(entities) = restructured.entities.get(namespace) {
@@ -459,11 +461,13 @@ impl EntityRestructurer {
 
     /// Get all entities in a namespace as a HashMap
     pub fn get_namespace_entities_map(namespace: &str) -> Option<HashMap<String, Entity>> {
+        let namespace = TypeCache::get_actual_namespace(namespace);
         Self::get()?.entities.get(namespace).cloned()
     }
 
     /// Check if a namespace was restructured
     pub fn was_restructured(namespace: &str) -> bool {
+        let namespace = TypeCache::get_actual_namespace(namespace);
         Self::get()
             .map(|r| r.restructured_namespaces.contains_key(namespace))
             .unwrap_or(false)
@@ -471,12 +475,14 @@ impl EntityRestructurer {
 
     /// Get restructure info for a namespace
     pub fn get_restructure_info(namespace: &str) -> Option<RestructureInfo> {
+        let namespace = TypeCache::get_actual_namespace(namespace);
         Self::get()?.restructured_namespaces.get(namespace).cloned()
     }
 
     /// Get entity keys for a namespace, using restructured keys if available
-    pub fn get_namespace_entity_keys(namespace: &str) -> Option<Vec<String>> {
+    pub fn get_namespace_entity_keys(namespace: &str) -> Vec<String> {
         let mut all_keys = HashSet::new();
+        let namespace = TypeCache::get_actual_namespace(namespace);
 
         // Add restructured entity keys if available
         if let Some(restructured) = Self::get() {
@@ -497,16 +503,13 @@ impl EntityRestructurer {
             }
         }
 
-        if all_keys.is_empty() {
-            None
-        } else {
-            Some(all_keys.into_iter().collect())
-        }
+        all_keys.into_iter().collect()
     }
 
     /// Get entities for a namespace as a vector of (key, entity) tuples
     pub fn get_namespace_entities(namespace: &str) -> Option<Vec<(String, Entity)>> {
         let mut all_entities = HashMap::new();
+        let namespace = TypeCache::get_actual_namespace(namespace);
 
         // Add restructured entities if available
         if let Some(restructured) = Self::get() {
@@ -537,6 +540,7 @@ impl EntityRestructurer {
     /// Get entity keys for a namespace as a HashSet, using restructured keys if available
     pub fn get_namespace_entity_keys_set(namespace: &str) -> Option<Arc<HashSet<String>>> {
         let mut all_keys = HashSet::new();
+        let namespace = TypeCache::get_actual_namespace(namespace);
 
         // Add restructured entity keys if available
         if let Some(restructured) = Self::get() {
@@ -570,6 +574,8 @@ impl EntityRestructurer {
 
     /// Get a specific entity from a namespace, using restructured entities if available
     pub fn get_namespace_entity(namespace: &str, entity_name: &str) -> Option<Entity> {
+        let namespace = TypeCache::get_actual_namespace(namespace);
+
         if let Some(restructured) = Self::get() {
             if let Some(entities) = restructured.entities.get(namespace) {
                 // Use restructured entities
@@ -597,6 +603,8 @@ impl EntityRestructurer {
 
     /// Get all entities in a namespace, using restructured entities if available
     pub fn get_all_namespace_entities(namespace: &str) -> Option<HashMap<String, Entity>> {
+        let namespace = TypeCache::get_actual_namespace(namespace);
+
         if let Some(restructured) = Self::get() {
             if let Some(entities) = restructured.entities.get(namespace) {
                 // Use restructured entities
@@ -617,6 +625,8 @@ impl EntityRestructurer {
     }
 
     pub fn get_namespace_values(namespace: &str) -> Option<Vec<String>> {
+        let namespace = TypeCache::get_actual_namespace(namespace);
+
         if let Some(game_data) = GameDataCache::get() {
             if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
                 Some(namespace_data.values.clone())
@@ -638,7 +648,7 @@ impl EntityRestructurer {
     /// Get scripted variables for a namespace (always from original GameDataCache)
     pub fn get_namespace_scripted_variables(namespace: &str) -> Option<HashMap<String, Value>> {
         let mut all_variables = HashMap::new();
-
+        let namespace = TypeCache::get_actual_namespace(namespace);
         // Add base game variables first
         if let Some(game_data) = GameDataCache::get() {
             if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
@@ -668,7 +678,7 @@ impl EntityRestructurer {
     /// Get all entities in a namespace, using restructured entities if available
     pub fn get_all_entities(namespace: &str) -> Option<Vec<Entity>> {
         let mut all_entities = Vec::new();
-
+        let namespace = TypeCache::get_actual_namespace(namespace);
         // Add restructured entities if available
         if let Some(restructured) = Self::get() {
             if let Some(entities) = restructured.entities.get(namespace) {
@@ -699,7 +709,7 @@ impl EntityRestructurer {
     /// Get all entities in a namespace as a HashMap, using restructured entities if available
     pub fn get_all_entities_map(namespace: &str) -> Option<HashMap<String, Entity>> {
         let mut all_entities = HashMap::new();
-
+        let namespace = TypeCache::get_actual_namespace(namespace);
         // Add original entities from GameDataCache first
         if let Some(game_data) = GameDataCache::get() {
             if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
@@ -745,29 +755,82 @@ impl EntityRestructurer {
         entity_key: &str,
         ast_entity: &AstEntity,
     ) -> (String, Entity) {
-        let mut entity = entity_from_ast(ast_entity);
+        let container_entity = entity_from_ast(ast_entity);
+
+        let namespace = TypeCache::get_actual_namespace(namespace);
 
         // Check if this namespace needs restructuring
         if let Some(restructured) = Self::get() {
             if let Some(info) = restructured.restructured_namespaces.get(namespace) {
                 if info.skip_root_key.as_ref() == Some(&container_key.to_string()) {
-                    // This is a skipped container scenario - the entity should be extracted from a container
-                    // In this case, the AST entity we received is actually the nested entity, so we use it directly
-                    // but we need to determine the effective key and add original key property
+                    // This is a skipped container scenario
 
-                    let effective_key = if let Some(name_field) = &info.name_field {
-                        Self::extract_name_from_entity(&entity, &Some(name_field.clone()))
-                            .unwrap_or_else(|| entity_key.to_string())
+                    if entity_key == container_key {
+                        // We're being asked to process the container itself, but we should extract nested entities
+                        // Return the first valid nested entity
+                        for (child_key, child_property_list) in &container_entity.properties.kv {
+                            for property_info in &child_property_list.0 {
+                                if let Value::Entity(mut child_entity) = property_info.value.clone()
+                                {
+                                    // Determine the effective key based on name field
+                                    let effective_key = if let Some(name_field) = &info.name_field {
+                                        Self::extract_name_from_entity(
+                                            &child_entity,
+                                            &Some(name_field.clone()),
+                                        )
+                                        .unwrap_or_else(|| child_key.clone())
+                                    } else {
+                                        child_key.clone()
+                                    };
+
+                                    // Add original key to entity for subtype determination
+                                    Self::add_original_key_to_entity_static(
+                                        &mut child_entity,
+                                        child_key,
+                                    );
+
+                                    return (effective_key, child_entity);
+                                }
+                            }
+                        }
                     } else {
-                        entity_key.to_string()
-                    };
+                        // We're being asked to extract a specific nested entity
+                        if let Some(property_list) = container_entity.properties.kv.get(entity_key)
+                        {
+                            if let Some(property_info) = property_list.0.first() {
+                                if let Value::Entity(mut nested_entity) =
+                                    property_info.value.clone()
+                                {
+                                    // Determine the effective key based on name field
+                                    let effective_key = if let Some(name_field) = &info.name_field {
+                                        Self::extract_name_from_entity(
+                                            &nested_entity,
+                                            &Some(name_field.clone()),
+                                        )
+                                        .unwrap_or_else(|| entity_key.to_string())
+                                    } else {
+                                        entity_key.to_string()
+                                    };
 
-                    // Add original key to entity for subtype determination
-                    Self::add_original_key_to_entity_static(&mut entity, entity_key);
+                                    // Add original key to entity for subtype determination
+                                    Self::add_original_key_to_entity_static(
+                                        &mut nested_entity,
+                                        entity_key,
+                                    );
 
-                    return (effective_key, entity);
+                                    return (effective_key, nested_entity);
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback if we can't extract any nested entity
+                    let mut fallback_entity = container_entity;
+                    Self::add_original_key_to_entity_static(&mut fallback_entity, entity_key);
+                    return (entity_key.to_string(), fallback_entity);
                 } else if let Some(name_field) = &info.name_field {
                     // Name field scenario - use name field for key, add original key to entity
+                    let mut entity = container_entity;
                     let effective_key =
                         Self::extract_name_from_entity(&entity, &Some(name_field.clone()))
                             .unwrap_or_else(|| entity_key.to_string());
@@ -781,7 +844,7 @@ impl EntityRestructurer {
         }
 
         // No restructuring applies, return as-is
-        (entity_key.to_string(), entity)
+        (entity_key.to_string(), container_entity)
     }
 
     /// Static version of add_original_key_to_entity for use in static contexts

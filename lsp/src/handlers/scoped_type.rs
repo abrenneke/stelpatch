@@ -73,9 +73,18 @@ impl CwtTypeOrSpecial {
     pub fn get_type_name(&self) -> &str {
         match self {
             CwtTypeOrSpecial::CwtType(cwt_type) => cwt_type.get_type_name(),
-            CwtTypeOrSpecial::ScopedUnion(scoped_types) => {
-                scoped_types.first().unwrap().get_type_name()
-            }
+            CwtTypeOrSpecial::ScopedUnion(_) => "",
+        }
+    }
+
+    pub fn type_name_for_display(&self) -> String {
+        match self {
+            CwtTypeOrSpecial::CwtType(cwt_type) => cwt_type.type_name_for_display(),
+            CwtTypeOrSpecial::ScopedUnion(union_types) => union_types
+                .iter()
+                .map(|t| t.get_type_name())
+                .collect::<Vec<_>>()
+                .join(" | "),
         }
     }
 }
@@ -105,6 +114,10 @@ impl ScopedType {
 
     pub fn get_type_name(&self) -> &str {
         self.cwt_type.get_type_name()
+    }
+
+    pub fn type_name_for_display(&self) -> String {
+        self.cwt_type.type_name_for_display()
     }
 
     pub fn new_with_subtype(

@@ -50,7 +50,7 @@ pub fn create_value_mismatch_diagnostic(
 pub fn create_unexpected_key_diagnostic(
     span: Range<usize>,
     key_name: &str,
-    namespace: &str,
+    type_name: &str,
     content: &str,
 ) -> Diagnostic {
     let range = span_to_lsp_range(span, content);
@@ -61,7 +61,7 @@ pub fn create_unexpected_key_diagnostic(
         code: Some(NumberOrString::String("unexpected-key".to_string())),
         code_description: None,
         source: Some("cw-type-checker".to_string()),
-        message: format!("Unexpected key '{}' in {} entity", key_name, namespace),
+        message: format!("Unexpected key '{}' in {} entity", key_name, type_name),
         related_information: None,
         tags: None,
         data: None,

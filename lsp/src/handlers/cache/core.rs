@@ -1,5 +1,7 @@
 use cw_model::types::CwtAnalyzer;
-use cw_model::{BlockType, CwtType, Property, ReferenceType, SimpleType, TypeDefinition};
+use cw_model::{
+    BlockType, CwtType, Property, ReferenceType, SimpleType, TypeDefinition, TypeKeyFilter,
+};
 use cw_parser::CwtModuleCell;
 use std::collections::HashMap;
 use std::env;
@@ -275,9 +277,39 @@ impl TypeCache {
         cwt_analyzer
     }
 
+    pub fn get_actual_namespace(namespace: &str) -> &str {
+        if namespace.starts_with("gfx/models") {
+            return "gfx/models";
+        }
+
+        if namespace.starts_with("gfx/") && !namespace.starts_with("gfx/models") {
+            return "gfx";
+        }
+
+        namespace
+    }
+
     /// Get type information for a specific namespace
     pub fn get_namespace_types(&self, namespace: &str) -> Option<Vec<Arc<ScopedType>>> {
-        self.namespace_types.get(namespace).cloned()
+        let namespace = Self::get_actual_namespace(namespace);
+
+        let mut all_types = vec![];
+
+        if let Some(types) = self.namespace_types.get(namespace) {
+            all_types.extend(types.clone());
+        }
+
+        if namespace.starts_with("gfx/models") {
+            if let Some(types) = self.namespace_types.get("gfx") {
+                all_types.extend(types.clone());
+            }
+        }
+
+        if all_types.is_empty() {
+            None
+        } else {
+            Some(all_types)
+        }
     }
 
     pub fn get_namespace_type(
@@ -285,10 +317,14 @@ impl TypeCache {
         namespace: &str,
         file_path: Option<&str>,
     ) -> Option<Arc<ScopedType>> {
+        let namespace = Self::get_actual_namespace(namespace);
+
         if let Some(namespace_types) = self.get_namespace_types(namespace) {
             if namespace_types.is_empty() {
                 return None;
             }
+
+            let mut union_types = vec![];
 
             // If the type def has a file_path... try to match the file_path to the type def,
             // this takes precence over the union type
@@ -299,14 +335,31 @@ impl TypeCache {
                             // path_file == file_path
                             if let Some(file_path) = file_path {
                                 if path_file.contains(file_path) {
-                                    return Some(scoped_type.clone());
+                                    if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) =
+                                        scoped_type.cwt_type()
+                                    {
+                                        // path_file always wins
+                                        return Some(Arc::new(ScopedType::new_cwt(
+                                            CwtType::Block(block.clone()),
+                                            Default::default(),
+                                            None,
+                                        )));
+                                    }
                                 }
                             }
+                        } else {
+                            // path_file exists, but is not the current file
+                            // so we can ignore it
+                            continue;
+                        }
 
-                            // Path == namespace
-                            if let Some(path) = type_def.path.as_ref() {
-                                if path.trim_start_matches("game/") == namespace {
-                                    return Some(scoped_type.clone());
+                        // namespace contains path
+                        if let Some(path) = type_def.path.as_ref() {
+                            if namespace.contains(path.trim_start_matches("game/")) {
+                                if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) =
+                                    scoped_type.cwt_type()
+                                {
+                                    union_types.push(CwtType::Block(block.clone()));
                                 }
                             }
                         }
@@ -314,33 +367,130 @@ impl TypeCache {
                 }
             }
 
-            let mut union_types = vec![];
+            match union_types.len() {
+                0 => {}
+                1 => {
+                    return Some(Arc::new(ScopedType::new_cwt(
+                        union_types[0].clone(),
+                        Default::default(),
+                        None,
+                    )));
+                }
+                _ => {
+                    return Some(Arc::new(ScopedType::new_cwt(
+                        CwtType::Union(union_types),
+                        Default::default(),
+                        None,
+                    )));
+                }
+            }
+
             for scoped_type in &namespace_types {
                 if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) = scoped_type.cwt_type() {
                     union_types.push(CwtType::Block(block.clone()));
                 }
             }
 
-            if union_types.is_empty() {
-                return None;
+            match union_types.len() {
+                0 => {
+                    return None;
+                }
+                1 => {
+                    return Some(Arc::new(ScopedType::new_cwt(
+                        union_types[0].clone(),
+                        Default::default(),
+                        None,
+                    )));
+                }
+                _ => {
+                    return Some(Arc::new(ScopedType::new_cwt(
+                        CwtType::Union(union_types),
+                        Default::default(),
+                        None,
+                    )));
+                }
             }
-
-            if union_types.len() == 1 {
-                return Some(Arc::new(ScopedType::new_cwt(
-                    union_types[0].clone(),
-                    Default::default(),
-                    None,
-                )));
-            }
-
-            return Some(Arc::new(ScopedType::new_cwt(
-                CwtType::Union(union_types),
-                Default::default(),
-                None,
-            )));
         }
 
         None
+    }
+
+    /// Filters union type members based on type_key_filter conditions.
+    ///
+    /// For union types, this method examines each member's type_key_filter
+    /// and only includes members whose filter conditions are satisfied by
+    /// the provided properties. Returns the original type if not a union.
+    pub fn filter_union_types_by_properties(
+        &self,
+        scoped_type: Arc<ScopedType>,
+        properties: &HashMap<String, String>,
+    ) -> Arc<ScopedType> {
+        match scoped_type.cwt_type() {
+            CwtTypeOrSpecial::CwtType(CwtType::Union(union_types)) => {
+                let mut filtered_types: Vec<CwtType> = vec![];
+                for t in union_types {
+                    match t {
+                        CwtType::Block(block) => {
+                            if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                                if let Some(type_key_filter) =
+                                    type_def.rule_options.type_key_filter.as_ref()
+                                {
+                                    match type_key_filter {
+                                        TypeKeyFilter::Specific(key) => {
+                                            if properties.contains_key(&key.to_string()) {
+                                                filtered_types.push(CwtType::Block(block.clone()));
+                                            }
+                                        }
+                                        TypeKeyFilter::OneOf(keys) => {
+                                            if keys.iter().any(|key| {
+                                                properties.contains_key(&key.to_string())
+                                            }) {
+                                                filtered_types.push(CwtType::Block(block.clone()));
+                                            }
+                                        }
+                                        TypeKeyFilter::Not(key) => {
+                                            if !properties.contains_key(&key.to_string()) {
+                                                filtered_types.push(CwtType::Block(block.clone()));
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    filtered_types.push(CwtType::Block(block.clone()));
+                                }
+                            }
+                        }
+                        _ => {
+                            filtered_types.push(t.clone());
+                        }
+                    }
+                }
+
+                match filtered_types.len() {
+                    0 => {
+                        return Arc::new(ScopedType::new_cwt(
+                            CwtType::Unknown,
+                            Default::default(),
+                            None,
+                        ));
+                    }
+                    1 => {
+                        return Arc::new(ScopedType::new_cwt(
+                            filtered_types[0].clone(),
+                            Default::default(),
+                            None,
+                        ));
+                    }
+                    _ => {
+                        return Arc::new(ScopedType::new_cwt(
+                            CwtType::Union(filtered_types),
+                            Default::default(),
+                            None,
+                        ));
+                    }
+                }
+            }
+            _ => scoped_type,
+        }
     }
 
     /// Get type information for a specific property path in a namespace
@@ -352,6 +502,8 @@ impl TypeCache {
         file_path: Option<&str>,
     ) -> Option<TypeInfo> {
         let formatter = TypeFormatter::new(&self.resolver, 30);
+
+        let namespace = Self::get_actual_namespace(namespace);
 
         // First try to get from namespace types (game data)
         if let Some(namespace_type) = self.get_namespace_type(namespace, file_path) {

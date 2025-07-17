@@ -88,11 +88,8 @@ impl ReferenceResolver {
                         // For Type references, we want the union of all keys in that namespace
                         // This is what the user expects when they hover over "resource" - they want to see
                         // all the possible resource keys like "energy", "minerals", etc.
-                        if let Some(namespace_keys) =
-                            EntityRestructurer::get_namespace_entity_keys(&path)
-                        {
-                            found = Some(CwtType::LiteralSet(namespace_keys.into_iter().collect()));
-                        }
+                        let namespace_keys = EntityRestructurer::get_namespace_entity_keys(&path);
+                        found = Some(CwtType::LiteralSet(namespace_keys.into_iter().collect()));
                     }
                 }
 

@@ -1,6 +1,10 @@
 use std::ops::Range;
 
-use winnow::{LocatingSlice, ModalResult, Parser, combinator::alt, error::StrContext};
+use winnow::{
+    LocatingSlice, ModalResult, Parser,
+    combinator::{alt, opt},
+    error::StrContext,
+};
 
 use crate::{
     AstColor, AstComment, AstEntity, AstMaths, AstNode, AstNumber, AstString, color, entity,
@@ -199,13 +203,18 @@ impl<'a> AstNode<'a> for AstValue<'a> {
 }
 
 pub(crate) fn script_value<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstValue<'a>> {
-    alt((
-        color.map(|c| AstValue::Color(Box::new(c))),
-        entity.map(AstValue::Entity),
-        number_val.map(AstValue::Number),
-        quoted_or_unquoted_string.map(AstValue::String),
-        inline_maths.map(AstValue::Maths),
-    ))
-    .context(StrContext::Label("script_value"))
-    .parse_next(input)
+    let (value, _) = (
+        alt((
+            color.map(|c| AstValue::Color(Box::new(c))),
+            entity.map(AstValue::Entity),
+            number_val.map(AstValue::Number),
+            quoted_or_unquoted_string.map(AstValue::String),
+            inline_maths.map(AstValue::Maths),
+        )),
+        opt(';').void(),
+    )
+        .context(StrContext::Label("script_value"))
+        .parse_next(input)?;
+
+    Ok(value)
 }

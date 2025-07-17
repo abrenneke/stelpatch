@@ -127,7 +127,7 @@ pub fn validate_entity_value(
                         let diagnostic = create_unexpected_key_diagnostic(
                             expr.key.span_range(),
                             key_name,
-                            namespace,
+                            &expected_type.type_name_for_display(),
                             content,
                         );
                         diagnostics.push(diagnostic);

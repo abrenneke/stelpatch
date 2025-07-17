@@ -77,6 +77,7 @@ impl GameMod {
             "interface/**/*.gfx",
             "events/**/*.txt",
             "gfx/**/*.gfx",
+            "gfx/**/*.asset",
             "flags/**/*.txt",
         ];
 

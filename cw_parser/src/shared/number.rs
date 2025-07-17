@@ -51,7 +51,7 @@ pub(crate) fn number_val<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<
     let leading_comments = opt_ws_and_comments.parse_next(input)?;
 
     let (value, span) = (
-        opt(alt(('-', '+'))),
+        opt(alt(('-', '+', '.'))), // . shouldn't be here but paradox fucked up
         // Both 0.11 and .11 are valid
         alt(((digit1, opt(('.', digit1))).take(), ('.', digit1).take())),
     )
@@ -68,6 +68,9 @@ pub(crate) fn number_val<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<
         // Typo in stellaris x_x
         opt(literal("%")).void().parse_next(input)?;
     }
+
+    // WTF paradox
+    opt('§').void().parse_next(input)?;
 
     peek(value_terminator)
         .context(StrContext::Label("number_val terminator"))

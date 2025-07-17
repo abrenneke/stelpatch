@@ -34,11 +34,11 @@ where
 pub(crate) fn valid_value_terminator_char(c: char) -> bool {
     matches!(
         c,
-        ' ' | '#' | '}' | ']' | ')' | '\n' | '\r' | '\t' | '=' | '>' | '<'
-    )
+        ' ' | '#' | '}' | ']' | ')' | '\n' | '\r' | '\t' | '=' | '>' | '<' | ';' | '§'
+    ) || c.is_alphabetic() // shouldn't be here but paradox fucked up
 }
 
-/// Characters that can terminate a value, like whitespace, a comma, or a closing brace.
+/// Characters that can terminate a value, like whitespace, a       comma, or a closing brace.
 pub(crate) fn value_terminator<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<&'a str> {
     alt((one_of(valid_value_terminator_char).void(), eof.void()))
         .take()

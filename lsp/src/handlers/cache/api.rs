@@ -1,6 +1,9 @@
+use crate::handlers::cache::EntityRestructurer;
+
 use super::core::TypeCache;
 use super::formatter::TypeFormatter;
 use super::types::TypeInfo;
+use cw_model::Entity;
 use cw_parser;
 
 /// Get type information for a namespace entity (top-level entity structure)

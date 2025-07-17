@@ -108,17 +108,18 @@ impl DiagnosticsProvider {
         // Extract namespace from URI
         let namespace = match extract_namespace_from_uri(uri) {
             Some(ns) => ns,
-            None => {
-                return diagnostics;
-            }
+            None => return diagnostics,
         };
+
+        if namespace.starts_with("common/inline_scripts") {
+            // These are special, they don't have a type
+            return diagnostics;
+        }
 
         // Get type information for this namespace
         let namespace_type = match type_cache.get_namespace_type(&namespace, Some(uri)) {
             Some(info) => info,
-            None => {
-                return diagnostics;
-            }
+            None => return diagnostics,
         };
 
         if let CwtTypeOrSpecial::CwtType(CwtType::Unknown) = namespace_type.cwt_type() {
@@ -162,9 +163,15 @@ impl DiagnosticsProvider {
                     if let AstEntityItem::Expression(expr) = item {
                         let key_name = expr.key.raw_value();
 
+                        // Filter union types before property navigation
+                        let filtered_validation_type = type_cache.filter_union_types_by_properties(
+                            validation_type.clone(),
+                            &property_data,
+                        );
+
                         if let PropertyNavigationResult::Success(property_type) = type_cache
                             .get_resolver()
-                            .navigate_to_property(validation_type.clone(), key_name)
+                            .navigate_to_property(filtered_validation_type, key_name)
                         {
                             // Validate the value against the property type
                             let value_diagnostics = validate_entity_value(
@@ -180,7 +187,7 @@ impl DiagnosticsProvider {
                             let diagnostic = create_unexpected_key_diagnostic(
                                 expr.key.span_range(),
                                 key_name,
-                                &namespace,
+                                &namespace_type.type_name_for_display(),
                                 content,
                             );
                             diagnostics.push(diagnostic);
@@ -224,10 +231,110 @@ impl DiagnosticsProvider {
                 // Instead, validate their VALUES against the namespace structure
 
                 // Check if this entity needs restructuring for correct subtype narrowing
-                let validation_type = if let AstValue::Entity(ast_entity) = &expr.value {
-                    // Get the effective entity for subtype narrowing while preserving AST for diagnostics
+                if let AstValue::Entity(ast_entity) = &expr.value {
                     let container_key = expr.key.raw_value();
-                    let entity_key = container_key; // For top-level entities, these are the same
+
+                    // Check if this is a skip_root_key container
+                    if EntityRestructurer::was_restructured(&namespace) {
+                        if let Some(info) = EntityRestructurer::get_restructure_info(&namespace) {
+                            if info.skip_root_key.as_ref() == Some(&container_key.to_string()) {
+                                // This is a skip_root_key container - validate each nested entity individually
+                                for nested_item in &ast_entity.items {
+                                    if let AstEntityItem::Expression(nested_expr) = nested_item {
+                                        if let AstValue::Entity(nested_ast_entity) =
+                                            &nested_expr.value
+                                        {
+                                            let nested_entity_key = nested_expr.key.raw_value();
+
+                                            // First, filter union types based on the ROOT KEY (type_key_filter)
+                                            let mut root_key_data = HashMap::new();
+                                            root_key_data.insert(
+                                                nested_entity_key.to_string(),
+                                                "{}".to_string(),
+                                            );
+                                            let filtered_namespace_type = type_cache
+                                                .filter_union_types_by_properties(
+                                                    namespace_type.clone(),
+                                                    &root_key_data,
+                                                );
+
+                                            let (_effective_key, effective_entity) =
+                                                EntityRestructurer::get_effective_entity_for_subtype_narrowing(
+                                                    &namespace,
+                                                    container_key,
+                                                    nested_entity_key,
+                                                    nested_ast_entity,
+                                                );
+
+                                            // Extract property data from the effective entity for subtype narrowing
+                                            let mut property_data = HashMap::new();
+                                            for (key, property_list) in
+                                                &effective_entity.properties.kv
+                                            {
+                                                if let Some(first_property) =
+                                                    property_list.0.first()
+                                                {
+                                                    property_data.insert(
+                                                        key.clone(),
+                                                        first_property.value.to_string(),
+                                                    );
+                                                }
+                                            }
+
+                                            // Perform subtype narrowing with the effective entity data
+                                            let nested_validation_type =
+                                                if let Some(type_cache) = TypeCache::get() {
+                                                    let matching_subtypes = type_cache
+                                                        .get_resolver()
+                                                        .determine_matching_subtypes(
+                                                            filtered_namespace_type.clone(),
+                                                            &property_data,
+                                                        );
+
+                                                    if !matching_subtypes.is_empty() {
+                                                        Arc::new(
+                                                            filtered_namespace_type
+                                                                .with_subtypes(matching_subtypes),
+                                                        )
+                                                    } else {
+                                                        filtered_namespace_type.clone()
+                                                    }
+                                                } else {
+                                                    filtered_namespace_type.clone()
+                                                };
+
+                                            // The type is already filtered, no need to filter again
+                                            let filtered_nested_validation_type =
+                                                nested_validation_type;
+
+                                            // Validate the nested entity using the AST value for proper diagnostics
+                                            let nested_entity_diagnostics = validate_entity_value(
+                                                &nested_expr.value,
+                                                filtered_nested_validation_type,
+                                                content,
+                                                &namespace,
+                                                0,
+                                            );
+
+                                            diagnostics.extend(nested_entity_diagnostics);
+                                        }
+                                    }
+                                }
+
+                                // Skip the normal validation for the container since we handled the nested entities
+                                continue;
+                            }
+                        }
+                    }
+
+                    let entity_key = container_key; // For normal entities, these are the same
+
+                    // First, filter union types based on the ROOT KEY (type_key_filter)
+                    let mut root_key_data = HashMap::new();
+                    root_key_data.insert(container_key.to_string(), "{}".to_string());
+
+                    let filtered_namespace_type = type_cache
+                        .filter_union_types_by_properties(namespace_type.clone(), &root_key_data);
 
                     let (_effective_key, effective_entity) =
                         EntityRestructurer::get_effective_entity_for_subtype_narrowing(
@@ -246,26 +353,44 @@ impl DiagnosticsProvider {
                     }
 
                     // Perform subtype narrowing with the effective entity data
-                    if let Some(type_cache) = TypeCache::get() {
-                        let matching_subtypes = type_cache
-                            .get_resolver()
-                            .determine_matching_subtypes(namespace_type.clone(), &property_data);
+                    let validation_type = if let Some(type_cache) = TypeCache::get() {
+                        let matching_subtypes =
+                            type_cache.get_resolver().determine_matching_subtypes(
+                                filtered_namespace_type.clone(),
+                                &property_data,
+                            );
 
                         if !matching_subtypes.is_empty() {
-                            Arc::new(namespace_type.with_subtypes(matching_subtypes))
+                            Arc::new(filtered_namespace_type.with_subtypes(matching_subtypes))
                         } else {
-                            namespace_type.clone()
+                            filtered_namespace_type.clone()
                         }
                     } else {
-                        namespace_type.clone()
-                    }
-                } else {
-                    namespace_type.clone()
-                };
+                        filtered_namespace_type.clone()
+                    };
 
-                let entity_diagnostics =
-                    validate_entity_value(&expr.value, validation_type, content, &namespace, 0);
-                diagnostics.extend(entity_diagnostics);
+                    // The type is already filtered, no need to filter again
+                    let filtered_validation_type = validation_type;
+
+                    let entity_diagnostics = validate_entity_value(
+                        &expr.value,
+                        filtered_validation_type,
+                        content,
+                        &namespace,
+                        0,
+                    );
+                    diagnostics.extend(entity_diagnostics);
+                } else {
+                    // For non-entity values, use the namespace type without filtering
+                    let entity_diagnostics = validate_entity_value(
+                        &expr.value,
+                        namespace_type.clone(),
+                        content,
+                        &namespace,
+                        0,
+                    );
+                    diagnostics.extend(entity_diagnostics);
+                };
             }
         }
         diagnostics

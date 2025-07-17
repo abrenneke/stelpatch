@@ -251,3 +251,29 @@ fn item_with_comments() {
         }
     );
 }
+
+#[test]
+fn back_to_back_properties() {
+    let input = LocatingSlice::new(
+        r#"
+        entity = {
+            prop1 = "value1"prop2 = value2
+        }
+    "#,
+    );
+
+    let _module = module.parse(input).unwrap();
+}
+
+#[test]
+fn semicolon_terminated_value() {
+    let input = LocatingSlice::new(
+        r#"
+        entity = {
+            prop1 = "value1";
+        }
+    "#,
+    );
+
+    let _module = module.parse(input).unwrap();
+}
