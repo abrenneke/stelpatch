@@ -220,22 +220,6 @@ impl TypeResolver {
             .determine_matching_subtypes(scoped_type, property_data)
     }
 
-    /// Create a new scoped type with a specific subtype
-    pub fn create_scoped_type_with_subtype(
-        &self,
-        cwt_type: CwtType,
-        scope_stack: ScopeStack,
-        subtype_name: Option<String>,
-        scripted_effect_name: Option<String>,
-    ) -> Arc<ScopedType> {
-        Arc::new(ScopedType::new_cwt_with_subtype(
-            cwt_type,
-            scope_stack,
-            subtype_name,
-            scripted_effect_name,
-        ))
-    }
-
     /// Get all enum definitions from the CWT analyzer
     pub fn get_enums(&self) -> &HashMap<String, cw_model::types::EnumDefinition> {
         self.cwt_analyzer.get_enums()

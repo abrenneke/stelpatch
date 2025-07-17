@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use cw_model::{ComplexEnumDefinition, CwtType, Entity, ReferenceType};
+use cw_model::{ComplexEnumDefinition, CwtType, Entity, PropertyInfoList, ReferenceType};
 use rayon::prelude::*;
 
 use crate::handlers::{
@@ -107,7 +107,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         entity: &Entity,
         scoped_type: Arc<ScopedType>,
     ) -> HashMap<String, HashSet<String>> {
-        let mut entity_value_sets = HashMap::new();
+        let mut entity_value_sets: HashMap<String, HashSet<String>> = HashMap::new();
 
         for (property_name, property_value) in entity.properties.kv.iter() {
             let property_type = self
@@ -115,83 +115,103 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                 .navigate_to_property(scoped_type.clone(), property_name);
 
             if let PropertyNavigationResult::Success(property_type) = property_type {
-                match property_type.cwt_type() {
-                    CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::ValueSet {
-                        key,
-                    })) => {
-                        let mut values = HashSet::new();
-                        for value in property_value.0.iter() {
-                            if let Some(value) = value.value.as_string() {
-                                values.insert(value.clone());
-                            }
-                        }
-                        if !values.is_empty() {
-                            entity_value_sets.insert(key.clone(), values);
-                        }
-                    }
-                    CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
-                        for value in property_value.0.iter() {
-                            if let Some(value) = value.value.as_entity() {
-                                let nested_results = self
-                                    .collect_value_sets_from_entity(value, property_type.clone());
-                                for (key, values) in nested_results {
-                                    entity_value_sets.entry(key).or_default().extend(values);
-                                }
-                            }
-                        }
-                    }
-                    CwtTypeOrSpecial::CwtType(CwtType::Union(union_types)) => {
-                        // Process all union members that are blocks
-                        for union_type in union_types {
-                            match union_type {
-                                CwtType::Block(_) => {
-                                    // Create a scoped type for this union member
-                                    let union_member_type = Arc::new(ScopedType::new_cwt(
-                                        union_type.clone(),
-                                        property_type.scope_stack().clone(),
-                                        property_type.in_scripted_effect_block().cloned(),
-                                    ));
-
-                                    for value in property_value.0.iter() {
-                                        if let Some(value) = value.value.as_entity() {
-                                            let nested_results = self
-                                                .collect_value_sets_from_entity(
-                                                    value,
-                                                    union_member_type.clone(),
-                                                );
-                                            for (key, values) in nested_results {
-                                                entity_value_sets
-                                                    .entry(key)
-                                                    .or_default()
-                                                    .extend(values);
-                                            }
-                                        }
-                                    }
-                                }
-                                CwtType::Reference(ReferenceType::ValueSet { key }) => {
-                                    // Handle value sets within unions
-                                    let mut values = HashSet::new();
-                                    for value in property_value.0.iter() {
-                                        if let Some(value) = value.value.as_string() {
-                                            values.insert(value.clone());
-                                        }
-                                    }
-                                    if !values.is_empty() {
-                                        entity_value_sets.insert(key.clone(), values);
-                                    }
-                                }
-                                _ => {
-                                    // Skip other union member types
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
+                let nested_results =
+                    self.collect_value_sets_from_property(property_value, property_type);
+                for (key, values) in nested_results {
+                    entity_value_sets.entry(key).or_default().extend(values);
                 }
             }
         }
 
         entity_value_sets
+    }
+
+    fn collect_value_sets_from_property(
+        &self,
+        property_value: &PropertyInfoList,
+        property_type: Arc<ScopedType>,
+    ) -> HashMap<String, HashSet<String>> {
+        let mut property_value_sets = HashMap::new();
+
+        match property_type.cwt_type() {
+            CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::ValueSet { key })) => {
+                let mut values = HashSet::new();
+                for value in property_value.0.iter() {
+                    if let Some(value) = value.value.as_string() {
+                        values.insert(value.clone());
+                    }
+                }
+                if !values.is_empty() {
+                    property_value_sets.insert(key.clone(), values);
+                }
+            }
+            CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
+                for value in property_value.0.iter() {
+                    if let Some(value) = value.value.as_entity() {
+                        let nested_results =
+                            self.collect_value_sets_from_entity(value, property_type.clone());
+                        for (key, values) in nested_results {
+                            property_value_sets.entry(key).or_default().extend(values);
+                        }
+                    }
+                }
+            }
+            CwtTypeOrSpecial::CwtType(CwtType::Union(union_types)) => {
+                // Process all union members that are blocks
+                for union_type in union_types {
+                    match union_type {
+                        CwtType::Block(_) => {
+                            // Create a scoped type for this union member
+                            let union_member_type = Arc::new(ScopedType::new_cwt(
+                                union_type.clone(),
+                                property_type.scope_stack().clone(),
+                                property_type.in_scripted_effect_block().cloned(),
+                            ));
+
+                            for value in property_value.0.iter() {
+                                if let Some(value) = value.value.as_entity() {
+                                    let nested_results = self.collect_value_sets_from_entity(
+                                        value,
+                                        union_member_type.clone(),
+                                    );
+                                    for (key, values) in nested_results {
+                                        property_value_sets.entry(key).or_default().extend(values);
+                                    }
+                                }
+                            }
+                        }
+                        CwtType::Reference(ReferenceType::ValueSet { key }) => {
+                            // Handle value sets within unions
+                            let mut values = HashSet::new();
+                            for value in property_value.0.iter() {
+                                if let Some(value) = value.value.as_string() {
+                                    values.insert(value.clone());
+                                }
+                            }
+                            if !values.is_empty() {
+                                property_value_sets.insert(key.clone(), values);
+                            }
+                        }
+                        _ => {
+                            // Skip other union member types
+                        }
+                    }
+                }
+            }
+            CwtTypeOrSpecial::ScopedUnion(scoped_union) => {
+                // Process all scoped union members using the same logic
+                for scoped_type in scoped_union {
+                    let nested_results =
+                        self.collect_value_sets_from_property(property_value, scoped_type.clone());
+                    for (key, values) in nested_results {
+                        property_value_sets.entry(key).or_default().extend(values);
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        property_value_sets
     }
 
     fn collect_complex_enums(&mut self) {

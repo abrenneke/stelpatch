@@ -446,7 +446,7 @@ fn validate_value_against_type(
             let mut compatible_types = Vec::new();
 
             for scoped_type in scoped_types {
-                let scoped_type_arc = Arc::new(scoped_type.clone());
+                let scoped_type_arc = scoped_type.clone();
                 if is_value_structurally_compatible(value, scoped_type_arc.clone()) {
                     compatible_types.push(scoped_type_arc);
                 }

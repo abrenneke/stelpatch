@@ -66,7 +66,7 @@ impl TypeFingerprint for ScopedType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum CwtTypeOrSpecial {
     CwtType(CwtType),
-    ScopedUnion(Vec<ScopedType>),
+    ScopedUnion(Vec<Arc<ScopedType>>),
 }
 
 impl CwtTypeOrSpecial {
@@ -162,20 +162,6 @@ impl ScopedType {
         }
     }
 
-    pub fn new_cwt_with_subtype(
-        cwt_type: CwtType,
-        scope_context: ScopeStack,
-        subtype: Option<String>,
-        scripted_effect_name: Option<String>,
-    ) -> Self {
-        Self {
-            cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
-            scope_context,
-            subtypes: subtype.into_iter().collect(),
-            in_scripted_effect_block: scripted_effect_name,
-        }
-    }
-
     pub fn new_cwt_with_subtypes(
         cwt_type: CwtType,
         scope_context: ScopeStack,
@@ -191,7 +177,7 @@ impl ScopedType {
     }
 
     pub fn new_scoped_union(
-        scoped_types: Vec<ScopedType>,
+        scoped_types: Vec<Arc<ScopedType>>,
         scope_context: ScopeStack,
         scripted_effect_name: Option<String>,
     ) -> Self {

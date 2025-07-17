@@ -259,13 +259,7 @@ impl<'a> TypeFormatter<'a> {
                 if types.len() <= MAX_UNION_MEMBERS {
                     types
                         .iter()
-                        .map(|t| {
-                            self.format_type_with_depth(
-                                Arc::new(t.clone()),
-                                depth + 1,
-                                property_name,
-                            )
-                        })
+                        .map(|t| self.format_type_with_depth(t.clone(), depth + 1, property_name))
                         .collect::<Vec<_>>()
                         .join(" | ")
                 } else {
@@ -275,11 +269,7 @@ impl<'a> TypeFormatter<'a> {
                             .iter()
                             .take(MAX_UNION_MEMBERS)
                             .map(|t| {
-                                self.format_type_with_depth(
-                                    Arc::new(t.clone()),
-                                    depth + 1,
-                                    property_name,
-                                )
+                                self.format_type_with_depth(t.clone(), depth + 1, property_name)
                             })
                             .collect::<Vec<_>>()
                             .join(" | "),
