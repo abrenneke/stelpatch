@@ -119,6 +119,7 @@ impl TypeCache {
                 properties: HashMap::new(),
                 subtypes: HashMap::new(),
                 subtype_properties: HashMap::new(),
+                subtype_pattern_properties: HashMap::new(),
                 pattern_properties: vec![],
                 localisation: None,
                 modifiers: Default::default(),

@@ -405,6 +405,7 @@ mod tests {
         let mut civic_subtype = Subtype {
             condition_properties: HashMap::new(),
             allowed_properties: HashMap::new(),
+            allowed_pattern_properties: Vec::new(),
             options: Default::default(),
             is_inverted: false,
         };
@@ -446,6 +447,7 @@ mod tests {
         let mut origin_subtype = Subtype {
             condition_properties: HashMap::new(),
             allowed_properties: HashMap::new(),
+            allowed_pattern_properties: Vec::new(),
             options: Default::default(),
             is_inverted: false,
         };

@@ -106,9 +106,21 @@ impl PropertyNavigator {
                     if let Some(subtype_property) =
                         self.get_subtype_property(block, subtype_name, property_name)
                     {
-                        let result = self.handle_subtype_property(
+                        let result =
+                            self.handle_subtype_property(scoped_type.clone(), subtype_property);
+                        self.collect_navigation_result(
+                            result,
+                            &mut successful_results,
+                            &mut scope_errors,
+                        );
+                    }
+
+                    if let Some(subtype_pattern_property) =
+                        self.get_subtype_pattern_property(block, subtype_name, property_name)
+                    {
+                        let result = self.handle_subtype_pattern_property(
                             scoped_type.clone(),
-                            subtype_property,
+                            subtype_pattern_property,
                             property_name,
                         );
                         self.collect_navigation_result(
@@ -556,7 +568,6 @@ impl PropertyNavigator {
         &self,
         scoped_type: Arc<ScopedType>,
         subtype_property: &Property,
-        _property_name: &str,
     ) -> PropertyNavigationResult {
         // Check if this property changes scope
         if subtype_property.changes_scope() {
@@ -597,7 +608,89 @@ impl PropertyNavigator {
         if let Some(subtype_def) = block_type.subtypes.get(subtype_name) {
             return subtype_def.allowed_properties.get(property_name);
         }
+
         None
+    }
+
+    /// Get subtype-specific pattern property from a block type
+    fn get_subtype_pattern_property<'b>(
+        &self,
+        block_type: &'b BlockType,
+        subtype_name: &str,
+        property_name: &str,
+    ) -> Option<&'b PatternProperty> {
+        // Check if there are pattern properties for this subtype
+        if let Some(pattern_properties) = block_type.subtype_pattern_properties.get(subtype_name) {
+            // Find a pattern property that matches the property name
+            for pattern_property in pattern_properties {
+                if self
+                    .pattern_matcher
+                    .key_matches_pattern_type(property_name, &pattern_property.pattern_type)
+                {
+                    return Some(pattern_property);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Handle navigation to a subtype-specific pattern property
+    fn handle_subtype_pattern_property(
+        &self,
+        scoped_type: Arc<ScopedType>,
+        subtype_pattern_property: &PatternProperty,
+        property_name: &str,
+    ) -> PropertyNavigationResult {
+        // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
+        let (resolved_value_type, alias_def, scripted_effect_block) =
+            match &subtype_pattern_property.value_type {
+                CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
+                    // Resolve the AliasMatchLeft using the property name
+                    let result = self
+                        .reference_resolver
+                        .resolve_alias_match_left(key, property_name);
+
+                    result
+                }
+                _ => (
+                    subtype_pattern_property.value_type.clone(),
+                    None::<AliasDefinition>,
+                    None::<String>,
+                ),
+            };
+
+        // Apply scope changes - first from alias definition, then from pattern property
+        let mut current_scope = scoped_type.scope_stack().clone();
+
+        // Apply alias scope changes if present
+        if let Some(alias_def) = alias_def {
+            if alias_def.changes_scope() {
+                match self.apply_alias_scope_changes(&current_scope, &alias_def) {
+                    Ok(new_scope) => current_scope = new_scope,
+                    Err(error) => {
+                        return PropertyNavigationResult::ScopeError(error);
+                    }
+                }
+            }
+        }
+
+        // Apply pattern property scope changes if present
+        if subtype_pattern_property.changes_scope() {
+            match subtype_pattern_property.apply_scope_changes(&current_scope, &self.cwt_analyzer) {
+                Ok(new_scope) => current_scope = new_scope,
+                Err(error) => return PropertyNavigationResult::ScopeError(error),
+            }
+        }
+
+        let property_scoped = ScopedType::new_cwt_with_subtypes(
+            resolved_value_type,
+            current_scope,
+            scoped_type.subtypes().clone(),
+            scripted_effect_block,
+        );
+
+        PropertyNavigationResult::Success(Arc::new(property_scoped))
     }
 
     /// Get all available property names for a scoped type

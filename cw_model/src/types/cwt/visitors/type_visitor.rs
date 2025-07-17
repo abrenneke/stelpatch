@@ -480,6 +480,7 @@ impl<'a> TypeVisitor<'a> {
         let subtype_def = Subtype {
             condition_properties: properties, // Use the properties we collected with their options
             allowed_properties: HashMap::new(),
+            allowed_pattern_properties: Vec::new(),
             options: subtype_options,
             is_inverted: false,
         };

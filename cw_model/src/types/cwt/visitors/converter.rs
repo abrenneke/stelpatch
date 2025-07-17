@@ -117,6 +117,7 @@ impl CwtConverter {
     pub fn convert_block(block: &AstCwtBlock, type_name: Option<String>) -> CwtType {
         let mut properties: HashMap<String, Property> = HashMap::new();
         let mut subtype_properties: HashMap<String, HashMap<String, Property>> = HashMap::new();
+        let mut subtype_pattern_properties: HashMap<String, Vec<PatternProperty>> = HashMap::new();
         let mut pattern_properties = Vec::new();
         let mut union_values = Vec::new();
 
@@ -193,8 +194,12 @@ impl CwtConverter {
 
                                     let subtype_map =
                                         subtype_properties.entry(subtype_name.clone()).or_default();
+                                    let subtype_patterns = subtype_pattern_properties
+                                        .entry(subtype_name.clone())
+                                        .or_default();
 
                                     if let CwtType::Block(block) = value_type {
+                                        // Extract regular properties
                                         for (key, value) in block.properties.iter() {
                                             subtype_map.insert(
                                                 key.clone(),
@@ -204,6 +209,16 @@ impl CwtConverter {
                                                     documentation: value.documentation.clone(),
                                                 },
                                             );
+                                        }
+
+                                        // Extract pattern properties
+                                        for pattern_prop in block.pattern_properties.iter() {
+                                            subtype_patterns.push(PatternProperty {
+                                                pattern_type: pattern_prop.pattern_type.clone(),
+                                                value_type: pattern_prop.value_type.clone(),
+                                                options: pattern_prop.options.clone(),
+                                                documentation: pattern_prop.documentation.clone(),
+                                            });
                                         }
                                     } else {
                                         eprintln!("Expected block type, got {:?}", value_type);
@@ -283,6 +298,7 @@ impl CwtConverter {
             properties,
             subtypes: HashMap::new(),
             subtype_properties,
+            subtype_pattern_properties,
             pattern_properties,
             localisation: None,
             modifiers: None,

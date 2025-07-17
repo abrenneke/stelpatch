@@ -253,6 +253,9 @@ pub struct BlockType {
     /// Subtype properties - subtype_name -> property_name -> Property
     pub subtype_properties: HashMap<String, HashMap<String, Property>>,
 
+    /// Subtype pattern properties - subtype_name -> pattern_property
+    pub subtype_pattern_properties: HashMap<String, Vec<PatternProperty>>,
+
     /// Pattern properties - properties that can match multiple keys but maintain unified cardinality
     pub pattern_properties: Vec<PatternProperty>,
 
@@ -505,6 +508,9 @@ pub struct Subtype {
     /// Game data properties that are allowed when this subtype is active
     /// These are discovered from analyzing actual game files (e.g., traits, playable, etc.)
     pub allowed_properties: HashMap<String, Property>,
+
+    /// Pattern properties that are allowed when this subtype is active
+    pub allowed_pattern_properties: Vec<PatternProperty>,
 
     /// Options for this subtype
     pub options: CwtOptions,
@@ -1375,6 +1381,7 @@ impl CwtType {
             localisation: None,
             modifiers: None,
             additional_flags: Vec::new(),
+            subtype_pattern_properties: HashMap::new(),
         }
     }
 

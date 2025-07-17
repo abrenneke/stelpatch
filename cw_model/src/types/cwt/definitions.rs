@@ -351,6 +351,16 @@ impl TypeDefinition {
                     }
                 }
             }
+
+            for (subtype_name, pattern_properties) in block_type.subtype_pattern_properties.iter() {
+                if let Some(subtype) = block_type.subtypes.get_mut(subtype_name) {
+                    for pattern_property in pattern_properties {
+                        subtype
+                            .allowed_pattern_properties
+                            .push(pattern_property.clone());
+                    }
+                }
+            }
         }
     }
 
