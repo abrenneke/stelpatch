@@ -221,9 +221,10 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         // Process each complex enum
         for (enum_name, enum_def) in enum_definitions {
             if let Some(complex_def) = &enum_def.complex {
-                let values = self.extract_complex_enum_values(complex_def);
+                let values = self.extract_complex_enum_values(complex_def, &enum_name);
                 if !values.is_empty() {
-                    self.complex_enums.insert(enum_name.to_string(), values);
+                    let set = self.complex_enums.entry(enum_name.to_string()).or_default();
+                    set.extend(values);
                 }
             }
         }
@@ -260,7 +261,11 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         }
     }
 
-    fn extract_complex_enum_values(&self, complex_def: &ComplexEnumDefinition) -> HashSet<String> {
+    fn extract_complex_enum_values(
+        &self,
+        complex_def: &ComplexEnumDefinition,
+        enum_name: &str,
+    ) -> HashSet<String> {
         let mut values = HashSet::new();
 
         // Get the namespace for the specified path
@@ -295,6 +300,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                     entity,
                     &complex_def.name_structure,
                     complex_def.start_from_root,
+                    &enum_name,
                 ) {
                     values.extend(extracted_values);
                 }
@@ -309,13 +315,14 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         entity: &Entity,
         name_structure: &CwtType,
         start_from_root: bool,
+        enum_name: &str,
     ) -> Option<HashSet<String>> {
         let mut values = HashSet::new();
 
         // If start_from_root is true, we start from the entity itself
         // Otherwise, we start from the first level properties
         if start_from_root {
-            self.extract_values_recursive(entity, name_structure, &mut values);
+            self.extract_values_recursive(entity, name_structure, &mut values, enum_name);
         } else {
             // Process each top-level property by matching against name_structure
             if let CwtType::Block(block_type) = name_structure {
@@ -337,6 +344,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                                             nested_entity,
                                             &expected_property.property_type,
                                             &mut values,
+                                            enum_name,
                                         );
                                     }
                                 }
@@ -359,79 +367,97 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         entity: &Entity,
         name_structure: &CwtType,
         values: &mut HashSet<String>,
+        enum_name: &str,
     ) {
         match name_structure {
             CwtType::Block(block_type) => {
-                // Process each property in the block structure
-                for (property_name, property_type) in &block_type.properties {
-                    if let Some(property_value) = entity.properties.kv.get(property_name) {
-                        for value in &property_value.0 {
-                            match &property_type.property_type {
-                                CwtType::Literal(literal) if literal == "enum_name" => {
-                                    // This is the special marker for enum name extraction
-                                    if let Some(string_value) = value.value.as_string() {
-                                        values.insert(string_value.clone());
+                // Check if any expected property is enum_name - if so, extract all keys from entity
+                let has_enum_name_property =
+                    block_type.properties.keys().any(|key| key == "enum_name");
+
+                if has_enum_name_property {
+                    // Extract all keys from the current entity as enum values
+                    for (key, _) in &entity.properties.kv {
+                        values.insert(key.clone());
+                    }
+                } else {
+                    // Process each property in the block structure normally
+                    for (property_name, property_type) in &block_type.properties {
+                        if let Some(property_value) = entity.properties.kv.get(property_name) {
+                            for value in &property_value.0 {
+                                match &property_type.property_type {
+                                    CwtType::Literal(literal) if literal == "enum_name" => {
+                                        // This is the special marker for enum name extraction
+                                        if let Some(string_value) = value.value.as_string() {
+                                            values.insert(string_value.clone());
+                                        }
                                     }
-                                }
-                                CwtType::Block(_) => {
-                                    // Recurse into nested blocks
-                                    if let Some(nested_entity) = value.value.as_entity() {
+                                    CwtType::Block(_) => {
+                                        // Recurse into nested blocks
+                                        if let Some(nested_entity) = value.value.as_entity() {
+                                            self.extract_values_recursive(
+                                                nested_entity,
+                                                &property_type.property_type,
+                                                values,
+                                                enum_name,
+                                            );
+                                        }
+                                    }
+                                    CwtType::Array(array_type) => {
+                                        // Recurse into the array element type
                                         self.extract_values_recursive(
-                                            nested_entity,
-                                            &property_type.property_type,
+                                            entity,
+                                            &array_type.element_type,
                                             values,
+                                            enum_name,
                                         );
                                     }
-                                }
-                                CwtType::Array(array_type) => {
-                                    // Recurse into the array element type
-                                    self.extract_values_recursive(
-                                        entity,
-                                        &array_type.element_type,
-                                        values,
-                                    );
-                                }
-                                CwtType::Union(union_types) => {
-                                    // Process all union members
-                                    for union_type in union_types {
-                                        match union_type {
-                                            CwtType::Literal(literal) if literal == "enum_name" => {
-                                                // Extract all string values from the property value entities
-                                                for value in &property_value.0 {
-                                                    if let Some(property_entity) =
-                                                        value.value.as_entity()
-                                                    {
-                                                        for item in &property_entity.items {
-                                                            if let Some(string_value) =
-                                                                item.as_string()
-                                                            {
-                                                                values.insert(string_value.clone());
+                                    CwtType::Union(union_types) => {
+                                        // Process all union members
+                                        for union_type in union_types {
+                                            match union_type {
+                                                CwtType::Literal(literal)
+                                                    if literal == "enum_name" =>
+                                                {
+                                                    // Extract all string values from the property value entities
+                                                    for value in &property_value.0 {
+                                                        if let Some(property_entity) =
+                                                            value.value.as_entity()
+                                                        {
+                                                            for item in &property_entity.items {
+                                                                if let Some(string_value) =
+                                                                    item.as_string()
+                                                                {
+                                                                    values.insert(
+                                                                        string_value.clone(),
+                                                                    );
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 }
-                                            }
-                                            _ => {
-                                                // Recurse into other union member types
-                                                self.extract_values_recursive(
-                                                    entity, union_type, values,
-                                                );
+                                                _ => {
+                                                    // Recurse into other union member types
+                                                    self.extract_values_recursive(
+                                                        entity, union_type, values, enum_name,
+                                                    );
+                                                }
                                             }
                                         }
                                     }
-                                }
-                                _ => {
-                                    // For scalar matches, we can match any key
-                                    if property_name == "scalar" {
-                                        // Match any property in the entity
-                                        for (key, _) in &entity.properties.kv {
-                                            values.insert(key.clone());
+                                    _ => {
+                                        // For scalar matches, we can match any key
+                                        if property_name == "scalar" {
+                                            // Match any property in the entity
+                                            for (key, _) in &entity.properties.kv {
+                                                values.insert(key.clone());
+                                            }
                                         }
-                                    }
-                                    // For any other type, if it's a string value, extract it
-                                    // This handles cases where enum_name is not a literal but a reference
-                                    if let Some(string_value) = value.value.as_string() {
-                                        values.insert(string_value.clone());
+                                        // For any other type, if it's a string value, extract it
+                                        // This handles cases where enum_name is not a literal but a reference
+                                        if let Some(string_value) = value.value.as_string() {
+                                            values.insert(string_value.clone());
+                                        }
                                     }
                                 }
                             }
@@ -458,7 +484,12 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                     }
                 } else {
                     // For other element types, recurse into the element type
-                    self.extract_values_recursive(entity, &array_type.element_type, values);
+                    self.extract_values_recursive(
+                        entity,
+                        &array_type.element_type,
+                        values,
+                        enum_name,
+                    );
                 }
             }
             CwtType::Union(union_types) => {
@@ -475,7 +506,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                         }
                         _ => {
                             // Recurse into other union member types
-                            self.extract_values_recursive(entity, union_type, values);
+                            self.extract_values_recursive(entity, union_type, values, enum_name);
                         }
                     }
                 }

@@ -124,6 +124,25 @@ fn validate_scope_path(
         ));
     }
 
+    // Handle event_target: references
+    if parts[0].starts_with("event_target:") {
+        // Event targets are always valid, just validate any subsequent navigation
+        if parts.len() > 1 {
+            // For dotted paths starting with event_target, simulate navigation from "unknown" scope
+            let remaining_parts = &parts[1..];
+            let mut dummy_scope_stack = scope_stack.clone();
+            // Push "unknown" scope to represent the event target
+            if dummy_scope_stack.push_scope_type("unknown").is_ok() {
+                let navigation_result =
+                    simulate_scope_navigation(remaining_parts, &dummy_scope_stack, &analyzer);
+                if let Err(error_msg) = navigation_result {
+                    return Some(create_value_mismatch_diagnostic(span, &error_msg, content));
+                }
+            }
+        }
+        return None; // event_target references are valid
+    }
+
     // Get all valid navigation options from the current scope
     let current_scope_type = &scope_stack.current_scope().scope_type;
     let mut valid_properties = Vec::new();
@@ -173,6 +192,23 @@ fn resolve_scope_path_to_final_type(
     let parts: Vec<&str> = value.split('.').collect();
     if parts.is_empty() {
         return None;
+    }
+
+    // Handle event_target: references
+    if parts[0].starts_with("event_target:") {
+        if parts.len() == 1 {
+            // Simple event_target reference resolves to "unknown"
+            return Some("unknown".to_string());
+        } else {
+            // For dotted paths, simulate navigation from "unknown" scope
+            let remaining_parts = &parts[1..];
+            let mut dummy_scope_stack = scope_stack.clone();
+            if dummy_scope_stack.push_scope_type("unknown").is_ok() {
+                return simulate_scope_navigation(remaining_parts, &dummy_scope_stack, analyzer)
+                    .ok();
+            }
+            return Some("unknown".to_string());
+        }
     }
 
     // Use the full simulation to get the final scope type
@@ -249,6 +285,11 @@ fn navigate_from_scope(
     analyzer: &CwtAnalyzer,
 ) -> Result<String, String> {
     let is_unknown_scope = from_scope_type == "unknown";
+
+    // Handle event_target: references
+    if property_name.starts_with("event_target:") {
+        return Ok("unknown".to_string());
+    }
 
     // Check if it's a scope property first
     if let Some(scope_context) = scope_stack.get_scope_by_name(property_name) {
