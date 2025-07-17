@@ -29,8 +29,9 @@ function isStellarisFile(filePath: string): boolean {
  */
 function setLanguageForDocument(document: TextDocument) {
 	if (document.languageId === 'plaintext' && isStellarisFile(document.uri.fsPath)) {
-		log(`🎯 Auto-detecting Stellaris file: ${document.uri.fsPath}`);
-		languages.setTextDocumentLanguage(document, 'stellaris');
+		// TODO causes recursion error or infinite loop or something :(
+		// log(`🎯 Auto-detecting Stellaris file: ${document.uri.fsPath}`);
+		// languages.setTextDocumentLanguage(document, 'stellaris');
 	}
 }
 

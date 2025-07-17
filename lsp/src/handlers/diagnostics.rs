@@ -6,6 +6,7 @@ use url::Url;
 
 pub mod diagnostic;
 pub mod provider;
+pub mod scope_validation;
 pub mod structural;
 pub mod type_validation;
 pub mod util;

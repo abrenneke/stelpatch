@@ -203,26 +203,6 @@ impl SubtypeHandler {
         }
     }
 
-    /// Extract cardinality for a specific property from a subtype definition
-    fn get_property_cardinality_from_subtype(
-        &self,
-        subtype_def: &cw_model::types::Subtype,
-        property_key: &str,
-    ) -> Option<cw_model::types::Cardinality> {
-        // Look in condition_properties first (CWT schema rules with cardinality)
-        subtype_def
-            .condition_properties
-            .get(property_key)
-            .and_then(|prop| prop.options.cardinality.clone())
-            .or_else(|| {
-                // Fallback to allowed_properties (game data properties)
-                subtype_def
-                    .allowed_properties
-                    .get(property_key)
-                    .and_then(|prop| prop.options.cardinality.clone())
-            })
-    }
-
     /// Determine all matching subtypes based on property data
     /// This is the main method for determining active subtypes
     pub fn determine_matching_subtypes(
@@ -415,7 +395,7 @@ mod tests {
 
     #[test]
     fn test_does_subtype_match_civic_without_is_origin() {
-        use cw_model::types::{Cardinality, Property, Subtype};
+        use cw_model::types::{Property, Subtype};
         use std::collections::HashMap;
 
         let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));

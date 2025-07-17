@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use cw_model::{CwtType, ReferenceType};
 use cw_parser::{AstEntityItem, AstNode, AstValue};
@@ -14,47 +14,13 @@ use crate::handlers::{
             create_type_mismatch_diagnostic, create_unexpected_key_diagnostic,
             create_value_mismatch_diagnostic,
         },
+        scope_validation::{validate_scope_reference, validate_scopegroup_reference},
         structural::is_value_structurally_compatible,
         value::is_value_compatible_with_simple_type,
     },
     scope::ScopeStack,
     scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
 };
-
-/// Extract property data from an AST entity for subtype condition checking
-fn extract_property_data_from_entity(entity: &cw_parser::AstEntity<'_>) -> HashMap<String, String> {
-    let mut property_data = HashMap::new();
-
-    for item in &entity.items {
-        if let AstEntityItem::Expression(expr) = item {
-            let key_name = expr.key.raw_value();
-
-            // Extract simple string values for condition matching
-            match &expr.value {
-                AstValue::String(string_val) => {
-                    property_data.insert(key_name.to_string(), string_val.raw_value().to_string());
-                }
-                AstValue::Number(num_val) => {
-                    property_data.insert(key_name.to_string(), num_val.value.value.to_string());
-                }
-                AstValue::Entity(_) => {
-                    // For entities, just mark that the property exists
-                    property_data.insert(key_name.to_string(), "{}".to_string());
-                }
-                AstValue::Color(_) => {
-                    // For colors, just mark that the property exists
-                    property_data.insert(key_name.to_string(), "color".to_string());
-                }
-                AstValue::Maths(_) => {
-                    // For math expressions, just mark that the property exists
-                    property_data.insert(key_name.to_string(), "math".to_string());
-                }
-            }
-        }
-    }
-
-    property_data
-}
 
 /// Extract possible string values from a CwtType for error messages
 fn extract_possible_values(cwt_type: &CwtType) -> Vec<String> {
@@ -412,17 +378,59 @@ fn validate_value_against_type(
         }
 
         // Reference type validation
-        (CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)), _) => {
-            let diagnostic = create_type_mismatch_diagnostic(
-                value.span_range(),
-                &format!(
-                    "Reference types are not supported yet, found: {:?}",
-                    ref_type
-                ),
-                content,
-            );
-            diagnostics.push(diagnostic);
-        }
+        (CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)), _) => match ref_type {
+            ReferenceType::Scope { key } => {
+                if let AstValue::String(string_value) = value {
+                    if let Some(diagnostic) = validate_scope_reference(
+                        string_value.raw_value(),
+                        key,
+                        expected_type.scope_stack(),
+                        value.span_range(),
+                        content,
+                    ) {
+                        diagnostics.push(diagnostic);
+                    }
+                } else {
+                    let diagnostic = create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Expected a string value for scope reference",
+                        content,
+                    );
+                    diagnostics.push(diagnostic);
+                }
+            }
+            ReferenceType::ScopeGroup { key } => {
+                if let AstValue::String(string_value) = value {
+                    if let Some(diagnostic) = validate_scopegroup_reference(
+                        string_value.raw_value(),
+                        key,
+                        expected_type.scope_stack(),
+                        value.span_range(),
+                        content,
+                    ) {
+                        diagnostics.push(diagnostic);
+                    }
+                } else {
+                    let diagnostic = create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Expected a string value for scope group reference",
+                        content,
+                    );
+                    diagnostics.push(diagnostic);
+                }
+            }
+            _ => {
+                let diagnostic = create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    &format!(
+                        "Reference type validation not implemented yet, found: {:?}",
+                        ref_type
+                    ),
+                    content,
+                );
+                diagnostics.push(diagnostic);
+            }
+        },
 
         (CwtTypeOrSpecial::CwtType(CwtType::Any), _) => {
             // Any type is valid for anything
@@ -433,7 +441,74 @@ fn validate_value_against_type(
             // Don't validate unknown types
         }
 
-        (CwtTypeOrSpecial::ScopedUnion(_), _) => todo!(),
+        (CwtTypeOrSpecial::ScopedUnion(scoped_types), _) => {
+            // Find all structurally compatible union members
+            let mut compatible_types = Vec::new();
+
+            for scoped_type in scoped_types {
+                let scoped_type_arc = Arc::new(scoped_type.clone());
+                if is_value_structurally_compatible(value, scoped_type_arc.clone()) {
+                    compatible_types.push(scoped_type_arc);
+                }
+            }
+
+            if compatible_types.is_empty() {
+                // Value is not structurally compatible with any union member
+                let mut all_possible_values = Vec::new();
+                for scoped_type in scoped_types {
+                    if let CwtTypeOrSpecial::CwtType(cwt_type) = scoped_type.cwt_type() {
+                        all_possible_values.extend(extract_possible_values(cwt_type));
+                    }
+                }
+
+                // Remove duplicates and sort
+                let mut unique_values: Vec<_> = all_possible_values
+                    .into_iter()
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect();
+                unique_values.sort();
+
+                let diagnostic = create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    &format!(
+                        "Expected one of: {}, found: {:?}",
+                        unique_values.join(", "),
+                        value.type_name(),
+                    ),
+                    content,
+                );
+                diagnostics.push(diagnostic);
+            } else {
+                // Value is structurally compatible with at least one union member
+                // Validate against each compatible type and use "any" logic:
+                // only report errors if ALL compatible types have validation errors
+                let mut all_validation_results = Vec::new();
+
+                for compatible_type in &compatible_types {
+                    let content_diagnostics = validate_value_against_type(
+                        value,
+                        compatible_type.clone(),
+                        content,
+                        namespace,
+                        depth + 1,
+                    );
+                    all_validation_results.push(content_diagnostics);
+                }
+
+                // If ANY compatible type validates without errors, the union validation passes
+                let any_validation_passed =
+                    all_validation_results.iter().any(|diags| diags.is_empty());
+
+                if !any_validation_passed {
+                    // All compatible types have validation errors - report the inner errors
+                    // from the first compatible type (they should be similar anyway)
+                    if let Some(first_errors) = all_validation_results.first() {
+                        diagnostics.extend(first_errors.iter().cloned());
+                    }
+                }
+            }
+        }
     }
 
     diagnostics

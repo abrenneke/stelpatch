@@ -1534,6 +1534,28 @@ impl CwtOptions {
                     options.push_scope =
                         Some(option.value.as_string_or_identifier().unwrap().to_string());
                 }
+                "replace_scope" => {
+                    if option.value.is_list() {
+                        let replacements = option.value.as_list().unwrap();
+                        let mut replace_map = HashMap::new();
+                        for replacement in replacements {
+                            let (from, to) = replacement.as_assignment().unwrap();
+                            replace_map.insert(
+                                from.to_string(),
+                                to.as_string_or_identifier().unwrap().to_string(),
+                            );
+                        }
+                        options.replace_scope = Some(replace_map);
+                    } else if option.value.is_assignment() {
+                        let (from, to) = option.value.as_assignment().unwrap();
+                        dbg!(&to);
+
+                        options.replace_scope = Some(HashMap::from([(
+                            from.to_string(),
+                            to.as_string_or_identifier().unwrap().to_string(),
+                        )]));
+                    }
+                }
                 "starts_with" => {
                     options.starts_with =
                         Some(option.value.as_string_or_identifier().unwrap().to_string());

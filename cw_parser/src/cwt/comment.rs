@@ -394,6 +394,13 @@ fn parse_option_comment_data<'a>(text: &'a str) -> CwtOptionData<'a> {
         return data;
     }
 
+    // Strip trailing comment if present (anything after #)
+    let text = if let Some(comment_pos) = text.find('#') {
+        text[..comment_pos].trim()
+    } else {
+        text
+    };
+
     // Look for key = value patterns
     if let Some(eq_pos) = text.find('=') {
         let key = text[..eq_pos].trim();
@@ -1009,6 +1016,32 @@ mod tests {
 
         // Should parse as some kind of structured expression
         assert!(option.value.is_list());
+    }
+
+    #[test]
+    fn with_comment() {
+        let input = "replace_scope = { this = no_scope root = no_scope } #this can check has_dlc and other likewise triggers, but thats it.";
+        let data = parse_option_comment_data(input);
+        assert_eq!(data.options.len(), 1);
+        assert_eq!(data.options[0].key, "replace_scope");
+        assert!(data.options[0].value.is_list());
+        assert_eq!(data.options[0].value.as_list().unwrap().len(), 2);
+        assert_eq!(
+            data.options[0].value.as_list().unwrap()[0]
+                .as_assignment()
+                .unwrap()
+                .0,
+            "this"
+        );
+        assert_eq!(
+            data.options[0].value.as_list().unwrap()[0]
+                .as_assignment()
+                .unwrap()
+                .1
+                .as_identifier()
+                .unwrap(),
+            "no_scope"
+        );
     }
 
     // === All Comment Types Together ===

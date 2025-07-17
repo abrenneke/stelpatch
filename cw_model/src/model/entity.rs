@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cw_parser::{AstEntity, AstModule, AstValue, AstVisitor};
+use cw_parser::{AstEntity, AstModule, AstVisitor};
 use indent::indent_all_by;
 
 use crate::{

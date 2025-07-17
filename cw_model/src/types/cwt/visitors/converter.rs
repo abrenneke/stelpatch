@@ -217,11 +217,13 @@ impl CwtConverter {
                         _ => {}
                     }
 
+                    let options = CwtOptions::from_rule(rule);
+
                     let key = rule.key.name();
                     let value_type = Self::convert_value(&rule.value, None);
                     let property_def = Property {
                         property_type: value_type,
-                        options: CwtOptions::default(),
+                        options,
                         documentation: None,
                     };
 

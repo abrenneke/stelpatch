@@ -68,14 +68,14 @@ impl PropertyNavigator {
         match scoped_type.cwt_type() {
             CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
                 // Collect ALL possible matches instead of returning early
-                let mut successful_results = Vec::new();
+                let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
                 let mut scope_errors = Vec::new();
 
                 // First, check regular properties
                 if let Some(property) = block.properties.get(property_name) {
                     match self.handle_regular_property(scoped_type.clone(), property) {
                         PropertyNavigationResult::Success(result) => {
-                            successful_results.push(result.cwt_type().clone());
+                            successful_results.push(result.clone());
                         }
                         PropertyNavigationResult::ScopeError(error) => {
                             scope_errors.push(error);
@@ -97,7 +97,7 @@ impl PropertyNavigator {
                             property_name,
                         ) {
                             PropertyNavigationResult::Success(result) => {
-                                successful_results.push(result.cwt_type().clone());
+                                successful_results.push(result);
                             }
                             PropertyNavigationResult::ScopeError(error) => {
                                 scope_errors.push(error);
@@ -113,7 +113,7 @@ impl PropertyNavigator {
                 if let Some(scalar_property) = block.properties.get("scalar") {
                     match self.handle_regular_property(scoped_type.clone(), scalar_property) {
                         PropertyNavigationResult::Success(result) => {
-                            successful_results.push(result.cwt_type().clone());
+                            successful_results.push(result);
                         }
                         PropertyNavigationResult::ScopeError(error) => {
                             scope_errors.push(error);
@@ -128,7 +128,7 @@ impl PropertyNavigator {
                     if property_name.parse::<i32>().is_ok() {
                         match self.handle_regular_property(scoped_type.clone(), int_property) {
                             PropertyNavigationResult::Success(result) => {
-                                successful_results.push(result.cwt_type().clone());
+                                successful_results.push(result);
                             }
                             PropertyNavigationResult::ScopeError(error) => {
                                 scope_errors.push(error);
@@ -146,7 +146,7 @@ impl PropertyNavigator {
                             .handle_regular_property(scoped_type.clone(), localisation_property)
                         {
                             PropertyNavigationResult::Success(result) => {
-                                successful_results.push(result.cwt_type().clone());
+                                successful_results.push(result);
                             }
                             PropertyNavigationResult::ScopeError(error) => {
                                 scope_errors.push(error);
@@ -160,13 +160,20 @@ impl PropertyNavigator {
 
                 // Fourth, check for special inline_script property
                 if property_name == "inline_script" {
-                    successful_results.push(CwtTypeOrSpecial::CwtType(
+                    let inline_script_type = CwtTypeOrSpecial::CwtType(
                         self.cwt_analyzer
                             .get_type("$inline_script")
                             .unwrap()
                             .rules
                             .clone(),
-                    ));
+                    );
+                    let inline_script_scoped = ScopedType::new_with_subtypes(
+                        inline_script_type,
+                        scoped_type.scope_stack().clone(),
+                        scoped_type.subtypes().clone(),
+                        scoped_type.in_scripted_effect_block().cloned(),
+                    );
+                    successful_results.push(Arc::new(inline_script_scoped));
                 }
 
                 // Fifth, check pattern properties
@@ -180,7 +187,7 @@ impl PropertyNavigator {
                         property_name,
                     ) {
                         PropertyNavigationResult::Success(result) => {
-                            successful_results.push(result.cwt_type().clone());
+                            successful_results.push(result);
                         }
                         PropertyNavigationResult::ScopeError(error) => {
                             scope_errors.push(error);
@@ -208,8 +215,7 @@ impl PropertyNavigator {
                                                 property_name,
                                             ) {
                                                 PropertyNavigationResult::Success(result) => {
-                                                    successful_results
-                                                        .push(result.cwt_type().clone());
+                                                    successful_results.push(result);
                                                 }
                                                 PropertyNavigationResult::ScopeError(error) => {
                                                     scope_errors.push(error);
@@ -228,7 +234,13 @@ impl PropertyNavigator {
 
                 // If it's a scripted argument, this could be really anything
                 if contains_scripted_argument(property_name) {
-                    successful_results.push(CwtTypeOrSpecial::CwtType(CwtType::Any));
+                    let any_scoped = ScopedType::new_with_subtypes(
+                        CwtTypeOrSpecial::CwtType(CwtType::Any),
+                        scoped_type.scope_stack().clone(),
+                        scoped_type.subtypes().clone(),
+                        scoped_type.in_scripted_effect_block().cloned(),
+                    );
+                    successful_results.push(Arc::new(any_scoped));
                 }
 
                 // Finally, check if this property is a link property (as fallback)
@@ -237,14 +249,7 @@ impl PropertyNavigator {
                     // For link properties, we maintain the current type but note scope change
                     // Since we're collecting multiple results, we can't easily apply scope changes here
                     // The type remains the same, but the consumer should be aware this is a link
-                    match scoped_type.cwt_type() {
-                        CwtTypeOrSpecial::CwtType(cwt_type) => {
-                            successful_results.push(CwtTypeOrSpecial::CwtType(cwt_type.clone()));
-                        }
-                        scoped_union => {
-                            successful_results.push(scoped_union.clone());
-                        }
-                    }
+                    successful_results.push(scoped_type.clone());
                 }
 
                 // Combine all successful results
@@ -259,21 +264,15 @@ impl PropertyNavigator {
                     }
                     1 => {
                         // Single result - return it directly
-                        let result_type = successful_results.into_iter().next().unwrap();
-                        let result_scoped = ScopedType::new_with_subtypes(
-                            result_type,
-                            scoped_type.scope_stack().clone(),
-                            scoped_type.subtypes().clone(),
-                            scoped_type.in_scripted_effect_block().cloned(),
-                        );
-                        PropertyNavigationResult::Success(Arc::new(result_scoped))
+                        let result = successful_results.into_iter().next().unwrap();
+                        PropertyNavigationResult::Success(result)
                     }
                     _ => {
                         // Multiple results - create a union of them
                         let union_members: Vec<CwtType> = successful_results
-                            .into_iter()
-                            .map(|t| match t {
-                                CwtTypeOrSpecial::CwtType(t) => t,
+                            .iter()
+                            .map(|scoped_type| match scoped_type.cwt_type() {
+                                CwtTypeOrSpecial::CwtType(t) => t.clone(),
                                 CwtTypeOrSpecial::ScopedUnion(_) => CwtType::Any, // Fallback for scoped unions
                             })
                             .collect();
@@ -371,7 +370,7 @@ impl PropertyNavigator {
             CwtTypeOrSpecial::CwtType(CwtType::Union(union)) => {
                 // For unions, try each type in the union and if there are multiple matches, make
                 // a union of the results
-                let mut successful_results = Vec::new();
+                let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
                 let mut scope_errors = Vec::new();
 
                 for union_type in union {
@@ -386,7 +385,7 @@ impl PropertyNavigator {
                     // Try to navigate to the property with this type
                     match self.navigate_to_property(temp_scoped_type, property_name) {
                         PropertyNavigationResult::Success(result) => {
-                            successful_results.push(result.cwt_type().clone());
+                            successful_results.push(result);
                         }
                         PropertyNavigationResult::ScopeError(error) => {
                             scope_errors.push(error);
@@ -408,35 +407,18 @@ impl PropertyNavigator {
                     }
                     1 => {
                         // Single result - return it directly
-                        let result_type = successful_results.into_iter().next().unwrap();
-                        let result_scoped = ScopedType::new_with_subtypes(
-                            result_type,
-                            scoped_type.scope_stack().clone(),
-                            scoped_type.subtypes().clone(),
-                            scoped_type.in_scripted_effect_block().cloned(),
-                        );
-                        PropertyNavigationResult::Success(Arc::new(result_scoped))
+                        let result = successful_results.into_iter().next().unwrap();
+                        PropertyNavigationResult::Success(result)
                     }
                     _ => {
-                        // Multiple results - create a union of them
-                        let union_members: Vec<CwtType> = successful_results
+                        // Multiple results - create a scoped union of them to preserve all scope contexts
+                        let union_members: Vec<ScopedType> = successful_results
                             .into_iter()
-                            .map(|t| match t {
-                                CwtTypeOrSpecial::CwtType(t) => t,
-                                CwtTypeOrSpecial::ScopedUnion(_) => CwtType::Any, // Fallback for scoped unions
-                            })
+                            .map(|scoped_type| (*scoped_type).clone())
                             .collect();
 
-                        // If any union member is Any, the entire union should be Any
-                        let final_type = if union_members.iter().any(|t| matches!(t, CwtType::Any))
-                        {
-                            CwtType::Any
-                        } else {
-                            CwtType::Union(union_members)
-                        };
-
                         let result_scoped = ScopedType::new_with_subtypes(
-                            CwtTypeOrSpecial::CwtType(final_type),
+                            CwtTypeOrSpecial::ScopedUnion(union_members),
                             scoped_type.scope_stack().clone(),
                             scoped_type.subtypes().clone(),
                             scoped_type.in_scripted_effect_block().cloned(),

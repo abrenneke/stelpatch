@@ -2,7 +2,7 @@ use tower_lsp::lsp_types::Position;
 use tower_lsp::{Client, lsp_types::MessageType};
 
 /// Log a message synchronously by using block_in_place
-pub fn log_message_sync(client: &Client, message_type: MessageType, message: String) {
+pub fn log_message_sync(_client: &Client, message_type: MessageType, message: String) {
     eprintln!("{:?}: {}", message_type, message);
 }
 

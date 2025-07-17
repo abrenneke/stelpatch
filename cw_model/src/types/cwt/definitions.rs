@@ -132,6 +132,7 @@ impl FromStr for SeverityLevel {
             "warning" => Ok(SeverityLevel::Warning),
             "information" => Ok(SeverityLevel::Information),
             "hint" => Ok(SeverityLevel::Hint),
+            "info" => Ok(SeverityLevel::Information),
             _ => Err(format!("Invalid severity level: {}", s)),
         }
     }

@@ -29,7 +29,7 @@ impl ReferenceResolver {
     pub fn resolve_reference_type(
         &self,
         ref_type: &ReferenceType,
-        scope_stack: &ScopeStack,
+        _scope_stack: &ScopeStack,
     ) -> Arc<CwtType> {
         match ref_type {
             ReferenceType::Type { key } => {
@@ -157,30 +157,15 @@ impl ReferenceResolver {
                 // For now, return a descriptive literal that can be used for completion
                 Arc::new(CwtType::Literal(format!("subtype:{}", name)))
             }
-            ReferenceType::Scope { key } => {
-                // If "any", then _any_ link or scope property is valid from the current scope
-                if key == "any" {
-                    let current_scope = &scope_stack.current_scope().scope_type;
-                    let mut properties = self.get_scope_link_properties(current_scope);
-
-                    // Add available scope properties (handles "unknown" scopes automatically)
-                    properties.extend(scope_stack.available_scope_names());
-
-                    Arc::new(CwtType::LiteralSet(properties.into_iter().collect()))
-                } else {
-                    let properties =
-                        self.get_properties_for_scope_names(vec![key.clone()], scope_stack);
-                    Arc::new(CwtType::LiteralSet(properties))
-                }
+            ReferenceType::Scope { .. } => {
+                // Scope references need dynamic validation because values can contain
+                // dotted paths like "prev.from" that can't be statically enumerated
+                Arc::new(CwtType::Reference(ref_type.clone()))
             }
-            ReferenceType::ScopeGroup { key } => {
-                if let Some(scope_group) = self.cwt_analyzer.get_scope_group(key) {
-                    let properties = self
-                        .get_properties_for_scope_names(scope_group.members.clone(), scope_stack);
-                    Arc::new(CwtType::LiteralSet(properties))
-                } else {
-                    Arc::new(CwtType::Reference(ref_type.clone()))
-                }
+            ReferenceType::ScopeGroup { .. } => {
+                // ScopeGroup references need dynamic validation because values can contain
+                // dotted paths like "prev.from" that can't be statically enumerated
+                Arc::new(CwtType::Reference(ref_type.clone()))
             }
             ReferenceType::AliasKeysField { key } => {
                 let mut properties = HashSet::new();
@@ -280,82 +265,5 @@ impl ReferenceResolver {
             None,
             None,
         )
-    }
-
-    /// Get all available link properties for the current scope
-    fn get_scope_link_properties(&self, scope: &str) -> Vec<String> {
-        let mut link_properties = Vec::new();
-
-        // If current scope is "unknown", treat it as a fallback that can navigate anywhere
-        let is_unknown_scope = scope == "unknown";
-
-        for (link_name, link_def) in self.cwt_analyzer.get_links() {
-            // If scope is unknown, allow all links as fallback, otherwise use normal validation
-            if is_unknown_scope || link_def.can_be_used_from(scope, &self.cwt_analyzer) {
-                link_properties.push(link_name.clone());
-            }
-        }
-
-        link_properties
-    }
-
-    /// Get properties for multiple scope names (unified logic for Scope and ScopeGroup)
-    fn get_properties_for_scope_names(
-        &self,
-        scope_names: Vec<String>,
-        scope_stack: &ScopeStack,
-    ) -> HashSet<String> {
-        let mut all_properties = HashSet::new();
-        let current_scope = &scope_stack.current_scope().scope_type;
-
-        // If current scope is "unknown", treat it as a fallback that can navigate anywhere
-        let is_unknown_scope = current_scope == "unknown";
-
-        // For each scope name
-        for scope_name in scope_names {
-            // Resolve the scope name to get the canonical name (e.g., "country" -> "Country")
-            if let Some(resolved_scope_name) = self.cwt_analyzer.resolve_scope_name(&scope_name) {
-                // Add link properties that are valid from the current scope and have the specified output scope
-                for (link_name, link_def) in self.cwt_analyzer.get_links() {
-                    // If scope is unknown, allow all links as fallback, otherwise use normal validation
-                    if is_unknown_scope
-                        || link_def.can_be_used_from(current_scope, &self.cwt_analyzer)
-                    {
-                        if let Some(link_output_scope) =
-                            self.cwt_analyzer.resolve_scope_name(&link_def.output_scope)
-                        {
-                            if link_output_scope == resolved_scope_name {
-                                all_properties.insert(link_name.clone());
-                            }
-                        }
-                    }
-                }
-
-                // Add scope properties that resolve to the specified scope type
-                if is_unknown_scope {
-                    // If scope is unknown, add all available scope properties as fallback
-                    for scope_property in scope_stack.available_scope_names() {
-                        all_properties.insert(scope_property);
-                    }
-                } else {
-                    // Normal case: filter scope properties by target scope type
-                    for scope_property in scope_stack.available_scope_names() {
-                        if let Some(scope_context) = scope_stack.get_scope_by_name(&scope_property)
-                        {
-                            if let Some(scope_type) = self
-                                .cwt_analyzer
-                                .resolve_scope_name(&scope_context.scope_type)
-                            {
-                                if scope_type == resolved_scope_name {
-                                    all_properties.insert(scope_property);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        all_properties
     }
 }
