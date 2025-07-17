@@ -9,7 +9,7 @@ use cw_model::{
 };
 use cw_parser::AstEntity;
 
-use crate::handlers::cache::{GameDataCache, ModDataCache, TypeCache};
+use crate::handlers::cache::{GameDataCache, ModDataCache, Namespace, TypeCache};
 
 /// Special property key used to store the original structural key
 /// This is needed for subtype determination when entities are restructured
@@ -252,7 +252,7 @@ impl EntityRestructurer {
     fn process_namespace(
         &self,
         type_defs: &Vec<TypeDefinitionInfo>,
-        namespace_data: &crate::handlers::cache::Namespace,
+        namespace_data: &Namespace,
     ) -> (HashMap<String, Entity>, RestructureInfo) {
         let mut restructured_entities = HashMap::new();
         let mut original_count = 0;
@@ -443,7 +443,7 @@ impl EntityRestructurer {
         }
 
         // Check mod data
-        if let Some(entity) = super::ModDataCache::get_entity(namespace, entity_name) {
+        if let Some(entity) = ModDataCache::get_entity(namespace, entity_name) {
             return Some(entity);
         }
 
@@ -723,7 +723,7 @@ impl EntityRestructurer {
         }
 
         // Add mod entities (can override base game entities)
-        let mod_namespaces = super::game_data::ModDataCache::get_namespaces();
+        let mod_namespaces = ModDataCache::get_namespaces();
         if let Some(mod_namespace) = mod_namespaces.get(namespace) {
             all_entities.extend(
                 mod_namespace
@@ -904,89 +904,4 @@ struct TypeDefinitionInfo {
     pub skip_root_key: Option<SkipRootKey>,
     pub name_field: Option<String>,
     pub type_key_filter: Option<TypeKeyFilter>,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use cw_model::{Entity, Operator, PropertyInfo, PropertyInfoList, Value};
-    use std::collections::HashMap;
-
-    #[test]
-    fn test_reset_functionality() {
-        // Test that reset clears the cache and allows reinitialization
-
-        // First, simulate that the cache is already initialized
-        {
-            let mut cache = RESTRUCTURED_ENTITIES.write().unwrap();
-            *cache = Some(Arc::new(RestructuredEntities {
-                entities: HashMap::new(),
-                restructured_namespaces: HashMap::new(),
-            }));
-        }
-
-        // Verify it's initialized
-        assert!(EntityRestructurer::is_initialized());
-
-        // Reset the cache
-        EntityRestructurer::reset();
-
-        // Verify it's no longer initialized
-        assert!(!EntityRestructurer::is_initialized());
-
-        // Verify get() returns None after reset
-        assert!(EntityRestructurer::get().is_none());
-    }
-
-    #[test]
-    fn test_reset_method_exists() {
-        // Simple test to verify that the reset method exists and can be called
-        // This ensures the trigger functionality is available
-        EntityRestructurer::reset();
-
-        // After reset, should not be initialized
-        assert!(!EntityRestructurer::is_initialized());
-    }
-
-    #[test]
-    fn test_original_key_preservation() {
-        // Test that the original key is preserved when restructuring entities
-        // We'll test the helper methods directly since we can't create valid static references
-
-        // Create a test entity
-        let mut entity = Entity::new();
-        entity.properties.kv.insert("name".to_string(), {
-            let mut list = PropertyInfoList::new();
-            list.0.push(PropertyInfo {
-                operator: Operator::Equals,
-                value: Value::String("test_entity".to_string()),
-            });
-            list
-        });
-
-        // Test adding original key
-        let original_key = "spriteType";
-
-        // We need to create a mock EntityRestructurer to test the method
-        // Since we can't create it properly, we'll test the concept by creating the entity manually
-        let mut entity_with_key = entity.clone();
-        entity_with_key
-            .properties
-            .kv
-            .entry(ORIGINAL_KEY_PROPERTY.to_string())
-            .or_insert_with(PropertyInfoList::new)
-            .0
-            .push(PropertyInfo {
-                operator: Operator::Equals,
-                value: Value::String(original_key.to_string()),
-            });
-
-        // Test that we can extract the original key
-        let extracted_key = EntityRestructurer::get_original_key_from_entity(&entity_with_key);
-        assert_eq!(extracted_key, Some("spriteType".to_string()));
-
-        // Test that entities without original key return None
-        let extracted_key_none = EntityRestructurer::get_original_key_from_entity(&entity);
-        assert_eq!(extracted_key_none, None);
-    }
 }

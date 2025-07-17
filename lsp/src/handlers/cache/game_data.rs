@@ -8,6 +8,7 @@ use cw_model::{Entity, GameMod, LoadMode, Value};
 
 use crate::handlers::cache::EntityRestructurer;
 use crate::handlers::cache::FullAnalysis;
+use crate::handlers::cache::TypeCache;
 
 /// Cache for actual game data keys from namespaces (e.g., "energy", "minerals" from resources namespace)
 pub struct GameDataCache {
@@ -77,7 +78,7 @@ impl GameDataCache {
             let mut global_scripted_variables = HashMap::new();
 
             // Extract keys from each namespace
-            let mut namespaces = HashMap::new();
+            let mut namespaces: HashMap<String, Namespace> = HashMap::new();
             for (namespace_name, namespace) in &base_game.namespaces {
                 let mut namespace_data = Namespace::new();
 
@@ -109,10 +110,22 @@ impl GameDataCache {
                     }
                 }
 
-                // Pre-compute entity keys for fast access
-                namespace_data.update_keys();
+                let namespace_name = TypeCache::get_actual_namespace(namespace_name);
 
-                namespaces.insert(namespace_name.clone(), namespace_data);
+                if let Some(existing) = namespaces.get_mut(namespace_name) {
+                    existing.entities.extend(namespace_data.entities);
+                    existing.values.extend(namespace_data.values);
+                    existing
+                        .scripted_variables
+                        .extend(namespace_data.scripted_variables);
+                    existing.modules.extend(namespace_data.modules);
+                } else {
+                    namespaces.insert(namespace_name.to_string(), namespace_data);
+                }
+            }
+
+            for namespace in namespaces.values_mut() {
+                namespace.update_keys();
             }
 
             eprintln!(
