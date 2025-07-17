@@ -685,7 +685,14 @@ impl PropertyNavigator {
 
     /// Check if a property name is a link property for the current scope
     fn is_link_property(&self, property_name: &str, scope: &str) -> Option<&LinkDefinition> {
-        if let Some(link_def) = self.cwt_analyzer.get_link(property_name) {
+        if let Some(link_def) = self.cwt_analyzer.get_link(property_name).or_else(|| {
+            if property_name.starts_with("hidden:") {
+                self.cwt_analyzer
+                    .get_link(property_name.split("hidden:").nth(1).unwrap())
+            } else {
+                None
+            }
+        }) {
             // If current scope is "unknown", treat it as a fallback that can navigate anywhere
             if scope == "unknown" || link_def.can_be_used_from(scope, &self.cwt_analyzer) {
                 return Some(link_def);
