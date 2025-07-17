@@ -267,25 +267,9 @@ impl PropertyNavigator {
                         PropertyNavigationResult::Success(result)
                     }
                     _ => {
-                        // Multiple results - create a union of them
-                        let union_members: Vec<CwtType> = successful_results
-                            .iter()
-                            .map(|scoped_type| match scoped_type.cwt_type() {
-                                CwtTypeOrSpecial::CwtType(t) => t.clone(),
-                                CwtTypeOrSpecial::ScopedUnion(_) => CwtType::Any, // Fallback for scoped unions
-                            })
-                            .collect();
-
-                        // If any union member is Any, the entire union should be Any
-                        let final_type = if union_members.iter().any(|t| matches!(t, CwtType::Any))
-                        {
-                            CwtType::Any
-                        } else {
-                            CwtType::Union(union_members)
-                        };
-
+                        // Multiple results - create a scoped union of them to preserve all scope contexts
                         let result_scoped = ScopedType::new_with_subtypes(
-                            CwtTypeOrSpecial::CwtType(final_type),
+                            CwtTypeOrSpecial::ScopedUnion(successful_results),
                             scoped_type.scope_stack().clone(),
                             scoped_type.subtypes().clone(),
                             scoped_type.in_scripted_effect_block().cloned(),

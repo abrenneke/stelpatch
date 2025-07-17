@@ -144,12 +144,26 @@ pub fn is_value_compatible_with_simple_type(
             } else if val.starts_with("$") && val.ends_with("$") {
                 None // Argument in scripted effect
             } else {
-                // TODO: Handle other value references
-                Some(create_type_mismatch_diagnostic(
-                    value.span_range(),
-                    "Value field validation for non-variables not yet implemented",
-                    content,
-                ))
+                if val.starts_with("value:") {
+                    let value_name = val.split("value:").nth(1).unwrap();
+                    let entity = EntityRestructurer::get_entity("common/script_values", value_name);
+
+                    if entity.is_none() {
+                        Some(create_type_mismatch_diagnostic(
+                            value.span_range(),
+                            &format!("Script value '{}' does not exist", value_name),
+                            content,
+                        ))
+                    } else {
+                        None
+                    }
+                } else {
+                    Some(create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Script values must start with value: prefix",
+                        content,
+                    ))
+                }
             }
         }
         (AstValue::Number(n), SimpleType::Int) => {

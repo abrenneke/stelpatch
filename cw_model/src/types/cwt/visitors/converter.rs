@@ -200,8 +200,8 @@ impl CwtConverter {
                                                 key.clone(),
                                                 Property {
                                                     property_type: value.property_type.clone(),
-                                                    options: CwtOptions::default(),
-                                                    documentation: None,
+                                                    options: value.options.clone(),
+                                                    documentation: value.documentation.clone(),
                                                 },
                                             );
                                         }
