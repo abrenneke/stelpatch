@@ -260,31 +260,22 @@ impl EntityRestructurer {
                     if let Value::Entity(entity) = &property_info.value {
                         original_count += 1;
 
-                        // Check if this entity passes the type_key_filter
-                        if !self.passes_type_key_filter(key, type_defs) {
-                            // Leave it alone in the namespace
-                            restructured_entities.insert(key.clone(), entity.clone());
-                            continue;
-                        }
-
-                        // Check if this key should be skipped
-                        if type_defs
-                            .iter()
-                            .any(|type_def| self.should_skip_root_key(key, &type_def.skip_root_key))
-                        {
-                            // Skip this root key and process nested entities
-                            // Find the name_field from the matching type definition
-                            let matching_type_def = type_defs.iter().find(|type_def| {
-                                self.should_skip_root_key(key, &type_def.skip_root_key)
-                            });
-                            let name_field = matching_type_def.and_then(|t| t.name_field.as_ref());
-                            let extracted_entities = self.extract_entities_from_container(
-                                entity,
-                                &name_field.cloned(),
-                                type_defs,
-                            );
+                        // Find the specific type definition that matches this key for skip_root_key
+                        if let Some(matching_type_def) = type_defs.iter().find(|type_def| {
+                            self.should_skip_root_key(key, &type_def.skip_root_key)
+                        }) {
+                            // Skip this root key and process nested entities using only the matching type definition
+                            let extracted_entities =
+                                self.extract_entities_from_container(entity, matching_type_def);
                             restructured_entities.extend(extracted_entities);
                         } else {
+                            // Check if this entity passes any type_key_filter
+                            if !self.passes_type_key_filter(key, type_defs) {
+                                // Leave it alone in the namespace
+                                restructured_entities.insert(key.clone(), entity.clone());
+                                continue;
+                            }
+
                             // Get type definitions that are applicable for this specific entity
                             let applicable_type_defs =
                                 self.get_applicable_type_defs(entity, type_defs);
@@ -408,8 +399,7 @@ impl EntityRestructurer {
     fn extract_entities_from_container(
         &self,
         container_entity: &Entity,
-        name_field: &Option<String>,
-        type_defs: &Vec<TypeDefinition>,
+        type_def: &TypeDefinition,
     ) -> HashMap<String, Entity> {
         let mut result = HashMap::new();
 
@@ -418,14 +408,14 @@ impl EntityRestructurer {
             for property_info in &child_property_list.0 {
                 if let Value::Entity(child_entity) = &property_info.value {
                     // Check if this child entity passes the type_key_filter
-                    if !self.passes_type_key_filter(child_key, type_defs) {
+                    if !self.passes_type_key_filter(child_key, &vec![type_def.clone()]) {
                         continue;
                     }
 
                     // Determine the entity name based on whether we have a name field
-                    let entity_name = if name_field.is_some() {
+                    let entity_name = if type_def.name_field.is_some() {
                         // Use name field if available, fallback to structural key
-                        Self::extract_name_from_entity(child_entity, name_field)
+                        Self::extract_name_from_entity(child_entity, &type_def.name_field)
                             .unwrap_or_else(|| child_key.clone())
                     } else {
                         // No name field, use the structural key
@@ -782,24 +772,54 @@ impl EntityRestructurer {
         ast_entity: &AstEntity,
     ) -> (String, Entity) {
         let container_entity = entity_from_ast(ast_entity);
-
         let namespace = TypeCache::get_actual_namespace(namespace);
 
-        // Check if this namespace needs restructuring
-        if let Some(restructured) = Self::get() {
-            if let Some(info) = restructured.restructured_namespaces.get(namespace) {
-                if info.skip_root_key.as_ref() == Some(&container_key.to_string()) {
-                    // This is a skipped container scenario
+        // Get type definitions for this namespace to check for skip_root_key and name_field
+        if let Some(type_cache) = TypeCache::get() {
+            let mut applicable_type_defs = Vec::new();
 
-                    if entity_key == container_key {
-                        // We're being asked to process the container itself, but we should extract nested entities
-                        // Return the first valid nested entity
-                        for (child_key, child_property_list) in &container_entity.properties.kv {
-                            for property_info in &child_property_list.0 {
-                                if let Value::Entity(mut child_entity) = property_info.value.clone()
-                                {
-                                    // Determine the effective key based on name field
-                                    let effective_key = if let Some(name_field) = &info.name_field {
+            for (_type_name, type_def) in type_cache.get_cwt_analyzer().get_types() {
+                if let Some(path) = &type_def.path {
+                    let type_namespace = if let Some(stripped) = path.strip_prefix("game/") {
+                        stripped.to_string()
+                    } else {
+                        path.clone()
+                    };
+
+                    if type_namespace == namespace
+                        && (type_def.skip_root_key.is_some() || type_def.name_field.is_some())
+                    {
+                        applicable_type_defs.push(type_def);
+                    }
+                }
+            }
+
+            // Check if this container_key matches any skip_root_key
+            if let Some(matching_type_def) =
+                applicable_type_defs
+                    .iter()
+                    .find(|type_def| match &type_def.skip_root_key {
+                        Some(SkipRootKey::Specific(skip_key)) => container_key == skip_key,
+                        Some(SkipRootKey::Any) => true,
+                        Some(SkipRootKey::Except(exceptions)) => {
+                            !exceptions.contains(&container_key.to_string())
+                        }
+                        Some(SkipRootKey::Multiple(keys)) => {
+                            keys.contains(&container_key.to_string())
+                        }
+                        None => false,
+                    })
+            {
+                // This is a skipped container scenario
+                if entity_key == container_key {
+                    // We're being asked to process the container itself, but we should extract nested entities
+                    // Return the first valid nested entity
+                    for (child_key, child_property_list) in &container_entity.properties.kv {
+                        for property_info in &child_property_list.0 {
+                            if let Value::Entity(mut child_entity) = property_info.value.clone() {
+                                // Determine the effective key based on name field
+                                let effective_key =
+                                    if let Some(name_field) = &matching_type_def.name_field {
                                         Self::extract_name_from_entity(
                                             &child_entity,
                                             &Some(name_field.clone()),
@@ -809,26 +829,24 @@ impl EntityRestructurer {
                                         child_key.clone()
                                     };
 
-                                    // Add original key to entity for subtype determination
-                                    Self::add_original_key_to_entity_static(
-                                        &mut child_entity,
-                                        child_key,
-                                    );
+                                // Add original key to entity for subtype determination
+                                Self::add_original_key_to_entity_static(
+                                    &mut child_entity,
+                                    child_key,
+                                );
 
-                                    return (effective_key, child_entity);
-                                }
+                                return (effective_key, child_entity);
                             }
                         }
-                    } else {
-                        // We're being asked to extract a specific nested entity
-                        if let Some(property_list) = container_entity.properties.kv.get(entity_key)
-                        {
-                            if let Some(property_info) = property_list.0.first() {
-                                if let Value::Entity(mut nested_entity) =
-                                    property_info.value.clone()
-                                {
-                                    // Determine the effective key based on name field
-                                    let effective_key = if let Some(name_field) = &info.name_field {
+                    }
+                } else {
+                    // We're being asked to extract a specific nested entity
+                    if let Some(property_list) = container_entity.properties.kv.get(entity_key) {
+                        if let Some(property_info) = property_list.0.first() {
+                            if let Value::Entity(mut nested_entity) = property_info.value.clone() {
+                                // Determine the effective key based on name field
+                                let effective_key =
+                                    if let Some(name_field) = &matching_type_def.name_field {
                                         Self::extract_name_from_entity(
                                             &nested_entity,
                                             &Some(name_field.clone()),
@@ -838,27 +856,31 @@ impl EntityRestructurer {
                                         entity_key.to_string()
                                     };
 
-                                    // Add original key to entity for subtype determination
-                                    Self::add_original_key_to_entity_static(
-                                        &mut nested_entity,
-                                        entity_key,
-                                    );
+                                // Add original key to entity for subtype determination
+                                Self::add_original_key_to_entity_static(
+                                    &mut nested_entity,
+                                    entity_key,
+                                );
 
-                                    return (effective_key, nested_entity);
-                                }
+                                return (effective_key, nested_entity);
                             }
                         }
                     }
+                }
 
-                    // Fallback if we can't extract any nested entity
-                    let mut fallback_entity = container_entity;
-                    Self::add_original_key_to_entity_static(&mut fallback_entity, entity_key);
-                    return (entity_key.to_string(), fallback_entity);
-                } else if let Some(name_field) = &info.name_field {
+                // Fallback if we can't extract any nested entity
+                let mut fallback_entity = container_entity;
+                Self::add_original_key_to_entity_static(&mut fallback_entity, entity_key);
+                return (entity_key.to_string(), fallback_entity);
+            } else {
+                // Check for name_field scenarios (without skip_root_key)
+                if let Some(name_field_type_def) = applicable_type_defs.iter().find(|type_def| {
+                    type_def.name_field.is_some() && type_def.skip_root_key.is_none()
+                }) {
                     // Name field scenario - use name field for key, add original key to entity
                     let mut entity = container_entity;
                     let effective_key =
-                        Self::extract_name_from_entity(&entity, &Some(name_field.clone()))
+                        Self::extract_name_from_entity(&entity, &name_field_type_def.name_field)
                             .unwrap_or_else(|| entity_key.to_string());
 
                     // Add original key to entity for subtype determination

@@ -377,6 +377,23 @@ fn validate_value_against_type(
             // Any string is allowed for value_set
         }
 
+        (
+            CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::Colour { format })),
+            AstValue::Color(color),
+        ) => {
+            if color.color_type.value != format {
+                let diagnostic = create_type_mismatch_diagnostic(
+                    value.span_range(),
+                    &format!(
+                        "Expected color format '{}' but got '{}'",
+                        format, color.color_type.value
+                    ),
+                    content,
+                );
+                diagnostics.push(diagnostic);
+            }
+        }
+
         // Reference type validation
         (CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)), _) => match ref_type {
             ReferenceType::Scope { key } => {

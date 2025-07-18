@@ -279,6 +279,10 @@ impl TypeCache {
     }
 
     pub fn get_actual_namespace(namespace: &str) -> &str {
+        if namespace.starts_with("gfx/portraits/portraits") {
+            return "gfx/portraits/portraits";
+        }
+
         if namespace.starts_with("gfx/") {
             return "gfx";
         }
