@@ -273,44 +273,6 @@ impl SubtypeHandler {
         }
     }
 
-    /// Check if a property satisfies cardinality constraints
-    fn property_satisfies_cardinality(
-        &self,
-        property_key: &str,
-        property_data: &HashMap<String, String>,
-        cardinality: &Option<cw_model::types::Cardinality>,
-    ) -> bool {
-        let property_count = if property_data.contains_key(property_key) {
-            1u32
-        } else {
-            0u32
-        };
-
-        match cardinality {
-            Some(card) => {
-                // Check minimum constraint
-                if let Some(min) = card.min {
-                    if property_count < min {
-                        return false;
-                    }
-                }
-
-                // Check maximum constraint
-                if let Some(max) = card.max {
-                    if property_count > max {
-                        return false;
-                    }
-                }
-
-                true
-            }
-            None => {
-                // No cardinality constraint means property must be present (default requirement)
-                property_count > 0
-            }
-        }
-    }
-
     /// Determine all matching subtypes based on entity structure
     /// This is the main method for determining active subtypes
     pub fn determine_matching_subtypes(
@@ -372,27 +334,6 @@ impl SubtypeHandler {
         }
 
         matching_keys
-    }
-
-    /// Extract property data from an entity for subtype matching
-    fn extract_property_data_from_entity(&self, entity: &Entity) -> HashMap<String, String> {
-        let mut property_data = HashMap::new();
-
-        for (key, property_list) in &entity.properties.kv {
-            // Take the first property value and convert it to string
-            if let Some(first_property) = property_list.0.first() {
-                let value_str = match &first_property.value {
-                    Value::String(s) => s.clone(),
-                    Value::Number(n) => n.clone(),
-                    Value::Entity(_) => "{}".to_string(), // Special marker for entity values
-                    Value::Color(_) => "color".to_string(), // Special marker for color values
-                    Value::Maths(m) => m.clone(),         // Math expressions as strings
-                };
-                property_data.insert(key.clone(), value_str);
-            }
-        }
-
-        property_data
     }
 
     /// Check if a subtype has scope changes

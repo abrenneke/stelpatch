@@ -699,45 +699,6 @@ impl TypeCache {
         })
     }
 
-    /// Extract property data from an AST entity for subtype condition checking
-    fn extract_property_data_from_entity(
-        &self,
-        entity: &cw_parser::AstEntity<'_>,
-    ) -> HashMap<String, String> {
-        let mut property_data = HashMap::new();
-
-        for item in &entity.items {
-            if let cw_parser::AstEntityItem::Expression(expr) = item {
-                let key_name = expr.key.raw_value();
-
-                // Extract simple string values for condition matching
-                match &expr.value {
-                    cw_parser::AstValue::String(string_val) => {
-                        property_data
-                            .insert(key_name.to_string(), string_val.raw_value().to_string());
-                    }
-                    cw_parser::AstValue::Number(num_val) => {
-                        property_data.insert(key_name.to_string(), num_val.value.value.to_string());
-                    }
-                    cw_parser::AstValue::Entity(_) => {
-                        // For entities, just mark that the property exists
-                        property_data.insert(key_name.to_string(), "{}".to_string());
-                    }
-                    cw_parser::AstValue::Color(_) => {
-                        // For colors, just mark that the property exists
-                        property_data.insert(key_name.to_string(), "color".to_string());
-                    }
-                    cw_parser::AstValue::Maths(_) => {
-                        // For math expressions, just mark that the property exists
-                        property_data.insert(key_name.to_string(), "math".to_string());
-                    }
-                }
-            }
-        }
-
-        property_data
-    }
-
     /// Narrow a type with subtypes based on property data
     fn narrow_type_with_subtypes(
         &self,

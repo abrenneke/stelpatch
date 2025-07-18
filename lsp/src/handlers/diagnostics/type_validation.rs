@@ -8,7 +8,7 @@ use tower_lsp::lsp_types::Diagnostic;
 
 use crate::handlers::utils::contains_scripted_argument;
 use crate::handlers::{
-    cache::TypeCache,
+    cache::{FileIndex, TypeCache},
     diagnostics::{
         diagnostic::{
             create_type_mismatch_diagnostic, create_unexpected_key_diagnostic,
@@ -168,6 +168,21 @@ fn validate_value_against_type(
                 diagnostics.push(diagnostic);
             }
         }
+
+        (CwtTypeOrSpecialRef::Literal(literal_value), AstValue::Number(number_value)) => {
+            if number_value.value.value != *literal_value {
+                let diagnostic = create_value_mismatch_diagnostic(
+                    value.span_range(),
+                    &format!(
+                        "Expected '{}' but got '{}'",
+                        literal_value, number_value.value.value
+                    ),
+                    content,
+                );
+                diagnostics.push(diagnostic);
+            }
+        }
+
         (CwtTypeOrSpecialRef::Literal(literal_value), _) => {
             // Expected a literal string but got something else
             let diagnostic = create_type_mismatch_diagnostic(
@@ -338,10 +353,10 @@ fn validate_value_against_type(
                     all_validation_results.iter().any(|diags| diags.is_empty());
 
                 if !any_validation_passed {
-                    // All compatible types have validation errors - report the inner errors
-                    // from the first compatible type (they should be similar anyway)
-                    if let Some(first_errors) = all_validation_results.first() {
-                        diagnostics.extend(first_errors.iter().cloned());
+                    // All compatible types have validation errors - report all inner errors
+                    // to provide comprehensive feedback
+                    for validation_errors in all_validation_results {
+                        diagnostics.extend(validation_errors);
                     }
                 }
             }
@@ -422,6 +437,46 @@ fn validate_value_against_type(
                     let diagnostic = create_type_mismatch_diagnostic(
                         value.span_range(),
                         "Expected a string value for scope group reference",
+                        content,
+                    );
+                    diagnostics.push(diagnostic);
+                }
+            }
+            ReferenceType::Icon { path } => {
+                if let AstValue::String(string_value) = value {
+                    if let Some(file_index) = FileIndex::get() {
+                        // Construct the full path for the icon file (append .dds extension)
+                        let icon_filename = string_value.raw_value();
+                        let icon_filename_with_ext = format!("{}.dds", icon_filename);
+                        let full_path = if path.is_empty() {
+                            icon_filename_with_ext
+                        } else {
+                            format!("{}/{}", path.trim_end_matches('/'), icon_filename_with_ext)
+                        };
+
+                        if !file_index.file_exists(&full_path) {
+                            let diagnostic = create_type_mismatch_diagnostic(
+                                value.span_range(),
+                                &format!(
+                                    "Icon file '{}' does not exist in path '{}'",
+                                    icon_filename, path
+                                ),
+                                content,
+                            );
+                            diagnostics.push(diagnostic);
+                        }
+                    } else {
+                        let diagnostic = create_type_mismatch_diagnostic(
+                            value.span_range(),
+                            "File index not initialized, cannot validate icon path",
+                            content,
+                        );
+                        diagnostics.push(diagnostic);
+                    }
+                } else {
+                    let diagnostic = create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Expected a string value for icon reference",
                         content,
                     );
                     diagnostics.push(diagnostic);
@@ -509,10 +564,10 @@ fn validate_value_against_type(
                     all_validation_results.iter().any(|diags| diags.is_empty());
 
                 if !any_validation_passed {
-                    // All compatible types have validation errors - report the inner errors
-                    // from the first compatible type (they should be similar anyway)
-                    if let Some(first_errors) = all_validation_results.first() {
-                        diagnostics.extend(first_errors.iter().cloned());
+                    // All compatible types have validation errors - report all inner errors
+                    // to provide comprehensive feedback
+                    for validation_errors in all_validation_results {
+                        diagnostics.extend(validation_errors);
                     }
                 }
             }
