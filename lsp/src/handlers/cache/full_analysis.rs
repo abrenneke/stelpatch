@@ -52,7 +52,7 @@ impl FullAnalysis {
         // Compute the result without holding the lock
         let start = std::time::Instant::now();
 
-        let mut collector = DataCollector::new(self.game_data, self.type_cache.get_resolver());
+        let mut collector = DataCollector::new(self.type_cache.get_resolver());
         collector.collect_all();
 
         let duration = start.elapsed();

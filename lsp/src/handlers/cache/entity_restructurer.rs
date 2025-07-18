@@ -4,8 +4,8 @@ use std::{
 };
 
 use cw_model::{
-    Entity, Operator, PropertyInfo, PropertyInfoList, SkipRootKey, TypeKeyFilter, Value,
-    entity_from_ast,
+    Entity, Operator, PropertyInfo, PropertyInfoList, SkipRootKey, TypeDefinition, TypeKeyFilter,
+    Value, entity_from_ast,
 };
 use cw_parser::AstEntity;
 
@@ -217,8 +217,8 @@ impl EntityRestructurer {
     }
 
     /// Get type definitions that need restructuring
-    fn get_types_needing_restructure(&self) -> HashMap<String, Vec<TypeDefinitionInfo>> {
-        let mut result: HashMap<String, Vec<TypeDefinitionInfo>> = HashMap::new();
+    fn get_types_needing_restructure(&self) -> HashMap<String, Vec<TypeDefinition>> {
+        let mut result: HashMap<String, Vec<TypeDefinition>> = HashMap::new();
 
         for (_type_name, type_def) in self.type_cache.get_cwt_analyzer().get_types() {
             // Check if this type needs any kind of restructuring
@@ -231,16 +231,10 @@ impl EntityRestructurer {
                         path.clone()
                     };
 
-                    let type_info = TypeDefinitionInfo {
-                        skip_root_key: type_def.skip_root_key.clone(),
-                        name_field: type_def.name_field.clone(),
-                        type_key_filter: type_def.options.type_key_filter.clone(),
-                    };
-
                     result
                         .entry(namespace)
                         .or_insert_with(Vec::new)
-                        .push(type_info);
+                        .push(type_def.clone());
                 }
             }
         }
@@ -251,7 +245,7 @@ impl EntityRestructurer {
     /// Process a single namespace according to its type definition
     fn process_namespace(
         &self,
-        type_defs: &Vec<TypeDefinitionInfo>,
+        type_defs: &Vec<TypeDefinition>,
         namespace_data: &Namespace,
     ) -> (HashMap<String, Entity>, RestructureInfo) {
         let mut restructured_entities = HashMap::new();
@@ -268,6 +262,8 @@ impl EntityRestructurer {
 
                         // Check if this entity passes the type_key_filter
                         if !self.passes_type_key_filter(key, type_defs) {
+                            // Leave it alone in the namespace
+                            restructured_entities.insert(key.clone(), entity.clone());
                             continue;
                         }
 
@@ -288,28 +284,34 @@ impl EntityRestructurer {
                                 type_defs,
                             );
                             restructured_entities.extend(extracted_entities);
-                        } else if type_defs
-                            .iter()
-                            .any(|type_def| type_def.name_field.is_some())
-                        {
-                            // Use name field to determine entity key, but don't skip root
-                            let name_field_type_def = type_defs
+                        } else {
+                            // Get type definitions that are applicable for this specific entity
+                            let applicable_type_defs =
+                                self.get_applicable_type_defs(entity, type_defs);
+
+                            // Check if any applicable type definition has a name_field
+                            if let Some(name_field_type_def) = applicable_type_defs
                                 .iter()
-                                .find(|type_def| type_def.name_field.is_some());
-                            if let Some(entity_name) = name_field_type_def.and_then(|type_def| {
-                                Self::extract_name_from_entity(entity, &type_def.name_field)
-                            }) {
-                                // Add original key to entity to preserve subtype information
-                                let entity_with_original_key =
-                                    self.add_original_key_to_entity(entity.clone(), key);
-                                restructured_entities.insert(entity_name, entity_with_original_key);
+                                .find(|type_def| type_def.name_field.is_some())
+                            {
+                                // Use name field to determine entity key, but don't skip root
+                                if let Some(entity_name) = Self::extract_name_from_entity(
+                                    entity,
+                                    &name_field_type_def.name_field,
+                                ) {
+                                    // Add original key to entity to preserve subtype information
+                                    let entity_with_original_key =
+                                        self.add_original_key_to_entity(entity.clone(), key);
+                                    restructured_entities
+                                        .insert(entity_name, entity_with_original_key);
+                                } else {
+                                    // Fallback to original key if name field not found
+                                    restructured_entities.insert(key.clone(), entity.clone());
+                                }
                             } else {
-                                // Fallback to original key if name field not found
+                                // Standard processing - use the key as-is
                                 restructured_entities.insert(key.clone(), entity.clone());
                             }
-                        } else {
-                            // Standard processing - use the key as-is
-                            restructured_entities.insert(key.clone(), entity.clone());
                         }
                     }
                 }
@@ -348,11 +350,11 @@ impl EntityRestructurer {
     }
 
     /// Check if a key passes the type_key_filter
-    fn passes_type_key_filter(&self, key: &str, type_defs: &Vec<TypeDefinitionInfo>) -> bool {
+    fn passes_type_key_filter(&self, key: &str, type_defs: &Vec<TypeDefinition>) -> bool {
         // If no type_key_filter is defined, allow all keys
         let type_key_filters: Vec<&TypeKeyFilter> = type_defs
             .iter()
-            .filter_map(|type_def| type_def.type_key_filter.as_ref())
+            .filter_map(|type_def| type_def.rule_options.type_key_filter.as_ref())
             .collect();
 
         if type_key_filters.is_empty() {
@@ -378,12 +380,36 @@ impl EntityRestructurer {
         }
     }
 
+    /// Get the type definitions that are applicable for a given entity based on type_key_filter
+    fn get_applicable_type_defs<'a>(
+        &self,
+        entity: &Entity,
+        type_defs: &'a Vec<TypeDefinition>,
+    ) -> Vec<&'a TypeDefinition> {
+        type_defs
+            .iter()
+            .filter(|type_def| {
+                // If no type_key_filter, this type definition applies to all entities
+                if let Some(filter) = &type_def.rule_options.type_key_filter {
+                    // Check if ANY key within the entity matches the type_key_filter
+                    entity
+                        .properties
+                        .kv
+                        .keys()
+                        .any(|entity_key| self.matches_type_key_filter(entity_key, filter))
+                } else {
+                    true
+                }
+            })
+            .collect()
+    }
+
     /// Extract entities from a container entity (when skipping root key)
     fn extract_entities_from_container(
         &self,
         container_entity: &Entity,
         name_field: &Option<String>,
-        type_defs: &Vec<TypeDefinitionInfo>,
+        type_defs: &Vec<TypeDefinition>,
     ) -> HashMap<String, Entity> {
         let mut result = HashMap::new();
 
@@ -896,12 +922,4 @@ impl EntityRestructurer {
 
         None
     }
-}
-
-/// Simplified type definition info for restructuring
-#[derive(Debug, Clone)]
-struct TypeDefinitionInfo {
-    pub skip_root_key: Option<SkipRootKey>,
-    pub name_field: Option<String>,
-    pub type_key_filter: Option<TypeKeyFilter>,
 }

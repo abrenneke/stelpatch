@@ -278,14 +278,9 @@ impl CwtConverter {
                     union_values.push(value_type);
                 }
                 AstCwtExpression::Identifier(id) => {
-                    // Handle identifiers in blocks
-                    let value = id.name.raw_value().to_string();
-                    let property_def = Property {
-                        property_type: CwtType::Literal(value.clone()),
-                        options: CwtOptions::default(),
-                        documentation: None,
-                    };
-                    properties.insert(value, property_def);
+                    // Handle identifiers in blocks - convert to type and add as union value
+                    let identifier_type = Self::convert_identifier(id);
+                    union_values.push(identifier_type);
                 }
                 _ => {
                     // Handle other expression types as needed

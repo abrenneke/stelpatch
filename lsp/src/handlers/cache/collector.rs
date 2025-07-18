@@ -8,30 +8,25 @@ use rayon::prelude::*;
 
 use crate::handlers::{
     cache::{
-        Namespace, entity_restructurer::EntityRestructurer, game_data::GameDataCache,
+        TypeCache, entity_restructurer::EntityRestructurer, game_data::GameDataCache,
         get_namespace_entity_type, resolver::TypeResolver,
     },
     scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
 };
 
-pub struct DataCollector<'game_data, 'resolver> {
+pub struct DataCollector<'resolver> {
     value_sets: HashMap<String, HashSet<String>>,
     complex_enums: HashMap<String, HashSet<String>>,
     scripted_effect_arguments: HashMap<String, HashSet<String>>, // Also scripted triggers for convenience... might be wrong because clashes
-    game_data: &'game_data GameDataCache,
     type_resolver: &'resolver TypeResolver,
 }
 
-impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
-    pub fn new(
-        game_data: &'game_data GameDataCache,
-        type_resolver: &'resolver TypeResolver,
-    ) -> Self {
+impl<'resolver> DataCollector<'resolver> {
+    pub fn new(type_resolver: &'resolver TypeResolver) -> Self {
         Self {
             value_sets: HashMap::new(),
             complex_enums: HashMap::new(),
             scripted_effect_arguments: HashMap::new(),
-            game_data,
             type_resolver,
         }
     }
@@ -49,16 +44,20 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
     }
 
     pub fn collect_all(&mut self) {
-        // Collect value_sets from parallel processing
-        let results: Vec<HashMap<String, HashSet<String>>> = self
-            .game_data
-            .get_namespaces()
+        // Get namespaces from GameDataCache, then use EntityRestructurer for entity access
+        let namespaces = match GameDataCache::get() {
+            Some(game_data) => game_data.get_namespaces(),
+            None => return, // Early return if game data not available
+        };
+
+        // Collect value_sets from parallel processing using EntityRestructurer
+        let results: Vec<HashMap<String, HashSet<String>>> = namespaces
             .par_iter()
-            .filter_map(|(namespace, namespace_data)| {
+            .filter_map(|(namespace, _namespace_data)| {
                 get_namespace_entity_type(namespace, None) // TODO: Add file_path
                     .and_then(|namespace_type| namespace_type.scoped_type)
                     .map(|scoped_type| {
-                        self.collect_value_sets_from_namespace(namespace_data, scoped_type)
+                        self.collect_value_sets_from_namespace(namespace, scoped_type)
                     })
             })
             .collect();
@@ -79,15 +78,23 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
 
     fn collect_value_sets_from_namespace(
         &self,
-        namespace_data: &Namespace,
+        namespace: &str,
         scoped_type: Arc<ScopedType>,
     ) -> HashMap<String, HashSet<String>> {
+        // Use EntityRestructurer to get entities instead of direct GameDataCache access
+        let entities = match EntityRestructurer::get_all_namespace_entities(namespace) {
+            Some(entities) => entities,
+            None => return HashMap::new(),
+        };
+
         // Process entities in parallel within the namespace
-        let results: Vec<HashMap<String, HashSet<String>>> = namespace_data
-            .entities
+        let results: Vec<HashMap<String, HashSet<String>>> = entities
             .par_iter()
-            .map(|(_entity_name, entity)| {
-                self.collect_value_sets_from_entity(entity, scoped_type.clone())
+            .map(|(entity_name, entity)| {
+                // Perform subtype narrowing for this entity, similar to provider.rs
+                let narrowed_scoped_type =
+                    self.narrow_entity_type(entity_name, entity, scoped_type.clone());
+                self.collect_value_sets_from_entity(entity, narrowed_scoped_type)
             })
             .collect();
 
@@ -100,6 +107,45 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         }
 
         namespace_value_sets
+    }
+
+    fn narrow_entity_type(
+        &self,
+        entity_name: &str,
+        entity: &Entity,
+        scoped_type: Arc<ScopedType>,
+    ) -> Arc<ScopedType> {
+        // Check if TypeCache is available for subtype narrowing
+        let type_cache = match TypeCache::get() {
+            Some(cache) => cache,
+            None => return scoped_type, // Return original type if TypeCache not available
+        };
+
+        // First, filter union types based on the ROOT KEY (type_key_filter)
+        let mut root_key_data = HashMap::new();
+        root_key_data.insert(entity_name.to_string(), "{}".to_string());
+
+        let filtered_scoped_type =
+            type_cache.filter_union_types_by_properties(scoped_type.clone(), &root_key_data);
+
+        // Extract property data from the entity for subtype narrowing
+        let mut property_data = HashMap::new();
+        for (key, property_list) in &entity.properties.kv {
+            if let Some(first_property) = property_list.0.first() {
+                property_data.insert(key.clone(), first_property.value.to_string());
+            }
+        }
+
+        // Perform subtype narrowing with the entity data
+        let matching_subtypes = type_cache
+            .get_resolver()
+            .determine_matching_subtypes(filtered_scoped_type.clone(), &property_data);
+
+        if !matching_subtypes.is_empty() {
+            Arc::new(filtered_scoped_type.with_subtypes(matching_subtypes))
+        } else {
+            filtered_scoped_type
+        }
     }
 
     fn collect_value_sets_from_entity(
@@ -123,6 +169,14 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
             }
         }
 
+        // Process items (new behavior for constructs like flags = { value_set[planet_flag] })
+        if !entity.items.is_empty() {
+            let item_results = self.collect_value_sets_from_items(&entity.items, scoped_type);
+            for (key, values) in item_results {
+                entity_value_sets.entry(key).or_default().extend(values);
+            }
+        }
+
         entity_value_sets
     }
 
@@ -131,7 +185,7 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         property_value: &PropertyInfoList,
         property_type: Arc<ScopedType>,
     ) -> HashMap<String, HashSet<String>> {
-        let mut property_value_sets = HashMap::new();
+        let mut property_value_sets: HashMap<String, HashSet<String>> = HashMap::new();
 
         match property_type.cwt_type() {
             CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::ValueSet { key })) => {
@@ -142,7 +196,10 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
                     }
                 }
                 if !values.is_empty() {
-                    property_value_sets.insert(key.clone(), values);
+                    property_value_sets
+                        .entry(key.clone())
+                        .or_default()
+                        .extend(values);
                 }
             }
             CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
@@ -214,6 +271,33 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
         property_value_sets
     }
 
+    fn collect_value_sets_from_items(
+        &self,
+        items: &[cw_model::Value],
+        scoped_type: Arc<ScopedType>,
+    ) -> HashMap<String, HashSet<String>> {
+        let mut item_value_sets: HashMap<String, HashSet<String>> = HashMap::new();
+
+        // Check if the scoped type has additional flags that are value sets
+        if let CwtTypeOrSpecial::CwtType(CwtType::Block(block_type)) = scoped_type.cwt_type() {
+            for additional_flag in &block_type.additional_flags {
+                if let CwtType::Reference(ReferenceType::ValueSet { key }) = additional_flag {
+                    let mut values = HashSet::new();
+                    for item in items {
+                        if let Some(string_value) = item.as_string() {
+                            values.insert(string_value.clone());
+                        }
+                    }
+                    if !values.is_empty() {
+                        item_value_sets.insert(key.clone(), values);
+                    }
+                }
+            }
+        }
+
+        item_value_sets
+    }
+
     fn collect_complex_enums(&mut self) {
         // Get all enum definitions from the CwtAnalyzer
         let enum_definitions = self.type_resolver.get_enums();
@@ -231,31 +315,27 @@ impl<'game_data, 'resolver> DataCollector<'game_data, 'resolver> {
     }
 
     fn collect_scripted_effect_arguments(&mut self) {
-        // Only collect from scripted_effects namespace
-        if let Some(scripted_effects_namespace) = self
-            .game_data
-            .get_namespaces()
-            .get("common/scripted_effects")
+        // Only collect from scripted_effects namespace using EntityRestructurer
+        if let Some(scripted_effects_entities) =
+            EntityRestructurer::get_all_namespace_entities("common/scripted_effects")
         {
-            for (effect_name, entity) in &scripted_effects_namespace.entities {
-                let arguments = self.extract_arguments_from_entity(entity);
+            for (effect_name, entity) in scripted_effects_entities {
+                let arguments = self.extract_arguments_from_entity(&entity);
                 if !arguments.is_empty() {
                     self.scripted_effect_arguments
-                        .insert(effect_name.clone(), arguments);
+                        .insert(effect_name, arguments);
                 }
             }
         }
 
-        if let Some(scripted_triggers_namespace) = self
-            .game_data
-            .get_namespaces()
-            .get("common/scripted_triggers")
+        if let Some(scripted_triggers_entities) =
+            EntityRestructurer::get_all_namespace_entities("common/scripted_triggers")
         {
-            for (trigger_name, entity) in &scripted_triggers_namespace.entities {
-                let arguments = self.extract_arguments_from_entity(entity);
+            for (trigger_name, entity) in scripted_triggers_entities {
+                let arguments = self.extract_arguments_from_entity(&entity);
                 if !arguments.is_empty() {
                     self.scripted_effect_arguments
-                        .insert(trigger_name.clone(), arguments);
+                        .insert(trigger_name, arguments);
                 }
             }
         }
