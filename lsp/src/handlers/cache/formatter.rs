@@ -40,7 +40,7 @@ impl<'a> TypeFormatter<'a> {
 
         // Only show scope info if it's not the default unknown scope
         if scope_stack.current_scope().scope_type != "unknown" {
-            format!("**Scope:** {}", scope_stack)
+            format!("Scope: {}", scope_stack)
         } else {
             String::new()
         }

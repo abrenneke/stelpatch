@@ -70,9 +70,6 @@ pub struct TypeOptions {
 
     /// Severity level for errors
     pub severity: Option<SeverityLevel>,
-
-    /// Type key filter
-    pub type_key_filter: Option<TypeKeyFilter>,
 }
 
 impl TypeOptions {
@@ -95,9 +92,6 @@ impl TypeOptions {
         }
         if other.severity.is_some() {
             self.severity = other.severity;
-        }
-        if other.type_key_filter.is_some() {
-            self.type_key_filter = other.type_key_filter;
         }
 
         // For vectors, extend rather than replace

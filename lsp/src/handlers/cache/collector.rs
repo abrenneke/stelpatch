@@ -111,7 +111,7 @@ impl<'resolver> DataCollector<'resolver> {
 
     fn narrow_entity_type(
         &self,
-        entity_name: &str,
+        _entity_name: &str,
         entity: &Entity,
         scoped_type: Arc<ScopedType>,
     ) -> Arc<ScopedType> {
@@ -121,25 +121,13 @@ impl<'resolver> DataCollector<'resolver> {
             None => return scoped_type, // Return original type if TypeCache not available
         };
 
-        // First, filter union types based on the ROOT KEY (type_key_filter)
-        let mut root_key_data = HashMap::new();
-        root_key_data.insert(entity_name.to_string(), "{}".to_string());
-
         let filtered_scoped_type =
-            type_cache.filter_union_types_by_properties(scoped_type.clone(), &root_key_data);
-
-        // Extract property data from the entity for subtype narrowing
-        let mut property_data = HashMap::new();
-        for (key, property_list) in &entity.properties.kv {
-            if let Some(first_property) = property_list.0.first() {
-                property_data.insert(key.clone(), first_property.value.to_string());
-            }
-        }
+            type_cache.filter_union_types_by_properties(scoped_type.clone(), &entity);
 
         // Perform subtype narrowing with the entity data
         let matching_subtypes = type_cache
             .get_resolver()
-            .determine_matching_subtypes(filtered_scoped_type.clone(), &property_data);
+            .determine_matching_subtypes(filtered_scoped_type.clone(), &entity);
 
         if !matching_subtypes.is_empty() {
             Arc::new(filtered_scoped_type.with_subtypes(matching_subtypes))
@@ -192,9 +180,6 @@ impl<'resolver> DataCollector<'resolver> {
                 let mut values = HashSet::new();
                 for value in property_value.0.iter() {
                     if let Some(value) = value.value.as_string() {
-                        if value == "human_species" {
-                            dbg!(&value);
-                        }
                         values.insert(value.clone());
                     }
                 }

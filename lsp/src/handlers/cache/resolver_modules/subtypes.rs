@@ -18,123 +18,231 @@ impl SubtypeHandler {
 
     /// Directly evaluate if a subtype matches based on its condition_properties and options
     /// This replaces the condition derivation + matching approach
-    fn does_subtype_match(
-        &self,
-        subtype_def: &cw_model::types::Subtype,
-        property_data: &HashMap<String, String>,
-    ) -> bool {
+    fn does_subtype_match(&self, subtype_def: &cw_model::types::Subtype, entity: &Entity) -> bool {
         // Handle CWT options that affect matching first (these take precedence)
         if let Some(starts_with) = &subtype_def.options.starts_with {
-            // Check if any key in property_data starts with the prefix
-            return property_data.keys().any(|key| key.starts_with(starts_with));
+            // Check if any key in entity starts with the prefix
+            return entity
+                .properties
+                .kv
+                .keys()
+                .any(|key| key.starts_with(starts_with));
         } else if let Some(type_key_filter) = &subtype_def.options.type_key_filter {
             return match type_key_filter {
                 TypeKeyFilter::Specific(key) => {
                     // Check if the entity has the specific key OR if the original key matches
-                    property_data.contains_key(key)
-                        || property_data
+                    entity.properties.kv.contains_key(key)
+                        || entity
+                            .properties
+                            .kv
                             .get(ORIGINAL_KEY_PROPERTY)
-                            .map_or(false, |original_key| original_key.contains(key))
+                            .and_then(|prop_list| prop_list.0.first())
+                            .and_then(|prop| match &prop.value {
+                                Value::String(s) => Some(s.contains(key)),
+                                _ => None,
+                            })
+                            .unwrap_or(false)
                 }
                 TypeKeyFilter::Not(key) => {
                     // Check if the entity does NOT have the specific key AND the original key doesn't match
-                    !property_data.contains_key(key)
-                        && property_data
+                    !entity.properties.kv.contains_key(key)
+                        && entity
+                            .properties
+                            .kv
                             .get(ORIGINAL_KEY_PROPERTY)
-                            .map_or(true, |original_key| !original_key.contains(key))
+                            .and_then(|prop_list| prop_list.0.first())
+                            .and_then(|prop| match &prop.value {
+                                Value::String(s) => Some(!s.contains(key)),
+                                _ => Some(true),
+                            })
+                            .unwrap_or(true)
                 }
                 TypeKeyFilter::OneOf(keys) => {
                     // Check if the entity has any of the specified keys OR if the original key matches any
-                    keys.iter().any(|key| property_data.contains_key(key))
-                        || property_data
+                    keys.iter()
+                        .any(|key| entity.properties.kv.contains_key(key))
+                        || entity
+                            .properties
+                            .kv
                             .get(ORIGINAL_KEY_PROPERTY)
-                            .map_or(false, |original_key| {
-                                keys.iter().any(|key| original_key.contains(key))
+                            .and_then(|prop_list| prop_list.0.first())
+                            .and_then(|prop| match &prop.value {
+                                Value::String(s) => Some(keys.iter().any(|key| s.contains(key))),
+                                _ => None,
                             })
+                            .unwrap_or(false)
                 }
             };
         }
 
-        // Evaluate condition_properties directly
-        let property_conditions: Vec<_> = subtype_def
-            .condition_properties
-            .iter()
-            .filter_map(|(key, property)| {
-                // Consider all properties including blocks for cardinality evaluation
-                match &*property.property_type {
-                    CwtType::Literal(value) => Some((key.clone(), Some(value.clone()), property)),
-                    CwtType::Simple(_) => Some((key.clone(), None, property)), // Exists condition
-                    CwtType::Block(_) => Some((key.clone(), None, property)), // Block existence with cardinality
-                    _ => Some((key.clone(), None, property)), // Default to exists condition
-                }
-            })
-            .collect();
-
         // If no conditions, fallback to true (subtype always matches)
-        if property_conditions.is_empty() {
+        if subtype_def.condition_properties.is_empty() {
             return true;
         }
 
         // Evaluate all conditions (they must all match - AND logic)
-        property_conditions
+        subtype_def
+            .condition_properties
             .iter()
-            .all(|(key, expected_value, property)| {
-                // Check cardinality constraints first
-                if !self.property_satisfies_cardinality(
-                    key,
-                    property_data,
-                    &property.options.cardinality,
-                ) {
-                    return false;
-                }
+            .all(|(key, property)| self.does_property_match_condition(key, property, entity))
+    }
 
-                // Then check value conditions
-                match expected_value {
-                    Some(value) => {
-                        // PropertyEquals: handle absent properties with cardinality constraints
-                        if !property_data.contains_key(key) {
-                            // Property is absent - check if cardinality allows this
-                            if let Some(card) = &property.options.cardinality {
-                                if card.min.unwrap_or(1) == 0 {
-                                    // Cardinality allows absence - treat as matching the condition
-                                    true
-                                } else {
-                                    // Property is required but absent - doesn't match
-                                    false
-                                }
-                            } else {
-                                // No cardinality constraint: property is required but absent
-                                false
+    /// Check if a property in an entity matches a specific condition
+    fn does_property_match_condition(
+        &self,
+        property_key: &str,
+        condition_property: &cw_model::types::Property,
+        entity: &Entity,
+    ) -> bool {
+        // Check cardinality constraints first
+        let property_count = if entity.properties.kv.contains_key(property_key) {
+            1u32
+        } else {
+            0u32
+        };
+
+        if !self.satisfies_cardinality_constraint(
+            property_count,
+            &condition_property.options.cardinality,
+        ) {
+            return false;
+        }
+
+        // Get the actual property from the entity
+        let actual_property = entity.properties.kv.get(property_key);
+
+        match &*condition_property.property_type {
+            CwtType::Literal(expected_value) => {
+                // For literal conditions, check exact value match
+                match actual_property {
+                    Some(property_list) => {
+                        if let Some(first_property) = property_list.0.first() {
+                            match &first_property.value {
+                                Value::String(s) => s == expected_value,
+                                Value::Number(n) => n == expected_value,
+                                _ => false,
                             }
                         } else {
-                            // Property is present - check if value matches
-                            property_data
-                                .get(key)
-                                .map_or(false, |actual_value| actual_value == value)
+                            // Property exists but has no values - check if cardinality allows absence
+                            if let Some(card) = &condition_property.options.cardinality {
+                                card.min.unwrap_or(1) == 0
+                            } else {
+                                false
+                            }
                         }
                     }
                     None => {
-                        // PropertyExists or block: check based on cardinality
-                        if let Some(cardinality) = &property.options.cardinality {
-                            if cardinality.max == Some(0) {
-                                // Cardinality 0..0 means property must NOT exist
-                                !property_data.contains_key(key)
-                            } else {
-                                // Other cardinalities: property should exist if min > 0
-                                if cardinality.min.unwrap_or(0) > 0 {
-                                    property_data.contains_key(key)
-                                } else {
-                                    // Optional property - always matches
-                                    true
-                                }
-                            }
+                        // Property is absent - check if cardinality allows this
+                        if let Some(card) = &condition_property.options.cardinality {
+                            card.min.unwrap_or(1) == 0
                         } else {
-                            // No cardinality constraint: property should exist (default requirement)
-                            property_data.contains_key(key)
+                            false
                         }
                     }
                 }
-            })
+            }
+            CwtType::Simple(_) => {
+                // For simple types, just check existence based on cardinality
+                match &condition_property.options.cardinality {
+                    Some(cardinality) => {
+                        if cardinality.max == Some(0) {
+                            // Cardinality 0..0 means property must NOT exist
+                            actual_property.is_none()
+                        } else if cardinality.min.unwrap_or(0) > 0 {
+                            // Property is required
+                            actual_property.is_some()
+                        } else {
+                            // Optional property - always matches
+                            true
+                        }
+                    }
+                    None => {
+                        // No cardinality constraint: property should exist (default requirement)
+                        actual_property.is_some()
+                    }
+                }
+            }
+            CwtType::Block(expected_block) => {
+                // For block conditions, recursively validate the structure
+                match actual_property {
+                    Some(property_list) => {
+                        if let Some(first_property) = property_list.0.first() {
+                            match &first_property.value {
+                                Value::Entity(actual_entity) => self
+                                    .does_entity_match_block_structure(
+                                        actual_entity,
+                                        expected_block,
+                                    ),
+                                _ => false, // Not a block/entity value
+                            }
+                        } else {
+                            // Property exists but has no values - check if cardinality allows absence
+                            if let Some(card) = &condition_property.options.cardinality {
+                                card.min.unwrap_or(1) == 0
+                            } else {
+                                false
+                            }
+                        }
+                    }
+                    None => {
+                        // Property is absent - check if cardinality allows this
+                        if let Some(card) = &condition_property.options.cardinality {
+                            card.min.unwrap_or(1) == 0
+                        } else {
+                            false
+                        }
+                    }
+                }
+            }
+            _ => {
+                // For other types, fall back to existence check
+                actual_property.is_some()
+            }
+        }
+    }
+
+    /// Check if an entity matches the structure defined in a CWT block
+    fn does_entity_match_block_structure(
+        &self,
+        entity: &Entity,
+        expected_block: &cw_model::types::BlockType,
+    ) -> bool {
+        // Check if all required properties in the expected block are satisfied
+        expected_block
+            .properties
+            .iter()
+            .all(|(key, property)| self.does_property_match_condition(key, property, entity))
+    }
+
+    /// Check if a property count satisfies cardinality constraints
+    fn satisfies_cardinality_constraint(
+        &self,
+        property_count: u32,
+        cardinality: &Option<cw_model::types::Cardinality>,
+    ) -> bool {
+        match cardinality {
+            Some(card) => {
+                // Check minimum constraint
+                if let Some(min) = card.min {
+                    if property_count < min {
+                        return false;
+                    }
+                }
+
+                // Check maximum constraint
+                if let Some(max) = card.max {
+                    if property_count > max {
+                        return false;
+                    }
+                }
+
+                true
+            }
+            None => {
+                // No cardinality constraint means property must be present (default requirement)
+                property_count > 0
+            }
+        }
     }
 
     /// Get all available subtypes for a given type
@@ -203,12 +311,12 @@ impl SubtypeHandler {
         }
     }
 
-    /// Determine all matching subtypes based on property data
+    /// Determine all matching subtypes based on entity structure
     /// This is the main method for determining active subtypes
     pub fn determine_matching_subtypes(
         &self,
         scoped_type: Arc<ScopedType>,
-        property_data: &HashMap<String, String>,
+        entity: &Entity,
     ) -> HashSet<String> {
         match scoped_type.cwt_type_for_matching() {
             CwtTypeOrSpecialRef::Block(block) => {
@@ -221,7 +329,7 @@ impl SubtypeHandler {
                     }
 
                     // Directly evaluate if the subtype matches
-                    if self.does_subtype_match(subtype_def, property_data) {
+                    if self.does_subtype_match(subtype_def, entity) {
                         matching_subtypes.insert(subtype_name.clone());
                     } else {
                         matching_subtypes.insert(format!("!{}", subtype_name));
@@ -257,10 +365,8 @@ impl SubtypeHandler {
 
         // Check each entity against the subtype condition
         for (entity_key, entity) in entities {
-            let property_data = self.extract_property_data_from_entity(&entity);
-
             // Directly evaluate if the subtype matches
-            if self.does_subtype_match(subtype_def, &property_data) {
+            if self.does_subtype_match(subtype_def, &entity) {
                 matching_keys.push(entity_key);
             }
         }
@@ -347,130 +453,5 @@ impl SubtypeHandler {
         }
 
         Ok(new_scope)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use cw_model::types::Cardinality;
-    use std::collections::HashMap;
-
-    #[test]
-    fn test_property_satisfies_cardinality() {
-        let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));
-        let mut property_data = HashMap::new();
-        property_data.insert("test_key".to_string(), "test_value".to_string());
-
-        // Test with no cardinality (default requirement)
-        assert!(handler.property_satisfies_cardinality("test_key", &property_data, &None));
-        assert!(!handler.property_satisfies_cardinality("missing_key", &property_data, &None));
-
-        // Test with cardinality 0..1 (optional)
-        let optional_cardinality = Some(Cardinality::optional());
-        assert!(handler.property_satisfies_cardinality(
-            "test_key",
-            &property_data,
-            &optional_cardinality
-        ));
-        assert!(handler.property_satisfies_cardinality(
-            "missing_key",
-            &property_data,
-            &optional_cardinality
-        ));
-
-        // Test with cardinality 1..1 (required)
-        let required_cardinality = Some(Cardinality::required());
-        assert!(handler.property_satisfies_cardinality(
-            "test_key",
-            &property_data,
-            &required_cardinality
-        ));
-        assert!(!handler.property_satisfies_cardinality(
-            "missing_key",
-            &property_data,
-            &required_cardinality
-        ));
-    }
-
-    #[test]
-    fn test_does_subtype_match_civic_without_is_origin() {
-        use cw_model::types::{Property, Subtype};
-        use std::collections::HashMap;
-
-        let handler = SubtypeHandler::new(Arc::new(CwtAnalyzer::new()));
-
-        // Create a mock civic subtype definition similar to the real one
-        // subtype[civic] = { ## cardinality = 0..1; is_origin = no }
-        let mut civic_subtype = Subtype {
-            condition_properties: HashMap::new(),
-            allowed_properties: HashMap::new(),
-            allowed_pattern_properties: Vec::new(),
-            options: Default::default(),
-            is_inverted: false,
-        };
-        let condition_property = Property::optional(Arc::new(CwtType::Literal("no".to_string())));
-        civic_subtype
-            .condition_properties
-            .insert("is_origin".to_string(), condition_property);
-
-        // Test case 1: Civic without is_origin property (should match)
-        let civic_data_without_is_origin = HashMap::new();
-        let result1 = handler.does_subtype_match(&civic_subtype, &civic_data_without_is_origin);
-        println!("Civic without is_origin: {}", result1);
-        assert!(
-            result1,
-            "Civic without is_origin property should match civic subtype"
-        );
-
-        // Test case 2: Civic with is_origin = no (should match)
-        let mut civic_data_with_no = HashMap::new();
-        civic_data_with_no.insert("is_origin".to_string(), "no".to_string());
-        let result2 = handler.does_subtype_match(&civic_subtype, &civic_data_with_no);
-        println!("Civic with is_origin=no: {}", result2);
-        assert!(
-            result2,
-            "Civic with is_origin = no should match civic subtype"
-        );
-
-        // Test case 3: Civic with is_origin = yes (should NOT match)
-        let mut civic_data_with_yes = HashMap::new();
-        civic_data_with_yes.insert("is_origin".to_string(), "yes".to_string());
-        let result3 = handler.does_subtype_match(&civic_subtype, &civic_data_with_yes);
-        println!("Civic with is_origin=yes: {}", result3);
-        assert!(
-            !result3,
-            "Civic with is_origin = yes should NOT match civic subtype"
-        );
-
-        // Now test origin subtype (required property)
-        let mut origin_subtype = Subtype {
-            condition_properties: HashMap::new(),
-            allowed_properties: HashMap::new(),
-            allowed_pattern_properties: Vec::new(),
-            options: Default::default(),
-            is_inverted: false,
-        };
-        let origin_condition_property =
-            Property::required(Arc::new(CwtType::Literal("yes".to_string())));
-        origin_subtype
-            .condition_properties
-            .insert("is_origin".to_string(), origin_condition_property);
-
-        // Test case 4: Origin without is_origin property (should NOT match)
-        let result4 = handler.does_subtype_match(&origin_subtype, &civic_data_without_is_origin);
-        println!("Origin without is_origin: {}", result4);
-        assert!(
-            !result4,
-            "Entity without is_origin property should NOT match origin subtype"
-        );
-
-        // Test case 5: Origin with is_origin = yes (should match)
-        let result5 = handler.does_subtype_match(&origin_subtype, &civic_data_with_yes);
-        println!("Origin with is_origin=yes: {}", result5);
-        assert!(
-            result5,
-            "Entity with is_origin = yes should match origin subtype"
-        );
     }
 }

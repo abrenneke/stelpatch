@@ -11,6 +11,7 @@ use crate::handlers::cache::{
 use super::document_cache::DocumentCache;
 use super::scoped_type::PropertyNavigationResult;
 use super::utils::{extract_namespace_from_uri, position_to_offset};
+use cw_model::entity_from_module_ast;
 use cw_parser::{AstEntity, AstExpression, AstNode, AstValue, AstVisitor};
 
 /// A visitor that builds property paths for hover functionality
@@ -191,8 +192,10 @@ pub fn hover(
     // Find the property at the given position
     let mut builder = PropertyPathBuilder::new(offset, cached_document.borrow_input());
 
+    let module;
     if let Ok(ast) = cached_document.borrow_ast() {
         builder.visit_module(ast);
+        module = Some(ast);
     } else {
         return Ok(None);
     }
@@ -222,11 +225,10 @@ pub fn hover(
                     let entity_key = container_key; // For normal entities, these are the same
 
                     // Step 1: Filter union types based on the ROOT KEY (type_key_filter)
-                    let mut root_key_data = HashMap::new();
-                    root_key_data.insert(container_key.to_string(), "{}".to_string());
+                    let root_entity = entity_from_module_ast(module.unwrap());
 
                     let filtered_namespace_type = type_cache
-                        .filter_union_types_by_properties(namespace_type.clone(), &root_key_data);
+                        .filter_union_types_by_properties(namespace_type.clone(), &root_entity);
 
                     // Step 2: Get the effective entity for subtype narrowing
                     let (_effective_key, effective_entity) =
@@ -237,18 +239,10 @@ pub fn hover(
                             entity_context,
                         );
 
-                    // Step 3: Extract property data from the effective entity for subtype narrowing
-                    let mut property_data = HashMap::new();
-                    for (key, property_list) in &effective_entity.properties.kv {
-                        if let Some(first_property) = property_list.0.first() {
-                            property_data.insert(key.clone(), first_property.value.to_string());
-                        }
-                    }
-
                     // Step 4: Perform subtype narrowing with the effective entity data
                     let matching_subtypes = type_cache.get_resolver().determine_matching_subtypes(
                         filtered_namespace_type.clone(),
-                        &property_data,
+                        &effective_entity,
                     );
 
                     let validation_type = if !matching_subtypes.is_empty() {

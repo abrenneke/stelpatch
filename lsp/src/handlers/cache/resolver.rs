@@ -1,7 +1,7 @@
 use crate::handlers::scope::ScopeStack;
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
 use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType};
-use cw_model::{CwtType, ReferenceType};
+use cw_model::{CwtType, Entity, ReferenceType};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -210,14 +210,14 @@ impl TypeResolver {
             .get_subtype_definition(cwt_type, subtype_name)
     }
 
-    /// Determine all matching subtypes based on property data
+    /// Determine all matching subtypes based on entity structure
     pub fn determine_matching_subtypes(
         &self,
         scoped_type: Arc<ScopedType>,
-        property_data: &HashMap<String, String>,
+        entity: &Entity,
     ) -> HashSet<String> {
         self.subtype_handler
-            .determine_matching_subtypes(scoped_type, property_data)
+            .determine_matching_subtypes(scoped_type, entity)
     }
 
     /// Get all enum definitions from the CWT analyzer

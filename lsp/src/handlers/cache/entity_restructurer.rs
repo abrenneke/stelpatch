@@ -269,16 +269,16 @@ impl EntityRestructurer {
                                 self.extract_entities_from_container(entity, matching_type_def);
                             restructured_entities.extend(extracted_entities);
                         } else {
-                            // Check if this entity passes any type_key_filter
-                            if !self.passes_type_key_filter(key, type_defs) {
-                                // Leave it alone in the namespace
-                                restructured_entities.insert(key.clone(), entity.clone());
-                                continue;
-                            }
-
                             // Get type definitions that are applicable for this specific entity
                             let applicable_type_defs =
-                                self.get_applicable_type_defs(entity, type_defs);
+                                self.get_applicable_type_defs(key, type_defs);
+
+                            // if applicable_type_defs.is_empty() {
+                            //     eprintln!(
+                            //         "WARN: No applicable type definitions found for entity: {}",
+                            //         key
+                            //     );
+                            // }
 
                             // Check if any applicable type definition has a name_field
                             if let Some(name_field_type_def) = applicable_type_defs
@@ -374,7 +374,7 @@ impl EntityRestructurer {
     /// Get the type definitions that are applicable for a given entity based on type_key_filter
     fn get_applicable_type_defs<'a>(
         &self,
-        entity: &Entity,
+        key: &str,
         type_defs: &'a Vec<TypeDefinition>,
     ) -> Vec<&'a TypeDefinition> {
         type_defs
@@ -383,11 +383,7 @@ impl EntityRestructurer {
                 // If no type_key_filter, this type definition applies to all entities
                 if let Some(filter) = &type_def.rule_options.type_key_filter {
                     // Check if ANY key within the entity matches the type_key_filter
-                    entity
-                        .properties
-                        .kv
-                        .keys()
-                        .any(|entity_key| self.matches_type_key_filter(entity_key, filter))
+                    self.matches_type_key_filter(key, filter)
                 } else {
                     true
                 }

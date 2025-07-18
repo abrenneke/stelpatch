@@ -1557,7 +1557,6 @@ impl CwtOptions {
                         options.replace_scope = Some(replace_map);
                     } else if option.value.is_assignment() {
                         let (from, to) = option.value.as_assignment().unwrap();
-                        dbg!(&to);
 
                         options.replace_scope = Some(HashMap::from([(
                             from.to_string(),
