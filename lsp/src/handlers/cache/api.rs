@@ -1,5 +1,4 @@
 use super::core::TypeCache;
-use super::formatter::TypeFormatter;
 use super::types::TypeInfo;
 use cw_parser;
 
@@ -8,7 +7,6 @@ pub fn get_namespace_entity_type(namespace: &str, file_path: Option<&str>) -> Op
     if !TypeCache::is_initialized() {
         return Some(TypeInfo {
             property_path: "entity".to_string(),
-            type_description: "Loading type information...".to_string(),
             scoped_type: None,
             documentation: None,
             source_info: Some("Type system initializing".to_string()),
@@ -16,17 +14,11 @@ pub fn get_namespace_entity_type(namespace: &str, file_path: Option<&str>) -> Op
     }
 
     let cache = TypeCache::get().unwrap();
-    let resolver = cache.get_resolver();
-    let formatter = TypeFormatter::new(resolver, 30);
 
     if let Some(namespace_type) = cache.get_namespace_type(namespace, file_path) {
         let scoped_type = namespace_type.clone();
         Some(TypeInfo {
             property_path: "entity".to_string(),
-            type_description: formatter.format_type(
-                scoped_type.clone(),
-                None, // No specific property name for top-level entity types
-            ),
             scoped_type: Some(scoped_type),
             documentation: None,
             source_info: Some(format!("Entity structure for {} namespace", namespace)),
@@ -34,36 +26,11 @@ pub fn get_namespace_entity_type(namespace: &str, file_path: Option<&str>) -> Op
     } else {
         Some(TypeInfo {
             property_path: "entity".to_string(),
-            type_description: format!(
-                "No type information available for this namespace: {}",
-                namespace
-            ),
             scoped_type: None,
             documentation: None,
             source_info: Some(format!("Namespace {} not found in type system", namespace)),
         })
     }
-}
-
-/// Get type information for a property within a namespace entity
-/// The property_path should be just the property path without the entity name
-pub fn get_entity_property_type(
-    namespace: &str,
-    property_path: &str,
-    file_path: Option<&str>,
-) -> Option<TypeInfo> {
-    if !TypeCache::is_initialized() {
-        return Some(TypeInfo {
-            property_path: property_path.to_string(),
-            type_description: "Loading type information...".to_string(),
-            scoped_type: None,
-            documentation: None,
-            source_info: Some("Type system initializing".to_string()),
-        });
-    }
-
-    let cache = TypeCache::get().unwrap();
-    cache.get_property_type(namespace, property_path, file_path)
 }
 
 /// Get type information for a property by navigating through an AST entity
@@ -85,7 +52,6 @@ pub fn get_entity_property_type_from_ast(
     if !TypeCache::is_initialized() {
         return Some(TypeInfo {
             property_path: property_path.to_string(),
-            type_description: "Loading type information...".to_string(),
             scoped_type: None,
             documentation: None,
             source_info: Some("Type system initializing".to_string()),

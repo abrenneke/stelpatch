@@ -82,8 +82,7 @@ pub async fn initialized(
             "Entity restructuring complete, loading full analysis".to_string(),
         );
 
-        let full_analysis =
-            FullAnalysis::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
+        let full_analysis = FullAnalysis::new(TypeCache::get().unwrap());
         full_analysis.load();
 
         let documents_guard = documents.read().unwrap();

@@ -429,16 +429,49 @@ impl TypeFingerprint for ScopeStack {
 
 impl std::fmt::Display for ScopeStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}/{}",
-            self.scopes
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>()
-                .join("->"),
-            self.root.to_string()
-        )?;
+        let mut parts = Vec::new();
+
+        // Show scopes with explicit names (this, prev, prevprev, etc.)
+        let scope_names = [
+            "prevprevprevprev",
+            "prevprevprev",
+            "prevprev",
+            "prev",
+            "this",
+        ];
+        let start_idx = if self.scopes.len() <= 5 {
+            5 - self.scopes.len()
+        } else {
+            0
+        };
+
+        for (i, scope) in self.scopes.iter().enumerate() {
+            if start_idx + i < scope_names.len() {
+                parts.push(format!("{}={}", scope_names[start_idx + i], scope));
+            }
+        }
+
+        if !parts.is_empty() {
+            write!(f, "{}", parts.join(" "))?;
+        }
+
+        // Add root reference
+        write!(f, " root={}", self.root)?;
+
+        // Add from references if they exist
+        if let Some(from) = &self.from {
+            write!(f, " from={}", from)?;
+        }
+        if let Some(fromfrom) = &self.fromfrom {
+            write!(f, " fromfrom={}", fromfrom)?;
+        }
+        if let Some(fromfromfrom) = &self.fromfromfrom {
+            write!(f, " fromfromfrom={}", fromfromfrom)?;
+        }
+        if let Some(fromfromfromfrom) = &self.fromfromfromfrom {
+            write!(f, " fromfromfromfrom={}", fromfromfromfrom)?;
+        }
+
         Ok(())
     }
 }

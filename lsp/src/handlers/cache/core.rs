@@ -12,7 +12,6 @@ use std::sync::{Arc, OnceLock};
 use crate::handlers::cache::resolver::TypeResolver;
 use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
 
-use super::formatter::TypeFormatter;
 use super::types::TypeInfo;
 
 /// Cache for Stellaris type information that's loaded once and shared across requests
@@ -22,7 +21,7 @@ pub struct TypeCache {
     resolver: TypeResolver,
 }
 
-static TYPE_CACHE: OnceLock<TypeCache> = OnceLock::new();
+static TYPE_CACHE: OnceLock<Arc<TypeCache>> = OnceLock::new();
 
 impl TypeCache {
     /// Initialize the type cache by loading Stellaris data
@@ -33,12 +32,12 @@ impl TypeCache {
         });
     }
 
-    pub fn get() -> Option<&'static TypeCache> {
+    pub fn get() -> Option<&'static Arc<TypeCache>> {
         TYPE_CACHE.get()
     }
 
     /// Get or initialize the global type cache (blocking version)
-    fn get_or_init_blocking() -> &'static TypeCache {
+    fn get_or_init_blocking() -> &'static Arc<TypeCache> {
         TYPE_CACHE.get_or_init(|| {
             eprintln!("Initializing type cache");
 
@@ -172,11 +171,11 @@ impl TypeCache {
 
             let cwt_analyzer = Arc::new(cwt_analyzer);
 
-            TypeCache {
+            Arc::new(TypeCache {
                 namespace_types,
                 cwt_analyzer: cwt_analyzer.clone(),
                 resolver: TypeResolver::new(cwt_analyzer.clone()),
-            }
+            })
         })
     }
 
@@ -490,163 +489,68 @@ impl TypeCache {
                     }
                 }
             }
-            _ => scoped_type,
-        }
-    }
-
-    /// Get type information for a specific property path in a namespace
-    /// Path format: "property" or "property.nested.field"
-    pub fn get_property_type(
-        &self,
-        namespace: &str,
-        property_path: &str,
-        file_path: Option<&str>,
-    ) -> Option<TypeInfo> {
-        let formatter = TypeFormatter::new(&self.resolver, 30);
-
-        let namespace = Self::get_actual_namespace(namespace);
-
-        // First try to get from namespace types (game data)
-        if let Some(namespace_type) = self.get_namespace_type(namespace, file_path) {
-            let path_parts: Vec<&str> = property_path.split('.').collect();
-            let mut current_type = namespace_type.clone();
-            let mut current_path = String::new();
-
-            for (i, part) in path_parts.iter().enumerate() {
-                if i > 0 {
-                    current_path.push('.');
+            CwtTypeOrSpecial::ScopedUnion(scoped_union_types) => {
+                let mut filtered_types: Vec<Arc<ScopedType>> = vec![];
+                for scoped_t in scoped_union_types {
+                    match scoped_t.cwt_type() {
+                        CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
+                            if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                                if let Some(type_key_filter) =
+                                    type_def.rule_options.type_key_filter.as_ref()
+                                {
+                                    match type_key_filter {
+                                        TypeKeyFilter::Specific(key) => {
+                                            if properties.contains_key(&key.to_string()) {
+                                                filtered_types.push(scoped_t.clone());
+                                            }
+                                        }
+                                        TypeKeyFilter::OneOf(keys) => {
+                                            if keys.iter().any(|key| {
+                                                properties.contains_key(&key.to_string())
+                                            }) {
+                                                filtered_types.push(scoped_t.clone());
+                                            }
+                                        }
+                                        TypeKeyFilter::Not(key) => {
+                                            if !properties.contains_key(&key.to_string()) {
+                                                filtered_types.push(scoped_t.clone());
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    filtered_types.push(scoped_t.clone());
+                                }
+                            }
+                        }
+                        _ => {
+                            // For non-block types in scoped union, include them
+                            filtered_types.push(scoped_t.clone());
+                        }
+                    }
                 }
-                current_path.push_str(part);
 
-                // Resolve the current type to its actual type
-                current_type = self.resolver.resolve_type(current_type);
-
-                match &current_type.cwt_type() {
-                    CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
-                        match self.resolver.navigate_to_property(current_type, part) {
-                            PropertyNavigationResult::Success(scoped_type) => {
-                                current_type = scoped_type;
-                            }
-                            PropertyNavigationResult::ScopeError(e) => {
-                                return Some(TypeInfo {
-                                    property_path: current_path,
-                                    type_description: format!("Scope error: {}", e),
-                                    scoped_type: None,
-                                    documentation: None,
-                                    source_info: Some(format!("Scope error: {}", e)),
-                                });
-                            }
-                            PropertyNavigationResult::NotFound => {
-                                return Some(TypeInfo {
-                                    property_path: current_path,
-                                    type_description: format!("Unknown property '{}'", part),
-                                    scoped_type: None,
-                                    documentation: None,
-                                    source_info: Some(format!(
-                                        "Property not found in {} entity",
-                                        namespace
-                                    )),
-                                });
-                            }
-                        }
+                match filtered_types.len() {
+                    0 => {
+                        return Arc::new(ScopedType::new_cwt(
+                            CwtType::Unknown,
+                            Default::default(),
+                            None,
+                        ));
                     }
-                    CwtTypeOrSpecial::CwtType(CwtType::Reference(_)) => {
-                        // Handle reference types (like alias_match_left) using the resolver
-                        match self.resolver.navigate_to_property(current_type, part) {
-                            PropertyNavigationResult::Success(scoped_type) => {
-                                current_type = scoped_type;
-                            }
-                            PropertyNavigationResult::ScopeError(e) => {
-                                return Some(TypeInfo {
-                                    property_path: current_path,
-                                    type_description: format!("Scope error: {}", e),
-                                    scoped_type: None,
-                                    documentation: None,
-                                    source_info: Some(format!("Scope error: {}", e)),
-                                });
-                            }
-                            PropertyNavigationResult::NotFound => {
-                                return Some(TypeInfo {
-                                    property_path: current_path,
-                                    type_description: format!("Unknown property '{}'", part),
-                                    scoped_type: None,
-                                    documentation: None,
-                                    source_info: Some(format!(
-                                        "Property not found in {} entity",
-                                        namespace
-                                    )),
-                                });
-                            }
-                        }
+                    1 => {
+                        return filtered_types[0].clone();
                     }
-                    CwtTypeOrSpecial::CwtType(CwtType::Union(_u)) => {
-                        // let mut potential_types = vec![];
-                        // for member in u {
-                        //     self.extract_all_union_types_with_property(
-                        //         current_type.child(member.clone()),
-                        //         part,
-                        //         &mut potential_types,
-                        //     );
-                        // }
-
-                        // potential_types.dedup_by(|a, b| a.fingerprint() == b.fingerprint());
-
-                        // current_type = ScopedType::new_scoped_union(
-                        //     potential_types,
-                        //     current_type.scope_context().clone(),
-                        // );
-
-                        continue;
-                    }
-
                     _ => {
-                        return Some(TypeInfo {
-                            property_path: current_path,
-                            type_description: format!(
-                                "Cannot access property '{}' on non-block type {:?}",
-                                part, current_type
-                            ),
-                            scoped_type: None,
-                            documentation: None,
-                            source_info: Some("Property access on non-block type".to_string()),
-                        });
+                        return Arc::new(ScopedType::new_scoped_union(
+                            filtered_types,
+                            scoped_type.scope_stack().clone(),
+                            scoped_type.in_scripted_effect_block().cloned(),
+                        ));
                     }
                 }
             }
-
-            return Some(TypeInfo {
-                property_path: property_path.to_string(),
-                type_description: formatter.format_type(
-                    current_type.clone(),
-                    path_parts.last().map(|s| *s), // Pass the last part as property name
-                ),
-                scoped_type: Some(current_type.clone()),
-                documentation: None,
-                source_info: Some(format!("From {} entity definition", namespace)),
-            });
+            _ => scoped_type,
         }
-
-        // If not found in namespace types, try CWT type definitions
-        if let Some(type_def) = self.cwt_analyzer.get_type(namespace) {
-            let path_parts: Vec<&str> = property_path.split('.').collect();
-            let scoped_type = Arc::new(ScopedType::new_cwt(
-                type_def.rules.clone(),
-                Default::default(),
-                None,
-            ));
-            return Some(TypeInfo {
-                property_path: property_path.to_string(),
-                type_description: formatter.format_type(
-                    scoped_type.clone(),
-                    path_parts.last().map(|s| *s), // Pass the last part as property name
-                ),
-                scoped_type: Some(scoped_type),
-                documentation: None,
-                source_info: Some(format!("CWT type definition: {}", namespace)),
-            });
-        }
-
-        None
     }
 
     /// Get type information for a property by navigating through an AST entity
@@ -666,8 +570,6 @@ impl TypeCache {
         property_path: &str,
         file_path: Option<&str>,
     ) -> Option<TypeInfo> {
-        let formatter = TypeFormatter::new(&self.resolver, 30);
-
         // Get the base namespace type
         let namespace_type = self.get_namespace_type(namespace, file_path)?;
 
@@ -701,7 +603,6 @@ impl TypeCache {
                         PropertyNavigationResult::ScopeError(e) => {
                             return Some(TypeInfo {
                                 property_path: current_path,
-                                type_description: format!("Scope error: {}", e),
                                 scoped_type: None,
                                 documentation: None,
                                 source_info: Some(format!("Scope error: {}", e)),
@@ -710,7 +611,6 @@ impl TypeCache {
                         PropertyNavigationResult::NotFound => {
                             return Some(TypeInfo {
                                 property_path: current_path,
-                                type_description: format!("Unknown property '{}'", part),
                                 scoped_type: None,
                                 documentation: None,
                                 source_info: Some(format!(
@@ -730,7 +630,6 @@ impl TypeCache {
                         PropertyNavigationResult::ScopeError(e) => {
                             return Some(TypeInfo {
                                 property_path: current_path,
-                                type_description: format!("Scope error: {}", e),
                                 scoped_type: None,
                                 documentation: None,
                                 source_info: Some(format!("Scope error: {}", e)),
@@ -739,7 +638,6 @@ impl TypeCache {
                         PropertyNavigationResult::NotFound => {
                             return Some(TypeInfo {
                                 property_path: current_path,
-                                type_description: format!("Unknown property '{}'", part),
                                 scoped_type: None,
                                 documentation: None,
                                 source_info: Some(format!(
@@ -750,18 +648,134 @@ impl TypeCache {
                         }
                     }
                 }
-                CwtTypeOrSpecial::CwtType(CwtType::Union(_)) => {
-                    // For union types, we could potentially navigate through each member
-                    // For now, just continue - this would need more sophisticated handling
-                    continue;
+                CwtTypeOrSpecial::CwtType(CwtType::Union(union)) => {
+                    // For unions, try each type in the union and collect results
+                    let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
+                    let mut scope_errors = Vec::new();
+
+                    for union_type in union {
+                        // Create a temporary scoped type with this union member type
+                        let temp_scoped_type = Arc::new(ScopedType::new_cwt_with_subtypes(
+                            union_type.clone(),
+                            current_type.scope_stack().clone(),
+                            current_type.subtypes().clone(),
+                            current_type.in_scripted_effect_block().cloned(),
+                        ));
+
+                        // Try to navigate to the property with this type
+                        match self.resolver.navigate_to_property(temp_scoped_type, part) {
+                            PropertyNavigationResult::Success(result) => {
+                                successful_results.push(result);
+                            }
+                            PropertyNavigationResult::ScopeError(error) => {
+                                scope_errors.push(error);
+                            }
+                            PropertyNavigationResult::NotFound => {
+                                // No action needed for NotFound
+                            }
+                        }
+                    }
+
+                    match successful_results.len() {
+                        0 => {
+                            // No successful results - if we have scope errors, return error info
+                            if let Some(error) = scope_errors.into_iter().next() {
+                                return Some(TypeInfo {
+                                    property_path: current_path,
+                                    scoped_type: None,
+                                    documentation: None,
+                                    source_info: Some(format!("Scope error: {}", error)),
+                                });
+                            } else {
+                                return Some(TypeInfo {
+                                    property_path: current_path,
+                                    scoped_type: None,
+                                    documentation: None,
+                                    source_info: Some(format!(
+                                        "Property not found in union type for {} entity",
+                                        namespace
+                                    )),
+                                });
+                            }
+                        }
+                        1 => {
+                            // Single result - use it for continued navigation
+                            current_type = successful_results.into_iter().next().unwrap();
+                        }
+                        _ => {
+                            // Multiple results - create a scoped union of them
+                            current_type = Arc::new(ScopedType::new_with_subtypes(
+                                CwtTypeOrSpecial::ScopedUnion(successful_results),
+                                current_type.scope_stack().clone(),
+                                current_type.subtypes().clone(),
+                                current_type.in_scripted_effect_block().cloned(),
+                            ));
+                        }
+                    }
+                }
+                CwtTypeOrSpecial::ScopedUnion(scoped_unions) => {
+                    // For scoped unions, try each scoped type in the union and collect results
+                    let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
+                    let mut scope_errors = Vec::new();
+
+                    for scoped_union_type in scoped_unions {
+                        // Try to navigate to the property with this scoped type
+                        match self
+                            .resolver
+                            .navigate_to_property(scoped_union_type.clone(), part)
+                        {
+                            PropertyNavigationResult::Success(result) => {
+                                successful_results.push(result);
+                            }
+                            PropertyNavigationResult::ScopeError(error) => {
+                                scope_errors.push(error);
+                            }
+                            PropertyNavigationResult::NotFound => {
+                                // No action needed for NotFound
+                            }
+                        }
+                    }
+
+                    match successful_results.len() {
+                        0 => {
+                            // No successful results - if we have scope errors, return error info
+                            if let Some(error) = scope_errors.into_iter().next() {
+                                return Some(TypeInfo {
+                                    property_path: current_path,
+                                    scoped_type: None,
+                                    documentation: None,
+                                    source_info: Some(format!("Scope error: {}", error)),
+                                });
+                            } else {
+                                return Some(TypeInfo {
+                                    property_path: current_path,
+                                    scoped_type: None,
+                                    documentation: None,
+                                    source_info: Some(format!(
+                                        "Property not found in scoped union type for {} entity",
+                                        namespace
+                                    )),
+                                });
+                            }
+                        }
+                        1 => {
+                            // Single result - use it for continued navigation
+                            current_type = successful_results.into_iter().next().unwrap();
+                        }
+                        _ => {
+                            // Multiple results - create a scoped union of them
+                            current_type = Arc::new(ScopedType::new_with_subtypes(
+                                CwtTypeOrSpecial::ScopedUnion(successful_results),
+                                current_type.scope_stack().clone(),
+                                current_type.subtypes().clone(),
+                                current_type.in_scripted_effect_block().cloned(),
+                            ));
+                        }
+                    }
                 }
                 _ => {
                     return Some(TypeInfo {
                         property_path: current_path,
-                        type_description: format!(
-                            "Cannot access property '{}' on non-block type",
-                            part
-                        ),
                         scoped_type: None,
                         documentation: None,
                         source_info: Some("Property access on non-block type".to_string()),
@@ -772,10 +786,6 @@ impl TypeCache {
 
         Some(TypeInfo {
             property_path: property_path.to_string(),
-            type_description: formatter.format_type(
-                current_type.clone(),
-                path_parts.last().copied(), // Pass the last part as property name
-            ),
             scoped_type: Some(current_type.clone()),
             documentation: None,
             source_info: None,

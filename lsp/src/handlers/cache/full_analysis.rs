@@ -3,10 +3,9 @@ use std::{
     sync::RwLock,
 };
 
-use crate::handlers::cache::{DataCollector, GameDataCache, TypeCache};
+use crate::handlers::cache::{DataCollector, TypeCache};
 
 pub struct FullAnalysis {
-    game_data: &'static GameDataCache,
     type_cache: &'static TypeCache,
 }
 
@@ -20,11 +19,8 @@ pub struct FullAnalysisResult {
 static FULL_ANALYSIS: RwLock<Option<FullAnalysisResult>> = RwLock::new(None);
 
 impl FullAnalysis {
-    pub fn new(game_data: &'static GameDataCache, type_cache: &'static TypeCache) -> Self {
-        Self {
-            game_data,
-            type_cache,
-        }
+    pub fn new(type_cache: &'static TypeCache) -> Self {
+        Self { type_cache }
     }
 
     pub fn get() -> Option<FullAnalysisResult> {

@@ -3,10 +3,13 @@ use std::sync::{Arc, RwLock};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, jsonrpc::Result};
 
-use super::cache::{
-    get_entity_property_type, get_entity_property_type_from_ast, get_namespace_entity_type,
+use crate::handlers::cache::types::TypeInfo;
+use crate::handlers::cache::{
+    EntityRestructurer, GameDataCache, TypeCache, TypeFormatter, get_entity_property_type_from_ast,
 };
+
 use super::document_cache::DocumentCache;
+use super::scoped_type::PropertyNavigationResult;
 use super::utils::{extract_namespace_from_uri, position_to_offset};
 use cw_parser::{AstEntity, AstExpression, AstNode, AstValue, AstVisitor};
 
@@ -19,6 +22,8 @@ where
     current_path: Vec<String>,
     found_property: Option<String>,
     found_entity_context: Option<&'ast AstEntity<'a>>,
+    found_container_key: Option<String>,
+    found_entity_key: Option<String>,
     original_input: &'a str,
 }
 
@@ -29,6 +34,8 @@ impl<'a, 'ast> PropertyPathBuilder<'a, 'ast> {
             current_path: Vec::new(),
             found_property: None,
             found_entity_context: None,
+            found_container_key: None,
+            found_entity_key: None,
             original_input: input,
         }
     }
@@ -67,6 +74,20 @@ where
                 format!("{}.{}", self.build_path(), node.key.raw_value())
             };
             self.found_property = Some(full_path);
+
+            // Set container and entity context based on the path level
+            if self.current_path.is_empty() {
+                // Top-level key - this is both container and entity key for normal entities
+                self.found_container_key = Some(node.key.raw_value().to_string());
+                self.found_entity_key = Some(node.key.raw_value().to_string());
+            } else {
+                // Nested property - the container/entity is the first element in current_path
+                if let Some(first_path_element) = self.current_path.first() {
+                    self.found_container_key = Some(first_path_element.clone());
+                    self.found_entity_key = Some(first_path_element.clone()); // Same for normal entities
+                }
+            }
+
             return;
         }
 
@@ -140,6 +161,33 @@ pub fn hover(
         None => return Ok(None),
     };
 
+    // Check if required caches are initialized
+    if !TypeCache::is_initialized()
+        || !GameDataCache::is_initialized()
+        || !EntityRestructurer::is_initialized()
+    {
+        return Ok(None);
+    }
+
+    let type_cache = TypeCache::get().unwrap();
+
+    // Extract namespace from URI to get type information
+    let namespace = match extract_namespace_from_uri(&uri) {
+        Some(namespace) => namespace,
+        None => return Ok(None),
+    };
+
+    if namespace.starts_with("common/inline_scripts") {
+        // These are special, they don't have a type
+        return Ok(None);
+    }
+
+    // Get namespace type information
+    let namespace_type = match type_cache.get_namespace_type(&namespace, Some(&uri)) {
+        Some(info) => info,
+        None => return Ok(None),
+    };
+
     // Find the property at the given position
     let mut builder = PropertyPathBuilder::new(offset, cached_document.borrow_input());
 
@@ -149,77 +197,168 @@ pub fn hover(
         return Ok(None);
     }
 
-    if let Some(property_path) = builder.found_property {
-        // Extract namespace from URI to get type information
-        let namespace = extract_namespace_from_uri(&uri);
-
+    if let Some(property_path) = builder.found_property.as_ref() {
         // Check if this is a top-level key (entity name) or a nested property
         let is_top_level_key = !property_path.contains('.');
 
         // Build the base hover content
         let mut hover_content = String::new();
 
-        // Add type information if we can determine the namespace
-        if let Some(namespace) = namespace {
-            // Only try to get type info if the type cache is initialized
-            if crate::handlers::cache::TypeCache::is_initialized() {
-                let type_info = if is_top_level_key {
-                    // For top-level keys, show the namespace type (the structure of entities in this namespace)
-                    get_namespace_entity_type(&namespace, Some(&uri))
-                } else {
-                    // For nested properties, use AST-based type resolution if we have entity context
-                    let property_parts: Vec<&str> = property_path.split('.').collect();
-                    if property_parts.len() > 1 {
-                        // Skip the first part (entity name) and join the rest
-                        let actual_property_path = property_parts[1..].join(".");
+        let type_info = if is_top_level_key {
+            // For top-level keys, we don't want to show namespace type as it's confusing
+            // Top-level keys are entity names which can be anything, so no type info
+            None
+        } else {
+            // For nested properties, we need to find the correct entity context first
+            let property_parts: Vec<&str> = property_path.split('.').collect();
+            if property_parts.len() > 1 {
+                // Skip the first part (entity name) and join the rest
+                let actual_property_path = property_parts[1..].join(".");
 
-                        // Try to use AST-based resolution if we have entity context
-                        if let Some(entity_context) = builder.found_entity_context {
-                            get_entity_property_type_from_ast(
-                                &namespace,
-                                entity_context,
-                                &actual_property_path,
-                                Some(&uri),
-                            )
-                        } else {
-                            // Fallback to string-based resolution
-                            get_entity_property_type(&namespace, &actual_property_path, Some(&uri))
+                // Use the entity context found by PropertyPathBuilder
+                if let Some(entity_context) = builder.found_entity_context {
+                    // Implement the exact same flow as provider.rs for sophisticated type resolution
+                    let container_key = property_parts[0];
+                    let entity_key = container_key; // For normal entities, these are the same
+
+                    // Step 1: Filter union types based on the ROOT KEY (type_key_filter)
+                    let mut root_key_data = HashMap::new();
+                    root_key_data.insert(container_key.to_string(), "{}".to_string());
+
+                    let filtered_namespace_type = type_cache
+                        .filter_union_types_by_properties(namespace_type.clone(), &root_key_data);
+
+                    // Step 2: Get the effective entity for subtype narrowing
+                    let (_effective_key, effective_entity) =
+                        EntityRestructurer::get_effective_entity_for_subtype_narrowing(
+                            &namespace,
+                            container_key,
+                            entity_key,
+                            entity_context,
+                        );
+
+                    // Step 3: Extract property data from the effective entity for subtype narrowing
+                    let mut property_data = HashMap::new();
+                    for (key, property_list) in &effective_entity.properties.kv {
+                        if let Some(first_property) = property_list.0.first() {
+                            property_data.insert(key.clone(), first_property.value.to_string());
                         }
+                    }
+
+                    // Step 4: Perform subtype narrowing with the effective entity data
+                    let matching_subtypes = type_cache.get_resolver().determine_matching_subtypes(
+                        filtered_namespace_type.clone(),
+                        &property_data,
+                    );
+
+                    let validation_type = if !matching_subtypes.is_empty() {
+                        Arc::new(filtered_namespace_type.with_subtypes(matching_subtypes))
                     } else {
-                        None
-                    }
-                };
+                        filtered_namespace_type
+                    };
 
-                if let Some(type_info) = type_info {
-                    // Add type information in a clean format
-                    hover_content.push_str(&format!("```\n{}\n```", type_info.type_description));
+                    // Step 5: Navigate to the specific property within the narrowed type
+                    let path_parts: Vec<&str> = actual_property_path.split('.').collect();
+                    let mut current_type = validation_type;
 
-                    // Add brief documentation if available
-                    if let Some(documentation) = &type_info.documentation {
-                        if !documentation.trim().is_empty() {
-                            hover_content.push_str(&format!("\n\n{}", documentation.trim()));
+                    for part in path_parts.iter() {
+                        // Resolve the current type to its actual type before navigation
+                        current_type = type_cache.get_resolver().resolve_type(current_type);
+
+                        match type_cache
+                            .get_resolver()
+                            .navigate_to_property(current_type, part)
+                        {
+                            PropertyNavigationResult::Success(property_type) => {
+                                current_type = property_type;
+                            }
+                            PropertyNavigationResult::NotFound => {
+                                return Ok(None);
+                            }
+                            PropertyNavigationResult::ScopeError(_) => {
+                                return Ok(None);
+                            }
                         }
                     }
 
-                    // Add source info if available and it indicates subtype narrowing was applied
-                    if let Some(source_info) = &type_info.source_info {
-                        if source_info.contains("subtype narrowing") {
-                            hover_content.push_str(&format!("\n\n*{}*", source_info));
+                    Some(TypeInfo {
+                        property_path: actual_property_path.clone(),
+                        scoped_type: Some(current_type),
+                        documentation: None,
+                        source_info: None,
+                    })
+                } else {
+                    // Fallback: try to find the entity in the AST manually
+                    let mut found_entity_type = None;
+                    if let Ok(ast) = cached_document.borrow_ast() {
+                        let entity_name = property_parts[0];
+
+                        // Find the entity in the AST that matches our container key
+                        for item in &ast.items {
+                            if let cw_parser::AstEntityItem::Expression(expr) = item {
+                                if expr.key.raw_value() == entity_name {
+                                    if let AstValue::Entity(ast_entity) = &expr.value {
+                                        // Found the right entity context - use AST-based resolution
+                                        found_entity_type = get_entity_property_type_from_ast(
+                                            &namespace,
+                                            ast_entity,
+                                            &actual_property_path,
+                                            Some(&uri),
+                                        );
+                                    }
+                                    break; // Found the key, stop searching
+                                }
+                            }
                         }
                     }
+
+                    // Only use string-based fallback if AST lookup completely failed
+                    found_entity_type
+                }
+            } else {
+                None
+            }
+        };
+
+        if let Some(type_info) = type_info {
+            // Format the type information using TypeFormatter
+            if let Some(scoped_type) = &type_info.scoped_type {
+                let formatter = TypeFormatter::new(&type_cache.get_resolver(), 30);
+                let property_parts: Vec<&str> = type_info.property_path.split('.').collect();
+                let formatted_type = formatter.format_type(
+                    scoped_type.clone(),
+                    property_parts.last().copied(), // Pass the last part as property name
+                );
+                // Add type information in a clean format
+                hover_content.push_str(&format!("```\n{}\n```", formatted_type));
+            }
+
+            // Add brief documentation if available
+            if let Some(documentation) = &type_info.documentation {
+                if !documentation.trim().is_empty() {
+                    hover_content.push_str(&format!("\n\n{}", documentation.trim()));
+                }
+            }
+
+            // Add source info if available
+            if let Some(source_info) = &type_info.source_info {
+                if !source_info.is_empty() {
+                    hover_content.push_str(&format!("\n\n*{}*", source_info));
                 }
             }
         }
 
-        let hover = Hover {
-            contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value: hover_content,
-            }),
-            range: None, // We could calculate the exact range if needed
-        };
+        if !hover_content.is_empty() {
+            let hover = Hover {
+                contents: HoverContents::Markup(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: hover_content,
+                }),
+                range: None, // We could calculate the exact range if needed
+            };
 
-        return Ok(Some(hover));
+            return Ok(Some(hover));
+        }
     }
 
     Ok(None)

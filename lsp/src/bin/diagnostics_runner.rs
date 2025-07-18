@@ -197,7 +197,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let full_analysis_start = std::time::Instant::now();
 
     println!("{}", "Loading full analysis...".blue().bold());
-    let full_analysis = FullAnalysis::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
+    let full_analysis = FullAnalysis::new(TypeCache::get().unwrap());
     full_analysis.load();
 
     let full_analysis_duration = full_analysis_start.elapsed();

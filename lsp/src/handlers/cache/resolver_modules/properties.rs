@@ -412,6 +412,49 @@ impl PropertyNavigator {
                     }
                 }
             }
+            CwtTypeOrSpecial::ScopedUnion(scoped_unions) => {
+                // For scoped unions, try each scoped type in the union and if there are multiple matches,
+                // make a union of the results
+                let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
+                let mut scope_errors = Vec::new();
+
+                for scoped_union_type in scoped_unions {
+                    // Try to navigate to the property with this scoped type
+                    let result =
+                        self.navigate_to_property(scoped_union_type.clone(), property_name);
+                    self.collect_navigation_result(
+                        result,
+                        &mut successful_results,
+                        &mut scope_errors,
+                    );
+                }
+
+                match successful_results.len() {
+                    0 => {
+                        // No successful results - if we have scope errors, return the first one
+                        if let Some(error) = scope_errors.into_iter().next() {
+                            PropertyNavigationResult::ScopeError(error)
+                        } else {
+                            PropertyNavigationResult::NotFound
+                        }
+                    }
+                    1 => {
+                        // Single result - return it directly
+                        let result = successful_results.into_iter().next().unwrap();
+                        PropertyNavigationResult::Success(result)
+                    }
+                    _ => {
+                        // Multiple results - create a scoped union of them to preserve all scope contexts
+                        let result_scoped = ScopedType::new_with_subtypes(
+                            CwtTypeOrSpecial::ScopedUnion(successful_results),
+                            scoped_type.scope_stack().clone(),
+                            scoped_type.subtypes().clone(),
+                            scoped_type.in_scripted_effect_block().cloned(),
+                        );
+                        PropertyNavigationResult::Success(Arc::new(result_scoped))
+                    }
+                }
+            }
             _ => {
                 // For other types, check if this property is a link property as fallback
                 let current_scope = &scoped_type.scope_stack().current_scope().scope_type;

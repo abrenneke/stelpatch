@@ -192,6 +192,9 @@ impl<'resolver> DataCollector<'resolver> {
                 let mut values = HashSet::new();
                 for value in property_value.0.iter() {
                     if let Some(value) = value.value.as_string() {
+                        if value == "human_species" {
+                            dbg!(&value);
+                        }
                         values.insert(value.clone());
                     }
                 }
