@@ -10,7 +10,9 @@ use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use crate::handlers::cache::resolver::TypeResolver;
-use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
+use crate::handlers::scoped_type::{
+    CwtTypeOrSpecial, CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType,
+};
 
 use super::types::TypeInfo;
 
@@ -105,7 +107,7 @@ impl TypeCache {
                     name_field: None,
                     skip_root_key: None,
                     localisation: HashMap::new(),
-                    rules: CwtType::Unknown,
+                    rules: Arc::new(CwtType::Unknown),
                     subtypes: HashMap::new(),
                     options: Default::default(),
                     rule_options: Default::default(),
@@ -128,7 +130,7 @@ impl TypeCache {
             inline_script_block.properties.insert(
                 "script".to_string(),
                 Property {
-                    property_type: CwtType::Reference(ReferenceType::InlineScript),
+                    property_type: Arc::new(CwtType::Reference(ReferenceType::InlineScript)),
                     documentation: None,
                     options: Default::default(),
                 },
@@ -137,7 +139,7 @@ impl TypeCache {
             inline_script_block.properties.insert(
                 "scalar".to_string(),
                 Property {
-                    property_type: CwtType::Any,
+                    property_type: Arc::new(CwtType::Any),
                     documentation: None,
                     options: Default::default(),
                 },
@@ -152,12 +154,12 @@ impl TypeCache {
                     skip_root_key: None,
                     subtypes: HashMap::new(),
                     localisation: HashMap::new(),
-                    rules: CwtType::Union(vec![
+                    rules: Arc::new(CwtType::Union(vec![
                         // inline_script = {}
-                        CwtType::Block(inline_script_block),
+                        Arc::new(CwtType::Block(inline_script_block)),
                         // inline_script = "path/to/script"
-                        CwtType::Simple(SimpleType::Scalar),
-                    ]),
+                        Arc::new(CwtType::Simple(SimpleType::Scalar)),
+                    ])),
                     options: Default::default(),
                     rule_options: Default::default(),
                     modifiers: Default::default(),
@@ -324,23 +326,23 @@ impl TypeCache {
                 return None;
             }
 
-            let mut union_types = vec![];
+            let mut union_types: Vec<Arc<CwtType>> = vec![];
 
             // If the type def has a file_path... try to match the file_path to the type def,
             // this takes precence over the union type
             for scoped_type in &namespace_types {
-                if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) = scoped_type.cwt_type() {
+                if let CwtTypeOrSpecialRef::Block(block) = scoped_type.cwt_type_for_matching() {
                     if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
                         if let Some(path_file) = type_def.options.path_file.as_ref() {
                             // path_file == file_path
                             if let Some(file_path) = file_path {
                                 if path_file.contains(file_path) {
-                                    if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) =
-                                        scoped_type.cwt_type()
+                                    if let CwtTypeOrSpecialRef::Block(block) =
+                                        scoped_type.cwt_type_for_matching()
                                     {
                                         // path_file always wins
                                         return Some(Arc::new(ScopedType::new_cwt(
-                                            CwtType::Block(block.clone()),
+                                            Arc::new(CwtType::Block(block.clone())),
                                             Default::default(),
                                             None,
                                         )));
@@ -356,10 +358,10 @@ impl TypeCache {
                         // namespace contains path
                         if let Some(path) = type_def.path.as_ref() {
                             if namespace.contains(path.trim_start_matches("game/")) {
-                                if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) =
-                                    scoped_type.cwt_type()
+                                if let CwtTypeOrSpecialRef::Block(block) =
+                                    scoped_type.cwt_type_for_matching()
                                 {
-                                    union_types.push(CwtType::Block(block.clone()));
+                                    union_types.push(Arc::new(CwtType::Block(block.clone())));
                                 }
                             }
                         }
@@ -378,7 +380,7 @@ impl TypeCache {
                 }
                 _ => {
                     return Some(Arc::new(ScopedType::new_cwt(
-                        CwtType::Union(union_types),
+                        Arc::new(CwtType::Union(union_types)),
                         Default::default(),
                         None,
                     )));
@@ -386,8 +388,8 @@ impl TypeCache {
             }
 
             for scoped_type in &namespace_types {
-                if let CwtTypeOrSpecial::CwtType(CwtType::Block(block)) = scoped_type.cwt_type() {
-                    union_types.push(CwtType::Block(block.clone()));
+                if let CwtTypeOrSpecialRef::Block(block) = scoped_type.cwt_type_for_matching() {
+                    union_types.push(Arc::new(CwtType::Block(block.clone())));
                 }
             }
 
@@ -404,7 +406,7 @@ impl TypeCache {
                 }
                 _ => {
                     return Some(Arc::new(ScopedType::new_cwt(
-                        CwtType::Union(union_types),
+                        Arc::new(CwtType::Union(union_types)),
                         Default::default(),
                         None,
                     )));
@@ -425,11 +427,11 @@ impl TypeCache {
         scoped_type: Arc<ScopedType>,
         properties: &HashMap<String, String>,
     ) -> Arc<ScopedType> {
-        match scoped_type.cwt_type() {
-            CwtTypeOrSpecial::CwtType(CwtType::Union(union_types)) => {
-                let mut filtered_types: Vec<CwtType> = vec![];
+        match scoped_type.cwt_type_for_matching() {
+            CwtTypeOrSpecialRef::Union(union_types) => {
+                let mut filtered_types: Vec<Arc<CwtType>> = vec![];
                 for t in union_types {
-                    match t {
+                    match &**t {
                         CwtType::Block(block) => {
                             if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
                                 if let Some(type_key_filter) =
@@ -438,24 +440,27 @@ impl TypeCache {
                                     match type_key_filter {
                                         TypeKeyFilter::Specific(key) => {
                                             if properties.contains_key(&key.to_string()) {
-                                                filtered_types.push(CwtType::Block(block.clone()));
+                                                filtered_types
+                                                    .push(Arc::new(CwtType::Block(block.clone())));
                                             }
                                         }
                                         TypeKeyFilter::OneOf(keys) => {
                                             if keys.iter().any(|key| {
                                                 properties.contains_key(&key.to_string())
                                             }) {
-                                                filtered_types.push(CwtType::Block(block.clone()));
+                                                filtered_types
+                                                    .push(Arc::new(CwtType::Block(block.clone())));
                                             }
                                         }
                                         TypeKeyFilter::Not(key) => {
                                             if !properties.contains_key(&key.to_string()) {
-                                                filtered_types.push(CwtType::Block(block.clone()));
+                                                filtered_types
+                                                    .push(Arc::new(CwtType::Block(block.clone())));
                                             }
                                         }
                                     }
                                 } else {
-                                    filtered_types.push(CwtType::Block(block.clone()));
+                                    filtered_types.push(Arc::new(CwtType::Block(block.clone())));
                                 }
                             }
                         }
@@ -468,7 +473,7 @@ impl TypeCache {
                 match filtered_types.len() {
                     0 => {
                         return Arc::new(ScopedType::new_cwt(
-                            CwtType::Unknown,
+                            Arc::new(CwtType::Unknown),
                             Default::default(),
                             None,
                         ));
@@ -482,18 +487,18 @@ impl TypeCache {
                     }
                     _ => {
                         return Arc::new(ScopedType::new_cwt(
-                            CwtType::Union(filtered_types),
+                            Arc::new(CwtType::Union(filtered_types)),
                             Default::default(),
                             None,
                         ));
                     }
                 }
             }
-            CwtTypeOrSpecial::ScopedUnion(scoped_union_types) => {
+            CwtTypeOrSpecialRef::ScopedUnion(scoped_union_types) => {
                 let mut filtered_types: Vec<Arc<ScopedType>> = vec![];
                 for scoped_t in scoped_union_types {
-                    match scoped_t.cwt_type() {
-                        CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
+                    match scoped_t.cwt_type_for_matching() {
+                        CwtTypeOrSpecialRef::Block(block) => {
                             if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
                                 if let Some(type_key_filter) =
                                     type_def.rule_options.type_key_filter.as_ref()
@@ -532,7 +537,7 @@ impl TypeCache {
                 match filtered_types.len() {
                     0 => {
                         return Arc::new(ScopedType::new_cwt(
-                            CwtType::Unknown,
+                            Arc::new(CwtType::Unknown),
                             Default::default(),
                             None,
                         ));
@@ -594,8 +599,8 @@ impl TypeCache {
             // Resolve the current type to its actual type
             current_type = self.resolver.resolve_type(current_type);
 
-            match &current_type.cwt_type() {
-                CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
+            match &current_type.cwt_type_for_matching() {
+                CwtTypeOrSpecialRef::Block(_) => {
                     match self.resolver.navigate_to_property(current_type, part) {
                         PropertyNavigationResult::Success(scoped_type) => {
                             current_type = scoped_type;
@@ -621,7 +626,7 @@ impl TypeCache {
                         }
                     }
                 }
-                CwtTypeOrSpecial::CwtType(CwtType::Reference(_)) => {
+                CwtTypeOrSpecialRef::Reference(_) => {
                     // Handle reference types using the resolver
                     match self.resolver.navigate_to_property(current_type, part) {
                         PropertyNavigationResult::Success(scoped_type) => {
@@ -648,12 +653,12 @@ impl TypeCache {
                         }
                     }
                 }
-                CwtTypeOrSpecial::CwtType(CwtType::Union(union)) => {
+                CwtTypeOrSpecialRef::Union(union) => {
                     // For unions, try each type in the union and collect results
                     let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
                     let mut scope_errors = Vec::new();
 
-                    for union_type in union {
+                    for union_type in *union {
                         // Create a temporary scoped type with this union member type
                         let temp_scoped_type = Arc::new(ScopedType::new_cwt_with_subtypes(
                             union_type.clone(),
@@ -713,12 +718,12 @@ impl TypeCache {
                         }
                     }
                 }
-                CwtTypeOrSpecial::ScopedUnion(scoped_unions) => {
+                CwtTypeOrSpecialRef::ScopedUnion(scoped_unions) => {
                     // For scoped unions, try each scoped type in the union and collect results
                     let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
                     let mut scope_errors = Vec::new();
 
-                    for scoped_union_type in scoped_unions {
+                    for scoped_union_type in *scoped_unions {
                         // Try to navigate to the property with this scoped type
                         match self
                             .resolver
@@ -837,7 +842,7 @@ impl TypeCache {
         base_type: Arc<ScopedType>,
         property_data: &HashMap<String, String>,
     ) -> Arc<ScopedType> {
-        if let CwtTypeOrSpecial::CwtType(CwtType::Block(block_type)) = base_type.cwt_type() {
+        if let CwtTypeOrSpecialRef::Block(block_type) = base_type.cwt_type_for_matching() {
             if !block_type.subtypes.is_empty() {
                 // Try to determine the matching subtypes
                 let detected_subtypes = self

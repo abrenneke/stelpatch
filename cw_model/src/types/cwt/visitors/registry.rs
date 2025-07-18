@@ -15,6 +15,7 @@ use cw_parser::cwt::{
     AstCwtIdentifierOrString, AstCwtRule, CwtModule, CwtReferenceType, CwtValue, CwtVisitor,
 };
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// Master data structure that owns all CWT analysis results
 #[derive(Debug, Default)]
@@ -32,7 +33,7 @@ pub struct CwtAnalysisData {
     pub aliases: HashMap<AliasPattern, AliasDefinition>,
 
     /// Known single aliases registry
-    pub single_aliases: HashMap<String, CwtType>,
+    pub single_aliases: HashMap<String, Arc<CwtType>>,
 
     /// Known links registry
     pub links: HashMap<String, LinkDefinition>,

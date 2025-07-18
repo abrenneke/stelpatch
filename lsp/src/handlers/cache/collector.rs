@@ -11,7 +11,7 @@ use crate::handlers::{
         TypeCache, entity_restructurer::EntityRestructurer, game_data::GameDataCache,
         get_namespace_entity_type, resolver::TypeResolver,
     },
-    scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
+    scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType},
 };
 
 pub struct DataCollector<'resolver> {
@@ -187,8 +187,8 @@ impl<'resolver> DataCollector<'resolver> {
     ) -> HashMap<String, HashSet<String>> {
         let mut property_value_sets: HashMap<String, HashSet<String>> = HashMap::new();
 
-        match property_type.cwt_type() {
-            CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::ValueSet { key })) => {
+        match property_type.cwt_type_for_matching() {
+            CwtTypeOrSpecialRef::Reference(ReferenceType::ValueSet { key }) => {
                 let mut values = HashSet::new();
                 for value in property_value.0.iter() {
                     if let Some(value) = value.value.as_string() {
@@ -205,7 +205,7 @@ impl<'resolver> DataCollector<'resolver> {
                         .extend(values);
                 }
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Block(_)) => {
+            CwtTypeOrSpecialRef::Block(_) => {
                 for value in property_value.0.iter() {
                     if let Some(value) = value.value.as_entity() {
                         let nested_results =
@@ -216,10 +216,10 @@ impl<'resolver> DataCollector<'resolver> {
                     }
                 }
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Union(union_types)) => {
+            CwtTypeOrSpecialRef::Union(union_types) => {
                 // Process all union members that are blocks
                 for union_type in union_types {
-                    match union_type {
+                    match &**union_type {
                         CwtType::Block(_) => {
                             // Create a scoped type for this union member
                             let union_member_type = Arc::new(ScopedType::new_cwt(
@@ -258,7 +258,7 @@ impl<'resolver> DataCollector<'resolver> {
                     }
                 }
             }
-            CwtTypeOrSpecial::ScopedUnion(scoped_union) => {
+            CwtTypeOrSpecialRef::ScopedUnion(scoped_union) => {
                 // Process all scoped union members using the same logic
                 for scoped_type in scoped_union {
                     let nested_results =
@@ -282,9 +282,9 @@ impl<'resolver> DataCollector<'resolver> {
         let mut item_value_sets: HashMap<String, HashSet<String>> = HashMap::new();
 
         // Check if the scoped type has additional flags that are value sets
-        if let CwtTypeOrSpecial::CwtType(CwtType::Block(block_type)) = scoped_type.cwt_type() {
+        if let CwtTypeOrSpecialRef::Block(block_type) = scoped_type.cwt_type_for_matching() {
             for additional_flag in &block_type.additional_flags {
-                if let CwtType::Reference(ReferenceType::ValueSet { key }) = additional_flag {
+                if let CwtType::Reference(ReferenceType::ValueSet { key }) = &**additional_flag {
                     let mut values = HashSet::new();
                     for item in items {
                         if let Some(string_value) = item.as_string() {
@@ -356,13 +356,13 @@ impl<'resolver> DataCollector<'resolver> {
 
         // Check if this is a flat list extraction pattern (name = { enum_name })
         // This happens when enum_name is in additional_flags, meaning extract all values directly
-        let is_flat_list_pattern = match &complex_def.name_structure {
+        let is_flat_list_pattern = match &*complex_def.name_structure {
             CwtType::Block(block_type) => {
                 // Check if additional_flags contains enum_name literal
                 block_type
                     .additional_flags
                     .iter()
-                    .any(|flag| matches!(flag, CwtType::Literal(lit) if lit == "enum_name"))
+                    .any(|flag| matches!(&**flag, CwtType::Literal(lit) if lit == "enum_name"))
             }
             CwtType::Literal(lit) if lit == "enum_name" => true,
             _ => false,
@@ -412,7 +412,7 @@ impl<'resolver> DataCollector<'resolver> {
                 for (property_name, property_value) in &entity.properties.kv {
                     if let Some(expected_property) = block_type.properties.get(property_name) {
                         for value in &property_value.0 {
-                            match &expected_property.property_type {
+                            match &*expected_property.property_type {
                                 CwtType::Literal(literal) if literal == "enum_name" => {
                                     // Handle direct string values for enum_name
                                     if let Some(string_value) = value.value.as_string() {
@@ -468,7 +468,7 @@ impl<'resolver> DataCollector<'resolver> {
                     for (property_name, property_type) in &block_type.properties {
                         if let Some(property_value) = entity.properties.kv.get(property_name) {
                             for value in &property_value.0 {
-                                match &property_type.property_type {
+                                match &*property_type.property_type {
                                     CwtType::Literal(literal) if literal == "enum_name" => {
                                         // This is the special marker for enum name extraction
                                         if let Some(string_value) = value.value.as_string() {
@@ -498,7 +498,7 @@ impl<'resolver> DataCollector<'resolver> {
                                     CwtType::Union(union_types) => {
                                         // Process all union members
                                         for union_type in union_types {
-                                            match union_type {
+                                            match &**union_type {
                                                 CwtType::Literal(literal)
                                                     if literal == "enum_name" =>
                                                 {
@@ -556,7 +556,7 @@ impl<'resolver> DataCollector<'resolver> {
             }
             CwtType::Array(array_type) => {
                 // For arrays, check if the element type is enum_name
-                if let CwtType::Literal(literal) = &*array_type.element_type {
+                if let CwtType::Literal(literal) = &**array_type.element_type {
                     if literal == "enum_name" {
                         // Extract all string values from entity items
                         for item in &entity.items {
@@ -578,7 +578,7 @@ impl<'resolver> DataCollector<'resolver> {
             CwtType::Union(union_types) => {
                 // Process all union members
                 for union_type in union_types {
-                    match union_type {
+                    match &**union_type {
                         CwtType::Literal(literal) if literal == "enum_name" => {
                             // Extract all string values from entity items
                             for item in &entity.items {

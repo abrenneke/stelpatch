@@ -232,19 +232,19 @@ tradable_actions = {
 
         // Verify the nested structure exists
         let tradable_actions_type = &data.types["tradable_actions"];
-        if let CwtType::Block(block) = &tradable_actions_type.rules {
+        if let CwtType::Block(block) = &*tradable_actions_type.rules {
             // Should have ai_weight property
             assert!(block.properties.contains_key("ai_weight"));
 
             // ai_weight should itself be a block
             let ai_weight_prop = &block.properties["ai_weight"];
-            if let CwtType::Block(ai_weight_block) = &ai_weight_prop.property_type {
+            if let CwtType::Block(ai_weight_block) = &*ai_weight_prop.property_type {
                 // Should have modifier property
                 assert!(ai_weight_block.properties.contains_key("modifier"));
 
                 // modifier should be a block with factor and weight
                 let modifier_prop = &ai_weight_block.properties["modifier"];
-                if let CwtType::Block(modifier_block) = &modifier_prop.property_type {
+                if let CwtType::Block(modifier_block) = &*modifier_prop.property_type {
                     assert!(modifier_block.properties.contains_key("factor"));
                     assert!(modifier_block.properties.contains_key("weight"));
                 } else {

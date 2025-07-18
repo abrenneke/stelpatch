@@ -1,7 +1,7 @@
 use crate::handlers::cache::FullAnalysis;
 use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{
-    CwtTypeOrSpecial, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
+    CwtTypeOrSpecial, CwtTypeOrSpecialRef, PropertyNavigationResult, ScopeAwareProperty, ScopedType,
 };
 use crate::handlers::settings::VALIDATE_LOCALISATION;
 use crate::handlers::utils::contains_scripted_argument;
@@ -85,8 +85,8 @@ impl PropertyNavigator {
         }
 
         // Handle regular properties based on the current type
-        match scoped_type.cwt_type() {
-            CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
+        match scoped_type.cwt_type_for_matching() {
+            CwtTypeOrSpecialRef::Block(block) => {
                 // Collect ALL possible matches instead of returning early
                 let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
                 let mut scope_errors = Vec::new();
@@ -246,7 +246,7 @@ impl PropertyNavigator {
                 // If it's a scripted argument, this could be really anything
                 if contains_scripted_argument(property_name) {
                     let any_scoped = ScopedType::new_with_subtypes(
-                        CwtTypeOrSpecial::CwtType(CwtType::Any),
+                        CwtTypeOrSpecial::CwtType(Arc::new(CwtType::Any)),
                         scoped_type.scope_stack().clone(),
                         scoped_type.subtypes().clone(),
                         scoped_type.in_scripted_effect_block().cloned(),
@@ -290,9 +290,7 @@ impl PropertyNavigator {
                     }
                 }
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::AliasMatchLeft {
-                key,
-            })) => {
+            CwtTypeOrSpecialRef::Reference(ReferenceType::AliasMatchLeft { key }) => {
                 // For alias_match_left[category], we need to look up the specific alias
                 // category:property_name and return its type
                 let (resolved_cwt_type, alias_def, scripted_effect_name) = self
@@ -301,7 +299,7 @@ impl PropertyNavigator {
 
                 // Check if we found a matching alias
                 if matches!(
-                    resolved_cwt_type,
+                    &*resolved_cwt_type,
                     CwtType::Reference(ReferenceType::AliasMatchLeft { .. })
                 ) {
                     // No matching alias was found - check if this property is a link property as fallback
@@ -362,7 +360,7 @@ impl PropertyNavigator {
                     }
                 }
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Union(union)) => {
+            CwtTypeOrSpecialRef::Union(union) => {
                 // For unions, try each type in the union and if there are multiple matches, make
                 // a union of the results
                 let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
@@ -412,7 +410,7 @@ impl PropertyNavigator {
                     }
                 }
             }
-            CwtTypeOrSpecial::ScopedUnion(scoped_unions) => {
+            CwtTypeOrSpecialRef::ScopedUnion(scoped_unions) => {
                 // For scoped unions, try each scoped type in the union and if there are multiple matches,
                 // make a union of the results
                 let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
@@ -524,7 +522,7 @@ impl PropertyNavigator {
             }
         } else {
             // Same scope context - but we may need to determine the subtype for the property type
-            let property_scoped = if let CwtType::Block(property_block) = &property.property_type {
+            let property_scoped = if let CwtType::Block(property_block) = &*property.property_type {
                 // If the property type is a block with subtypes, we might need to determine the subtype
                 let subtypes = if !property_block.subtypes.is_empty() {
                     // For now, we don't have the actual property data to determine subtypes
@@ -561,7 +559,7 @@ impl PropertyNavigator {
     ) -> PropertyNavigationResult {
         // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
         let (resolved_value_type, alias_def, scripted_effect_block) =
-            match &pattern_property.value_type {
+            match &*pattern_property.value_type {
                 CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
                     // Resolve the AliasMatchLeft using the property name
                     let result = self
@@ -687,7 +685,7 @@ impl PropertyNavigator {
     ) -> PropertyNavigationResult {
         // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
         let (resolved_value_type, alias_def, scripted_effect_block) =
-            match &subtype_pattern_property.value_type {
+            match &*subtype_pattern_property.value_type {
                 CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
                     // Resolve the AliasMatchLeft using the property name
                     let result = self
@@ -740,8 +738,8 @@ impl PropertyNavigator {
     pub fn get_available_properties(&self, scoped_type: Arc<ScopedType>) -> Vec<String> {
         let mut properties = Vec::new();
 
-        match scoped_type.cwt_type() {
-            CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
+        match scoped_type.cwt_type_for_matching() {
+            CwtTypeOrSpecialRef::Block(block) => {
                 // Add subtype-specific properties first
                 for subtype_name in scoped_type.subtypes() {
                     if let Some(subtype_def) = block.subtypes.get(subtype_name) {
@@ -760,9 +758,7 @@ impl PropertyNavigator {
                     properties.extend(completions);
                 }
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::AliasMatchLeft {
-                key,
-            })) => {
+            CwtTypeOrSpecialRef::Reference(ReferenceType::AliasMatchLeft { key }) => {
                 // For alias_match_left[category], return all possible alias names from that category
                 if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(key) {
                     for alias_pattern in aliases_in_category {

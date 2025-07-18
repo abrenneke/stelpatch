@@ -19,7 +19,7 @@ use crate::handlers::{
         value::is_value_compatible_with_simple_type,
     },
     scope::ScopeStack,
-    scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
+    scoped_type::{CwtTypeOrSpecial, CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType},
 };
 
 /// Extract possible string values from a CwtType for error messages
@@ -135,15 +135,15 @@ fn validate_value_against_type(
     let cache = TypeCache::get().unwrap();
     let resolved_type = cache.resolve_type(expected_type.clone());
 
-    match (&resolved_type.cwt_type(), value) {
+    match (&resolved_type.cwt_type_for_matching(), value) {
         // Block type validation
-        (CwtTypeOrSpecial::CwtType(CwtType::Block(_)), AstValue::Entity(_)) => {
+        (CwtTypeOrSpecialRef::Block(_), AstValue::Entity(_)) => {
             // For block types, validate the entity structure recursively
             let entity_diagnostics =
                 validate_entity_value(value, resolved_type, content, namespace, depth);
             diagnostics.extend(entity_diagnostics);
         }
-        (CwtTypeOrSpecial::CwtType(CwtType::Block(_)), _) => {
+        (CwtTypeOrSpecialRef::Block(_), _) => {
             // Expected a block but got something else
             let diagnostic = create_type_mismatch_diagnostic(
                 value.span_range(),
@@ -154,11 +154,8 @@ fn validate_value_against_type(
         }
 
         // Literal value validation
-        (
-            CwtTypeOrSpecial::CwtType(CwtType::Literal(literal_value)),
-            AstValue::String(string_value),
-        ) => {
-            if string_value.raw_value() != literal_value {
+        (CwtTypeOrSpecialRef::Literal(literal_value), AstValue::String(string_value)) => {
+            if string_value.raw_value() != *literal_value {
                 let diagnostic = create_value_mismatch_diagnostic(
                     value.span_range(),
                     &format!(
@@ -171,7 +168,7 @@ fn validate_value_against_type(
                 diagnostics.push(diagnostic);
             }
         }
-        (CwtTypeOrSpecial::CwtType(CwtType::Literal(literal_value)), _) => {
+        (CwtTypeOrSpecialRef::Literal(literal_value), _) => {
             // Expected a literal string but got something else
             let diagnostic = create_type_mismatch_diagnostic(
                 value.span_range(),
@@ -182,10 +179,7 @@ fn validate_value_against_type(
         }
 
         // Literal set validation
-        (
-            CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(valid_values)),
-            AstValue::String(string_value),
-        ) => {
+        (CwtTypeOrSpecialRef::LiteralSet(valid_values), AstValue::String(string_value)) => {
             // Allow $ARGUMENT$ to be used as a value
             if !contains_scripted_argument(string_value.raw_value()) {
                 if !valid_values.contains(string_value.raw_value()) {
@@ -208,7 +202,7 @@ fn validate_value_against_type(
             }
         }
 
-        (CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(set)), AstValue::Number(num)) => {
+        (CwtTypeOrSpecialRef::LiteralSet(set), AstValue::Number(num)) => {
             // A number is valid if when converted to a string, it is in the set
             let number_str = num.value.value;
             if !set.iter().any(|s| s == &number_str) {
@@ -228,7 +222,7 @@ fn validate_value_against_type(
             }
         }
 
-        (CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(_)), _) => {
+        (CwtTypeOrSpecialRef::LiteralSet(_), _) => {
             // Expected a string from literal set but got something else
             let diagnostic = create_type_mismatch_diagnostic(
                 value.span_range(),
@@ -239,7 +233,7 @@ fn validate_value_against_type(
         }
 
         // Simple type validation
-        (CwtTypeOrSpecial::CwtType(CwtType::Simple(simple_type)), _) => {
+        (CwtTypeOrSpecialRef::Simple(simple_type), _) => {
             // Create a default scope for backward compatibility
             let scope_manager = ScopeStack::default_with_root("unknown");
             if let Some(diagnostic) = is_value_compatible_with_simple_type(
@@ -254,14 +248,14 @@ fn validate_value_against_type(
         }
 
         // Array type validation
-        (CwtTypeOrSpecial::CwtType(CwtType::Array(array_type)), AstValue::Entity(_entity)) => {
+        (CwtTypeOrSpecialRef::Array(array_type), AstValue::Entity(_entity)) => {
             // Arrays in CW are represented as entities with numbered keys
             // For now, we'll just validate that it's an entity - more complex validation would require
             // checking that all keys are valid indices and values match the element type
             let _element_type = &array_type.element_type;
             // TODO: Implement array element validation
         }
-        (CwtTypeOrSpecial::CwtType(CwtType::Array(_)), _) => {
+        (CwtTypeOrSpecialRef::Array(_), _) => {
             let diagnostic = create_type_mismatch_diagnostic(
                 value.span_range(),
                 "Expected an array (entity with indexed elements)",
@@ -271,11 +265,11 @@ fn validate_value_against_type(
         }
 
         // Union type validation
-        (CwtTypeOrSpecial::CwtType(CwtType::Union(types)), _) => {
+        (CwtTypeOrSpecialRef::Union(types), _) => {
             // Find all structurally compatible union members
             let mut compatible_resolved_types = Vec::new();
 
-            for union_type in types {
+            for union_type in *types {
                 // Resolve the union type first in case it's a reference
                 let resolved_union_type = cache.resolve_type(Arc::new(ScopedType::new_cwt(
                     union_type.clone(),
@@ -291,7 +285,7 @@ fn validate_value_against_type(
             if compatible_resolved_types.is_empty() {
                 // Value is not structurally compatible with any union member
                 let mut all_possible_values = Vec::new();
-                for union_type in types {
+                for union_type in *types {
                     // Resolve each union type to get its actual structure for error messages
                     let resolved_union_type = cache.resolve_type(Arc::new(ScopedType::new_cwt(
                         union_type.clone(),
@@ -354,12 +348,12 @@ fn validate_value_against_type(
         }
 
         // Comparable type validation
-        (CwtTypeOrSpecial::CwtType(CwtType::Comparable(base_type)), _) => {
+        (CwtTypeOrSpecialRef::Comparable(base_type), _) => {
             // For comparable types, validate against the base type
             let base_diagnostics = validate_value_against_type(
                 value,
                 Arc::new(ScopedType::new_cwt(
-                    *base_type.clone(),
+                    (***base_type).clone(),
                     expected_type.scope_stack().clone(),
                     expected_type.in_scripted_effect_block().cloned(),
                 )),
@@ -370,15 +364,12 @@ fn validate_value_against_type(
             diagnostics.extend(base_diagnostics);
         }
 
-        (
-            CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::ValueSet { .. })),
-            AstValue::String(_),
-        ) => {
+        (CwtTypeOrSpecialRef::Reference(ReferenceType::ValueSet { .. }), AstValue::String(_)) => {
             // Any string is allowed for value_set
         }
 
         (
-            CwtTypeOrSpecial::CwtType(CwtType::Reference(ReferenceType::Colour { format })),
+            CwtTypeOrSpecialRef::Reference(ReferenceType::Colour { format }),
             AstValue::Color(color),
         ) => {
             if color.color_type.value != format {
@@ -395,7 +386,7 @@ fn validate_value_against_type(
         }
 
         // Reference type validation
-        (CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)), _) => match ref_type {
+        (CwtTypeOrSpecialRef::Reference(ref_type), _) => match ref_type {
             ReferenceType::Scope { key } => {
                 if let AstValue::String(string_value) = value {
                     if let Some(diagnostic) = validate_scope_reference(
@@ -449,20 +440,20 @@ fn validate_value_against_type(
             }
         },
 
-        (CwtTypeOrSpecial::CwtType(CwtType::Any), _) => {
+        (CwtTypeOrSpecialRef::Any, _) => {
             // Any type is valid for anything
         }
 
         // Unknown type - don't validate
-        (CwtTypeOrSpecial::CwtType(CwtType::Unknown), _) => {
+        (CwtTypeOrSpecialRef::Unknown, _) => {
             // Don't validate unknown types
         }
 
-        (CwtTypeOrSpecial::ScopedUnion(scoped_types), _) => {
+        (CwtTypeOrSpecialRef::ScopedUnion(scoped_types), _) => {
             // Find all structurally compatible union members
             let mut compatible_types = Vec::new();
 
-            for scoped_type in scoped_types {
+            for scoped_type in *scoped_types {
                 let scoped_type_arc = scoped_type.clone();
                 if is_value_structurally_compatible(value, scoped_type_arc.clone()) {
                     compatible_types.push(scoped_type_arc);
@@ -472,7 +463,7 @@ fn validate_value_against_type(
             if compatible_types.is_empty() {
                 // Value is not structurally compatible with any union member
                 let mut all_possible_values = Vec::new();
-                for scoped_type in scoped_types {
+                for scoped_type in *scoped_types {
                     if let CwtTypeOrSpecial::CwtType(cwt_type) = scoped_type.cwt_type() {
                         all_possible_values.extend(extract_possible_values(cwt_type));
                     }

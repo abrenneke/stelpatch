@@ -5,8 +5,10 @@
 
 use crate::{SeverityLevel, TypeKeyFilter};
 use cw_parser::{AstCwtRule, CwtCommentRangeBound};
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 /// Trait for generating unique fingerprints for types to enable deduplication
 pub trait TypeFingerprint {
@@ -15,7 +17,7 @@ pub trait TypeFingerprint {
 }
 
 /// The main CWT type system - directly represents CWT type concepts
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CwtType {
     /// Unknown type
     Unknown,
@@ -33,7 +35,7 @@ pub enum CwtType {
     Array(ArrayType),
 
     /// Union types (multiple alternatives)
-    Union(Vec<CwtType>),
+    Union(Vec<Arc<CwtType>>),
 
     /// Literal string values
     Literal(String),
@@ -42,7 +44,7 @@ pub enum CwtType {
     LiteralSet(HashSet<String>),
 
     /// Comparable types (for triggers with == operator)
-    Comparable(Box<CwtType>),
+    Comparable(Box<Arc<CwtType>>),
 
     /// Any type
     Any,
@@ -92,7 +94,7 @@ impl CwtType {
 }
 
 /// Simple CWT primitive types - directly maps to CWT simple values
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SimpleType {
     Bool,
     Int,
@@ -140,7 +142,7 @@ impl SimpleType {
 }
 
 /// CWT reference types - directly maps to CWT reference syntax
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ReferenceType {
     /// Type reference: <type_key>
     Type { key: String },
@@ -240,7 +242,7 @@ impl ReferenceType {
 }
 
 /// Block/object types with properties and subtypes
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq)]
 pub struct BlockType {
     pub type_name: String,
 
@@ -266,7 +268,7 @@ pub struct BlockType {
     pub modifiers: Option<ModifierSpec>,
 
     /// Additional flags, like an array
-    pub additional_flags: Vec<CwtType>,
+    pub additional_flags: Vec<Arc<CwtType>>,
 }
 
 impl std::fmt::Debug for BlockType {
@@ -329,13 +331,13 @@ impl std::fmt::Debug for BlockType {
 }
 
 /// A property that can match multiple keys using patterns
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq)]
 pub struct PatternProperty {
     /// Type of pattern
     pub pattern_type: PatternType,
 
     /// Value type for matching keys
-    pub value_type: CwtType,
+    pub value_type: Arc<CwtType>,
 
     /// CWT options/directives (includes cardinality, range, etc.)
     pub options: CwtOptions,
@@ -379,7 +381,7 @@ impl std::fmt::Display for PatternProperty {
 }
 
 /// Types of patterns that can match multiple keys
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PatternType {
     /// alias_name[category] - matches any alias name from the category
     AliasName { category: String },
@@ -406,7 +408,7 @@ impl PatternType {
 /// 2. alias[foo:<type_name>] = bar
 ///
 /// The first is a simple alias, the second is a dynamic alias.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct AliasPattern {
     /// Full text for hashing, e.g. "foo:<type_name>" or "foo:x"
     pub full_text: String,
@@ -464,7 +466,7 @@ impl PartialEq for AliasPattern {
 
 impl Eq for AliasPattern {}
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AliasName {
     Static(String),
     TypeRef(String),
@@ -472,10 +474,10 @@ pub enum AliasName {
 }
 
 /// A property in a block type
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq)]
 pub struct Property {
     /// Type of this property
-    pub property_type: CwtType,
+    pub property_type: Arc<CwtType>,
 
     /// CWT options/directives (includes cardinality, range, etc.)
     pub options: CwtOptions,
@@ -499,7 +501,7 @@ impl std::fmt::Debug for Property {
 }
 
 /// Subtype definition - properties that apply under certain conditions
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Subtype {
     /// CWT schema condition properties with cardinality constraints
     /// These define the rules for when this subtype matches (e.g., is_origin = no with cardinality 0..1)
@@ -520,7 +522,7 @@ pub struct Subtype {
 }
 
 /// Conditions for subtype activation
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SubtypeCondition {
     /// Property equals specific value
     PropertyEquals { key: String, value: String },
@@ -545,14 +547,14 @@ pub enum SubtypeCondition {
 }
 
 /// Array type
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArrayType {
     /// Element type
-    pub element_type: Box<CwtType>,
+    pub element_type: Box<Arc<CwtType>>,
 }
 
 /// Cardinality constraints
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Cardinality {
     /// Minimum occurrences
     pub min: Option<u32>,
@@ -563,7 +565,7 @@ pub struct Cardinality {
 }
 
 /// Range constraints for numeric types
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Range {
     /// Minimum value
     pub min: RangeBound,
@@ -572,7 +574,7 @@ pub struct Range {
 }
 
 /// Range boundary values
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RangeBound {
     Integer(i64),
     Float(f64),
@@ -581,7 +583,7 @@ pub enum RangeBound {
 }
 
 /// CWT options/directives that can apply to any type
-#[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, PartialEq, Default)]
 pub struct CwtOptions {
     /// Required field
     pub required: bool,
@@ -716,7 +718,7 @@ impl std::fmt::Debug for CwtOptions {
 }
 
 /// Localisation specification
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LocalisationSpec {
     /// Required localisation keys
     pub required: HashMap<String, String>,
@@ -729,7 +731,7 @@ pub struct LocalisationSpec {
 }
 
 /// Modifier generation specification
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ModifierSpec {
     /// Modifier patterns
     pub modifiers: HashMap<String, String>,
@@ -747,7 +749,7 @@ impl Default for ModifierSpec {
 }
 
 /// CWT type definition - top-level type in the registry
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CwtTypeDefinition {
     /// Type name/key
     pub name: String,
@@ -764,7 +766,7 @@ pub struct CwtTypeDefinition {
 }
 
 /// Skip root key specification
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SkipRootKeySpec {
     /// Skip specific key
     Specific(String),
@@ -777,7 +779,7 @@ pub enum SkipRootKeySpec {
 }
 
 /// CWT enum definition
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CwtEnumDefinition {
     /// Enum name/key
     pub name: String,
@@ -788,7 +790,7 @@ pub struct CwtEnumDefinition {
 }
 
 /// Complex enum specification
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ComplexEnumSpec {
     /// Path to scan
     pub path: String,
@@ -799,7 +801,7 @@ pub struct ComplexEnumSpec {
 }
 
 /// CWT alias definition
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CwtAliasDefinition {
     /// Alias name/key
     pub name: String,
@@ -810,7 +812,7 @@ pub struct CwtAliasDefinition {
 }
 
 /// CWT value set definition
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CwtValueSetDefinition {
     /// Value set name/key
     pub name: String,
@@ -1386,26 +1388,26 @@ impl CwtType {
     }
 
     /// Create an array type
-    pub fn array(element_type: CwtType) -> Self {
+    pub fn array(element_type: Arc<CwtType>) -> Self {
         Self::Array(ArrayType {
             element_type: Box::new(element_type),
         })
     }
 
     /// Create a union type
-    pub fn union(types: Vec<CwtType>) -> Self {
+    pub fn union(types: Vec<Arc<CwtType>>) -> Self {
         Self::Union(types)
     }
 
     /// Create a comparable type
-    pub fn comparable(base_type: CwtType) -> Self {
+    pub fn comparable(base_type: Arc<CwtType>) -> Self {
         Self::Comparable(Box::new(base_type))
     }
 }
 
 impl Property {
     /// Create a simple property
-    pub fn simple(property_type: CwtType) -> Self {
+    pub fn simple(property_type: Arc<CwtType>) -> Self {
         Self {
             property_type,
             options: CwtOptions::default(),
@@ -1414,7 +1416,7 @@ impl Property {
     }
 
     /// Create a required property
-    pub fn required(property_type: CwtType) -> Self {
+    pub fn required(property_type: Arc<CwtType>) -> Self {
         Self {
             property_type,
             options: CwtOptions {
@@ -1427,7 +1429,7 @@ impl Property {
     }
 
     /// Create an optional property
-    pub fn optional(property_type: CwtType) -> Self {
+    pub fn optional(property_type: Arc<CwtType>) -> Self {
         Self {
             property_type,
             options: CwtOptions {
@@ -1682,8 +1684,8 @@ mod tests {
         let type1 = CwtType::simple(SimpleType::Int);
         let type2 = CwtType::simple(SimpleType::Float);
 
-        let union1 = CwtType::union(vec![type1.clone(), type2.clone()]);
-        let union2 = CwtType::union(vec![type2.clone(), type1.clone()]);
+        let union1 = CwtType::union(vec![Arc::new(type1.clone()), Arc::new(type2.clone())]);
+        let union2 = CwtType::union(vec![Arc::new(type2.clone()), Arc::new(type1.clone())]);
 
         assert_eq!(union1.fingerprint(), union2.fingerprint());
         assert!(union1.is_equivalent_to(&union2));
@@ -1715,11 +1717,11 @@ mod tests {
         let mut block = CwtType::block("test_block");
         block.properties.insert(
             "key1".to_string(),
-            Property::simple(CwtType::simple(SimpleType::Int)),
+            Property::simple(Arc::new(CwtType::simple(SimpleType::Int))),
         );
         block.properties.insert(
             "key2".to_string(),
-            Property::simple(CwtType::simple(SimpleType::Float)),
+            Property::simple(Arc::new(CwtType::simple(SimpleType::Float))),
         );
 
         let complex_type = CwtType::Block(block);

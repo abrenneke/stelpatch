@@ -4,7 +4,10 @@ use std::{
 };
 
 use crate::handlers::scope::{ScopeContext, ScopeError, ScopeStack};
-use cw_model::{CwtAnalyzer, CwtType, PatternProperty, Property, SimpleType, TypeFingerprint};
+use cw_model::{
+    ArrayType, BlockType, CwtAnalyzer, CwtType, PatternProperty, Property, ReferenceType,
+    SimpleType, TypeFingerprint,
+};
 
 /// A wrapper that combines a CWT type with its scope context
 /// This ensures that types always carry information about what scope they exist in
@@ -65,8 +68,43 @@ impl TypeFingerprint for ScopedType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CwtTypeOrSpecial {
-    CwtType(CwtType),
+    CwtType(Arc<CwtType>),
     ScopedUnion(Vec<Arc<ScopedType>>),
+}
+
+pub enum CwtTypeOrSpecialRef<'a> {
+    /// Unknown type
+    Unknown,
+
+    /// Simple primitive types (bool, int, float, scalar, etc.)
+    Simple(&'a SimpleType),
+
+    /// Reference types (<type>, enum[key], scope[key], etc.)
+    Reference(&'a ReferenceType),
+
+    /// Block/object types with properties
+    Block(&'a BlockType),
+
+    /// Array types
+    Array(&'a ArrayType),
+
+    /// Union types (multiple alternatives)
+    Union(&'a Vec<Arc<CwtType>>),
+
+    /// Literal string values
+    Literal(&'a String),
+
+    /// Set of literal values
+    LiteralSet(&'a HashSet<String>),
+
+    /// Comparable types (for triggers with == operator)
+    Comparable(&'a Box<Arc<CwtType>>),
+
+    /// Any type
+    Any,
+
+    /// Union of scoped types (multiple alternatives)
+    ScopedUnion(&'a Vec<Arc<ScopedType>>),
 }
 
 impl CwtTypeOrSpecial {
@@ -150,7 +188,7 @@ impl ScopedType {
 
     /// Create a new scoped type
     pub fn new_cwt(
-        cwt_type: CwtType,
+        cwt_type: Arc<CwtType>,
         scope_context: ScopeStack,
         scripted_effect_name: Option<String>,
     ) -> Self {
@@ -163,7 +201,7 @@ impl ScopedType {
     }
 
     pub fn new_cwt_with_subtypes(
-        cwt_type: CwtType,
+        cwt_type: Arc<CwtType>,
         scope_context: ScopeStack,
         subtypes: HashSet<String>,
         scripted_effect_name: Option<String>,
@@ -191,7 +229,7 @@ impl ScopedType {
 
     /// Create a scoped type with a default root scope
     pub fn with_root_scope(
-        cwt_type: CwtType,
+        cwt_type: Arc<CwtType>,
         root_scope_type: impl Into<String>,
         scripted_effect_name: Option<String>,
     ) -> Self {
@@ -204,7 +242,7 @@ impl ScopedType {
     }
 
     pub fn with_root_scope_and_subtype(
-        cwt_type: CwtType,
+        cwt_type: Arc<CwtType>,
         root_scope_type: impl Into<String>,
         subtype: Option<String>,
         scripted_effect_name: Option<String>,
@@ -218,7 +256,7 @@ impl ScopedType {
     }
 
     pub fn with_root_scope_and_subtypes(
-        cwt_type: CwtType,
+        cwt_type: Arc<CwtType>,
         root_scope_type: impl Into<String>,
         subtypes: HashSet<String>,
         scripted_effect_name: Option<String>,
@@ -231,7 +269,7 @@ impl ScopedType {
         }
     }
 
-    pub fn child(&self, cwt_type: CwtType) -> Self {
+    pub fn child(&self, cwt_type: Arc<CwtType>) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: self.scope_context.clone(),
@@ -240,7 +278,7 @@ impl ScopedType {
         }
     }
 
-    pub fn child_with_subtype(&self, cwt_type: CwtType, subtype: Option<String>) -> Self {
+    pub fn child_with_subtype(&self, cwt_type: Arc<CwtType>, subtype: Option<String>) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: self.scope_context.clone(),
@@ -249,7 +287,7 @@ impl ScopedType {
         }
     }
 
-    pub fn child_with_subtypes(&self, cwt_type: CwtType, subtypes: HashSet<String>) -> Self {
+    pub fn child_with_subtypes(&self, cwt_type: Arc<CwtType>, subtypes: HashSet<String>) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: self.scope_context.clone(),
@@ -258,9 +296,35 @@ impl ScopedType {
         }
     }
 
-    /// Get the underlying CWT type
     pub fn cwt_type(&self) -> &CwtTypeOrSpecial {
         &self.cwt_type
+    }
+
+    /// Get the underlying CWT type
+    pub fn cwt_type_for_matching<'a>(&'a self) -> CwtTypeOrSpecialRef<'a> {
+        match &self.cwt_type {
+            CwtTypeOrSpecial::CwtType(cwt_type) => match &**cwt_type {
+                CwtType::Simple(simple_type) => CwtTypeOrSpecialRef::Simple(simple_type),
+                CwtType::Reference(reference_type) => {
+                    CwtTypeOrSpecialRef::Reference(reference_type)
+                }
+                CwtType::Block(block_type) => CwtTypeOrSpecialRef::Block(block_type),
+                CwtType::Array(array_type) => CwtTypeOrSpecialRef::Array(array_type),
+                CwtType::Union(union_type) => CwtTypeOrSpecialRef::Union(union_type),
+                CwtType::Literal(literal_type) => CwtTypeOrSpecialRef::Literal(literal_type),
+                CwtType::LiteralSet(literal_set_type) => {
+                    CwtTypeOrSpecialRef::LiteralSet(literal_set_type)
+                }
+                CwtType::Comparable(comparable_type) => {
+                    CwtTypeOrSpecialRef::Comparable(comparable_type)
+                }
+                CwtType::Any => CwtTypeOrSpecialRef::Any,
+                CwtType::Unknown => CwtTypeOrSpecialRef::Unknown,
+            },
+            CwtTypeOrSpecial::ScopedUnion(scoped_union) => {
+                CwtTypeOrSpecialRef::ScopedUnion(scoped_union)
+            }
+        }
     }
 
     /// Get the scope context
@@ -350,10 +414,13 @@ impl ScopedType {
 
     /// Check if this is a scope field type
     pub fn is_scope_field(&self) -> bool {
-        matches!(
-            &self.cwt_type,
-            CwtTypeOrSpecial::CwtType(CwtType::Simple(SimpleType::ScopeField))
-        )
+        match &self.cwt_type {
+            CwtTypeOrSpecial::CwtType(cwt_type) => match &**cwt_type {
+                CwtType::Simple(SimpleType::ScopeField) => true,
+                _ => false,
+            },
+            _ => false,
+        }
     }
 
     /// Get available scope field names for this scoped type
@@ -521,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_scoped_type_creation() {
-        let cwt_type = CwtType::Simple(SimpleType::ScopeField);
+        let cwt_type = Arc::new(CwtType::Simple(SimpleType::ScopeField));
         let scoped_type = ScopedType::with_root_scope(cwt_type, "country", None);
 
         assert!(scoped_type.is_scope_field());
@@ -532,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_scoped_type_with_subtype() {
-        let cwt_type = CwtType::Simple(SimpleType::ScopeField);
+        let cwt_type = Arc::new(CwtType::Simple(SimpleType::ScopeField));
         let scoped_type = ScopedType::with_root_scope_and_subtype(
             cwt_type,
             "country",
@@ -554,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_subtype_manipulation() {
-        let cwt_type = CwtType::Simple(SimpleType::ScopeField);
+        let cwt_type = Arc::new(CwtType::Simple(SimpleType::ScopeField));
         let mut scoped_type = ScopedType::with_root_scope(cwt_type, "country", None);
 
         // Initially no subtypes
@@ -587,7 +654,7 @@ mod tests {
 
     #[test]
     fn test_scope_field_validation() {
-        let cwt_type = CwtType::Simple(SimpleType::ScopeField);
+        let cwt_type = Arc::new(CwtType::Simple(SimpleType::ScopeField));
         let mut scope_manager = ScopeStack::default_with_root("country");
         scope_manager.push_scope_type("planet").unwrap();
 
@@ -609,7 +676,7 @@ mod tests {
 
     #[test]
     fn test_scoped_type_branching() {
-        let cwt_type = CwtType::Simple(SimpleType::ScopeField);
+        let cwt_type = Arc::new(CwtType::Simple(SimpleType::ScopeField));
         let scoped_type = ScopedType::with_root_scope_and_subtype(
             cwt_type,
             "country",

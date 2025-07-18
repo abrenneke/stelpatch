@@ -1,5 +1,5 @@
 use crate::handlers::scope::ScopeStack;
-use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
+use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
 use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType};
 use cw_model::{CwtType, ReferenceType};
 use std::collections::{HashMap, HashSet};
@@ -45,18 +45,18 @@ impl TypeResolver {
 
     /// Resolves references & nested types to concrete types
     pub fn resolve_type(&self, scoped_type: Arc<ScopedType>) -> Arc<ScopedType> {
-        let cwt_type = scoped_type.cwt_type();
+        let cwt_type = scoped_type.cwt_type_for_matching();
 
         match cwt_type {
             // For references, try to resolve to the actual type
-            CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)) => {
+            CwtTypeOrSpecialRef::Reference(ref_type) => {
                 let resolved_cwt_type = self.resolve_reference_type(
                     ref_type,
                     scoped_type.scope_stack(),
                     scoped_type.in_scripted_effect_block().cloned(),
                 );
                 let result = ScopedType::new_cwt_with_subtypes(
-                    (*resolved_cwt_type).clone(),
+                    resolved_cwt_type.clone(),
                     scoped_type.scope_stack().clone(),
                     scoped_type.subtypes().clone(),
                     scoped_type.in_scripted_effect_block().cloned(),
@@ -65,7 +65,7 @@ impl TypeResolver {
                 Arc::new(result)
             }
             // For comparables, unwrap to the base type
-            CwtTypeOrSpecial::CwtType(CwtType::Comparable(base_type)) => {
+            CwtTypeOrSpecialRef::Comparable(base_type) => {
                 let base_scoped = ScopedType::new_cwt_with_subtypes(
                     (**base_type).clone(),
                     scoped_type.scope_stack().clone(),

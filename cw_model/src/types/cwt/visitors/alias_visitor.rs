@@ -3,6 +3,8 @@
 //! This visitor handles the processing of CWT alias definitions, including both
 //! regular aliases and single aliases.
 
+use std::sync::Arc;
+
 use cw_parser::{AstCwtIdentifierOrString, AstCwtRule, CwtReferenceType, CwtVisitor};
 
 use crate::{
@@ -114,21 +116,21 @@ impl<'a> AliasVisitor<'a> {
         alias_pattern: AliasPattern,
         category: &str,
         name: &str,
-        new_to_type: CwtType,
+        new_to_type: Arc<CwtType>,
         options: CwtOptions,
     ) {
         if let Some(existing_def) = self.data.aliases.get_mut(&alias_pattern) {
             // Merge with existing definition by creating a union
-            existing_def.to = match &existing_def.to {
+            existing_def.to = match &*existing_def.to {
                 CwtType::Union(types) => {
                     // Already a union, add the new type
                     let mut new_types = types.clone();
                     new_types.push(new_to_type);
-                    CwtType::Union(new_types)
+                    CwtType::Union(new_types).into()
                 }
-                existing_type => {
+                _ => {
                     // Convert to union
-                    CwtType::Union(vec![existing_type.clone(), new_to_type])
+                    CwtType::Union(vec![existing_def.to.clone(), new_to_type.clone()]).into()
                 }
             };
 
@@ -155,17 +157,17 @@ impl<'a> AliasVisitor<'a> {
 
             if let Some(existing_type) = self.data.single_aliases.get_mut(name) {
                 // Merge with existing single alias by creating a union
-                let old_type = std::mem::replace(existing_type, CwtType::Unknown);
-                *existing_type = match old_type {
+                let old_type = std::mem::replace(existing_type, Arc::new(CwtType::Unknown));
+                *existing_type = match &*old_type {
                     CwtType::Union(types) => {
                         // Already a union, add the new type
-                        let mut new_types = types;
-                        new_types.push(new_alias_type);
-                        CwtType::Union(new_types)
+                        let mut new_types = types.clone();
+                        new_types.push(new_alias_type.clone());
+                        CwtType::Union(new_types).into()
                     }
-                    existing => {
+                    _ => {
                         // Convert to union
-                        CwtType::Union(vec![existing, new_alias_type])
+                        CwtType::Union(vec![old_type.clone(), new_alias_type.clone()]).into()
                     }
                 };
             } else {

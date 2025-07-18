@@ -3,7 +3,7 @@
 //! This visitor handles the processing of CWT type definitions, including nested
 //! subtypes, localisation requirements, and type options.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use cw_parser::{
     AstCwtBlock, AstCwtExpression, AstCwtIdentifierOrString, AstCwtRule, CwtOperator,
@@ -69,7 +69,7 @@ impl<'a> TypeVisitor<'a> {
                     modifiers: HashMap::new(),
                     subtypes: HashMap::new(),
                 },
-                rules: CwtType::Unknown,
+                rules: Arc::new(CwtType::Unknown),
                 options: TypeOptions::default(),
                 rule_options: options,
             };

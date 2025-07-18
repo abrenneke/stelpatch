@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
-use cw_model::CwtType;
 use cw_parser::AstValue;
 
 use crate::handlers::{
     cache::TypeCache,
-    scoped_type::{CwtTypeOrSpecial, ScopedType},
+    scoped_type::{CwtTypeOrSpecialRef, ScopedType},
 };
 
 /// Check if a value is structurally compatible with a type (without content validation)
@@ -34,26 +33,26 @@ fn is_value_structurally_compatible_with_depth(
     let cache = TypeCache::get().unwrap();
     let resolved_type = cache.resolve_type(expected_type.clone());
 
-    match (&resolved_type.cwt_type(), value) {
+    match (&resolved_type.cwt_type_for_matching(), value) {
         // Block types are compatible with entities
-        (CwtTypeOrSpecial::CwtType(CwtType::Block(_)), AstValue::Entity(_)) => true,
+        (CwtTypeOrSpecialRef::Block(_), AstValue::Entity(_)) => true,
 
         // Literal types are compatible with strings
-        (CwtTypeOrSpecial::CwtType(CwtType::Literal(_)), AstValue::String(_)) => true,
+        (CwtTypeOrSpecialRef::Literal(_), AstValue::String(_)) => true,
 
         // Literal sets are compatible with strings
-        (CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(_)), AstValue::String(_)) => true,
+        (CwtTypeOrSpecialRef::LiteralSet(_), AstValue::String(_)) => true,
 
         // Simple types - check basic compatibility
-        (CwtTypeOrSpecial::CwtType(CwtType::Simple(simple_type)), _) => {
+        (CwtTypeOrSpecialRef::Simple(simple_type), _) => {
             is_value_compatible_with_simple_type_structurally(value, simple_type)
         }
 
         // Array types are compatible with entities
-        (CwtTypeOrSpecial::CwtType(CwtType::Array(_)), AstValue::Entity(_)) => true,
+        (CwtTypeOrSpecialRef::Array(_), AstValue::Entity(_)) => true,
 
         // Union types - check if compatible with any member
-        (CwtTypeOrSpecial::CwtType(CwtType::Union(types)), _) => types.iter().any(|union_type| {
+        (CwtTypeOrSpecialRef::Union(types), _) => types.iter().any(|union_type| {
             is_value_structurally_compatible_with_depth(
                 value,
                 Arc::new(ScopedType::new_cwt(
@@ -66,11 +65,11 @@ fn is_value_structurally_compatible_with_depth(
         }),
 
         // Comparable types - check compatibility with base type
-        (CwtTypeOrSpecial::CwtType(CwtType::Comparable(base_type)), _) => {
+        (CwtTypeOrSpecialRef::Comparable(base_type), _) => {
             is_value_structurally_compatible_with_depth(
                 value,
                 Arc::new(ScopedType::new_cwt(
-                    *base_type.clone(),
+                    (***base_type).clone(),
                     expected_type.scope_stack().clone(),
                     expected_type.in_scripted_effect_block().cloned(),
                 )),
@@ -79,14 +78,14 @@ fn is_value_structurally_compatible_with_depth(
         }
 
         // Reference types - resolve and check
-        (CwtTypeOrSpecial::CwtType(CwtType::Reference(_)), _) => {
+        (CwtTypeOrSpecialRef::Reference(_), _) => {
             // For now, assume references are compatible
             // TODO: Implement proper reference resolution
             true
         }
 
         // Unknown types are always compatible
-        (CwtTypeOrSpecial::CwtType(CwtType::Unknown), _) => true,
+        (CwtTypeOrSpecialRef::Unknown, _) => true,
 
         // Everything else is incompatible
         _ => false,

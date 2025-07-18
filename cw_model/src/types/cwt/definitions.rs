@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
+    sync::Arc,
 };
 
 use crate::{CwtAnalyzer, CwtOptions, CwtType, ModifierSpec, RuleOptions, Subtype};
@@ -34,7 +35,7 @@ pub struct TypeDefinition {
     pub modifiers: ModifierSpec,
 
     /// Type validation rules
-    pub rules: CwtType,
+    pub rules: Arc<CwtType>,
 
     /// Type-specific options
     pub options: TypeOptions,
@@ -229,7 +230,7 @@ pub struct ComplexEnumDefinition {
     /// Path to scan for enum values
     pub path: String,
     /// Structure to match for enum extraction
-    pub name_structure: CwtType,
+    pub name_structure: Arc<CwtType>,
     /// Whether to start from file root
     pub start_from_root: bool,
 }
@@ -244,7 +245,7 @@ pub struct AliasDefinition {
     pub name: String,
 
     /// Alias to this type
-    pub to: CwtType,
+    pub to: Arc<CwtType>,
 
     /// Options from the alias definition (e.g., push_scope, replace_scope)
     pub options: CwtOptions,
@@ -284,7 +285,7 @@ pub enum LinkType {
 
 impl TypeDefinition {
     /// Create a new type definition with default values
-    pub fn new(rules: CwtType) -> Self {
+    pub fn new(rules: Arc<CwtType>) -> Self {
         Self {
             path: None,
             name_field: None,
@@ -319,7 +320,7 @@ impl TypeDefinition {
     /// Update the rules field to include subtypes
     /// This should be called after all subtypes have been parsed
     pub fn finalize_with_subtypes(&mut self) {
-        if let CwtType::Block(ref mut block_type) = self.rules {
+        if let CwtType::Block(block_type) = Arc::<CwtType>::make_mut(&mut self.rules) {
             // Merge subtypes into the block type
             for (subtype_name, subtype_def) in &self.subtypes {
                 block_type
@@ -340,7 +341,7 @@ impl TypeDefinition {
     pub fn finalize_subtype_properties(&mut self) {
         // Merge subtype_properties with existing subtypes.allowed_properties
         // This adds game data properties to allowed_properties while preserving CWT schema condition_properties
-        if let CwtType::Block(ref mut block_type) = self.rules {
+        if let CwtType::Block(block_type) = Arc::<CwtType>::make_mut(&mut self.rules) {
             for (subtype_name, properties) in block_type.subtype_properties.iter() {
                 if let Some(subtype) = block_type.subtypes.get_mut(subtype_name) {
                     // Merge properties instead of overwriting
@@ -369,7 +370,7 @@ impl TypeDefinition {
     /// but metadata will be merged intelligently
     pub fn merge_with(&mut self, other: TypeDefinition) {
         // Always take the new rules
-        if other.rules != CwtType::Unknown {
+        if *other.rules != CwtType::Unknown {
             self.rules = other.rules;
         }
 
@@ -442,7 +443,7 @@ impl EnumDefinition {
 
 impl AliasDefinition {
     /// Create a new alias definition
-    pub fn new(category: String, name: String, rules: CwtType) -> Self {
+    pub fn new(category: String, name: String, rules: Arc<CwtType>) -> Self {
         Self {
             category,
             name,
@@ -455,7 +456,7 @@ impl AliasDefinition {
     pub fn with_options(
         category: String,
         name: String,
-        rules: CwtType,
+        rules: Arc<CwtType>,
         options: CwtOptions,
     ) -> Self {
         Self {

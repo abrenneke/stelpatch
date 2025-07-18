@@ -207,7 +207,7 @@ impl ReferenceResolver {
         &self,
         category: &str,
         property_name: &str,
-    ) -> (CwtType, Option<AliasDefinition>, Option<String>) {
+    ) -> (Arc<CwtType>, Option<AliasDefinition>, Option<String>) {
         // Look up the specific alias category:property_name and return its type
         if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(category) {
             for alias_pattern in aliases_in_category {
@@ -259,9 +259,9 @@ impl ReferenceResolver {
 
         // If no matching alias was found, return the original AliasMatchLeft
         (
-            CwtType::Reference(ReferenceType::AliasMatchLeft {
+            Arc::new(CwtType::Reference(ReferenceType::AliasMatchLeft {
                 key: category.to_string(),
-            }),
+            })),
             None,
             None,
         )

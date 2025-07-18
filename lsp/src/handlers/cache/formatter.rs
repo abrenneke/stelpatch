@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cw_model::{CwtType, ReferenceType, SimpleType};
 
 use crate::handlers::cache::resolver::TypeResolver;
-use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
+use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
 
 const MAX_UNION_MEMBERS: usize = 8;
 const MAX_LITERAL_SET_MEMBERS: usize = 30;
@@ -59,9 +59,9 @@ impl<'a> TypeFormatter<'a> {
 
         let scoped_type = self.resolver.resolve_type(scoped_type);
 
-        match scoped_type.cwt_type() {
-            CwtTypeOrSpecial::CwtType(CwtType::Literal(lit)) => format!("\"{}\"", lit),
-            CwtTypeOrSpecial::CwtType(CwtType::LiteralSet(literals)) => {
+        match scoped_type.cwt_type_for_matching() {
+            CwtTypeOrSpecialRef::Literal(lit) => format!("\"{}\"", lit),
+            CwtTypeOrSpecialRef::LiteralSet(literals) => {
                 let mut sorted: Vec<_> = literals.iter().collect();
                 sorted.sort();
                 if sorted.len() <= MAX_LITERAL_SET_MEMBERS {
@@ -83,7 +83,7 @@ impl<'a> TypeFormatter<'a> {
                     )
                 }
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Simple(simple)) => match simple {
+            CwtTypeOrSpecialRef::Simple(simple) => match simple {
                 SimpleType::Bool => "boolean".to_string(),
                 SimpleType::Int => "integer".to_string(),
                 SimpleType::Float => "float".to_string(),
@@ -103,10 +103,10 @@ impl<'a> TypeFormatter<'a> {
                 SimpleType::Color => "color (rgb/hsv/hex)".to_string(),
                 SimpleType::Maths => "mathematical expression".to_string(),
             },
-            CwtTypeOrSpecial::CwtType(CwtType::Reference(ref_type)) => {
+            CwtTypeOrSpecialRef::Reference(ref_type) => {
                 format!("reference {:?}", ref_type)
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Comparable(comparable)) => {
+            CwtTypeOrSpecialRef::Comparable(comparable) => {
                 format!(
                     "comparable[{}]",
                     self.format_type_with_depth(
@@ -120,7 +120,7 @@ impl<'a> TypeFormatter<'a> {
                     )
                 )
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
+            CwtTypeOrSpecialRef::Block(block) => {
                 // Show:
                 // - The root obj
                 // - The properties of the root obj
@@ -166,10 +166,8 @@ impl<'a> TypeFormatter<'a> {
 
                     if let PropertyNavigationResult::Success(property_type) = property_type {
                         if matches!(
-                            property_type.cwt_type(),
-                            CwtTypeOrSpecial::CwtType(CwtType::Reference(
-                                ReferenceType::AliasMatchLeft { .. }
-                            ))
+                            property_type.cwt_type_for_matching(),
+                            CwtTypeOrSpecialRef::Reference(ReferenceType::AliasMatchLeft { .. })
                         ) {
                             eprintln!(
                                 "navigate_to_property '{}' did not resolve the alias_match_left, coming from {:?}",
@@ -213,7 +211,7 @@ impl<'a> TypeFormatter<'a> {
 
                 lines.join("\n")
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Array(array_type)) => {
+            CwtTypeOrSpecialRef::Array(array_type) => {
                 let element_desc = self.format_type_with_depth(
                     Arc::new(ScopedType::new_cwt(
                         *array_type.element_type.clone(),
@@ -226,7 +224,7 @@ impl<'a> TypeFormatter<'a> {
                 if element_desc.contains('\n') {
                     format!(
                         "array[{}]",
-                        if let CwtType::Block(_) = array_type.element_type.as_ref() {
+                        if let CwtType::Block(_) = &**array_type.element_type {
                             "Entity"
                         } else {
                             "object"
@@ -236,7 +234,7 @@ impl<'a> TypeFormatter<'a> {
                     format!("array[{}]", element_desc)
                 }
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Union(types)) => {
+            CwtTypeOrSpecialRef::Union(types) => {
                 if types.len() <= MAX_UNION_MEMBERS {
                     types
                         .iter()
@@ -276,8 +274,8 @@ impl<'a> TypeFormatter<'a> {
                     )
                 }
             }
-            CwtTypeOrSpecial::CwtType(CwtType::Unknown) => "unknown".to_string(),
-            CwtTypeOrSpecial::ScopedUnion(types) => {
+            CwtTypeOrSpecialRef::Unknown => "unknown".to_string(),
+            CwtTypeOrSpecialRef::ScopedUnion(types) => {
                 let formatted_types: Vec<String> = types
                     .iter()
                     .map(|t| self.format_type_with_depth(t.clone(), depth + 1, property_name))
@@ -299,7 +297,7 @@ impl<'a> TypeFormatter<'a> {
                 }
             }
 
-            CwtTypeOrSpecial::CwtType(CwtType::Any) => "any".to_string(),
+            CwtTypeOrSpecialRef::Any => "any".to_string(),
         }
     }
 }

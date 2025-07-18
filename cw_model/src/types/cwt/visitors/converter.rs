@@ -9,7 +9,7 @@ use cw_parser::{
         CwtValue,
     },
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     BlockType, CwtOptions, CwtType, PatternProperty, PatternType, Property, ReferenceType,
@@ -198,7 +198,7 @@ impl CwtConverter {
                                         .entry(subtype_name.clone())
                                         .or_default();
 
-                                    if let CwtType::Block(block) = value_type {
+                                    if let CwtType::Block(block) = &*value_type {
                                         // Extract regular properties
                                         for (key, value) in block.properties.iter() {
                                             subtype_map.insert(
@@ -246,24 +246,24 @@ impl CwtConverter {
                     let key_string = key.to_string();
                     if let Some(existing_property) = properties.get(&key_string) {
                         // Key already exists, create a union
-                        let union_type = match &existing_property.property_type {
+                        let union_type = match &*existing_property.property_type {
                             CwtType::Union(existing_types) => {
                                 // Already a union, add the new type to it
                                 let mut new_types = existing_types.clone();
                                 new_types.push(property_def.property_type);
                                 CwtType::Union(new_types)
                             }
-                            existing_type => {
+                            _ => {
                                 // Not a union yet, create one with both types
                                 CwtType::Union(vec![
-                                    existing_type.clone(),
+                                    existing_property.property_type.clone(),
                                     property_def.property_type,
                                 ])
                             }
                         };
 
                         let unified_property = Property {
-                            property_type: union_type,
+                            property_type: Arc::new(union_type),
                             options: CwtOptions::default(),
                             documentation: None,
                         };
@@ -280,7 +280,7 @@ impl CwtConverter {
                 AstCwtExpression::Identifier(id) => {
                     // Handle identifiers in blocks - convert to type and add as union value
                     let identifier_type = Self::convert_identifier(id);
-                    union_values.push(identifier_type);
+                    union_values.push(Arc::new(identifier_type));
                 }
                 _ => {
                     // Handle other expression types as needed
@@ -302,12 +302,12 @@ impl CwtConverter {
     }
 
     /// Convert a CWT value to our type system
-    pub fn convert_value(value: &CwtValue, type_name: Option<String>) -> CwtType {
+    pub fn convert_value(value: &CwtValue, type_name: Option<String>) -> Arc<CwtType> {
         match value {
-            CwtValue::Simple(simple) => Self::convert_simple_value(simple),
-            CwtValue::Identifier(identifier) => Self::convert_identifier(identifier),
-            CwtValue::Block(block) => Self::convert_block(block, type_name),
-            CwtValue::String(s) => CwtType::Literal(s.raw_value().to_string()),
+            CwtValue::Simple(simple) => Arc::new(Self::convert_simple_value(simple)),
+            CwtValue::Identifier(identifier) => Arc::new(Self::convert_identifier(identifier)),
+            CwtValue::Block(block) => Arc::new(Self::convert_block(block, type_name)),
+            CwtValue::String(s) => Arc::new(CwtType::Literal(s.raw_value().to_string())),
         }
     }
 }

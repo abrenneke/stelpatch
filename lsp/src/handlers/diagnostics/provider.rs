@@ -7,7 +7,7 @@ use crate::handlers::diagnostics::diagnostic::{
     create_diagnostic_from_parse_error, create_unexpected_key_diagnostic,
 };
 use crate::handlers::diagnostics::type_validation::validate_entity_value;
-use crate::handlers::scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType};
+use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
 
 use super::super::utils::extract_namespace_from_uri;
 use std::collections::HashMap;
@@ -122,7 +122,7 @@ impl DiagnosticsProvider {
             None => return diagnostics,
         };
 
-        if let CwtTypeOrSpecial::CwtType(CwtType::Unknown) = namespace_type.cwt_type() {
+        if let CwtTypeOrSpecialRef::Unknown = namespace_type.cwt_type_for_matching() {
             panic!("Namespace type is unknown");
         }
 
@@ -204,12 +204,12 @@ impl DiagnosticsProvider {
             if let AstEntityItem::Expression(expr) = item {
                 if expr.key.raw_value().starts_with("@") {
                     // we're setting a variable
-                    let expected_type = CwtType::Union(vec![
-                        CwtType::Simple(SimpleType::Int),
-                        CwtType::Simple(SimpleType::Float),
-                        CwtType::Simple(SimpleType::Scalar),
-                        CwtType::Simple(SimpleType::Bool),
-                    ]);
+                    let expected_type = Arc::new(CwtType::Union(vec![
+                        Arc::new(CwtType::Simple(SimpleType::Int)),
+                        Arc::new(CwtType::Simple(SimpleType::Float)),
+                        Arc::new(CwtType::Simple(SimpleType::Scalar)),
+                        Arc::new(CwtType::Simple(SimpleType::Bool)),
+                    ]));
 
                     let entity_diagnostics = validate_entity_value(
                         &expr.value,

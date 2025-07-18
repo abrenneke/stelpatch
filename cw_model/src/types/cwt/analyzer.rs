@@ -10,6 +10,7 @@ use super::definitions::*;
 use super::visitors::{CwtAnalysisData, CwtVisitorRegistry};
 use cw_parser::cwt::CwtModule;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// Main analyzer for CWT (Clausewitz Type) files
 ///
@@ -67,7 +68,7 @@ impl CwtAnalyzer {
     }
 
     /// Get single aliases
-    pub fn get_single_aliases(&self) -> &HashMap<String, CwtType> {
+    pub fn get_single_aliases(&self) -> &HashMap<String, Arc<CwtType>> {
         &self.data.single_aliases
     }
 
@@ -139,7 +140,7 @@ impl CwtAnalyzer {
     }
 
     /// Get a specific single alias
-    pub fn get_single_alias(&self, name: &str) -> Option<&CwtType> {
+    pub fn get_single_alias(&self, name: &str) -> Option<&Arc<CwtType>> {
         self.data.single_aliases.get(name)
     }
 

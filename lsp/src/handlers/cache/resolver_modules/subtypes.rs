@@ -1,7 +1,7 @@
 use crate::handlers::cache::ORIGINAL_KEY_PROPERTY;
 use crate::handlers::cache::entity_restructurer::EntityRestructurer;
 use crate::handlers::scope::{ScopeError, ScopeStack};
-use crate::handlers::scoped_type::{CwtTypeOrSpecial, ScopedType};
+use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, ScopedType};
 use cw_model::types::CwtAnalyzer;
 use cw_model::{CwtType, Entity, TypeKeyFilter, Value};
 use std::collections::{HashMap, HashSet};
@@ -61,7 +61,7 @@ impl SubtypeHandler {
             .iter()
             .filter_map(|(key, property)| {
                 // Consider all properties including blocks for cardinality evaluation
-                match &property.property_type {
+                match &*property.property_type {
                     CwtType::Literal(value) => Some((key.clone(), Some(value.clone()), property)),
                     CwtType::Simple(_) => Some((key.clone(), None, property)), // Exists condition
                     CwtType::Block(_) => Some((key.clone(), None, property)), // Block existence with cardinality
@@ -210,8 +210,8 @@ impl SubtypeHandler {
         scoped_type: Arc<ScopedType>,
         property_data: &HashMap<String, String>,
     ) -> HashSet<String> {
-        match scoped_type.cwt_type() {
-            CwtTypeOrSpecial::CwtType(CwtType::Block(block)) => {
+        match scoped_type.cwt_type_for_matching() {
+            CwtTypeOrSpecialRef::Block(block) => {
                 // Check each subtype condition and collect all matches
                 let mut matching_subtypes = HashSet::new();
 
@@ -409,7 +409,7 @@ mod tests {
             options: Default::default(),
             is_inverted: false,
         };
-        let condition_property = Property::optional(CwtType::Literal("no".to_string()));
+        let condition_property = Property::optional(Arc::new(CwtType::Literal("no".to_string())));
         civic_subtype
             .condition_properties
             .insert("is_origin".to_string(), condition_property);
@@ -451,7 +451,8 @@ mod tests {
             options: Default::default(),
             is_inverted: false,
         };
-        let origin_condition_property = Property::required(CwtType::Literal("yes".to_string()));
+        let origin_condition_property =
+            Property::required(Arc::new(CwtType::Literal("yes".to_string())));
         origin_subtype
             .condition_properties
             .insert("is_origin".to_string(), origin_condition_property);
