@@ -12,7 +12,6 @@ use crate::handlers::scoped_type::CwtTypeOrSpecialRef;
 use super::document_cache::DocumentCache;
 use super::scoped_type::PropertyNavigationResult;
 use super::utils::{extract_namespace_from_uri, position_to_offset};
-use cw_model::entity_from_module_ast;
 use cw_parser::{AstEntity, AstExpression, AstNode, AstValue, AstVisitor};
 
 /// A visitor that builds property paths for hover functionality

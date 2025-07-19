@@ -145,16 +145,33 @@ impl<'resolver> ComplexEnumCollector<'resolver> {
     ) {
         match name_structure {
             CwtType::Block(block_type) => {
-                // Check if any expected property is enum_name - if so, extract all keys from entity
+                // Check if enum_name is in additional_flags - if so, extract from entity.items
+                let has_enum_name_flag = block_type
+                    .additional_flags
+                    .iter()
+                    .any(|flag| matches!(&**flag, CwtType::Literal(lit) if lit == "enum_name"));
+
+                // Check if any expected property is enum_name - if so, extract from entity.properties
                 let has_enum_name_property =
                     block_type.properties.keys().any(|key| key == "enum_name");
+
+                if has_enum_name_flag {
+                    // Extract all string items as enum values
+                    for item in &entity.items {
+                        if let Some(string_value) = item.as_string() {
+                            values.insert(string_value.clone());
+                        }
+                    }
+                }
 
                 if has_enum_name_property {
                     // Extract all keys from the current entity as enum values
                     for (key, _) in &entity.properties.kv {
                         values.insert(key.clone());
                     }
-                } else {
+                }
+
+                if !has_enum_name_flag && !has_enum_name_property {
                     // Process each property in the block structure normally
                     for (property_name, property_type) in &block_type.properties {
                         if let Some(property_value) = entity.properties.kv.get(property_name) {

@@ -145,7 +145,15 @@ pub fn is_value_compatible_with_simple_type(
                 None // Argument in scripted effect
             } else {
                 if val.starts_with("value:") {
-                    let value_name = val.split("value:").nth(1).unwrap();
+                    // Extract the script value name, handling parameterized format
+                    // Format: value:my_value|PARAM1|value1|PARAM2|value2|
+                    let value_part = val.split("value:").nth(1).unwrap();
+                    let value_name = if let Some(pipe_pos) = value_part.find('|') {
+                        &value_part[..pipe_pos]
+                    } else {
+                        value_part
+                    };
+
                     let entity = EntityRestructurer::get_entity("common/script_values", value_name);
 
                     if entity.is_none() {
