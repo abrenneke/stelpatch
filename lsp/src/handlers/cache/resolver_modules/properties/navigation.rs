@@ -181,11 +181,21 @@ pub fn navigate_to_block_property(
 
     // Finally, check if this property is a link property (as fallback)
     let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
-    if let Some(_link_def) = is_link_property(&cwt_analyzer, property_name, current_scope) {
-        // For link properties, we maintain the current type but note scope change
-        // Since we're collecting multiple results, we can't easily apply scope changes here
-        // The type remains the same, but the consumer should be aware this is a link
-        successful_results.push(scoped_type.clone());
+    if let Some(link_def) = is_link_property(&cwt_analyzer, property_name, current_scope) {
+        // This is a link property - create a scoped type with the output scope
+        let mut new_scope_context = scoped_type.scope_stack().clone();
+        if new_scope_context
+            .push_scope_type(&link_def.output_scope)
+            .is_ok()
+        {
+            let result = ScopedType::new_with_subtypes(
+                scoped_type.cwt_type().clone(),
+                new_scope_context,
+                scoped_type.subtypes().clone(),
+                scoped_type.in_scripted_effect_block().cloned(),
+            );
+            successful_results.push(Arc::new(result));
+        }
     }
 
     // Combine all successful results
