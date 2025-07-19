@@ -224,10 +224,8 @@ impl DiagnosticsProvider {
                 if let AstValue::Entity(ast_entity) = &expr.value {
                     let container_key = expr.key.raw_value();
 
-                    let root_entity = entity_from_module_ast(module);
-
                     let filtered_namespace_type = type_cache
-                        .filter_union_types_by_properties(namespace_type.clone(), &root_entity);
+                        .filter_union_types_by_key(namespace_type.clone(), &container_key);
 
                     // Now check if the FILTERED type has skip_root_key
                     let mut is_skip_root_key_container = false;

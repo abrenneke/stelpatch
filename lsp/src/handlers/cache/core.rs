@@ -559,6 +559,146 @@ impl TypeCache {
         }
     }
 
+    /// Filters union type members based on type_key_filter conditions using the entity key.
+    ///
+    /// For union types, this method examines each member's type_key_filter
+    /// and only includes members whose filter conditions are satisfied by
+    /// the provided entity key. Returns the original type if not a union.
+    pub fn filter_union_types_by_key(
+        &self,
+        scoped_type: Arc<ScopedType>,
+        entity_key: &str,
+    ) -> Arc<ScopedType> {
+        match scoped_type.cwt_type_for_matching() {
+            CwtTypeOrSpecialRef::Union(union_types) => {
+                let mut filtered_types: Vec<Arc<CwtType>> = vec![];
+                for t in union_types {
+                    match &**t {
+                        CwtType::Block(block) => {
+                            if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                                if let Some(type_key_filter) =
+                                    type_def.rule_options.type_key_filter.as_ref()
+                                {
+                                    match type_key_filter {
+                                        TypeKeyFilter::Specific(key) => {
+                                            if entity_key == key {
+                                                filtered_types
+                                                    .push(Arc::new(CwtType::Block(block.clone())));
+                                            }
+                                        }
+                                        TypeKeyFilter::OneOf(keys) => {
+                                            if keys.iter().any(|key| entity_key == key) {
+                                                filtered_types
+                                                    .push(Arc::new(CwtType::Block(block.clone())));
+                                            }
+                                        }
+                                        TypeKeyFilter::Not(key) => {
+                                            if entity_key != key {
+                                                filtered_types
+                                                    .push(Arc::new(CwtType::Block(block.clone())));
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // No type_key_filter means this type applies to all keys
+                                    filtered_types.push(Arc::new(CwtType::Block(block.clone())));
+                                }
+                            }
+                        }
+                        _ => {
+                            // Non-block types don't have type_key_filter, include them
+                            filtered_types.push(t.clone());
+                        }
+                    }
+                }
+
+                match filtered_types.len() {
+                    0 => {
+                        return Arc::new(ScopedType::new_cwt(
+                            Arc::new(CwtType::Unknown),
+                            Default::default(),
+                            None,
+                        ));
+                    }
+                    1 => {
+                        return Arc::new(ScopedType::new_cwt(
+                            filtered_types[0].clone(),
+                            Default::default(),
+                            None,
+                        ));
+                    }
+                    _ => {
+                        return Arc::new(ScopedType::new_cwt(
+                            Arc::new(CwtType::Union(filtered_types)),
+                            Default::default(),
+                            None,
+                        ));
+                    }
+                }
+            }
+            CwtTypeOrSpecialRef::ScopedUnion(scoped_union_types) => {
+                let mut filtered_types: Vec<Arc<ScopedType>> = vec![];
+                for scoped_t in scoped_union_types {
+                    match scoped_t.cwt_type_for_matching() {
+                        CwtTypeOrSpecialRef::Block(block) => {
+                            if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                                if let Some(type_key_filter) =
+                                    type_def.rule_options.type_key_filter.as_ref()
+                                {
+                                    match type_key_filter {
+                                        TypeKeyFilter::Specific(key) => {
+                                            if entity_key == key {
+                                                filtered_types.push(scoped_t.clone());
+                                            }
+                                        }
+                                        TypeKeyFilter::OneOf(keys) => {
+                                            if keys.iter().any(|key| entity_key == key) {
+                                                filtered_types.push(scoped_t.clone());
+                                            }
+                                        }
+                                        TypeKeyFilter::Not(key) => {
+                                            if entity_key != key {
+                                                filtered_types.push(scoped_t.clone());
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // No type_key_filter means this type applies to all keys
+                                    filtered_types.push(scoped_t.clone());
+                                }
+                            }
+                        }
+                        _ => {
+                            // For non-block types in scoped union, include them
+                            filtered_types.push(scoped_t.clone());
+                        }
+                    }
+                }
+
+                match filtered_types.len() {
+                    0 => {
+                        return Arc::new(ScopedType::new_cwt(
+                            Arc::new(CwtType::Unknown),
+                            Default::default(),
+                            None,
+                        ));
+                    }
+                    1 => {
+                        return filtered_types[0].clone();
+                    }
+                    _ => {
+                        return Arc::new(ScopedType::new_scoped_union(
+                            filtered_types,
+                            scoped_type.scope_stack().clone(),
+                            scoped_type.in_scripted_effect_block().cloned(),
+                        ));
+                    }
+                }
+            }
+            _ => scoped_type,
+        }
+    }
+
     /// Get type information for a property by navigating through an AST entity
     /// This method does full AST navigation with subtype narrowing, similar to validate_entity_value.
     ///

@@ -192,10 +192,8 @@ pub fn hover(
     // Find the property at the given position
     let mut builder = PropertyPathBuilder::new(offset, cached_document.borrow_input());
 
-    let module;
     if let Ok(ast) = cached_document.borrow_ast() {
         builder.visit_module(ast);
-        module = Some(ast);
     } else {
         return Ok(None);
     }
@@ -225,10 +223,8 @@ pub fn hover(
                     let entity_key = container_key; // For normal entities, these are the same
 
                     // Step 1: Filter union types based on the ROOT KEY (type_key_filter)
-                    let root_entity = entity_from_module_ast(module.unwrap());
-
-                    let filtered_namespace_type = type_cache
-                        .filter_union_types_by_properties(namespace_type.clone(), &root_entity);
+                    let filtered_namespace_type =
+                        type_cache.filter_union_types_by_key(namespace_type.clone(), entity_key);
 
                     // Step 2: Get the effective entity for subtype narrowing
                     let (_effective_key, effective_entity) =

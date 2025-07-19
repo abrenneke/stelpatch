@@ -77,11 +77,12 @@ pub fn validate_scopegroup_reference(
             resolve_scope_path_to_final_type(value, scope_stack, &analyzer)
         {
             // Check if final scope type matches any member of the group
-            let is_valid = scope_group.members.iter().any(|member| {
-                analyzer
-                    .resolve_scope_name(member)
-                    .map_or(false, |resolved| resolved == final_scope_type)
-            });
+            let is_valid = final_scope_type == "any"
+                || scope_group.members.iter().any(|member| {
+                    analyzer
+                        .resolve_scope_name(member)
+                        .map_or(false, |resolved| resolved == final_scope_type)
+                });
 
             if !is_valid {
                 return Some(create_value_mismatch_diagnostic(
@@ -131,8 +132,8 @@ fn validate_scope_path(
             // For dotted paths starting with event_target, simulate navigation from "unknown" scope
             let remaining_parts = &parts[1..];
             let mut dummy_scope_stack = scope_stack.clone();
-            // Push "unknown" scope to represent the event target
-            if dummy_scope_stack.push_scope_type("unknown").is_ok() {
+            // Push "any" scope to represent the event target
+            if dummy_scope_stack.push_scope_type("any").is_ok() {
                 let navigation_result =
                     simulate_scope_navigation(remaining_parts, &dummy_scope_stack, &analyzer);
                 if let Err(error_msg) = navigation_result {
@@ -197,17 +198,17 @@ fn resolve_scope_path_to_final_type(
     // Handle event_target: references
     if parts[0].starts_with("event_target:") {
         if parts.len() == 1 {
-            // Simple event_target reference resolves to "unknown"
-            return Some("unknown".to_string());
+            // Simple event_target reference resolves to "any"
+            return Some("any".to_string());
         } else {
-            // For dotted paths, simulate navigation from "unknown" scope
+            // For dotted paths, simulate navigation from "any" scope
             let remaining_parts = &parts[1..];
             let mut dummy_scope_stack = scope_stack.clone();
-            if dummy_scope_stack.push_scope_type("unknown").is_ok() {
+            if dummy_scope_stack.push_scope_type("any").is_ok() {
                 return simulate_scope_navigation(remaining_parts, &dummy_scope_stack, analyzer)
                     .ok();
             }
-            return Some("unknown".to_string());
+            return Some("any".to_string());
         }
     }
 
@@ -288,7 +289,7 @@ fn navigate_from_scope(
 
     // Handle event_target: references
     if property_name.starts_with("event_target:") {
-        return Ok("unknown".to_string());
+        return Ok("any".to_string());
     }
 
     // Check if it's a scope property first
