@@ -179,8 +179,6 @@ pub fn hover(
         None => return Ok(None),
     };
 
-    eprintln!("🔍 HOVER: Extracted namespace: '{}'", namespace);
-
     if namespace.starts_with("common/inline_scripts") {
         // These are special, they don't have a type
         return Ok(None);
@@ -189,13 +187,8 @@ pub fn hover(
     // Get namespace type information
     let namespace_type = match type_cache.get_namespace_type(&namespace, Some(&uri)) {
         Some(info) => info,
-        None => {
-            eprintln!("🔍 HOVER: No namespace type found for: '{}'", namespace);
-            return Ok(None);
-        }
+        None => return Ok(None),
     };
-
-    eprintln!("🔍 HOVER: Found namespace type: '{:?}'", namespace_type);
 
     // Find the property at the given position
     let mut builder = PropertyPathBuilder::new(offset, cached_document.borrow_input());
@@ -207,19 +200,66 @@ pub fn hover(
     }
 
     if let Some(property_path) = builder.found_property.as_ref() {
-        eprintln!("🔍 HOVER: Found property path: '{}'", property_path);
-
         // Check if this is a top-level key (entity name) or a nested property
         let is_top_level_key = !property_path.contains('.');
-        eprintln!("🔍 HOVER: Is top-level key: {}", is_top_level_key);
 
         // Build the base hover content
         let mut hover_content = String::new();
 
         let type_info = if is_top_level_key {
-            // For top-level keys, we don't want to show namespace type as it's confusing
-            // Top-level keys are entity names which can be anything, so no type info
-            None
+            // For top-level keys, show contextual information about the entity type
+            let entity_name = property_path;
+
+            // Check if this is a skip_root_key container by looking at union types
+            let mut container_info = None;
+            if let CwtTypeOrSpecialRef::Union(union_types) = namespace_type.cwt_type_for_matching()
+            {
+                for union_type in union_types {
+                    let type_name = union_type.get_type_name();
+                    if !type_name.is_empty() {
+                        if let Some(type_def) = type_cache.get_cwt_analyzer().get_type(&type_name) {
+                            if let Some(skip_root_key) = &type_def.skip_root_key {
+                                let should_skip = match skip_root_key {
+                                    cw_model::SkipRootKey::Specific(skip_key) => {
+                                        entity_name == skip_key
+                                    }
+                                    cw_model::SkipRootKey::Any => true,
+                                    cw_model::SkipRootKey::Except(exceptions) => {
+                                        !exceptions.contains(&entity_name.to_string())
+                                    }
+                                    cw_model::SkipRootKey::Multiple(keys) => {
+                                        keys.contains(&entity_name.to_string())
+                                    }
+                                };
+
+                                if should_skip {
+                                    container_info =
+                                        Some(format!("Container for {} entities", type_name));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some(info) = container_info {
+                // This is a skip_root_key container
+                Some(TypeInfo {
+                    property_path: property_path.clone(),
+                    scoped_type: None,
+                    documentation: Some(info),
+                    source_info: Some(format!("From namespace: {}", namespace)),
+                })
+            } else {
+                // Regular entity - show the namespace context
+                Some(TypeInfo {
+                    property_path: property_path.clone(),
+                    scoped_type: None,
+                    documentation: Some(format!("Entity in {} namespace", namespace)),
+                    source_info: None,
+                })
+            }
         } else {
             // For nested properties, we need to find the correct entity context first
             let property_parts: Vec<&str> = property_path.split('.').collect();
@@ -230,10 +270,6 @@ pub fn hover(
                 // Use the entity context found by PropertyPathBuilder
                 if let Some(entity_context) = builder.found_entity_context {
                     let container_key = property_parts[0];
-                    eprintln!(
-                        "🔍 HOVER: Container key: '{}', property parts: {:?}",
-                        container_key, property_parts
-                    );
 
                     // Check for skip_root_key on the union types BEFORE filtering
                     let mut is_skip_root_key_container = false;
@@ -245,18 +281,10 @@ pub fn hover(
                         for union_type in union_types {
                             let type_name = union_type.get_type_name();
                             if !type_name.is_empty() {
-                                eprintln!(
-                                    "🔍 HOVER: Checking union type '{}' for skip_root_key",
-                                    type_name
-                                );
                                 if let Some(type_def) =
                                     type_cache.get_cwt_analyzer().get_type(&type_name)
                                 {
                                     if let Some(skip_root_key) = &type_def.skip_root_key {
-                                        eprintln!(
-                                            "🔍 HOVER: Found skip_root_key: {:?}",
-                                            skip_root_key
-                                        );
                                         let should_skip = match skip_root_key {
                                             cw_model::SkipRootKey::Specific(skip_key) => {
                                                 container_key == skip_key
@@ -270,25 +298,11 @@ pub fn hover(
                                             }
                                         };
 
-                                        eprintln!(
-                                            "🔍 HOVER: Should skip '{}': {}",
-                                            container_key, should_skip
-                                        );
                                         if should_skip {
                                             is_skip_root_key_container = true;
                                             break;
                                         }
-                                    } else {
-                                        eprintln!(
-                                            "🔍 HOVER: No skip_root_key found for type '{}'",
-                                            type_name
-                                        );
                                     }
-                                } else {
-                                    eprintln!(
-                                        "🔍 HOVER: Type '{}' not found in analyzer",
-                                        type_name
-                                    );
                                 }
                             }
                         }
@@ -297,7 +311,6 @@ pub fn hover(
                     let (validation_type, final_property_path) = if is_skip_root_key_container
                         && property_parts.len() >= 2
                     {
-                        eprintln!("🔍 HOVER: Using skip_root_key handling");
                         // Skip root key: filter by nested entity key directly, not container key
                         let nested_entity_key = property_parts[1];
                         let nested_property_path = if property_parts.len() > 2 {
@@ -306,31 +319,16 @@ pub fn hover(
                             String::new() // Empty path when hovering over the entity name itself
                         };
 
-                        eprintln!(
-                            "🔍 HOVER: Nested entity key: '{}', nested property path: '{}'",
-                            nested_entity_key, nested_property_path
-                        );
-
                         let filtered_namespace_type = type_cache
                             .filter_union_types_by_key(namespace_type.clone(), nested_entity_key);
 
-                        eprintln!("🔍 HOVER: Filtered namespace type by nested entity key");
-
                         // Find the nested entity in the AST
                         let mut nested_entity_context = None;
-                        eprintln!(
-                            "🔍 HOVER: Searching for nested entity '{}' in container '{}'",
-                            nested_entity_key, container_key
-                        );
 
                         if let Ok(ast) = cached_document.borrow_ast() {
                             for item in &ast.items {
                                 if let cw_parser::AstEntityItem::Expression(expr) = item {
                                     if expr.key.raw_value() == container_key {
-                                        eprintln!(
-                                            "🔍 HOVER: Found container '{}' in AST",
-                                            container_key
-                                        );
                                         if let AstValue::Entity(container_ast_entity) = &expr.value
                                         {
                                             for nested_item in &container_ast_entity.items {
@@ -341,10 +339,6 @@ pub fn hover(
                                                     if nested_expr.key.raw_value()
                                                         == nested_entity_key
                                                     {
-                                                        eprintln!(
-                                                            "🔍 HOVER: Found nested entity '{}' in AST",
-                                                            nested_entity_key
-                                                        );
                                                         if let AstValue::Entity(nested_ast_entity) =
                                                             &nested_expr.value
                                                         {
@@ -362,15 +356,7 @@ pub fn hover(
                             }
                         }
 
-                        if nested_entity_context.is_none() {
-                            eprintln!(
-                                "🔍 HOVER: Failed to find nested entity '{}' in container '{}'",
-                                nested_entity_key, container_key
-                            );
-                        }
-
                         if let Some(nested_ast_entity) = nested_entity_context {
-                            eprintln!("🔍 HOVER: Processing nested entity for subtype narrowing");
                             let (_effective_key, effective_entity) =
                                 EntityRestructurer::get_effective_entity_for_subtype_narrowing(
                                     &namespace,
@@ -396,10 +382,8 @@ pub fn hover(
                             return Ok(None);
                         }
                     } else {
-                        eprintln!("🔍 HOVER: Using normal (non-skip_root_key) handling");
                         // Normal case: filter by container key
                         let entity_key = container_key;
-                        eprintln!("🔍 HOVER: Filtering by entity key: '{}'", entity_key);
                         let filtered_namespace_type = type_cache
                             .filter_union_types_by_key(namespace_type.clone(), entity_key);
 
@@ -428,14 +412,11 @@ pub fn hover(
 
                     // Navigate to the specific property within the narrowed type
                     let mut current_type = validation_type;
-                    eprintln!("🔍 HOVER: Final property path: '{}'", final_property_path);
 
                     if !final_property_path.is_empty() {
                         let path_parts: Vec<&str> = final_property_path.split('.').collect();
-                        eprintln!("🔍 HOVER: Navigating through path parts: {:?}", path_parts);
 
                         for part in path_parts.iter() {
-                            eprintln!("🔍 HOVER: Navigating to property: '{}'", part);
                             // Resolve the current type to its actual type before navigation
                             current_type = type_cache.get_resolver().resolve_type(current_type);
 
@@ -444,33 +425,18 @@ pub fn hover(
                                 .navigate_to_property(current_type, part)
                             {
                                 PropertyNavigationResult::Success(property_type) => {
-                                    eprintln!(
-                                        "🔍 HOVER: Successfully navigated to property '{}'",
-                                        part
-                                    );
                                     current_type = property_type;
                                 }
                                 PropertyNavigationResult::NotFound => {
-                                    eprintln!("🔍 HOVER: Property '{}' not found", part);
                                     return Ok(None);
                                 }
-                                PropertyNavigationResult::ScopeError(err) => {
-                                    eprintln!(
-                                        "🔍 HOVER: Scope error for property '{}': {:?}",
-                                        part, err
-                                    );
+                                PropertyNavigationResult::ScopeError(_) => {
                                     return Ok(None);
                                 }
                             }
                         }
-                    } else {
-                        eprintln!("🔍 HOVER: Empty property path - using type as-is");
                     }
 
-                    eprintln!(
-                        "🔍 HOVER: Successfully created TypeInfo for path: '{}'",
-                        final_property_path
-                    );
                     Some(TypeInfo {
                         property_path: final_property_path.clone(),
                         scoped_type: Some(current_type),

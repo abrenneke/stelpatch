@@ -482,6 +482,56 @@ fn validate_value_against_type(
                     diagnostics.push(diagnostic);
                 }
             }
+            ReferenceType::Filepath { path } => {
+                if let AstValue::String(string_value) = value {
+                    if let Some(file_index) = FileIndex::get() {
+                        // Split the path by comma to get prefix and suffix
+                        let parts: Vec<&str> = path.split(',').collect();
+                        if parts.len() == 2 {
+                            let prefix = parts[0];
+                            let suffix = parts[1];
+                            let filename = string_value.raw_value();
+                            let full_path = format!("{}{}{}", prefix, filename, suffix);
+
+                            if !file_index.file_exists(&full_path) {
+                                let diagnostic = create_type_mismatch_diagnostic(
+                                    value.span_range(),
+                                    &format!(
+                                        "File '{}' does not exist (expected at '{}')",
+                                        filename, full_path
+                                    ),
+                                    content,
+                                );
+                                diagnostics.push(diagnostic);
+                            }
+                        } else {
+                            let diagnostic = create_type_mismatch_diagnostic(
+                                value.span_range(),
+                                &format!(
+                                    "Invalid filepath pattern '{}' - expected format 'prefix,suffix'",
+                                    path
+                                ),
+                                content,
+                            );
+                            diagnostics.push(diagnostic);
+                        }
+                    } else {
+                        let diagnostic = create_type_mismatch_diagnostic(
+                            value.span_range(),
+                            "File index not initialized, cannot validate filepath",
+                            content,
+                        );
+                        diagnostics.push(diagnostic);
+                    }
+                } else {
+                    let diagnostic = create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Expected a string value for filepath reference",
+                        content,
+                    );
+                    diagnostics.push(diagnostic);
+                }
+            }
             _ => {
                 let diagnostic = create_type_mismatch_diagnostic(
                     value.span_range(),
