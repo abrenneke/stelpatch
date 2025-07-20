@@ -1,21 +1,21 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use cw_model::Entity;
+use cw_model::{Entity, LowerCaseHashMap};
 
 use crate::handlers::cache::EntityRestructurer;
 
 pub struct ScriptedEffectArgumentCollector {
-    scripted_effect_arguments: HashMap<String, HashSet<String>>,
+    scripted_effect_arguments: LowerCaseHashMap<HashSet<String>>,
 }
 
 impl ScriptedEffectArgumentCollector {
     pub fn new() -> Self {
         Self {
-            scripted_effect_arguments: HashMap::new(),
+            scripted_effect_arguments: LowerCaseHashMap::new(),
         }
     }
 
-    pub fn collect(mut self) -> HashMap<String, HashSet<String>> {
+    pub fn collect(mut self) -> LowerCaseHashMap<HashSet<String>> {
         // Only collect from scripted_effects namespace using EntityRestructurer
         if let Some(scripted_effects_entities) =
             EntityRestructurer::get_all_namespace_entities("common/scripted_effects")

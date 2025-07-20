@@ -118,11 +118,17 @@ impl CwtTypeOrSpecial {
     pub fn type_name_for_display(&self) -> String {
         match self {
             CwtTypeOrSpecial::CwtType(cwt_type) => cwt_type.type_name_for_display(),
-            CwtTypeOrSpecial::ScopedUnion(union_types) => union_types
-                .iter()
-                .map(|t| t.get_type_name())
-                .collect::<Vec<_>>()
-                .join(" | "),
+            CwtTypeOrSpecial::ScopedUnion(union_types) => {
+                if union_types.is_empty() {
+                    "(empty scoped union)".to_string()
+                } else {
+                    union_types
+                        .iter()
+                        .map(|t| t.type_name_for_display())
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                }
+            }
         }
     }
 }

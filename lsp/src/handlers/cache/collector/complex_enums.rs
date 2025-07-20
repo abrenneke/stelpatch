@@ -1,23 +1,23 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use cw_model::{ComplexEnumDefinition, CwtType, Entity};
+use cw_model::{ComplexEnumDefinition, CwtType, Entity, LowerCaseHashMap};
 
 use crate::handlers::cache::{EntityRestructurer, resolver::TypeResolver};
 
 pub struct ComplexEnumCollector<'resolver> {
-    complex_enums: HashMap<String, HashSet<String>>,
+    complex_enums: LowerCaseHashMap<HashSet<String>>,
     type_resolver: &'resolver TypeResolver,
 }
 
 impl<'resolver> ComplexEnumCollector<'resolver> {
     pub fn new(type_resolver: &'resolver TypeResolver) -> Self {
         Self {
-            complex_enums: HashMap::new(),
+            complex_enums: LowerCaseHashMap::new(),
             type_resolver,
         }
     }
 
-    pub fn collect(mut self) -> HashMap<String, HashSet<String>> {
+    pub fn collect(mut self) -> LowerCaseHashMap<HashSet<String>> {
         // Get all enum definitions from the CwtAnalyzer
         let enum_definitions = self.type_resolver.get_enums();
 
@@ -30,6 +30,13 @@ impl<'resolver> ComplexEnumCollector<'resolver> {
                     set.extend(values);
                 }
             }
+        }
+
+        // Postprocess: convert all values to lowercase
+        for (_key, value_set) in &mut self.complex_enums {
+            let lowercase_values: HashSet<String> =
+                value_set.iter().map(|v| v.to_lowercase()).collect();
+            *value_set = lowercase_values;
         }
 
         self.complex_enums

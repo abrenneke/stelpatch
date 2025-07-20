@@ -7,9 +7,12 @@ use super::super::conversion::ConversionError;
 use super::super::definitions::*;
 use super::converter::CwtConverter;
 use super::registry::CwtAnalysisData;
-use cw_parser::cwt::{
-    AstCwtBlock, AstCwtIdentifierOrString, AstCwtRule, CwtReferenceType, CwtSimpleValueType,
-    CwtValue, CwtVisitor,
+use cw_parser::{
+    AstCwtExpression,
+    cwt::{
+        AstCwtBlock, AstCwtIdentifierOrString, AstCwtRule, CwtReferenceType, CwtSimpleValueType,
+        CwtValue, CwtVisitor,
+    },
 };
 use std::collections::HashSet;
 
@@ -127,17 +130,17 @@ impl<'a> EnumVisitor<'a> {
     fn extract_enum_values(enum_def: &mut EnumDefinition, block: &AstCwtBlock) {
         for item in &block.items {
             match item {
-                cw_parser::cwt::AstCwtExpression::Value(s) => match s {
+                AstCwtExpression::Value(s) => match s {
                     CwtValue::String(s) => {
-                        enum_def.values.insert(s.raw_value().to_string());
+                        enum_def.values.insert(s.raw_value().to_lowercase());
                     }
                     CwtValue::Identifier(id) => {
-                        enum_def.values.insert(id.name.raw_value().to_string());
+                        enum_def.values.insert(id.name.raw_value().to_lowercase());
                     }
                     _ => {}
                 },
-                cw_parser::cwt::AstCwtExpression::Identifier(id) => {
-                    enum_def.values.insert(id.name.raw_value().to_string());
+                AstCwtExpression::Identifier(id) => {
+                    enum_def.values.insert(id.name.raw_value().to_lowercase());
                 }
                 _ => {}
             }

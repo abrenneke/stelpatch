@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use cw_model::{CwtType, Entity, PropertyInfoList, ReferenceType};
+use cw_model::{CwtType, Entity, LowerCaseHashMap, PropertyInfoList, ReferenceType};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::handlers::{
@@ -15,23 +15,23 @@ use crate::handlers::{
 };
 
 pub struct ValueSetCollector<'resolver> {
-    value_sets: HashMap<String, HashSet<String>>,
+    value_sets: LowerCaseHashMap<HashSet<String>>,
     type_resolver: &'resolver TypeResolver,
 }
 
 impl<'resolver> ValueSetCollector<'resolver> {
     pub fn new(type_resolver: &'resolver TypeResolver) -> Self {
         Self {
-            value_sets: HashMap::new(),
+            value_sets: LowerCaseHashMap::new(),
             type_resolver,
         }
     }
 
-    pub fn collect(mut self) -> HashMap<String, HashSet<String>> {
+    pub fn collect(mut self) -> LowerCaseHashMap<HashSet<String>> {
         // Get namespaces from GameDataCache, then use EntityRestructurer for entity access
         let namespaces = match GameDataCache::get() {
             Some(game_data) => game_data.get_namespaces(),
-            None => return HashMap::new(), // Early return if game data not available
+            None => return LowerCaseHashMap::new(), // Early return if game data not available
         };
 
         // Collect value_sets from parallel processing using EntityRestructurer

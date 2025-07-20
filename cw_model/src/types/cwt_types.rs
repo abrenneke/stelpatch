@@ -74,14 +74,26 @@ impl CwtType {
         match self {
             CwtType::Simple(_) => "(simple)".to_string(),
             CwtType::Reference(_) => "(reference)".to_string(),
-            CwtType::Block(block_type) => block_type.type_name.clone(),
+            CwtType::Block(block_type) => {
+                if block_type.type_name.is_empty() {
+                    "(anonymous block)".to_string()
+                } else {
+                    block_type.type_name.clone()
+                }
+            }
             CwtType::Unknown => "(unknown)".to_string(),
             CwtType::Array(_) => "(array)".to_string(),
-            CwtType::Union(union) => union
-                .iter()
-                .map(|t| t.type_name_for_display())
-                .collect::<Vec<_>>()
-                .join(" | "),
+            CwtType::Union(union) => {
+                if union.is_empty() {
+                    "(empty union)".to_string()
+                } else {
+                    union
+                        .iter()
+                        .map(|t| t.type_name_for_display())
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                }
+            }
             CwtType::Literal(_) => "(literal)".to_string(),
             CwtType::LiteralSet(_) => "(literal set)".to_string(),
             CwtType::Comparable(_) => "(comparable)".to_string(),

@@ -1,7 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::RwLock,
-};
+use std::{collections::HashSet, sync::RwLock};
+
+use cw_model::LowerCaseHashMap;
 
 use crate::handlers::cache::{DataCollector, TypeCache};
 
@@ -11,9 +10,9 @@ pub struct FullAnalysis {
 
 #[derive(Clone)]
 pub struct FullAnalysisResult {
-    pub dynamic_value_sets: HashMap<String, HashSet<String>>,
-    pub complex_enums: HashMap<String, HashSet<String>>,
-    pub scripted_effect_arguments: HashMap<String, HashSet<String>>,
+    pub dynamic_value_sets: LowerCaseHashMap<HashSet<String>>,
+    pub complex_enums: LowerCaseHashMap<HashSet<String>>,
+    pub scripted_effect_arguments: LowerCaseHashMap<HashSet<String>>,
 }
 
 static FULL_ANALYSIS: RwLock<Option<FullAnalysisResult>> = RwLock::new(None);
@@ -82,9 +81,9 @@ mod tests {
         {
             let mut cache = FULL_ANALYSIS.write().unwrap();
             *cache = Some(FullAnalysisResult {
-                dynamic_value_sets: HashMap::new(),
-                complex_enums: HashMap::new(),
-                scripted_effect_arguments: HashMap::new(),
+                dynamic_value_sets: LowerCaseHashMap::new(),
+                complex_enums: LowerCaseHashMap::new(),
+                scripted_effect_arguments: LowerCaseHashMap::new(),
             });
         }
 
