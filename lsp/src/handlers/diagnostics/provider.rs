@@ -238,14 +238,20 @@ impl DiagnosticsProvider {
                                     if let Some(skip_root_key) = &type_def.skip_root_key {
                                         let should_skip = match skip_root_key {
                                             cw_model::SkipRootKey::Specific(skip_key) => {
-                                                container_key == skip_key
+                                                container_key.to_lowercase()
+                                                    == skip_key.to_lowercase()
                                             }
                                             cw_model::SkipRootKey::Any => true,
                                             cw_model::SkipRootKey::Except(exceptions) => {
-                                                !exceptions.contains(&container_key.to_string())
+                                                !exceptions.iter().any(|exception| {
+                                                    exception.to_lowercase()
+                                                        == container_key.to_lowercase()
+                                                })
                                             }
                                             cw_model::SkipRootKey::Multiple(keys) => {
-                                                keys.contains(&container_key.to_string())
+                                                keys.iter().any(|k| {
+                                                    k.to_lowercase() == container_key.to_lowercase()
+                                                })
                                             }
                                         };
 

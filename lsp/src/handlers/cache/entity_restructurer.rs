@@ -304,16 +304,22 @@ impl EntityRestructurer {
                     if let Value::Entity(entity) = &property_info.value {
                         original_count += 1;
 
-                        // Find the specific type definition that matches this key for skip_root_key
-                        if let Some(matching_type_def) = type_defs.iter().find(|type_def| {
-                            self.should_skip_root_key(key, &type_def.skip_root_key)
-                        }) {
-                            // Skip this root key and process nested entities using only the matching type definition
-                            let extracted_entities = self.extract_entities_from_container(
-                                entity,
-                                matching_type_def,
-                                namespace,
-                            );
+                        // Check if any type definition wants to skip this root key
+                        let skip_root_type_defs: Vec<&TypeDefinition> = type_defs
+                            .iter()
+                            .filter(|type_def| {
+                                self.should_skip_root_key(key, &type_def.skip_root_key)
+                            })
+                            .collect();
+
+                        if !skip_root_type_defs.is_empty() {
+                            // Skip this root key and process nested entities using all applicable type definitions
+                            let extracted_entities = self
+                                .extract_entities_from_container_with_multiple_types(
+                                    entity,
+                                    &skip_root_type_defs,
+                                    namespace,
+                                );
                             self.extend_with_duplicate_warnings(
                                 &mut restructured_entities,
                                 extracted_entities,
@@ -401,10 +407,14 @@ impl EntityRestructurer {
     /// Check if a root key should be skipped
     fn should_skip_root_key(&self, key: &str, skip_config: &Option<SkipRootKey>) -> bool {
         match skip_config {
-            Some(SkipRootKey::Specific(skip_key)) => key == skip_key,
+            Some(SkipRootKey::Specific(skip_key)) => key.to_lowercase() == skip_key.to_lowercase(),
             Some(SkipRootKey::Any) => true,
-            Some(SkipRootKey::Except(exceptions)) => !exceptions.contains(&key.to_string()),
-            Some(SkipRootKey::Multiple(keys)) => keys.contains(&key.to_string()),
+            Some(SkipRootKey::Except(exceptions)) => !exceptions
+                .iter()
+                .any(|exception| exception.to_lowercase() == key.to_lowercase()),
+            Some(SkipRootKey::Multiple(keys)) => {
+                keys.iter().any(|k| k.to_lowercase() == key.to_lowercase())
+            }
             None => false,
         }
     }
@@ -434,9 +444,13 @@ impl EntityRestructurer {
     /// Check if a key matches a specific type_key_filter
     fn matches_type_key_filter(&self, key: &str, filter: &TypeKeyFilter) -> bool {
         match filter {
-            TypeKeyFilter::Specific(required_key) => key == required_key,
-            TypeKeyFilter::OneOf(required_keys) => required_keys.contains(&key.to_string()),
-            TypeKeyFilter::Not(excluded_key) => key != excluded_key,
+            TypeKeyFilter::Specific(required_key) => {
+                key.to_lowercase() == required_key.to_lowercase()
+            }
+            TypeKeyFilter::OneOf(required_keys) => required_keys
+                .iter()
+                .any(|k| k.to_lowercase() == key.to_lowercase()),
+            TypeKeyFilter::Not(excluded_key) => key.to_lowercase() != excluded_key.to_lowercase(),
         }
     }
 
@@ -458,6 +472,55 @@ impl EntityRestructurer {
                 }
             })
             .collect()
+    }
+
+    /// Extract entities from a container entity using multiple type definitions (when skipping root key)
+    fn extract_entities_from_container_with_multiple_types(
+        &self,
+        container_entity: &Entity,
+        type_defs: &Vec<&TypeDefinition>,
+        namespace: &str,
+    ) -> LowerCaseHashMap<Entity> {
+        let mut result = LowerCaseHashMap::new();
+
+        // Look for child entities in the container
+        for (child_key, child_property_list) in &container_entity.properties.kv {
+            for property_info in &child_property_list.0 {
+                if let Value::Entity(child_entity) = &property_info.value {
+                    // Find the first type definition that matches this child entity
+                    if let Some(matching_type_def) = type_defs.iter().find(|type_def| {
+                        self.passes_type_key_filter(child_key, &vec![(**type_def).clone()])
+                    }) {
+                        // Determine the entity name based on whether we have a name field
+                        let entity_name = if matching_type_def.name_field.is_some() {
+                            // Use name field if available, fallback to structural key
+                            Self::extract_name_from_entity(
+                                child_entity,
+                                &matching_type_def.name_field,
+                            )
+                            .unwrap_or_else(|| child_key.clone())
+                        } else {
+                            // No name field, use the structural key
+                            child_key.clone()
+                        };
+
+                        // Add original key to entity to preserve subtype information
+                        let entity_with_original_key =
+                            self.add_original_key_to_entity(child_entity.clone(), child_key);
+                        self.insert_with_duplicate_warning(
+                            &mut result,
+                            entity_name,
+                            entity_with_original_key,
+                            &format!("extracted from container child '{}'", child_key),
+                            namespace,
+                        );
+                    }
+                    // If no type definition matches, skip this entity (it will be handled by normal processing)
+                }
+            }
+        }
+
+        result
     }
 
     /// Extract entities from a container entity (when skipping root key)
@@ -871,14 +934,18 @@ impl EntityRestructurer {
                 applicable_type_defs
                     .iter()
                     .find(|type_def| match &type_def.skip_root_key {
-                        Some(SkipRootKey::Specific(skip_key)) => container_key == skip_key,
+                        Some(SkipRootKey::Specific(skip_key)) => {
+                            container_key.to_lowercase() == skip_key.to_lowercase()
+                        }
                         Some(SkipRootKey::Any) => true,
                         Some(SkipRootKey::Except(exceptions)) => {
-                            !exceptions.contains(&container_key.to_string())
+                            !exceptions.iter().any(|exception| {
+                                exception.to_lowercase() == container_key.to_lowercase()
+                            })
                         }
-                        Some(SkipRootKey::Multiple(keys)) => {
-                            keys.contains(&container_key.to_string())
-                        }
+                        Some(SkipRootKey::Multiple(keys)) => keys
+                            .iter()
+                            .any(|k| k.to_lowercase() == container_key.to_lowercase()),
                         None => false,
                     })
             {
