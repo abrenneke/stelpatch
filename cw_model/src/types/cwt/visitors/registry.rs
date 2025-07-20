@@ -3,7 +3,7 @@
 //! This module provides the main coordinator for all CWT visitors, determining which
 //! visitor should handle each rule based on its type and context.
 
-use crate::{AliasPattern, CwtType};
+use crate::{AliasPattern, CwtType, LowerCaseHashMap};
 
 use super::super::conversion::ConversionError;
 use super::super::definitions::*;
@@ -21,28 +21,28 @@ use std::sync::Arc;
 #[derive(Debug, Default)]
 pub struct CwtAnalysisData {
     /// Known types registry
-    pub types: HashMap<String, TypeDefinition>,
+    pub types: LowerCaseHashMap<TypeDefinition>,
 
     /// Known enums registry
-    pub enums: HashMap<String, EnumDefinition>,
+    pub enums: LowerCaseHashMap<EnumDefinition>,
 
     /// Known value sets registry
-    pub value_sets: HashMap<String, HashSet<String>>,
+    pub value_sets: LowerCaseHashMap<HashSet<String>>,
 
     /// Known aliases registry
     pub aliases: HashMap<AliasPattern, AliasDefinition>,
 
     /// Known single aliases registry
-    pub single_aliases: HashMap<String, Arc<CwtType>>,
+    pub single_aliases: LowerCaseHashMap<Arc<CwtType>>,
 
     /// Known links registry
-    pub links: HashMap<String, LinkDefinition>,
+    pub links: LowerCaseHashMap<LinkDefinition>,
 
     /// Known scopes registry
-    pub scopes: HashMap<String, ScopeDefinition>,
+    pub scopes: LowerCaseHashMap<ScopeDefinition>,
 
     /// Known scope groups registry
-    pub scope_groups: HashMap<String, ScopeGroupDefinition>,
+    pub scope_groups: LowerCaseHashMap<ScopeGroupDefinition>,
 
     /// Errors encountered during conversion
     pub errors: Vec<ConversionError>,

@@ -224,29 +224,37 @@ impl DiagnosticsProvider {
                 if let AstValue::Entity(ast_entity) = &expr.value {
                     let container_key = expr.key.raw_value();
 
-                    let filtered_namespace_type = type_cache
-                        .filter_union_types_by_key(namespace_type.clone(), &container_key);
-
-                    // Now check if the FILTERED type has skip_root_key
+                    // Check if the container key matches skip_root_key for any union type BEFORE filtering
                     let mut is_skip_root_key_container = false;
-                    let type_name = filtered_namespace_type.get_type_name();
-                    if let Some(type_def) = type_cache.get_cwt_analyzer().get_type(type_name) {
-                        if let Some(skip_root_key) = &type_def.skip_root_key {
-                            let should_skip = match skip_root_key {
-                                cw_model::SkipRootKey::Specific(skip_key) => {
-                                    container_key == skip_key
-                                }
-                                cw_model::SkipRootKey::Any => true,
-                                cw_model::SkipRootKey::Except(exceptions) => {
-                                    !exceptions.contains(&container_key.to_string())
-                                }
-                                cw_model::SkipRootKey::Multiple(keys) => {
-                                    keys.contains(&container_key.to_string())
-                                }
-                            };
+                    if let CwtTypeOrSpecialRef::Union(union_types) =
+                        namespace_type.cwt_type_for_matching()
+                    {
+                        for union_type in union_types {
+                            let type_name = union_type.get_type_name();
+                            if !type_name.is_empty() {
+                                if let Some(type_def) =
+                                    type_cache.get_cwt_analyzer().get_type(&type_name)
+                                {
+                                    if let Some(skip_root_key) = &type_def.skip_root_key {
+                                        let should_skip = match skip_root_key {
+                                            cw_model::SkipRootKey::Specific(skip_key) => {
+                                                container_key == skip_key
+                                            }
+                                            cw_model::SkipRootKey::Any => true,
+                                            cw_model::SkipRootKey::Except(exceptions) => {
+                                                !exceptions.contains(&container_key.to_string())
+                                            }
+                                            cw_model::SkipRootKey::Multiple(keys) => {
+                                                keys.contains(&container_key.to_string())
+                                            }
+                                        };
 
-                            if should_skip {
-                                is_skip_root_key_container = true;
+                                        if should_skip {
+                                            is_skip_root_key_container = true;
+                                            break;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -258,9 +266,12 @@ impl DiagnosticsProvider {
                                 if let AstValue::Entity(nested_ast_entity) = &nested_expr.value {
                                     let nested_entity_key = nested_expr.key.raw_value();
 
-                                    // For nested entities in skip_root_key containers, use the already filtered type
-                                    let nested_filtered_namespace_type =
-                                        filtered_namespace_type.clone();
+                                    // For nested entities in skip_root_key containers, filter by the nested entity key
+                                    let nested_filtered_namespace_type = type_cache
+                                        .filter_union_types_by_key(
+                                            namespace_type.clone(),
+                                            nested_entity_key,
+                                        );
 
                                     let (_effective_key, effective_entity) =
                                         EntityRestructurer::get_effective_entity_for_subtype_narrowing(
@@ -314,6 +325,10 @@ impl DiagnosticsProvider {
                     }
 
                     let entity_key = container_key; // For normal entities, these are the same
+
+                    // For normal entities, filter by the container key
+                    let filtered_namespace_type = type_cache
+                        .filter_union_types_by_key(namespace_type.clone(), &container_key);
 
                     let (_effective_key, effective_entity) =
                         EntityRestructurer::get_effective_entity_for_subtype_narrowing(

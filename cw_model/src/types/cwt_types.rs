@@ -3,12 +3,9 @@
 //! This module provides a direct representation of CWT types and definitions,
 //! closely aligned with the CWT specification rather than inferred types.
 
-use crate::{SeverityLevel, TypeKeyFilter};
+use crate::{LowerCaseHashMap, SeverityLevel, TypeKeyFilter};
 use cw_parser::{AstCwtRule, CwtCommentRangeBound};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 /// Trait for generating unique fingerprints for types to enable deduplication
 pub trait TypeFingerprint {
@@ -247,16 +244,16 @@ pub struct BlockType {
     pub type_name: String,
 
     /// Regular properties
-    pub properties: HashMap<String, Property>,
+    pub properties: LowerCaseHashMap<Property>,
 
     /// Subtypes - conditional property sets
-    pub subtypes: HashMap<String, Subtype>,
+    pub subtypes: LowerCaseHashMap<Subtype>,
 
     /// Subtype properties - subtype_name -> property_name -> Property
-    pub subtype_properties: HashMap<String, HashMap<String, Property>>,
+    pub subtype_properties: LowerCaseHashMap<LowerCaseHashMap<Property>>,
 
     /// Subtype pattern properties - subtype_name -> pattern_property
-    pub subtype_pattern_properties: HashMap<String, Vec<PatternProperty>>,
+    pub subtype_pattern_properties: LowerCaseHashMap<Vec<PatternProperty>>,
 
     /// Pattern properties - properties that can match multiple keys but maintain unified cardinality
     pub pattern_properties: Vec<PatternProperty>,
@@ -505,11 +502,11 @@ impl std::fmt::Debug for Property {
 pub struct Subtype {
     /// CWT schema condition properties with cardinality constraints
     /// These define the rules for when this subtype matches (e.g., is_origin = no with cardinality 0..1)
-    pub condition_properties: HashMap<String, Property>,
+    pub condition_properties: LowerCaseHashMap<Property>,
 
     /// Game data properties that are allowed when this subtype is active
     /// These are discovered from analyzing actual game files (e.g., traits, playable, etc.)
-    pub allowed_properties: HashMap<String, Property>,
+    pub allowed_properties: LowerCaseHashMap<Property>,
 
     /// Pattern properties that are allowed when this subtype is active
     pub allowed_pattern_properties: Vec<PatternProperty>,
@@ -610,7 +607,7 @@ pub struct CwtOptions {
     pub push_scope: Option<String>,
 
     /// Replace scope mappings
-    pub replace_scope: Option<HashMap<String, String>>,
+    pub replace_scope: Option<LowerCaseHashMap<String>>,
 
     /// Scope constraint
     pub scope: Option<Vec<String>>,
@@ -721,29 +718,29 @@ impl std::fmt::Debug for CwtOptions {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalisationSpec {
     /// Required localisation keys
-    pub required: HashMap<String, String>,
+    pub required: LowerCaseHashMap<String>,
     /// Optional localisation keys
-    pub optional: HashMap<String, String>,
+    pub optional: LowerCaseHashMap<String>,
     /// Primary localisation key
     pub primary: Option<String>,
     /// Subtype-specific localisation
-    pub subtypes: HashMap<String, HashMap<String, String>>,
+    pub subtypes: LowerCaseHashMap<LowerCaseHashMap<String>>,
 }
 
 /// Modifier generation specification
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModifierSpec {
     /// Modifier patterns
-    pub modifiers: HashMap<String, String>,
+    pub modifiers: LowerCaseHashMap<String>,
     /// Subtype-specific modifiers
-    pub subtypes: HashMap<String, HashMap<String, String>>,
+    pub subtypes: LowerCaseHashMap<LowerCaseHashMap<String>>,
 }
 
 impl Default for ModifierSpec {
     fn default() -> Self {
         Self {
-            modifiers: HashMap::new(),
-            subtypes: HashMap::new(),
+            modifiers: LowerCaseHashMap::new(),
+            subtypes: LowerCaseHashMap::new(),
         }
     }
 }
@@ -1376,14 +1373,14 @@ impl CwtType {
     pub fn block(name: impl Into<String>) -> BlockType {
         BlockType {
             type_name: name.into(),
-            properties: HashMap::new(),
-            subtypes: HashMap::new(),
+            properties: LowerCaseHashMap::new(),
+            subtypes: LowerCaseHashMap::new(),
             pattern_properties: Vec::new(),
-            subtype_properties: HashMap::new(),
+            subtype_properties: LowerCaseHashMap::new(),
             localisation: None,
             modifiers: None,
             additional_flags: Vec::new(),
-            subtype_pattern_properties: HashMap::new(),
+            subtype_pattern_properties: LowerCaseHashMap::new(),
         }
     }
 
@@ -1546,7 +1543,7 @@ impl CwtOptions {
                 "replace_scope" => {
                     if option.value.is_list() {
                         let replacements = option.value.as_list().unwrap();
-                        let mut replace_map = HashMap::new();
+                        let mut replace_map = LowerCaseHashMap::new();
                         for replacement in replacements {
                             let (from, to) = replacement.as_assignment().unwrap();
                             replace_map.insert(
@@ -1558,7 +1555,7 @@ impl CwtOptions {
                     } else if option.value.is_assignment() {
                         let (from, to) = option.value.as_assignment().unwrap();
 
-                        options.replace_scope = Some(HashMap::from([(
+                        options.replace_scope = Some(LowerCaseHashMap::from([(
                             from.to_string(),
                             to.as_string_or_identifier().unwrap().to_string(),
                         )]));

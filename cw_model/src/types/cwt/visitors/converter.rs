@@ -12,8 +12,8 @@ use cw_parser::{
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    BlockType, CwtOptions, CwtType, PatternProperty, PatternType, Property, ReferenceType,
-    SimpleType,
+    BlockType, CwtOptions, CwtType, LowerCaseHashMap, PatternProperty, PatternType, Property,
+    ReferenceType, SimpleType,
 };
 
 /// Converter for CWT values to CwtType
@@ -115,9 +115,11 @@ impl CwtConverter {
 
     /// Convert a CWT block to our type system
     pub fn convert_block(block: &AstCwtBlock, type_name: Option<String>) -> CwtType {
-        let mut properties: HashMap<String, Property> = HashMap::new();
-        let mut subtype_properties: HashMap<String, HashMap<String, Property>> = HashMap::new();
-        let mut subtype_pattern_properties: HashMap<String, Vec<PatternProperty>> = HashMap::new();
+        let mut properties: LowerCaseHashMap<Property> = LowerCaseHashMap::new();
+        let mut subtype_properties: LowerCaseHashMap<LowerCaseHashMap<Property>> =
+            LowerCaseHashMap::new();
+        let mut subtype_pattern_properties: LowerCaseHashMap<Vec<PatternProperty>> =
+            LowerCaseHashMap::new();
         let mut pattern_properties = Vec::new();
         let mut union_values = Vec::new();
 
@@ -291,7 +293,7 @@ impl CwtConverter {
         CwtType::Block(BlockType {
             type_name: type_name.unwrap_or_default(),
             properties,
-            subtypes: HashMap::new(),
+            subtypes: LowerCaseHashMap::new(),
             subtype_properties,
             subtype_pattern_properties,
             pattern_properties,

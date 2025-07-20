@@ -1,7 +1,7 @@
 use cw_model::types::CwtAnalyzer;
 use cw_model::{
-    BlockType, CwtType, Entity, Property, ReferenceType, SimpleType, TypeDefinition, TypeKeyFilter,
-    entity_from_ast,
+    BlockType, CwtType, Entity, LowerCaseHashMap, Property, ReferenceType, SimpleType,
+    TypeDefinition, TypeKeyFilter, entity_from_ast,
 };
 use cw_parser::CwtModuleCell;
 use std::collections::HashMap;
@@ -105,9 +105,9 @@ impl TypeCache {
                     path: Some("game/modifiers".to_string()),
                     name_field: None,
                     skip_root_key: None,
-                    localisation: HashMap::new(),
+                    localisation: LowerCaseHashMap::new(),
                     rules: Arc::new(CwtType::Unknown),
-                    subtypes: HashMap::new(),
+                    subtypes: LowerCaseHashMap::new(),
                     options: Default::default(),
                     rule_options: Default::default(),
                     modifiers: Default::default(),
@@ -116,10 +116,10 @@ impl TypeCache {
 
             let mut inline_script_block = BlockType {
                 type_name: "$inline_script".to_string(),
-                properties: HashMap::new(),
-                subtypes: HashMap::new(),
-                subtype_properties: HashMap::new(),
-                subtype_pattern_properties: HashMap::new(),
+                properties: LowerCaseHashMap::new(),
+                subtypes: LowerCaseHashMap::new(),
+                subtype_properties: LowerCaseHashMap::new(),
+                subtype_pattern_properties: LowerCaseHashMap::new(),
                 pattern_properties: vec![],
                 localisation: None,
                 modifiers: Default::default(),
@@ -151,8 +151,8 @@ impl TypeCache {
                     path: Some("game/$inline_scripts".to_string()),
                     name_field: None,
                     skip_root_key: None,
-                    subtypes: HashMap::new(),
-                    localisation: HashMap::new(),
+                    subtypes: LowerCaseHashMap::new(),
+                    localisation: LowerCaseHashMap::new(),
                     rules: Arc::new(CwtType::Union(vec![
                         // inline_script = {}
                         Arc::new(CwtType::Block(inline_script_block)),

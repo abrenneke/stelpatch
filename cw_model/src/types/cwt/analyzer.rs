@@ -8,6 +8,7 @@ use crate::{AliasPattern, CwtType};
 use super::conversion::ConversionError;
 use super::definitions::*;
 use super::visitors::{CwtAnalysisData, CwtVisitorRegistry};
+use crate::LowerCaseHashMap;
 use cw_parser::cwt::CwtModule;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -20,7 +21,7 @@ pub struct CwtAnalyzer {
     /// Internal analysis data
     data: CwtAnalysisData,
     /// Pre-computed category to aliases mapping for performance
-    category_index: HashMap<String, Vec<AliasPattern>>,
+    category_index: LowerCaseHashMap<Vec<AliasPattern>>,
 }
 
 impl CwtAnalyzer {
@@ -28,7 +29,7 @@ impl CwtAnalyzer {
     pub fn new() -> Self {
         Self {
             data: CwtAnalysisData::new(),
-            category_index: HashMap::new(),
+            category_index: LowerCaseHashMap::new(),
         }
     }
 
@@ -48,17 +49,17 @@ impl CwtAnalyzer {
     }
 
     /// Get all defined types
-    pub fn get_types(&self) -> &HashMap<String, TypeDefinition> {
+    pub fn get_types(&self) -> &LowerCaseHashMap<TypeDefinition> {
         &self.data.types
     }
 
     /// Get all defined enums
-    pub fn get_enums(&self) -> &HashMap<String, EnumDefinition> {
+    pub fn get_enums(&self) -> &LowerCaseHashMap<EnumDefinition> {
         &self.data.enums
     }
 
     /// Get all defined value sets
-    pub fn get_value_sets(&self) -> &HashMap<String, HashSet<String>> {
+    pub fn get_value_sets(&self) -> &LowerCaseHashMap<HashSet<String>> {
         &self.data.value_sets
     }
 
@@ -68,7 +69,7 @@ impl CwtAnalyzer {
     }
 
     /// Get single aliases
-    pub fn get_single_aliases(&self) -> &HashMap<String, Arc<CwtType>> {
+    pub fn get_single_aliases(&self) -> &LowerCaseHashMap<Arc<CwtType>> {
         &self.data.single_aliases
     }
 
@@ -78,7 +79,7 @@ impl CwtAnalyzer {
     }
 
     /// Get all defined links
-    pub fn get_links(&self) -> &HashMap<String, super::definitions::LinkDefinition> {
+    pub fn get_links(&self) -> &LowerCaseHashMap<super::definitions::LinkDefinition> {
         &self.data.links
     }
 

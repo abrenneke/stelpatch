@@ -12,8 +12,8 @@ use cw_parser::{
 
 use crate::{
     ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, CwtType, LocalisationRequirement,
-    ModifierSpec, Property, RuleOptions, SeverityLevel, SkipRootKey, Subtype, TypeDefinition,
-    TypeOptions,
+    LowerCaseHashMap, ModifierSpec, Property, RuleOptions, SeverityLevel, SkipRootKey, Subtype,
+    TypeDefinition, TypeOptions,
 };
 
 /// Specialized visitor for type definitions
@@ -63,11 +63,11 @@ impl<'a> TypeVisitor<'a> {
                 path: None,
                 name_field: None,
                 skip_root_key: None,
-                subtypes: HashMap::new(),
-                localisation: HashMap::new(),
+                subtypes: LowerCaseHashMap::new(),
+                localisation: LowerCaseHashMap::new(),
                 modifiers: ModifierSpec {
-                    modifiers: HashMap::new(),
-                    subtypes: HashMap::new(),
+                    modifiers: LowerCaseHashMap::new(),
+                    subtypes: LowerCaseHashMap::new(),
                 },
                 rules: Arc::new(CwtType::Unknown),
                 options: TypeOptions::default(),
@@ -348,7 +348,7 @@ impl<'a> TypeVisitor<'a> {
                             let subtype_map = base_requirement
                                 .subtypes
                                 .entry(subtype_name.to_string())
-                                .or_insert_with(HashMap::new);
+                                .or_insert_with(LowerCaseHashMap::new);
 
                             subtype_map.insert(loc_key.to_string(), pattern_str);
 
@@ -407,7 +407,7 @@ impl<'a> TypeVisitor<'a> {
         rule: &AstCwtRule,
     ) {
         if let CwtValue::Block(subtype_block) = &rule.value {
-            let mut subtype_modifiers = HashMap::new();
+            let mut subtype_modifiers = LowerCaseHashMap::new();
 
             for item in &subtype_block.items {
                 if let cw_parser::cwt::AstCwtExpression::Rule(mod_rule) = item {
@@ -439,11 +439,11 @@ impl<'a> TypeVisitor<'a> {
         let subtype_options = CwtOptions::from_rule(rule);
 
         // Extract properties from the rule value block
-        let mut properties = HashMap::new();
+        let mut properties = LowerCaseHashMap::new();
 
         if let CwtValue::Block(block) = &rule.value {
             // Look for property definitions that define this subtype's constraints
-            let mut property_conditions = HashMap::new();
+            let mut property_conditions = LowerCaseHashMap::new();
 
             for item in &block.items {
                 if let cw_parser::cwt::AstCwtExpression::Rule(prop_rule) = item {
@@ -479,7 +479,7 @@ impl<'a> TypeVisitor<'a> {
 
         let subtype_def = Subtype {
             condition_properties: properties, // Use the properties we collected with their options
-            allowed_properties: HashMap::new(),
+            allowed_properties: LowerCaseHashMap::new(),
             allowed_pattern_properties: Vec::new(),
             options: subtype_options,
             is_inverted: false,
@@ -505,8 +505,6 @@ impl<'a> CwtVisitor<'a> for TypeVisitor<'a> {
 #[cfg(test)]
 mod tests {
     use cw_parser::CwtModule;
-
-    use crate::TypeKeyFilter;
 
     use super::*;
 
