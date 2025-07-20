@@ -53,8 +53,8 @@ impl CwtConverter {
             CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => {
                 ReferenceType::TypeWithAffix {
                     key: identifier.name.raw_value().to_string(),
-                    prefix: Some(prefix.to_string()),
-                    suffix: Some(suffix.to_string()),
+                    prefix: prefix.map(|p| p.to_string()),
+                    suffix: suffix.map(|s| s.to_string()),
                 }
             }
             CwtReferenceType::Enum => ReferenceType::Enum {

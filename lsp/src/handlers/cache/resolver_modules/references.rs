@@ -196,6 +196,38 @@ impl ReferenceResolver {
             // but eventually it should validate to a union of all possible paths to
             // inline script files
             ReferenceType::InlineScript => Arc::new(CwtType::Simple(SimpleType::Scalar)),
+
+            ReferenceType::TypeWithAffix {
+                key,
+                prefix,
+                suffix,
+            } => {
+                // First, resolve the base type the same way as ReferenceType::Type
+                let base_ref = ReferenceType::Type { key: key.clone() };
+                let base_type = self.resolve_reference_type(&base_ref, _scope_stack);
+
+                // If we got a LiteralSet back, apply prefix and suffix to each element
+                match base_type.as_ref() {
+                    CwtType::LiteralSet(keys) => {
+                        let affixed_keys: HashSet<String> = keys
+                            .iter()
+                            .map(|k| {
+                                format!(
+                                    "{}{}{}",
+                                    prefix.as_deref().unwrap_or(""),
+                                    k,
+                                    suffix.as_deref().unwrap_or("")
+                                )
+                            })
+                            .collect();
+                        Arc::new(CwtType::LiteralSet(affixed_keys))
+                    }
+                    _ => {
+                        // If we couldn't resolve to a literal set, return the original reference
+                        Arc::new(CwtType::Reference(ref_type.clone()))
+                    }
+                }
+            }
             // For any remaining unhandled reference types, return the original
             _ => Arc::new(CwtType::Reference(ref_type.clone())),
         }

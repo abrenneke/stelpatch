@@ -155,7 +155,7 @@ fn validate_value_against_type(
 
         // Literal value validation
         (CwtTypeOrSpecialRef::Literal(literal_value), AstValue::String(string_value)) => {
-            if string_value.raw_value() != *literal_value {
+            if string_value.raw_value().to_lowercase() != *literal_value.to_lowercase() {
                 let diagnostic = create_value_mismatch_diagnostic(
                     value.span_range(),
                     &format!(
@@ -197,7 +197,7 @@ fn validate_value_against_type(
         (CwtTypeOrSpecialRef::LiteralSet(valid_values), AstValue::String(string_value)) => {
             // Allow $ARGUMENT$ to be used as a value
             if !contains_scripted_argument(string_value.raw_value()) {
-                if !valid_values.contains(string_value.raw_value()) {
+                if !valid_values.contains(&string_value.raw_value().to_lowercase()) {
                     let valid_list: Vec<_> = valid_values.iter().collect();
                     let diagnostic = create_value_mismatch_diagnostic(
                         value.span_range(),

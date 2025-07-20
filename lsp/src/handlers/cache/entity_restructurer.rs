@@ -4,8 +4,8 @@ use std::{
 };
 
 use cw_model::{
-    Entity, Operator, PropertyInfo, PropertyInfoList, SkipRootKey, TypeDefinition, TypeKeyFilter,
-    Value, entity_from_ast,
+    Entity, LowerCaseHashMap, Operator, PropertyInfo, PropertyInfoList, SkipRootKey,
+    TypeDefinition, TypeKeyFilter, Value, entity_from_ast,
 };
 use cw_parser::AstEntity;
 
@@ -76,9 +76,9 @@ pub struct EntityRestructurer {
 pub struct RestructuredEntities {
     /// Namespace -> Entity Name -> Entity
     /// For special types, entities are indexed by their name_field value
-    pub entities: HashMap<String, HashMap<String, Entity>>,
+    pub entities: LowerCaseHashMap<LowerCaseHashMap<Entity>>,
     /// Track which namespaces were restructured
-    pub restructured_namespaces: HashMap<String, RestructureInfo>,
+    pub restructured_namespaces: LowerCaseHashMap<RestructureInfo>,
 }
 
 /// Information about how a namespace was restructured
@@ -91,6 +91,8 @@ pub struct RestructureInfo {
 }
 
 static RESTRUCTURED_ENTITIES: RwLock<Option<Arc<RestructuredEntities>>> = RwLock::new(None);
+
+const PRINT_WARNINGS: bool = false;
 
 impl EntityRestructurer {
     /// Create a new EntityRestructurer
@@ -156,8 +158,8 @@ impl EntityRestructurer {
         let start = std::time::Instant::now();
 
         let mut restructured = RestructuredEntities {
-            entities: HashMap::new(),
-            restructured_namespaces: HashMap::new(),
+            entities: LowerCaseHashMap::new(),
+            restructured_namespaces: LowerCaseHashMap::new(),
         };
 
         self.process_all_namespaces(&mut restructured);
@@ -201,7 +203,8 @@ impl EntityRestructurer {
 
         for (namespace, type_defs) in types_with_special_loading {
             if let Some(namespace_data) = self.game_data.get_namespaces().get(&namespace) {
-                let (entities, info) = self.process_namespace(&type_defs, namespace_data);
+                let (entities, info) =
+                    self.process_namespace(&namespace, &type_defs, namespace_data);
 
                 restructured.entities.insert(namespace.clone(), entities);
                 restructured
@@ -217,8 +220,8 @@ impl EntityRestructurer {
     }
 
     /// Get type definitions that need restructuring
-    fn get_types_needing_restructure(&self) -> HashMap<String, Vec<TypeDefinition>> {
-        let mut result: HashMap<String, Vec<TypeDefinition>> = HashMap::new();
+    fn get_types_needing_restructure(&self) -> LowerCaseHashMap<Vec<TypeDefinition>> {
+        let mut result: LowerCaseHashMap<Vec<TypeDefinition>> = LowerCaseHashMap::new();
 
         for (_type_name, type_def) in self.type_cache.get_cwt_analyzer().get_types() {
             // Check if this type needs any kind of restructuring
@@ -242,13 +245,54 @@ impl EntityRestructurer {
         result
     }
 
+    /// Helper method to insert into a HashMap with duplicate detection
+    fn insert_with_duplicate_warning(
+        &self,
+        map: &mut LowerCaseHashMap<Entity>,
+        key: String,
+        entity: Entity,
+        context: &str,
+        namespace: &str,
+    ) {
+        if let Some(existing) = map.get(&key) {
+            // Get original keys for better context
+            let existing_original = Self::get_original_key_from_entity(existing)
+                .unwrap_or_else(|| "<unknown>".to_string());
+            let new_original = Self::get_original_key_from_entity(&entity)
+                .unwrap_or_else(|| "<unknown>".to_string());
+
+            if PRINT_WARNINGS {
+                eprintln!(
+                    "WARN: Duplicate entity '{}' in namespace '{}' ({}). Existing from '{}', new from '{}'. Keeping existing.",
+                    key, namespace, context, existing_original, new_original
+                );
+            }
+            return; // Keep existing entity
+        }
+        map.insert(key, entity);
+    }
+
+    /// Helper method to extend a HashMap with duplicate detection
+    fn extend_with_duplicate_warnings(
+        &self,
+        target: &mut LowerCaseHashMap<Entity>,
+        source: LowerCaseHashMap<Entity>,
+        context: &str,
+        namespace: &str,
+    ) {
+        for (key, entity) in source {
+            self.insert_with_duplicate_warning(target, key, entity, context, namespace);
+        }
+    }
+
     /// Process a single namespace according to its type definition
     fn process_namespace(
         &self,
+        namespace: &str,
         type_defs: &Vec<TypeDefinition>,
         namespace_data: &Namespace,
-    ) -> (HashMap<String, Entity>, RestructureInfo) {
-        let mut restructured_entities = HashMap::new();
+    ) -> (LowerCaseHashMap<Entity>, RestructureInfo) {
+        let mut restructured_entities = LowerCaseHashMap::new();
         let mut original_count = 0;
 
         // Process each module in the namespace individually to avoid key overwrites
@@ -265,9 +309,17 @@ impl EntityRestructurer {
                             self.should_skip_root_key(key, &type_def.skip_root_key)
                         }) {
                             // Skip this root key and process nested entities using only the matching type definition
-                            let extracted_entities =
-                                self.extract_entities_from_container(entity, matching_type_def);
-                            restructured_entities.extend(extracted_entities);
+                            let extracted_entities = self.extract_entities_from_container(
+                                entity,
+                                matching_type_def,
+                                namespace,
+                            );
+                            self.extend_with_duplicate_warnings(
+                                &mut restructured_entities,
+                                extracted_entities,
+                                &format!("skip_root_key from container '{}'", key),
+                                namespace,
+                            );
                         } else {
                             // Get type definitions that are applicable for this specific entity
                             let applicable_type_defs =
@@ -293,15 +345,32 @@ impl EntityRestructurer {
                                     // Add original key to entity to preserve subtype information
                                     let entity_with_original_key =
                                         self.add_original_key_to_entity(entity.clone(), key);
-                                    restructured_entities
-                                        .insert(entity_name, entity_with_original_key);
+                                    self.insert_with_duplicate_warning(
+                                        &mut restructured_entities,
+                                        entity_name,
+                                        entity_with_original_key,
+                                        &format!("name_field from key '{}'", key),
+                                        namespace,
+                                    );
                                 } else {
                                     // Fallback to original key if name field not found
-                                    restructured_entities.insert(key.clone(), entity.clone());
+                                    self.insert_with_duplicate_warning(
+                                        &mut restructured_entities,
+                                        key.clone(),
+                                        entity.clone(),
+                                        &format!("name_field fallback from key '{}'", key),
+                                        namespace,
+                                    );
                                 }
                             } else {
                                 // Standard processing - use the key as-is
-                                restructured_entities.insert(key.clone(), entity.clone());
+                                self.insert_with_duplicate_warning(
+                                    &mut restructured_entities,
+                                    key.clone(),
+                                    entity.clone(),
+                                    &format!("standard processing from key '{}'", key),
+                                    namespace,
+                                );
                             }
                         }
                     }
@@ -353,7 +422,7 @@ impl EntityRestructurer {
         }
 
         // Check if the key matches any of the type_key_filters
-        for filter in type_key_filters {
+        for filter in &type_key_filters {
             if self.matches_type_key_filter(key, filter) {
                 return true;
             }
@@ -396,8 +465,9 @@ impl EntityRestructurer {
         &self,
         container_entity: &Entity,
         type_def: &TypeDefinition,
-    ) -> HashMap<String, Entity> {
-        let mut result = HashMap::new();
+        namespace: &str,
+    ) -> LowerCaseHashMap<Entity> {
+        let mut result = LowerCaseHashMap::new();
 
         // Look for child entities in the container
         for (child_key, child_property_list) in &container_entity.properties.kv {
@@ -421,7 +491,13 @@ impl EntityRestructurer {
                     // Add original key to entity to preserve subtype information
                     let entity_with_original_key =
                         self.add_original_key_to_entity(child_entity.clone(), child_key);
-                    result.insert(entity_name, entity_with_original_key);
+                    self.insert_with_duplicate_warning(
+                        &mut result,
+                        entity_name,
+                        entity_with_original_key,
+                        &format!("extracted from container child '{}'", child_key),
+                        namespace,
+                    );
                 }
             }
         }
@@ -472,7 +548,7 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace as a HashMap
-    pub fn get_namespace_entities_map(namespace: &str) -> Option<HashMap<String, Entity>> {
+    pub fn get_namespace_entities_map(namespace: &str) -> Option<LowerCaseHashMap<Entity>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
         Self::get()?.entities.get(namespace).cloned()
     }
@@ -614,7 +690,7 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace, using restructured entities if available
-    pub fn get_all_namespace_entities(namespace: &str) -> Option<HashMap<String, Entity>> {
+    pub fn get_all_namespace_entities(namespace: &str) -> Option<LowerCaseHashMap<Entity>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         if let Some(restructured) = Self::get() {
@@ -658,8 +734,8 @@ impl EntityRestructurer {
     }
 
     /// Get scripted variables for a namespace (always from original GameDataCache)
-    pub fn get_namespace_scripted_variables(namespace: &str) -> Option<HashMap<String, Value>> {
-        let mut all_variables = HashMap::new();
+    pub fn get_namespace_scripted_variables(namespace: &str) -> Option<LowerCaseHashMap<Value>> {
+        let mut all_variables = LowerCaseHashMap::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
         // Add base game variables first
         if let Some(game_data) = GameDataCache::get() {
@@ -719,8 +795,8 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace as a HashMap, using restructured entities if available
-    pub fn get_all_entities_map(namespace: &str) -> Option<HashMap<String, Entity>> {
-        let mut all_entities = HashMap::new();
+    pub fn get_all_entities_map(namespace: &str) -> Option<LowerCaseHashMap<Entity>> {
+        let mut all_entities = LowerCaseHashMap::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
         // Add original entities from GameDataCache first
         if let Some(game_data) = GameDataCache::get() {

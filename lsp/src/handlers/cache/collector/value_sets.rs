@@ -69,6 +69,7 @@ impl<'resolver> ValueSetCollector<'resolver> {
 
         // Process entities in parallel within the namespace
         let results: Vec<HashMap<String, HashSet<String>>> = entities
+            .as_inner()
             .par_iter()
             .map(|(entity_name, entity)| {
                 // Perform subtype narrowing for this entity, similar to provider.rs

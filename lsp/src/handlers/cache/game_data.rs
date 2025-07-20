@@ -4,6 +4,7 @@ use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 
 use cw_games::stellaris::BaseGame;
+use cw_model::LowerCaseHashMap;
 use cw_model::{Entity, GameMod, LoadMode, Value};
 
 use crate::handlers::cache::EntityRestructurer;
@@ -19,7 +20,7 @@ pub struct GameDataCache {
 
 #[derive(Clone)]
 pub struct Namespace {
-    pub entities: HashMap<String, Entity>,
+    pub entities: LowerCaseHashMap<Entity>,
     pub values: Vec<String>,
     pub entity_keys: Vec<String>,
     pub entity_keys_set: Arc<HashSet<String>>,
@@ -31,7 +32,7 @@ pub struct Namespace {
 impl Namespace {
     pub fn new() -> Self {
         Self {
-            entities: HashMap::new(),
+            entities: LowerCaseHashMap::new(),
             values: Vec::new(),
             entity_keys: Vec::new(),
             entity_keys_set: Arc::new(HashSet::new()),

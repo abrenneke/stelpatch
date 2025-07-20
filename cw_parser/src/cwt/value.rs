@@ -60,7 +60,7 @@ pub enum CwtReferenceType<'a> {
     /// Type reference: <type_key>
     TypeRef,
     /// Type reference with prefix/suffix: prefix_<type_key>_suffix
-    TypeRefWithPrefixSuffix(&'a str, &'a str),
+    TypeRefWithPrefixSuffix(Option<&'a str>, Option<&'a str>),
     /// Enum reference: enum[key]
     Enum,
     /// Scope reference: scope[key]

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use cw_games::stellaris::BaseGame;
-use cw_model::Entity;
+use cw_model::{Entity, LowerCaseHashMap};
 
 use crate::handlers::cache::{GameDataCache, Namespace};
 
@@ -14,7 +14,7 @@ pub fn integrate_modifiers_into_cache(
     let modifiers = BaseGame::load_modifiers()?;
 
     // Create artificial entities for each modifier
-    let mut modifier_entities = HashMap::new();
+    let mut modifier_entities = LowerCaseHashMap::new();
     let mut entity_keys = Vec::new();
 
     for modifier in modifiers {

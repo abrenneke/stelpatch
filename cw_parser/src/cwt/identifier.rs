@@ -215,15 +215,32 @@ pub(crate) fn cwt_identifier_part<'a>(
     input: &mut LocatingSlice<&'a str>,
 ) -> ModalResult<AstCwtIdentifier<'a>> {
     let ((key, scope, is_not, identifier_type), span) = alt((
-        // Type key identifier: <identifier>
-        delimited("<", (opt("!"), quoted_or_unquoted_string), ">").map(|(is_not, name)| {
-            (
-                AstCwtIdentifierOrString::String(name),
-                None,
-                is_not.is_some(),
-                CwtReferenceType::TypeRef,
-            )
-        }),
+        // Type key identifier with optional prefix and suffix: [prefix]<identifier>[suffix]
+        (
+            opt(take_while(1.., |c: char| {
+                c.is_ascii_alphanumeric() || c == '_'
+            })),
+            "<",
+            opt("!"),
+            quoted_or_unquoted_string,
+            ">",
+            opt(take_while(1.., |c: char| {
+                c.is_ascii_alphanumeric() || c == '_'
+            })),
+        )
+            .map(|(prefix, _, is_not, name, _, suffix)| {
+                let identifier_type = if prefix.is_none() && suffix.is_none() {
+                    CwtReferenceType::TypeRef
+                } else {
+                    CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix)
+                };
+                (
+                    AstCwtIdentifierOrString::String(name),
+                    None,
+                    is_not.is_some(),
+                    identifier_type,
+                )
+            }),
         identifier_parser("alias", CwtReferenceType::Alias),
         identifier_parser("icon", CwtReferenceType::Icon),
         identifier_parser("filepath", CwtReferenceType::Filepath),
@@ -384,5 +401,116 @@ mod tests {
     fn nested() {
         let mut input = LocatingSlice::new("alias[modifier_rule:enum[complex_maths_enum]]");
         let _result = cwt_identifier.parse_next(&mut input).unwrap();
+    }
+
+    #[test]
+    fn test_cwt_identifier_type_ref_with_prefix_suffix() {
+        let mut input = LocatingSlice::new("prefix<test_type>suffix");
+        let result = cwt_identifier.parse_next(&mut input).unwrap();
+
+        match result.identifier_type {
+            CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => {
+                assert_eq!(prefix, Some("prefix"));
+                assert_eq!(suffix, Some("suffix"));
+                assert_eq!(result.name.raw_value(), "test_type");
+                assert!(result.is_type_key());
+            }
+            _ => panic!("Expected TypeRefWithPrefixSuffix identifier type"),
+        }
+    }
+
+    #[test]
+    fn test_cwt_identifier_type_ref_with_prefix_suffix_not() {
+        let mut input = LocatingSlice::new("my_prefix<!negated_type>my_suffix");
+        let result = cwt_identifier.parse_next(&mut input).unwrap();
+
+        match result.identifier_type {
+            CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => {
+                assert_eq!(prefix, Some("my_prefix"));
+                assert_eq!(suffix, Some("my_suffix"));
+                assert_eq!(result.name.raw_value(), "negated_type");
+                assert!(result.is_not);
+                assert!(result.is_type_key());
+            }
+            _ => panic!("Expected TypeRefWithPrefixSuffix identifier type"),
+        }
+    }
+
+    #[test]
+    fn test_cwt_identifier_type_ref_with_quoted_content() {
+        let mut input = LocatingSlice::new("pre<\"quoted type\">suf");
+        let result = cwt_identifier.parse_next(&mut input).unwrap();
+
+        match result.identifier_type {
+            CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => {
+                assert_eq!(prefix, Some("pre"));
+                assert_eq!(suffix, Some("suf"));
+                assert_eq!(result.name.raw_value(), "quoted type");
+                assert!(result.is_type_key());
+            }
+            _ => panic!("Expected TypeRefWithPrefixSuffix identifier type"),
+        }
+    }
+
+    #[test]
+    fn test_cwt_identifier_type_ref_with_numbers_underscores() {
+        let mut input = LocatingSlice::new("prefix_123<type_name>suffix_456");
+        let result = cwt_identifier.parse_next(&mut input).unwrap();
+
+        match result.identifier_type {
+            CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => {
+                assert_eq!(prefix, Some("prefix_123"));
+                assert_eq!(suffix, Some("suffix_456"));
+                assert_eq!(result.name.raw_value(), "type_name");
+                assert!(result.is_type_key());
+            }
+            _ => panic!("Expected TypeRefWithPrefixSuffix identifier type"),
+        }
+    }
+
+    #[test]
+    fn test_cwt_identifier_type_ref_prefix_only() {
+        let mut input = LocatingSlice::new("prefix<type_name>");
+        let result = cwt_identifier.parse_next(&mut input).unwrap();
+
+        match result.identifier_type {
+            CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => {
+                assert_eq!(prefix, Some("prefix"));
+                assert_eq!(suffix, None);
+                assert_eq!(result.name.raw_value(), "type_name");
+                assert!(result.is_type_key());
+            }
+            _ => panic!("Expected TypeRefWithPrefixSuffix identifier type"),
+        }
+    }
+
+    #[test]
+    fn test_cwt_identifier_type_ref_suffix_only() {
+        let mut input = LocatingSlice::new("<type_name>suffix");
+        let result = cwt_identifier.parse_next(&mut input).unwrap();
+
+        match result.identifier_type {
+            CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => {
+                assert_eq!(prefix, None);
+                assert_eq!(suffix, Some("suffix"));
+                assert_eq!(result.name.raw_value(), "type_name");
+                assert!(result.is_type_key());
+            }
+            _ => panic!("Expected TypeRefWithPrefixSuffix identifier type"),
+        }
+    }
+
+    #[test]
+    fn test_cwt_identifier_type_ref_plain_still_works() {
+        let mut input = LocatingSlice::new("<plain_type>");
+        let result = cwt_identifier.parse_next(&mut input).unwrap();
+
+        match result.identifier_type {
+            CwtReferenceType::TypeRef => {
+                assert_eq!(result.name.raw_value(), "plain_type");
+                assert!(result.is_type_key());
+            }
+            _ => panic!("Expected TypeRef identifier type"),
+        }
     }
 }
