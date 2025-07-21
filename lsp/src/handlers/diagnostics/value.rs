@@ -9,6 +9,7 @@ use crate::handlers::{
     diagnostics::diagnostic::create_type_mismatch_diagnostic,
     scope::ScopeStack,
     settings::VALIDATE_LOCALISATION,
+    utils::contains_scripted_argument,
 };
 
 /// Check if a value is compatible with a simple type with scope context, returning a diagnostic if incompatible
@@ -139,51 +140,13 @@ pub fn is_value_compatible_with_simple_type(
 
         (AstValue::Number(_), SimpleType::ValueField) => None, // Valid
         (AstValue::String(s), SimpleType::ValueField) => {
-            let val = s.raw_value();
-            if val.starts_with("@") {
-                validate_scripted_variable(val, value.span_range(), content, current_namespace)
-            } else if val.starts_with("$") && val.ends_with("$") {
-                None // Argument in scripted effect
-            } else {
-                if val.starts_with("value:") {
-                    // Extract the script value name, handling parameterized format
-                    // Format: value:my_value|PARAM1|value1|PARAM2|value2|
-                    let value_part = val.split("value:").nth(1).unwrap();
-                    let value_name = if let Some(pipe_pos) = value_part.find('|') {
-                        &value_part[..pipe_pos]
-                    } else {
-                        value_part
-                    };
-
-                    let entity = EntityRestructurer::get_entity("common/script_values", value_name);
-
-                    if entity.is_none() {
-                        Some(create_type_mismatch_diagnostic(
-                            value.span_range(),
-                            &format!("Script value '{}' does not exist", value_name),
-                            content,
-                        ))
-                    } else {
-                        None
-                    }
-                } else {
-                    // Check if the value exists in any value set
-                    if let Some(full_analysis) = FullAnalysis::get() {
-                        // Check if this value exists in any of the dynamic value sets
-                        for (_key, value_set) in &full_analysis.dynamic_value_sets {
-                            if value_set.contains(val) {
-                                return None; // Valid value from a value set
-                            }
-                        }
-                    }
-
-                    Some(create_type_mismatch_diagnostic(
-                        value.span_range(),
-                        "Expected script value (value: prefix), scripted variable (@), argument ($...$), or value from value set",
-                        content,
-                    ))
-                }
-            }
+            validate_value_field_string(
+                s.raw_value(),
+                value.span_range(),
+                content,
+                current_namespace,
+                false, // Don't include "integer" in error message
+            )
         }
         (AstValue::Number(n), SimpleType::Int) => {
             if n.value.value.find('.').is_none() {
@@ -248,51 +211,13 @@ pub fn is_value_compatible_with_simple_type(
             }
         }
         (AstValue::String(s), SimpleType::IntValueField) => {
-            let val = s.raw_value();
-            if val.starts_with("@") {
-                validate_scripted_variable(val, value.span_range(), content, current_namespace)
-            } else if val.starts_with("$") && val.ends_with("$") {
-                None // Argument in scripted effect
-            } else {
-                if val.starts_with("value:") {
-                    // Extract the script value name, handling parameterized format
-                    // Format: value:my_value|PARAM1|value1|PARAM2|value2|
-                    let value_part = val.split("value:").nth(1).unwrap();
-                    let value_name = if let Some(pipe_pos) = value_part.find('|') {
-                        &value_part[..pipe_pos]
-                    } else {
-                        value_part
-                    };
-
-                    let entity = EntityRestructurer::get_entity("common/script_values", value_name);
-
-                    if entity.is_none() {
-                        Some(create_type_mismatch_diagnostic(
-                            value.span_range(),
-                            &format!("Script value '{}' does not exist", value_name),
-                            content,
-                        ))
-                    } else {
-                        None
-                    }
-                } else {
-                    // Check if the value exists in any value set
-                    if let Some(full_analysis) = FullAnalysis::get() {
-                        // Check if this value exists in any of the dynamic value sets
-                        for (_key, value_set) in &full_analysis.dynamic_value_sets {
-                            if value_set.contains(val) {
-                                return None; // Valid value from a value set
-                            }
-                        }
-                    }
-
-                    Some(create_type_mismatch_diagnostic(
-                        value.span_range(),
-                        "Expected integer, script value (value: prefix), scripted variable (@), argument ($...$), or value from value set",
-                        content,
-                    ))
-                }
-            }
+            validate_value_field_string(
+                s.raw_value(),
+                value.span_range(),
+                content,
+                current_namespace,
+                true, // Include "integer" in error message
+            )
         }
 
         (AstValue::String(s), SimpleType::Bool) => {
@@ -337,6 +262,72 @@ fn validate_scripted_variable(
     current_namespace: Option<&str>,
 ) -> Option<tower_lsp::lsp_types::Diagnostic> {
     validate_scripted_variable_exists(variable_name, span_range, content, current_namespace)
+}
+
+/// Helper function to validate value field strings (used by both ValueField and IntValueField)
+fn validate_value_field_string(
+    value_str: &str,
+    span_range: Range<usize>,
+    content: &str,
+    current_namespace: Option<&str>,
+    include_integer_in_error: bool,
+) -> Option<Diagnostic> {
+    if value_str.starts_with("@") {
+        validate_scripted_variable(value_str, span_range, content, current_namespace)
+    } else if contains_scripted_argument(value_str) {
+        None // Argument in scripted effect
+    } else if value_str.starts_with("modifier:") {
+        None // Modifier reference - anything after modifier: is valid for now
+    } else if let Some(colon_pos) = value_str.find(':') {
+        // Check if there's a dot before the colon (complex path like "from.trigger:empire_size")
+        if value_str[..colon_pos].contains('.') {
+            None // Complex path - skip validation
+        } else if value_str.starts_with("value:") {
+            // Extract the script value name, handling parameterized format
+            // Format: value:my_value|PARAM1|value1|PARAM2|value2|
+            let value_part = value_str.split("value:").nth(1).unwrap();
+            let value_name = if let Some(pipe_pos) = value_part.find('|') {
+                &value_part[..pipe_pos]
+            } else {
+                value_part
+            };
+
+            let entity = EntityRestructurer::get_entity("common/script_values", value_name);
+
+            if entity.is_none() {
+                Some(create_type_mismatch_diagnostic(
+                    span_range,
+                    &format!("Script value '{}' does not exist", value_name),
+                    content,
+                ))
+            } else {
+                None
+            }
+        } else {
+            // Other colon-based values, for now let them through
+            None
+        }
+    } else {
+        // Check if the value exists in any value set
+        if let Some(full_analysis) = FullAnalysis::get() {
+            // Check if this value exists in any of the dynamic value sets
+            for (_key, value_set) in &full_analysis.dynamic_value_sets {
+                if value_set.contains(value_str) {
+                    return None; // Valid value from a value set
+                }
+            }
+        }
+
+        let error_msg = if include_integer_in_error {
+            "Expected integer, script value (value: prefix), scripted variable (@), argument ($...$), or value from value set"
+        } else {
+            "Expected number, script value (value: prefix), scripted variable (@), argument ($...$), or value from value set"
+        };
+
+        Some(create_type_mismatch_diagnostic(
+            span_range, error_msg, content,
+        ))
+    }
 }
 
 /// Check if a scripted variable exists in the game data

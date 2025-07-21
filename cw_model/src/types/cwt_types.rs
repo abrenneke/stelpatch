@@ -1552,7 +1552,7 @@ impl CwtOptions {
                     options.push_scope =
                         Some(option.value.as_string_or_identifier().unwrap().to_string());
                 }
-                "replace_scope" => {
+                "replace_scope" | "replace_scopes" => {
                     if option.value.is_list() {
                         let replacements = option.value.as_list().unwrap();
                         let mut replace_map = LowerCaseHashMap::new();

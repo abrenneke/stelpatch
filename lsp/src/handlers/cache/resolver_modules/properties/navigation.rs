@@ -36,7 +36,12 @@ pub fn navigate_to_block_property(
 
     // First, check regular properties
     if let Some(property) = block.properties.get(property_name) {
-        let result = handle_regular_property(cwt_analyzer.clone(), scoped_type.clone(), property);
+        let result = handle_regular_property(
+            cwt_analyzer.clone(),
+            scoped_type.clone(),
+            property,
+            property_name,
+        );
         collect_navigation_result(result, &mut successful_results, &mut scope_errors);
     }
 
@@ -73,15 +78,23 @@ pub fn navigate_to_block_property(
 
     // Third, check for special "scalar" key that matches any string
     if let Some(scalar_property) = block.properties.get("scalar") {
-        let result =
-            handle_regular_property(cwt_analyzer.clone(), scoped_type.clone(), scalar_property);
+        let result = handle_regular_property(
+            cwt_analyzer.clone(),
+            scoped_type.clone(),
+            scalar_property,
+            property_name,
+        );
         collect_navigation_result(result, &mut successful_results, &mut scope_errors);
     }
 
     if let Some(int_property) = block.properties.get("int") {
         if property_name.parse::<i32>().is_ok() {
-            let result =
-                handle_regular_property(cwt_analyzer.clone(), scoped_type.clone(), int_property);
+            let result = handle_regular_property(
+                cwt_analyzer.clone(),
+                scoped_type.clone(),
+                int_property,
+                property_name,
+            );
             collect_navigation_result(result, &mut successful_results, &mut scope_errors);
         }
     }
@@ -92,6 +105,7 @@ pub fn navigate_to_block_property(
                 cwt_analyzer.clone(),
                 scoped_type.clone(),
                 localisation_property,
+                property_name,
             );
             collect_navigation_result(result, &mut successful_results, &mut scope_errors);
         }

@@ -6,14 +6,15 @@ use tower_lsp::{Client, jsonrpc::Result};
 use crate::handlers::cache::types::TypeInfo;
 use crate::handlers::cache::{TypeCache, get_entity_property_type_from_ast};
 use crate::handlers::common_validation::{
-    NamespaceValidationResult, build_hover_response, detect_skip_root_key_container,
-    filter_and_narrow_entity_type, find_entity_in_module, find_nested_entity_in_container,
-    validate_namespace_and_caches,
+    NamespaceValidationResult, apply_file_level_subtype_narrowing, build_hover_response,
+    detect_skip_root_key_container, filter_and_narrow_entity_type, find_entity_in_module,
+    find_nested_entity_in_container, is_type_per_file_namespace, validate_namespace_and_caches,
 };
 
 use super::document_cache::DocumentCache;
 use super::scoped_type::PropertyNavigationResult;
 use super::utils::position_to_offset;
+use cw_model::entity_from_module_ast;
 use cw_parser::{AstEntity, AstExpression, AstNode, AstValue, AstVisitor};
 
 /// A visitor that builds property paths for hover functionality
@@ -186,10 +187,59 @@ pub fn hover(
     }
 
     if let Some(property_path) = builder.found_property.as_ref() {
+        // Check if this is a type_per_file namespace
+        let is_type_per_file = is_type_per_file_namespace(&namespace_type);
+
         // Check if this is a top-level key (entity name) or a nested property
         let is_top_level_key = !property_path.contains('.');
 
-        let type_info = if is_top_level_key {
+        let type_info = if is_type_per_file {
+            // For type_per_file, all properties are properties of the file-level entity
+            if let Ok(ast) = cached_document.borrow_ast() {
+                let entity = entity_from_module_ast(ast);
+
+                // Apply subtype narrowing at the file level
+                let validation_type =
+                    apply_file_level_subtype_narrowing(namespace_type.clone(), &entity);
+
+                // Filter union types before property navigation
+                let filtered_validation_type =
+                    type_cache.filter_union_types_by_properties(validation_type.clone(), &entity);
+
+                // Navigate to the property within the file-level entity type
+                let mut current_type = filtered_validation_type;
+                let path_parts: Vec<&str> = property_path.split('.').collect();
+
+                for part in path_parts.iter() {
+                    // Resolve the current type to its actual type before navigation
+                    current_type = type_cache.get_resolver().resolve_type(current_type);
+
+                    match type_cache
+                        .get_resolver()
+                        .navigate_to_property(current_type, part)
+                    {
+                        PropertyNavigationResult::Success(property_type) => {
+                            current_type = property_type;
+                        }
+                        PropertyNavigationResult::NotFound => {
+                            return Ok(None);
+                        }
+                        PropertyNavigationResult::ScopeError(_) => {
+                            return Ok(None);
+                        }
+                    }
+                }
+
+                Some(TypeInfo {
+                    property_path: property_path.clone(),
+                    scoped_type: Some(current_type),
+                    documentation: None,
+                    source_info: None,
+                })
+            } else {
+                None
+            }
+        } else if is_top_level_key {
             // For top-level keys, show contextual information about the entity type
             let entity_name = property_path;
 

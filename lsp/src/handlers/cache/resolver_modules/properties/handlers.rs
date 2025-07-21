@@ -14,6 +14,7 @@ pub fn handle_regular_property(
     cwt_analyzer: Arc<CwtAnalyzer>,
     scoped_type: Arc<ScopedType>,
     property: &Property,
+    _property_name: &str,
 ) -> PropertyNavigationResult {
     // Check if this property changes scope
     if property.changes_scope() {
