@@ -9,7 +9,7 @@ use cw_parser::{
         CwtValue,
     },
 };
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     BlockType, CwtOptions, CwtType, LowerCaseHashMap, PatternProperty, PatternType, Property,

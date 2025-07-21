@@ -517,6 +517,10 @@ impl LinkDefinition {
 
     /// Check if this link can be used from a specific scope
     pub fn can_be_used_from(&self, scope: &str, analyzer: &CwtAnalyzer) -> bool {
+        if scope == "any" {
+            return true;
+        }
+
         if let Some(scope_name) = analyzer.resolve_scope_name(scope) {
             return self
                 .input_scopes

@@ -36,7 +36,7 @@ pub fn validate_scope_reference(
     if let Some(final_scope_type) = resolve_scope_path_to_final_type(value, scope_stack, &analyzer)
     {
         if let Some(expected_scope_type) = analyzer.resolve_scope_name(scope_key) {
-            if final_scope_type != expected_scope_type {
+            if final_scope_type != expected_scope_type && final_scope_type != "any" {
                 return Some(create_value_mismatch_diagnostic(
                     span,
                     &format!(

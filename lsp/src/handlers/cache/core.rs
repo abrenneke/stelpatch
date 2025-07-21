@@ -91,6 +91,31 @@ impl TypeCache {
                         .unwrap();
                 }
 
+                // Special case for scripted_effects: since they can be used from any scope,
+                // we need to set up a scope stack where this=any, prev=any, prevprev=any, etc.
+                // This allows validation of prev/prevprev scope references without requiring
+                // specific scope types that can't be determined statically.
+                if namespace == "common/scripted_effects" {
+                    let mut scripted_effect_scopes = HashMap::new();
+                    scripted_effect_scopes.insert("this".to_string(), "any".to_string());
+                    scripted_effect_scopes.insert("prev".to_string(), "any".to_string());
+                    scripted_effect_scopes.insert("prevprev".to_string(), "any".to_string());
+                    scripted_effect_scopes.insert("prevprevprev".to_string(), "any".to_string());
+                    scripted_effect_scopes
+                        .insert("prevprevprevprev".to_string(), "any".to_string());
+                    scripted_effect_scopes.insert("root".to_string(), "any".to_string());
+                    scripted_effect_scopes.insert("from".to_string(), "any".to_string());
+                    scripted_effect_scopes.insert("fromfrom".to_string(), "any".to_string());
+                    scripted_effect_scopes.insert("fromfromfrom".to_string(), "any".to_string());
+                    scripted_effect_scopes
+                        .insert("fromfromfromfrom".to_string(), "any".to_string());
+
+                    scoped_type
+                        .scope_stack_mut()
+                        .replace_scope_from_strings(scripted_effect_scopes)
+                        .unwrap();
+                }
+
                 // Store the type rules for this namespace
                 namespace_types
                     .entry(namespace)
@@ -342,8 +367,8 @@ impl TypeCache {
                                         // path_file always wins
                                         return Some(Arc::new(ScopedType::new_cwt(
                                             Arc::new(CwtType::Block(block.clone())),
-                                            Default::default(),
-                                            None,
+                                            scoped_type.scope_stack().clone(),
+                                            scoped_type.in_scripted_effect_block().cloned(),
                                         )));
                                     }
                                 }
@@ -373,15 +398,15 @@ impl TypeCache {
                 1 => {
                     return Some(Arc::new(ScopedType::new_cwt(
                         union_types[0].clone(),
-                        Default::default(),
-                        None,
+                        namespace_types[0].scope_stack().clone(),
+                        namespace_types[0].in_scripted_effect_block().cloned(),
                     )));
                 }
                 _ => {
                     return Some(Arc::new(ScopedType::new_cwt(
                         Arc::new(CwtType::Union(union_types)),
-                        Default::default(),
-                        None,
+                        namespace_types[0].scope_stack().clone(),
+                        namespace_types[0].in_scripted_effect_block().cloned(),
                     )));
                 }
             }
@@ -399,15 +424,15 @@ impl TypeCache {
                 1 => {
                     return Some(Arc::new(ScopedType::new_cwt(
                         union_types[0].clone(),
-                        Default::default(),
-                        None,
+                        namespace_types[0].scope_stack().clone(),
+                        namespace_types[0].in_scripted_effect_block().cloned(),
                     )));
                 }
                 _ => {
                     return Some(Arc::new(ScopedType::new_cwt(
                         Arc::new(CwtType::Union(union_types)),
-                        Default::default(),
-                        None,
+                        namespace_types[0].scope_stack().clone(),
+                        namespace_types[0].in_scripted_effect_block().cloned(),
                     )));
                 }
             }

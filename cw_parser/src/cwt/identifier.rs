@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use winnow::{
     LocatingSlice, ModalResult, Parser,
-    combinator::{alt, delimited, opt},
+    combinator::{alt, opt},
     error::{ErrMode, StrContext},
     token::take_while,
 };

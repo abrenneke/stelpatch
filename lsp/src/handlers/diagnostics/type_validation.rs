@@ -548,6 +548,26 @@ fn validate_value_against_type(
                     diagnostics.push(diagnostic);
                 }
             }
+            ReferenceType::StellarisNameFormat { key } => {
+                if let AstValue::String(string_value) = value {
+                    if let Some(diagnostic) = validate_stellaris_name_format(
+                        string_value.raw_value(),
+                        key,
+                        expected_type.scope_stack(),
+                        value.span_range(),
+                        content,
+                    ) {
+                        diagnostics.push(diagnostic);
+                    }
+                } else {
+                    let diagnostic = create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Expected a string value for stellaris name format reference",
+                        content,
+                    );
+                    diagnostics.push(diagnostic);
+                }
+            }
             _ => {
                 let diagnostic = create_type_mismatch_diagnostic(
                     value.span_range(),
@@ -581,4 +601,23 @@ fn validate_value_against_type(
     }
 
     diagnostics
+}
+
+fn validate_stellaris_name_format(
+    raw_value: &str,
+    _key: &str,
+    _scope_stack: &ScopeStack,
+    _span_range: std::ops::Range<usize>,
+    _content: &str,
+) -> Option<Diagnostic> {
+    // TODO... they're complicated
+    if !raw_value.starts_with("{") || !raw_value.ends_with("}") {
+        return Some(create_type_mismatch_diagnostic(
+            _span_range,
+            "Name format must start and end with curly braces",
+            _content,
+        ));
+    }
+
+    None
 }
