@@ -15,7 +15,7 @@ use crate::handlers::{
             create_value_mismatch_diagnostic,
         },
         scope_validation::{validate_scope_reference, validate_scopegroup_reference},
-        structural::calculate_structural_compatibility_score,
+        structural::{calculate_structural_compatibility_score, is_value_structurally_compatible},
         value::is_value_compatible_with_simple_type,
     },
     scope::ScopeStack,
@@ -143,26 +143,31 @@ fn validate_union_types(
         return diagnostics; // Empty diagnostics = success
     }
 
-    // Step 3: All types have errors - find the highest structural score
-    let max_score = type_scores
+    // Step 3: Check for basic structural compatibility first
+    let structurally_compatible_indices: Vec<usize> = type_scores
         .iter()
-        .map(|(_, score)| *score)
-        .fold(0.0, f64::max);
+        .enumerate()
+        .filter(|(_, (union_type, _))| is_value_structurally_compatible(value, union_type.clone()))
+        .map(|(index, _)| index)
+        .collect();
 
-    if max_score > 0.0 {
-        // Step 4: Report errors only from the most structurally compatible types
-        let best_indices: Vec<usize> = type_scores
+    if !structurally_compatible_indices.is_empty() {
+        // Step 4: If we have structurally compatible types, use detailed scoring among them
+        let max_score = structurally_compatible_indices
             .iter()
-            .enumerate()
-            .filter(|(_, (_, score))| (*score - max_score).abs() < f64::EPSILON)
-            .map(|(index, _)| index)
+            .map(|&index| type_scores[index].1)
+            .fold(0.0, f64::max);
+
+        let best_indices: Vec<usize> = structurally_compatible_indices
+            .into_iter()
+            .filter(|&index| (type_scores[index].1 - max_score).abs() < f64::EPSILON)
             .collect();
 
         for index in best_indices {
             diagnostics.extend(all_validation_results[index].iter().cloned());
         }
     } else {
-        // No structural compatibility at all - provide general error
+        // Step 5: No structural compatibility at all - provide general error
         let mut all_possible_values = Vec::new();
         for (union_type, _) in type_scores {
             if let CwtTypeOrSpecial::CwtType(cwt_type) = union_type.cwt_type() {

@@ -52,7 +52,10 @@ impl ScriptedEffectArgumentCollector {
 
     fn extract_arguments_recursive(&self, entity: &Entity, arguments: &mut HashSet<String>) {
         // Extract arguments from all string values in the entity
-        for (_key, property_value) in &entity.properties.kv {
+        for (key, property_value) in &entity.properties.kv {
+            // Check the key for arguments too
+            self.extract_arguments_from_string(key, arguments);
+
             for value in &property_value.0 {
                 if let Some(string_value) = value.value.as_string() {
                     self.extract_arguments_from_string(string_value, arguments);
@@ -76,7 +79,10 @@ impl ScriptedEffectArgumentCollector {
             arguments.insert(condition.clone());
 
             // Extract arguments from conditional block properties
-            for (_key, property_value) in &conditional_block.properties.kv {
+            for (key, property_value) in &conditional_block.properties.kv {
+                // Check the key for arguments too
+                self.extract_arguments_from_string(key, arguments);
+
                 for value in &property_value.0 {
                     if let Some(string_value) = value.value.as_string() {
                         self.extract_arguments_from_string(string_value, arguments);

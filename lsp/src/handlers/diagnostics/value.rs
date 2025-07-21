@@ -5,7 +5,7 @@ use cw_parser::{AstNode, AstValue};
 use tower_lsp::lsp_types::Diagnostic;
 
 use crate::handlers::{
-    cache::{EntityRestructurer, FileIndex, GameDataCache, ModDataCache, TypeCache},
+    cache::{EntityRestructurer, FileIndex, FullAnalysis, GameDataCache, ModDataCache, TypeCache},
     diagnostics::diagnostic::create_type_mismatch_diagnostic,
     scope::ScopeStack,
     settings::VALIDATE_LOCALISATION,
@@ -127,6 +127,7 @@ pub fn is_value_compatible_with_simple_type(
             ))
         }
         (AstValue::String(_), SimpleType::Scalar) => None, // Valid
+        (AstValue::Number(_), SimpleType::Scalar) => None, // Valid
         (AstValue::String(_), SimpleType::IntVariableField) => {
             // TODO: Implement proper int variable field validation
             Some(create_type_mismatch_diagnostic(
@@ -166,9 +167,19 @@ pub fn is_value_compatible_with_simple_type(
                         None
                     }
                 } else {
+                    // Check if the value exists in any value set
+                    if let Some(full_analysis) = FullAnalysis::get() {
+                        // Check if this value exists in any of the dynamic value sets
+                        for (_key, value_set) in &full_analysis.dynamic_value_sets {
+                            if value_set.contains(val) {
+                                return None; // Valid value from a value set
+                            }
+                        }
+                    }
+
                     Some(create_type_mismatch_diagnostic(
                         value.span_range(),
-                        "Script values must start with value: prefix",
+                        "Expected script value (value: prefix), scripted variable (@), argument ($...$), or value from value set",
                         content,
                     ))
                 }
@@ -243,12 +254,44 @@ pub fn is_value_compatible_with_simple_type(
             } else if val.starts_with("$") && val.ends_with("$") {
                 None // Argument in scripted effect
             } else {
-                // TODO: Handle other value references
-                Some(create_type_mismatch_diagnostic(
-                    value.span_range(),
-                    "Int value field validation for non-variables not yet implemented",
-                    content,
-                ))
+                if val.starts_with("value:") {
+                    // Extract the script value name, handling parameterized format
+                    // Format: value:my_value|PARAM1|value1|PARAM2|value2|
+                    let value_part = val.split("value:").nth(1).unwrap();
+                    let value_name = if let Some(pipe_pos) = value_part.find('|') {
+                        &value_part[..pipe_pos]
+                    } else {
+                        value_part
+                    };
+
+                    let entity = EntityRestructurer::get_entity("common/script_values", value_name);
+
+                    if entity.is_none() {
+                        Some(create_type_mismatch_diagnostic(
+                            value.span_range(),
+                            &format!("Script value '{}' does not exist", value_name),
+                            content,
+                        ))
+                    } else {
+                        None
+                    }
+                } else {
+                    // Check if the value exists in any value set
+                    if let Some(full_analysis) = FullAnalysis::get() {
+                        // Check if this value exists in any of the dynamic value sets
+                        for (_key, value_set) in &full_analysis.dynamic_value_sets {
+                            if value_set.contains(val) {
+                                return None; // Valid value from a value set
+                            }
+                        }
+                    }
+
+                    Some(create_type_mismatch_diagnostic(
+                        value.span_range(),
+                        "Expected integer, script value (value: prefix), scripted variable (@), argument ($...$), or value from value set",
+                        content,
+                    ))
+                }
             }
         }
 

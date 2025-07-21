@@ -360,7 +360,7 @@ impl TypeCache {
                         if let Some(path_file) = type_def.options.path_file.as_ref() {
                             // path_file == file_path
                             if let Some(file_path) = file_path {
-                                if path_file.contains(file_path) {
+                                if file_path.contains(path_file) {
                                     if let CwtTypeOrSpecialRef::Block(block) =
                                         scoped_type.cwt_type_for_matching()
                                     {
