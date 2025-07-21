@@ -69,9 +69,6 @@ fn calculate_structural_compatibility_score_with_depth(
             matching_keys as f64 / total_keys as f64
         }
 
-        // Block types are structurally compatible with entities
-        (CwtTypeOrSpecialRef::Block(_), AstValue::Entity(_)) => 0.8,
-
         // Exact type matches get high scores
         (CwtTypeOrSpecialRef::Literal(_), AstValue::String(_)) => 0.9,
         (CwtTypeOrSpecialRef::LiteralSet(_), AstValue::String(_)) => 0.9,

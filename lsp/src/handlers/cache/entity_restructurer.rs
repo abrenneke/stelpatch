@@ -92,8 +92,6 @@ pub struct RestructureInfo {
 
 static RESTRUCTURED_ENTITIES: RwLock<Option<Arc<RestructuredEntities>>> = RwLock::new(None);
 
-const PRINT_WARNINGS: bool = false;
-
 impl EntityRestructurer {
     /// Create a new EntityRestructurer
     pub fn new(game_data: &'static GameDataCache, type_cache: &'static TypeCache) -> Self {
@@ -252,8 +250,8 @@ impl EntityRestructurer {
         key_counters: &mut LowerCaseHashMap<u32>,
         key: String,
         entity: Entity,
-        context: &str,
-        namespace: &str,
+        _context: &str,
+        _namespace: &str,
     ) {
         if let Some(_existing) = map.get(&key) {
             // Key collision detected - generate unique key for the new entity

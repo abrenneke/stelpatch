@@ -139,7 +139,7 @@ impl CwtConverter {
                                             key: enum_key.clone(),
                                         },
                                         value_type: value_type.clone(),
-                                        options: Default::default(),
+                                        options: CwtOptions::from_rule(rule),
                                         documentation: None,
                                     });
 
@@ -154,7 +154,7 @@ impl CwtConverter {
                                             key: type_name.clone(),
                                         },
                                         value_type: value_type.clone(),
-                                        options: Default::default(),
+                                        options: CwtOptions::from_rule(rule),
                                         documentation: None,
                                     });
 
@@ -168,7 +168,7 @@ impl CwtConverter {
                                                 "alias_name[foo:<type_name>] = bar is not supported"
                                             );
                                         }
-                                        // Handle alias[foo:x] = bar
+                                        // Handle alias_name[foo:x] = bar
                                         AstCwtIdentifierOrString::String(key_str) => {
                                             let value_type = Self::convert_value(&rule.value, None);
                                             pattern_properties.push(PatternProperty {
@@ -176,9 +176,7 @@ impl CwtConverter {
                                                     category: key_str.raw_value().to_string(),
                                                 },
                                                 value_type: value_type.clone(),
-
-                                                // TODO!
-                                                options: Default::default(),
+                                                options: CwtOptions::from_rule(rule),
                                                 documentation: None,
                                             });
                                             continue;
