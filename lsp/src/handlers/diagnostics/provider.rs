@@ -1,15 +1,18 @@
-use cw_model::{CwtType, SimpleType, entity_from_module_ast};
+use cw_model::entity_from_module_ast;
 use cw_parser::{AstEntityItem, AstModule, AstNode, AstValue};
 use tower_lsp::lsp_types::*;
 
-use crate::handlers::cache::{EntityRestructurer, GameDataCache, TypeCache};
+use crate::handlers::cache::TypeCache;
+use crate::handlers::common_validation::{
+    NamespaceValidationResult, apply_file_level_subtype_narrowing, create_variable_assignment_type,
+    detect_skip_root_key_container, filter_and_narrow_entity_type, is_type_per_file_namespace,
+    validate_namespace_and_caches,
+};
 use crate::handlers::diagnostics::diagnostic::{
     create_diagnostic_from_parse_error, create_unexpected_key_diagnostic,
 };
 use crate::handlers::diagnostics::type_validation::validate_entity_value;
-use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
-
-use super::super::utils::extract_namespace_from_uri;
+use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -89,130 +92,78 @@ impl DiagnosticsProvider {
     ) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        // Check if type cache is initialized
-        if !TypeCache::is_initialized() {
-            return diagnostics;
-        }
+        // Validate namespace and caches using common validation
+        let validation_context = match validate_namespace_and_caches(uri) {
+            NamespaceValidationResult::Valid(context) => context,
+            NamespaceValidationResult::CachesNotInitialized
+            | NamespaceValidationResult::NamespaceNotFound
+            | NamespaceValidationResult::InlineScript
+            | NamespaceValidationResult::UnknownNamespace => return diagnostics,
+        };
 
-        if !GameDataCache::is_initialized() {
-            return diagnostics;
-        }
-
-        // Ensure EntityRestructurer is initialized for correct subtype narrowing
-        if !EntityRestructurer::is_initialized() {
-            return diagnostics;
-        }
-
+        let namespace = validation_context.namespace;
+        let namespace_type = validation_context.namespace_type;
         let type_cache = TypeCache::get().unwrap();
-
-        // Extract namespace from URI
-        let namespace = match extract_namespace_from_uri(uri) {
-            Some(ns) => ns,
-            None => return diagnostics,
-        };
-
-        if namespace.starts_with("common/inline_scripts") {
-            // These are special, they don't have a type
-            return diagnostics;
-        }
-
-        // Get type information for this namespace
-        let namespace_type = match type_cache.get_namespace_type(&namespace, Some(uri)) {
-            Some(info) => info,
-            None => return diagnostics,
-        };
 
         if let CwtTypeOrSpecialRef::Unknown = namespace_type.cwt_type_for_matching() {
             panic!("Namespace type is unknown");
         }
 
-        let type_def = type_cache
-            .get_cwt_analyzer()
-            .get_type(&namespace_type.get_type_name());
+        // Check if we should treat the entire file as a single entity using common validation
+        if is_type_per_file_namespace(&namespace_type) {
+            let entity = entity_from_module_ast(module);
 
-        // Check if we should treat the entire file as a single entity
-        if let Some(type_def) = type_def {
-            if type_def.options.type_per_file {
-                let entity = entity_from_module_ast(module);
+            // Perform subtype narrowing at the file level using common function
+            let validation_type =
+                apply_file_level_subtype_narrowing(namespace_type.clone(), &entity);
 
-                // Perform subtype narrowing at the file level
-                let validation_type = if let Some(type_cache) = TypeCache::get() {
-                    let matching_subtypes = type_cache
+            // Validate each top-level property in the module as if it were an entity property
+            for item in &module.items {
+                if let AstEntityItem::Expression(expr) = item {
+                    let key_name = expr.key.raw_value();
+
+                    // Filter union types before property navigation
+                    let filtered_validation_type = type_cache
+                        .filter_union_types_by_properties(validation_type.clone(), &entity);
+
+                    if let PropertyNavigationResult::Success(property_type) = type_cache
                         .get_resolver()
-                        .determine_matching_subtypes(namespace_type.clone(), &entity);
-
-                    if !matching_subtypes.is_empty() {
-                        type_cache
-                            .apply_subtype_scope_changes(namespace_type.clone(), matching_subtypes)
+                        .navigate_to_property(filtered_validation_type.clone(), key_name)
+                    {
+                        // Validate the value against the property type
+                        let value_diagnostics = validate_entity_value(
+                            &expr.value,
+                            property_type,
+                            content,
+                            &namespace,
+                            1,
+                        );
+                        diagnostics.extend(value_diagnostics);
                     } else {
-                        namespace_type.clone()
-                    }
-                } else {
-                    namespace_type.clone()
-                };
-
-                // Validate each top-level property in the module as if it were an entity property
-                for item in &module.items {
-                    if let AstEntityItem::Expression(expr) = item {
-                        let key_name = expr.key.raw_value();
-
-                        // Filter union types before property navigation
-                        let filtered_validation_type = type_cache
-                            .filter_union_types_by_properties(validation_type.clone(), &entity);
-
-                        if let PropertyNavigationResult::Success(property_type) = type_cache
-                            .get_resolver()
-                            .navigate_to_property(filtered_validation_type.clone(), key_name)
-                        {
-                            // Validate the value against the property type
-                            let value_diagnostics = validate_entity_value(
-                                &expr.value,
-                                property_type,
-                                content,
-                                &namespace,
-                                1,
-                            );
-                            diagnostics.extend(value_diagnostics);
-                        } else {
-                            // Create diagnostic for unexpected property
-                            let diagnostic = create_unexpected_key_diagnostic(
-                                expr.key.span_range(),
-                                key_name,
-                                &namespace_type.type_name_for_display(),
-                                content,
-                            );
-                            diagnostics.push(diagnostic);
-                        }
+                        // Create diagnostic for unexpected property
+                        let diagnostic = create_unexpected_key_diagnostic(
+                            expr.key.span_range(),
+                            key_name,
+                            &namespace_type.type_name_for_display(),
+                            content,
+                        );
+                        diagnostics.push(diagnostic);
                     }
                 }
-
-                return diagnostics;
             }
+
+            return diagnostics;
         }
 
         // Standard behavior: validate each entity in the module separately
         for item in &module.items {
             if let AstEntityItem::Expression(expr) = item {
                 if expr.key.raw_value().starts_with("@") {
-                    // we're setting a variable
-                    let expected_type = Arc::new(CwtType::Union(vec![
-                        Arc::new(CwtType::Simple(SimpleType::Int)),
-                        Arc::new(CwtType::Simple(SimpleType::Float)),
-                        Arc::new(CwtType::Simple(SimpleType::Scalar)),
-                        Arc::new(CwtType::Simple(SimpleType::Bool)),
-                    ]));
+                    // we're setting a variable - use common validation function
+                    let variable_type = create_variable_assignment_type(&namespace_type);
 
-                    let entity_diagnostics = validate_entity_value(
-                        &expr.value,
-                        Arc::new(ScopedType::new_cwt(
-                            expected_type,
-                            namespace_type.scope_stack().clone(),
-                            namespace_type.in_scripted_effect_block().cloned(),
-                        )),
-                        content,
-                        &namespace,
-                        0,
-                    );
+                    let entity_diagnostics =
+                        validate_entity_value(&expr.value, variable_type, content, &namespace, 0);
 
                     diagnostics.extend(entity_diagnostics);
                     continue;
@@ -225,46 +176,11 @@ impl DiagnosticsProvider {
                 if let AstValue::Entity(ast_entity) = &expr.value {
                     let container_key = expr.key.raw_value();
 
-                    // Check if the container key matches skip_root_key for any union type BEFORE filtering
-                    let mut is_skip_root_key_container = false;
-                    if let CwtTypeOrSpecialRef::Union(union_types) =
-                        namespace_type.cwt_type_for_matching()
-                    {
-                        for union_type in union_types {
-                            let type_name = union_type.get_type_name();
-                            if !type_name.is_empty() {
-                                if let Some(type_def) =
-                                    type_cache.get_cwt_analyzer().get_type(&type_name)
-                                {
-                                    if let Some(skip_root_key) = &type_def.skip_root_key {
-                                        let should_skip = match skip_root_key {
-                                            cw_model::SkipRootKey::Specific(skip_key) => {
-                                                container_key.to_lowercase()
-                                                    == skip_key.to_lowercase()
-                                            }
-                                            cw_model::SkipRootKey::Any => true,
-                                            cw_model::SkipRootKey::Except(exceptions) => {
-                                                !exceptions.iter().any(|exception| {
-                                                    exception.to_lowercase()
-                                                        == container_key.to_lowercase()
-                                                })
-                                            }
-                                            cw_model::SkipRootKey::Multiple(keys) => {
-                                                keys.iter().any(|k| {
-                                                    k.to_lowercase() == container_key.to_lowercase()
-                                                })
-                                            }
-                                        };
-
-                                        if should_skip {
-                                            is_skip_root_key_container = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // Check if the container key matches skip_root_key using common validation
+                    let skip_root_key_result =
+                        detect_skip_root_key_container(&namespace_type, container_key);
+                    let is_skip_root_key_container =
+                        skip_root_key_result.is_skip_root_key_container;
 
                     if is_skip_root_key_container {
                         // This is a skip_root_key container - validate each nested entity individually
@@ -273,45 +189,15 @@ impl DiagnosticsProvider {
                                 if let AstValue::Entity(nested_ast_entity) = &nested_expr.value {
                                     let nested_entity_key = nested_expr.key.raw_value();
 
-                                    // For nested entities in skip_root_key containers, filter by the nested entity key
-                                    let nested_filtered_namespace_type = type_cache
-                                        .filter_union_types_by_key(
+                                    // For nested entities in skip_root_key containers, use common validation
+                                    let filtered_nested_validation_type =
+                                        filter_and_narrow_entity_type(
                                             namespace_type.clone(),
-                                            nested_entity_key,
-                                        );
-
-                                    let (_effective_key, effective_entity) =
-                                        EntityRestructurer::get_effective_entity_for_subtype_narrowing(
                                             &namespace,
                                             container_key,
                                             nested_entity_key,
                                             nested_ast_entity,
                                         );
-
-                                    // Perform subtype narrowing with the effective entity data
-                                    let nested_validation_type = if let Some(type_cache) =
-                                        TypeCache::get()
-                                    {
-                                        let matching_subtypes =
-                                            type_cache.get_resolver().determine_matching_subtypes(
-                                                nested_filtered_namespace_type.clone(),
-                                                &effective_entity,
-                                            );
-
-                                        if !matching_subtypes.is_empty() {
-                                            type_cache.apply_subtype_scope_changes(
-                                                nested_filtered_namespace_type.clone(),
-                                                matching_subtypes,
-                                            )
-                                        } else {
-                                            nested_filtered_namespace_type.clone()
-                                        }
-                                    } else {
-                                        nested_filtered_namespace_type.clone()
-                                    };
-
-                                    // The type is already filtered, no need to filter again
-                                    let filtered_nested_validation_type = nested_validation_type;
 
                                     // Validate the nested entity using the AST value for proper diagnostics
                                     let nested_entity_diagnostics = validate_entity_value(
@@ -333,40 +219,14 @@ impl DiagnosticsProvider {
 
                     let entity_key = container_key; // For normal entities, these are the same
 
-                    // For normal entities, filter by the container key
-                    let filtered_namespace_type = type_cache
-                        .filter_union_types_by_key(namespace_type.clone(), &container_key);
-
-                    let (_effective_key, effective_entity) =
-                        EntityRestructurer::get_effective_entity_for_subtype_narrowing(
-                            &namespace,
-                            container_key,
-                            entity_key,
-                            ast_entity,
-                        );
-
-                    // Perform subtype narrowing with the effective entity data
-                    let validation_type = if let Some(type_cache) = TypeCache::get() {
-                        let matching_subtypes =
-                            type_cache.get_resolver().determine_matching_subtypes(
-                                filtered_namespace_type.clone(),
-                                &effective_entity,
-                            );
-
-                        if !matching_subtypes.is_empty() {
-                            type_cache.apply_subtype_scope_changes(
-                                filtered_namespace_type.clone(),
-                                matching_subtypes,
-                            )
-                        } else {
-                            filtered_namespace_type.clone()
-                        }
-                    } else {
-                        filtered_namespace_type.clone()
-                    };
-
-                    // The type is already filtered, no need to filter again
-                    let filtered_validation_type = validation_type;
+                    // For normal entities, use common validation function
+                    let filtered_validation_type = filter_and_narrow_entity_type(
+                        namespace_type.clone(),
+                        &namespace,
+                        container_key,
+                        entity_key,
+                        ast_entity,
+                    );
 
                     let entity_diagnostics = validate_entity_value(
                         &expr.value,

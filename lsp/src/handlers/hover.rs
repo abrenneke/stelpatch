@@ -4,14 +4,16 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, jsonrpc::Result};
 
 use crate::handlers::cache::types::TypeInfo;
-use crate::handlers::cache::{
-    EntityRestructurer, GameDataCache, TypeCache, TypeFormatter, get_entity_property_type_from_ast,
+use crate::handlers::cache::{TypeCache, get_entity_property_type_from_ast};
+use crate::handlers::common_validation::{
+    NamespaceValidationResult, build_hover_response, detect_skip_root_key_container,
+    filter_and_narrow_entity_type, find_entity_in_module, find_nested_entity_in_container,
+    validate_namespace_and_caches,
 };
-use crate::handlers::scoped_type::CwtTypeOrSpecialRef;
 
 use super::document_cache::DocumentCache;
 use super::scoped_type::PropertyNavigationResult;
-use super::utils::{extract_namespace_from_uri, position_to_offset};
+use super::utils::position_to_offset;
 use cw_parser::{AstEntity, AstExpression, AstNode, AstValue, AstVisitor};
 
 /// A visitor that builds property paths for hover functionality
@@ -161,32 +163,18 @@ pub fn hover(
         None => return Ok(None),
     };
 
-    // Check if required caches are initialized
-    if !TypeCache::is_initialized()
-        || !GameDataCache::is_initialized()
-        || !EntityRestructurer::is_initialized()
-    {
-        return Ok(None);
-    }
+    // Validate namespace and caches using common validation
+    let validation_context = match validate_namespace_and_caches(&uri) {
+        NamespaceValidationResult::Valid(context) => context,
+        NamespaceValidationResult::CachesNotInitialized
+        | NamespaceValidationResult::NamespaceNotFound
+        | NamespaceValidationResult::InlineScript
+        | NamespaceValidationResult::UnknownNamespace => return Ok(None),
+    };
 
+    let namespace = validation_context.namespace;
+    let namespace_type = validation_context.namespace_type;
     let type_cache = TypeCache::get().unwrap();
-
-    // Extract namespace from URI to get type information
-    let namespace = match extract_namespace_from_uri(&uri) {
-        Some(namespace) => namespace,
-        None => return Ok(None),
-    };
-
-    if namespace.starts_with("common/inline_scripts") {
-        // These are special, they don't have a type
-        return Ok(None);
-    }
-
-    // Get namespace type information
-    let namespace_type = match type_cache.get_namespace_type(&namespace, Some(&uri)) {
-        Some(info) => info,
-        None => return Ok(None),
-    };
 
     // Find the property at the given position
     let mut builder = PropertyPathBuilder::new(offset, cached_document.borrow_input());
@@ -201,45 +189,21 @@ pub fn hover(
         // Check if this is a top-level key (entity name) or a nested property
         let is_top_level_key = !property_path.contains('.');
 
-        // Build the base hover content
-        let mut hover_content = String::new();
-
         let type_info = if is_top_level_key {
             // For top-level keys, show contextual information about the entity type
             let entity_name = property_path;
 
-            // Check if this is a skip_root_key container by looking at union types
-            let mut container_info = None;
-            if let CwtTypeOrSpecialRef::Union(union_types) = namespace_type.cwt_type_for_matching()
-            {
-                for union_type in union_types {
-                    let type_name = union_type.get_type_name();
-                    if !type_name.is_empty() {
-                        if let Some(type_def) = type_cache.get_cwt_analyzer().get_type(&type_name) {
-                            if let Some(skip_root_key) = &type_def.skip_root_key {
-                                let should_skip = match skip_root_key {
-                                    cw_model::SkipRootKey::Specific(skip_key) => {
-                                        entity_name == skip_key
-                                    }
-                                    cw_model::SkipRootKey::Any => true,
-                                    cw_model::SkipRootKey::Except(exceptions) => {
-                                        !exceptions.contains(&entity_name.to_string())
-                                    }
-                                    cw_model::SkipRootKey::Multiple(keys) => {
-                                        keys.contains(&entity_name.to_string())
-                                    }
-                                };
-
-                                if should_skip {
-                                    container_info =
-                                        Some(format!("Container for {} entities", type_name));
-                                    break;
-                                }
-                            }
-                        }
-                    }
+            // Check if this is a skip_root_key container using common validation
+            let skip_root_key_result = detect_skip_root_key_container(&namespace_type, entity_name);
+            let container_info = if skip_root_key_result.is_skip_root_key_container {
+                if let Some(type_name) = skip_root_key_result.matching_type_name {
+                    Some(format!("Container for {} entities", type_name))
+                } else {
+                    Some("Container entity".to_string())
                 }
-            }
+            } else {
+                None
+            };
 
             if let Some(info) = container_info {
                 // This is a skip_root_key container
@@ -269,89 +233,11 @@ pub fn hover(
                 if let Some(entity_context) = builder.found_entity_context {
                     let container_key = property_parts[0];
 
-                    // Check for skip_root_key on the union types BEFORE filtering
-                    let mut is_skip_root_key_container = false;
-
-                    // For unions, we need to check each type for skip_root_key
-                    match namespace_type.cwt_type_for_matching() {
-                        CwtTypeOrSpecialRef::Union(union_types) => {
-                            for union_type in union_types {
-                                let type_name = union_type.get_type_name();
-                                if !type_name.is_empty() {
-                                    if let Some(type_def) =
-                                        type_cache.get_cwt_analyzer().get_type(&type_name)
-                                    {
-                                        if let Some(skip_root_key) = &type_def.skip_root_key {
-                                            let should_skip = match skip_root_key {
-                                                cw_model::SkipRootKey::Specific(skip_key) => {
-                                                    container_key.to_lowercase()
-                                                        == skip_key.to_lowercase()
-                                                }
-                                                cw_model::SkipRootKey::Any => true,
-                                                cw_model::SkipRootKey::Except(exceptions) => {
-                                                    !exceptions.iter().any(|exception| {
-                                                        exception.to_lowercase()
-                                                            == container_key.to_lowercase()
-                                                    })
-                                                }
-                                                cw_model::SkipRootKey::Multiple(keys) => {
-                                                    keys.iter().any(|k| {
-                                                        k.to_lowercase()
-                                                            == container_key.to_lowercase()
-                                                    })
-                                                }
-                                            };
-
-                                            if should_skip {
-                                                is_skip_root_key_container = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        CwtTypeOrSpecialRef::ScopedUnion(scoped_union_types) => {
-                            for scoped_type in scoped_union_types {
-                                let type_name = scoped_type.get_type_name();
-                                if !type_name.is_empty() {
-                                    if let Some(type_def) =
-                                        type_cache.get_cwt_analyzer().get_type(&type_name)
-                                    {
-                                        if let Some(skip_root_key) = &type_def.skip_root_key {
-                                            let should_skip = match skip_root_key {
-                                                cw_model::SkipRootKey::Specific(skip_key) => {
-                                                    container_key.to_lowercase()
-                                                        == skip_key.to_lowercase()
-                                                }
-                                                cw_model::SkipRootKey::Any => true,
-                                                cw_model::SkipRootKey::Except(exceptions) => {
-                                                    !exceptions.iter().any(|exception| {
-                                                        exception.to_lowercase()
-                                                            == container_key.to_lowercase()
-                                                    })
-                                                }
-                                                cw_model::SkipRootKey::Multiple(keys) => {
-                                                    keys.iter().any(|k| {
-                                                        k.to_lowercase()
-                                                            == container_key.to_lowercase()
-                                                    })
-                                                }
-                                            };
-
-                                            if should_skip {
-                                                is_skip_root_key_container = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        _ => {
-                            // Not a union type, no skip_root_key handling needed
-                        }
-                    }
+                    // Check for skip_root_key using common validation
+                    let skip_root_key_result =
+                        detect_skip_root_key_container(&namespace_type, container_key);
+                    let is_skip_root_key_container =
+                        skip_root_key_result.is_skip_root_key_container;
 
                     let (validation_type, final_property_path) = if is_skip_root_key_container
                         && property_parts.len() >= 2
@@ -364,99 +250,43 @@ pub fn hover(
                             String::new() // Empty path when hovering over the entity name itself
                         };
 
-                        let filtered_namespace_type = type_cache
-                            .filter_union_types_by_key(namespace_type.clone(), nested_entity_key);
-
-                        // Find the nested entity in the AST
-                        let mut nested_entity_context = None;
-
-                        if let Ok(ast) = cached_document.borrow_ast() {
-                            for item in &ast.items {
-                                if let cw_parser::AstEntityItem::Expression(expr) = item {
-                                    if expr.key.raw_value() == container_key {
-                                        if let AstValue::Entity(container_ast_entity) = &expr.value
-                                        {
-                                            for nested_item in &container_ast_entity.items {
-                                                if let cw_parser::AstEntityItem::Expression(
-                                                    nested_expr,
-                                                ) = nested_item
-                                                {
-                                                    if nested_expr.key.raw_value()
-                                                        == nested_entity_key
-                                                    {
-                                                        if let AstValue::Entity(nested_ast_entity) =
-                                                            &nested_expr.value
-                                                        {
-                                                            nested_entity_context =
-                                                                Some(nested_ast_entity);
-                                                        }
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        break;
-                                    }
-                                }
+                        // Find the nested entity in the AST using common utilities
+                        let nested_entity_context = if let Ok(ast) = cached_document.borrow_ast() {
+                            if let Some(container_lookup) =
+                                find_entity_in_module(&ast, container_key).ast_entity
+                            {
+                                find_nested_entity_in_container(container_lookup, nested_entity_key)
+                                    .ast_entity
+                            } else {
+                                None
                             }
-                        }
+                        } else {
+                            None
+                        };
 
                         if let Some(nested_ast_entity) = nested_entity_context {
-                            let (_effective_key, effective_entity) =
-                                EntityRestructurer::get_effective_entity_for_subtype_narrowing(
-                                    &namespace,
-                                    container_key,
-                                    nested_entity_key,
-                                    nested_ast_entity,
-                                );
-
-                            let matching_subtypes =
-                                type_cache.get_resolver().determine_matching_subtypes(
-                                    filtered_namespace_type.clone(),
-                                    &effective_entity,
-                                );
-
-                            let validation_type = if !matching_subtypes.is_empty() {
-                                type_cache.apply_subtype_scope_changes(
-                                    filtered_namespace_type.clone(),
-                                    matching_subtypes,
-                                )
-                            } else {
-                                filtered_namespace_type.clone()
-                            };
+                            let validation_type = filter_and_narrow_entity_type(
+                                namespace_type.clone(),
+                                &namespace,
+                                container_key,
+                                nested_entity_key,
+                                nested_ast_entity,
+                            );
 
                             (validation_type, nested_property_path)
                         } else {
                             return Ok(None);
                         }
                     } else {
-                        // Normal case: filter by container key
+                        // Normal case: filter by container key using common function
                         let entity_key = container_key;
-                        let filtered_namespace_type = type_cache
-                            .filter_union_types_by_key(namespace_type.clone(), entity_key);
-
-                        let (_effective_key, effective_entity) =
-                            EntityRestructurer::get_effective_entity_for_subtype_narrowing(
-                                &namespace,
-                                container_key,
-                                entity_key,
-                                entity_context,
-                            );
-
-                        let matching_subtypes =
-                            type_cache.get_resolver().determine_matching_subtypes(
-                                filtered_namespace_type.clone(),
-                                &effective_entity,
-                            );
-
-                        let validation_type = if !matching_subtypes.is_empty() {
-                            type_cache.apply_subtype_scope_changes(
-                                filtered_namespace_type.clone(),
-                                matching_subtypes,
-                            )
-                        } else {
-                            filtered_namespace_type
-                        };
+                        let validation_type = filter_and_narrow_entity_type(
+                            namespace_type.clone(),
+                            &namespace,
+                            container_key,
+                            entity_key,
+                            entity_context,
+                        );
 
                         (validation_type, actual_property_path)
                     };
@@ -495,27 +325,22 @@ pub fn hover(
                         source_info: None,
                     })
                 } else {
-                    // Fallback: try to find the entity in the AST manually
+                    // Fallback: try to find the entity in the AST using common utilities
                     let mut found_entity_type = None;
                     if let Ok(ast) = cached_document.borrow_ast() {
                         let entity_name = property_parts[0];
 
-                        // Find the entity in the AST that matches our container key
-                        for item in &ast.items {
-                            if let cw_parser::AstEntityItem::Expression(expr) = item {
-                                if expr.key.raw_value() == entity_name {
-                                    if let AstValue::Entity(ast_entity) = &expr.value {
-                                        // Found the right entity context - use AST-based resolution
-                                        found_entity_type = get_entity_property_type_from_ast(
-                                            &namespace,
-                                            ast_entity,
-                                            &actual_property_path,
-                                            Some(&uri),
-                                        );
-                                    }
-                                    break; // Found the key, stop searching
-                                }
-                            }
+                        // Find the entity using common utility function
+                        if let Some(ast_entity) =
+                            find_entity_in_module(&ast, entity_name).ast_entity
+                        {
+                            // Found the right entity context - use AST-based resolution
+                            found_entity_type = get_entity_property_type_from_ast(
+                                &namespace,
+                                ast_entity,
+                                &actual_property_path,
+                                Some(&uri),
+                            );
                         }
                     }
 
@@ -528,43 +353,10 @@ pub fn hover(
         };
 
         if let Some(type_info) = type_info {
-            // Format the type information using TypeFormatter
-            if let Some(scoped_type) = &type_info.scoped_type {
-                let formatter = TypeFormatter::new(&type_cache.get_resolver(), 30);
-                let property_parts: Vec<&str> = type_info.property_path.split('.').collect();
-                let formatted_type = formatter.format_type(
-                    scoped_type.clone(),
-                    property_parts.last().copied(), // Pass the last part as property name
-                );
-                // Add type information in a clean format
-                hover_content.push_str(&format!("```\n{}\n```", formatted_type));
+            // Use common hover response builder
+            if let Some(hover) = build_hover_response(type_info, &type_cache) {
+                return Ok(Some(hover));
             }
-
-            // Add brief documentation if available
-            if let Some(documentation) = &type_info.documentation {
-                if !documentation.trim().is_empty() {
-                    hover_content.push_str(&format!("\n\n{}", documentation.trim()));
-                }
-            }
-
-            // Add source info if available
-            if let Some(source_info) = &type_info.source_info {
-                if !source_info.is_empty() {
-                    hover_content.push_str(&format!("\n\n*{}*", source_info));
-                }
-            }
-        }
-
-        if !hover_content.is_empty() {
-            let hover = Hover {
-                contents: HoverContents::Markup(MarkupContent {
-                    kind: MarkupKind::Markdown,
-                    value: hover_content,
-                }),
-                range: None, // We could calculate the exact range if needed
-            };
-
-            return Ok(Some(hover));
         }
     }
 
