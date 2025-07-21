@@ -15,7 +15,7 @@ use crate::handlers::{
             create_value_mismatch_diagnostic,
         },
         scope_validation::{validate_scope_reference, validate_scopegroup_reference},
-        structural::is_value_structurally_compatible,
+        structural::calculate_structural_compatibility_score,
         value::is_value_compatible_with_simple_type,
     },
     scope::ScopeStack,
@@ -107,6 +107,86 @@ pub fn validate_entity_value(
                 validate_value_against_type(value, expected_type, content, namespace, depth + 1);
             diagnostics.extend(value_diagnostics);
         }
+    }
+
+    diagnostics
+}
+
+/// Helper function to validate a value against multiple union types with structural scoring
+fn validate_union_types(
+    value: &AstValue<'_>,
+    union_types: Vec<Arc<ScopedType>>,
+    content: &str,
+    namespace: &str,
+    depth: usize,
+) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+
+    // Step 1: Validate against ALL union types and calculate structural scores
+    let mut all_validation_results = Vec::new();
+    let mut type_scores = Vec::new();
+
+    for union_type in union_types {
+        let validation_result =
+            validate_value_against_type(value, union_type.clone(), content, namespace, depth + 1);
+        let structural_score = calculate_structural_compatibility_score(value, union_type.clone());
+
+        all_validation_results.push(validation_result);
+        type_scores.push((union_type, structural_score));
+    }
+
+    // Step 2: Check if ANY union type validates successfully (0 diagnostics)
+    let any_validation_passed = all_validation_results.iter().any(|diags| diags.is_empty());
+
+    if any_validation_passed {
+        // If any type validates successfully, the union passes - report no errors
+        return diagnostics; // Empty diagnostics = success
+    }
+
+    // Step 3: All types have errors - find the highest structural score
+    let max_score = type_scores
+        .iter()
+        .map(|(_, score)| *score)
+        .fold(0.0, f64::max);
+
+    if max_score > 0.0 {
+        // Step 4: Report errors only from the most structurally compatible types
+        let best_indices: Vec<usize> = type_scores
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, score))| (*score - max_score).abs() < f64::EPSILON)
+            .map(|(index, _)| index)
+            .collect();
+
+        for index in best_indices {
+            diagnostics.extend(all_validation_results[index].iter().cloned());
+        }
+    } else {
+        // No structural compatibility at all - provide general error
+        let mut all_possible_values = Vec::new();
+        for (union_type, _) in type_scores {
+            if let CwtTypeOrSpecial::CwtType(cwt_type) = union_type.cwt_type() {
+                all_possible_values.extend(extract_possible_values(cwt_type));
+            }
+        }
+
+        let mut unique_values: Vec<_> = all_possible_values
+            .into_iter()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        unique_values.sort();
+
+        let diagnostic = create_type_mismatch_diagnostic(
+            value.span_range(),
+            &format!(
+                "Expected one of: {}, found: {:?}",
+                unique_values.join(", "),
+                value.type_name(),
+            ),
+            content,
+        );
+        diagnostics.push(diagnostic);
     }
 
     diagnostics
@@ -281,85 +361,21 @@ fn validate_value_against_type(
 
         // Union type validation
         (CwtTypeOrSpecialRef::Union(types), _) => {
-            // Find all structurally compatible union members
-            let mut compatible_resolved_types = Vec::new();
-
-            for union_type in *types {
-                // Resolve the union type first in case it's a reference
-                let resolved_union_type = cache.resolve_type(Arc::new(ScopedType::new_cwt(
-                    union_type.clone(),
-                    expected_type.scope_stack().clone(),
-                    expected_type.in_scripted_effect_block().cloned(),
-                )));
-
-                if is_value_structurally_compatible(value, resolved_union_type.clone()) {
-                    compatible_resolved_types.push(resolved_union_type);
-                }
-            }
-
-            if compatible_resolved_types.is_empty() {
-                // Value is not structurally compatible with any union member
-                let mut all_possible_values = Vec::new();
-                for union_type in *types {
-                    // Resolve each union type to get its actual structure for error messages
-                    let resolved_union_type = cache.resolve_type(Arc::new(ScopedType::new_cwt(
+            // Resolve all union types first
+            let resolved_union_types: Vec<Arc<ScopedType>> = types
+                .iter()
+                .map(|union_type| {
+                    cache.resolve_type(Arc::new(ScopedType::new_cwt(
                         union_type.clone(),
                         expected_type.scope_stack().clone(),
                         expected_type.in_scripted_effect_block().cloned(),
-                    )));
+                    )))
+                })
+                .collect();
 
-                    if let CwtTypeOrSpecial::CwtType(cwt_type) = resolved_union_type.cwt_type() {
-                        all_possible_values.extend(extract_possible_values(cwt_type));
-                    }
-                }
-
-                // Remove duplicates and sort
-                let mut unique_values: Vec<_> = all_possible_values
-                    .into_iter()
-                    .collect::<HashSet<_>>()
-                    .into_iter()
-                    .collect();
-                unique_values.sort();
-
-                let diagnostic = create_type_mismatch_diagnostic(
-                    value.span_range(),
-                    &format!(
-                        "Expected one of: {}, found: {:?}",
-                        unique_values.join(", "),
-                        value.type_name(),
-                    ),
-                    content,
-                );
-                diagnostics.push(diagnostic);
-            } else {
-                // Value is structurally compatible with at least one union member
-                // Validate against each compatible type and use "any" logic:
-                // only report errors if ALL compatible types have validation errors
-                let mut all_validation_results = Vec::new();
-
-                for compatible_resolved_type in &compatible_resolved_types {
-                    let content_diagnostics = validate_value_against_type(
-                        value,
-                        compatible_resolved_type.clone(),
-                        content,
-                        namespace,
-                        depth + 1,
-                    );
-                    all_validation_results.push(content_diagnostics);
-                }
-
-                // If ANY compatible type validates without errors, the union validation passes
-                let any_validation_passed =
-                    all_validation_results.iter().any(|diags| diags.is_empty());
-
-                if !any_validation_passed {
-                    // All compatible types have validation errors - report all inner errors
-                    // to provide comprehensive feedback
-                    for validation_errors in all_validation_results {
-                        diagnostics.extend(validation_errors);
-                    }
-                }
-            }
+            let union_diagnostics =
+                validate_union_types(value, resolved_union_types, content, namespace, depth);
+            diagnostics.extend(union_diagnostics);
         }
 
         // Comparable type validation
@@ -555,72 +571,12 @@ fn validate_value_against_type(
         }
 
         (CwtTypeOrSpecialRef::ScopedUnion(scoped_types), _) => {
-            // Find all structurally compatible union members
-            let mut compatible_types = Vec::new();
+            // ScopedUnion types are already resolved, so we can use them directly
+            let union_types: Vec<Arc<ScopedType>> = scoped_types.iter().cloned().collect();
 
-            for scoped_type in *scoped_types {
-                let scoped_type_arc = scoped_type.clone();
-                if is_value_structurally_compatible(value, scoped_type_arc.clone()) {
-                    compatible_types.push(scoped_type_arc);
-                }
-            }
-
-            if compatible_types.is_empty() {
-                // Value is not structurally compatible with any union member
-                let mut all_possible_values = Vec::new();
-                for scoped_type in *scoped_types {
-                    if let CwtTypeOrSpecial::CwtType(cwt_type) = scoped_type.cwt_type() {
-                        all_possible_values.extend(extract_possible_values(cwt_type));
-                    }
-                }
-
-                // Remove duplicates and sort
-                let mut unique_values: Vec<_> = all_possible_values
-                    .into_iter()
-                    .collect::<HashSet<_>>()
-                    .into_iter()
-                    .collect();
-                unique_values.sort();
-
-                let diagnostic = create_type_mismatch_diagnostic(
-                    value.span_range(),
-                    &format!(
-                        "Expected one of: {}, found: {:?}",
-                        unique_values.join(", "),
-                        value.type_name(),
-                    ),
-                    content,
-                );
-                diagnostics.push(diagnostic);
-            } else {
-                // Value is structurally compatible with at least one union member
-                // Validate against each compatible type and use "any" logic:
-                // only report errors if ALL compatible types have validation errors
-                let mut all_validation_results = Vec::new();
-
-                for compatible_type in &compatible_types {
-                    let content_diagnostics = validate_value_against_type(
-                        value,
-                        compatible_type.clone(),
-                        content,
-                        namespace,
-                        depth + 1,
-                    );
-                    all_validation_results.push(content_diagnostics);
-                }
-
-                // If ANY compatible type validates without errors, the union validation passes
-                let any_validation_passed =
-                    all_validation_results.iter().any(|diags| diags.is_empty());
-
-                if !any_validation_passed {
-                    // All compatible types have validation errors - report all inner errors
-                    // to provide comprehensive feedback
-                    for validation_errors in all_validation_results {
-                        diagnostics.extend(validation_errors);
-                    }
-                }
-            }
+            let union_diagnostics =
+                validate_union_types(value, union_types, content, namespace, depth);
+            diagnostics.extend(union_diagnostics);
         }
     }
 

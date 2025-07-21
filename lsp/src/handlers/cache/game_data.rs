@@ -97,10 +97,17 @@ impl GameDataCache {
                             .scripted_variables
                             .insert(key.to_string(), value.0.first().unwrap().value.clone());
                     } else {
-                        if let Some(entity) = value.0.first().unwrap().value.as_entity() {
-                            namespace_data
-                                .entities
-                                .insert(key.to_string(), entity.clone());
+                        // Handle multiple entities with the same key (like multiple random_list entries)
+                        for (index, property_info) in value.0.iter().enumerate() {
+                            if let Some(entity) = property_info.value.as_entity() {
+                                let entity_key = if index == 0 {
+                                    key.to_string()
+                                } else {
+                                    format!("{}_{}", key, index + 1)
+                                };
+
+                                namespace_data.entities.insert(entity_key, entity.clone());
+                            }
                         }
                     }
                 }

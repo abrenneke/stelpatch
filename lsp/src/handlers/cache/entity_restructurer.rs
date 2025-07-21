@@ -245,30 +245,26 @@ impl EntityRestructurer {
         result
     }
 
-    /// Helper method to insert into a HashMap with duplicate detection
+    /// Helper method to insert into a HashMap with duplicate detection using efficient counters
     fn insert_with_duplicate_warning(
         &self,
         map: &mut LowerCaseHashMap<Entity>,
+        key_counters: &mut LowerCaseHashMap<u32>,
         key: String,
         entity: Entity,
         context: &str,
         namespace: &str,
     ) {
-        if let Some(existing) = map.get(&key) {
-            // Get original keys for better context
-            let existing_original = Self::get_original_key_from_entity(existing)
-                .unwrap_or_else(|| "<unknown>".to_string());
-            let new_original = Self::get_original_key_from_entity(&entity)
-                .unwrap_or_else(|| "<unknown>".to_string());
+        if let Some(_existing) = map.get(&key) {
+            // Key collision detected - generate unique key for the new entity
+            let counter = key_counters.entry(key.clone()).or_insert(1);
+            *counter += 1;
+            let unique_key = format!("{}_{}", key, counter);
 
-            if PRINT_WARNINGS {
-                eprintln!(
-                    "WARN: Duplicate entity '{}' in namespace '{}' ({}). Existing from '{}', new from '{}'. Keeping existing.",
-                    key, namespace, context, existing_original, new_original
-                );
-            }
-            return; // Keep existing entity
+            map.insert(unique_key, entity);
+            return;
         }
+
         map.insert(key, entity);
     }
 
@@ -276,12 +272,20 @@ impl EntityRestructurer {
     fn extend_with_duplicate_warnings(
         &self,
         target: &mut LowerCaseHashMap<Entity>,
+        key_counters: &mut LowerCaseHashMap<u32>,
         source: LowerCaseHashMap<Entity>,
         context: &str,
         namespace: &str,
     ) {
         for (key, entity) in source {
-            self.insert_with_duplicate_warning(target, key, entity, context, namespace);
+            self.insert_with_duplicate_warning(
+                target,
+                key_counters,
+                key,
+                entity,
+                context,
+                namespace,
+            );
         }
     }
 
@@ -293,6 +297,7 @@ impl EntityRestructurer {
         namespace_data: &Namespace,
     ) -> (LowerCaseHashMap<Entity>, RestructureInfo) {
         let mut restructured_entities = LowerCaseHashMap::new();
+        let mut key_counters: LowerCaseHashMap<u32> = LowerCaseHashMap::new();
         let mut original_count = 0;
 
         // Process each module in the namespace individually to avoid key overwrites
@@ -322,6 +327,7 @@ impl EntityRestructurer {
                                 );
                             self.extend_with_duplicate_warnings(
                                 &mut restructured_entities,
+                                &mut key_counters,
                                 extracted_entities,
                                 &format!("skip_root_key from container '{}'", key),
                                 namespace,
@@ -353,6 +359,7 @@ impl EntityRestructurer {
                                         self.add_original_key_to_entity(entity.clone(), key);
                                     self.insert_with_duplicate_warning(
                                         &mut restructured_entities,
+                                        &mut key_counters,
                                         entity_name,
                                         entity_with_original_key,
                                         &format!("name_field from key '{}'", key),
@@ -362,6 +369,7 @@ impl EntityRestructurer {
                                     // Fallback to original key if name field not found
                                     self.insert_with_duplicate_warning(
                                         &mut restructured_entities,
+                                        &mut key_counters,
                                         key.clone(),
                                         entity.clone(),
                                         &format!("name_field fallback from key '{}'", key),
@@ -372,6 +380,7 @@ impl EntityRestructurer {
                                 // Standard processing - use the key as-is
                                 self.insert_with_duplicate_warning(
                                     &mut restructured_entities,
+                                    &mut key_counters,
                                     key.clone(),
                                     entity.clone(),
                                     &format!("standard processing from key '{}'", key),
@@ -482,6 +491,7 @@ impl EntityRestructurer {
         namespace: &str,
     ) -> LowerCaseHashMap<Entity> {
         let mut result = LowerCaseHashMap::new();
+        let mut key_counters: LowerCaseHashMap<u32> = LowerCaseHashMap::new();
 
         // Look for child entities in the container
         for (child_key, child_property_list) in &container_entity.properties.kv {
@@ -509,6 +519,7 @@ impl EntityRestructurer {
                             self.add_original_key_to_entity(child_entity.clone(), child_key);
                         self.insert_with_duplicate_warning(
                             &mut result,
+                            &mut key_counters,
                             entity_name,
                             entity_with_original_key,
                             &format!("extracted from container child '{}'", child_key),
@@ -516,51 +527,6 @@ impl EntityRestructurer {
                         );
                     }
                     // If no type definition matches, skip this entity (it will be handled by normal processing)
-                }
-            }
-        }
-
-        result
-    }
-
-    /// Extract entities from a container entity (when skipping root key)
-    fn extract_entities_from_container(
-        &self,
-        container_entity: &Entity,
-        type_def: &TypeDefinition,
-        namespace: &str,
-    ) -> LowerCaseHashMap<Entity> {
-        let mut result = LowerCaseHashMap::new();
-
-        // Look for child entities in the container
-        for (child_key, child_property_list) in &container_entity.properties.kv {
-            for property_info in &child_property_list.0 {
-                if let Value::Entity(child_entity) = &property_info.value {
-                    // Check if this child entity passes the type_key_filter
-                    if !self.passes_type_key_filter(child_key, &vec![type_def.clone()]) {
-                        continue;
-                    }
-
-                    // Determine the entity name based on whether we have a name field
-                    let entity_name = if type_def.name_field.is_some() {
-                        // Use name field if available, fallback to structural key
-                        Self::extract_name_from_entity(child_entity, &type_def.name_field)
-                            .unwrap_or_else(|| child_key.clone())
-                    } else {
-                        // No name field, use the structural key
-                        child_key.clone()
-                    };
-
-                    // Add original key to entity to preserve subtype information
-                    let entity_with_original_key =
-                        self.add_original_key_to_entity(child_entity.clone(), child_key);
-                    self.insert_with_duplicate_warning(
-                        &mut result,
-                        entity_name,
-                        entity_with_original_key,
-                        &format!("extracted from container child '{}'", child_key),
-                        namespace,
-                    );
                 }
             }
         }

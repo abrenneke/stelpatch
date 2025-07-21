@@ -27,13 +27,19 @@ pub struct PropertyNavigator {
 
 impl PropertyNavigator {
     pub fn new(cwt_analyzer: Arc<CwtAnalyzer>, utils: Arc<ResolverUtils>) -> Self {
+        let subtype_handler = Arc::new(SubtypeHandler::new(cwt_analyzer.clone()));
+
         Self {
             reference_resolver: Arc::new(ReferenceResolver::new(
                 cwt_analyzer.clone(),
                 utils.clone(),
-                Arc::new(SubtypeHandler::new(cwt_analyzer.clone())),
+                subtype_handler.clone(),
             )),
-            pattern_matcher: Arc::new(PatternMatcher::new(cwt_analyzer.clone(), utils.clone())),
+            pattern_matcher: Arc::new(PatternMatcher::new(
+                cwt_analyzer.clone(),
+                utils.clone(),
+                subtype_handler,
+            )),
             utils,
             cwt_analyzer,
         }

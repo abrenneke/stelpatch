@@ -2,7 +2,7 @@ use crate::handlers::scope::ScopeStack;
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
 use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType};
 use cw_model::{CwtType, Entity, EnumDefinition, LowerCaseHashMap, ReferenceType};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -18,7 +18,7 @@ pub struct TypeResolver {
     pattern_matcher: PatternMatcher,
     property_navigator: PropertyNavigator,
     scope_handler: ScopeHandler,
-    subtype_handler: SubtypeHandler,
+    subtype_handler: Arc<SubtypeHandler>,
 }
 
 impl TypeResolver {
@@ -28,16 +28,22 @@ impl TypeResolver {
 
         let subtype_handler_for_reference = Arc::new(SubtypeHandler::new(cwt_analyzer.clone()));
 
+        let subtype_handler = Arc::new(SubtypeHandler::new(cwt_analyzer.clone()));
+
         Self {
             reference_resolver: ReferenceResolver::new(
                 cwt_analyzer.clone(),
                 utils.clone(),
                 subtype_handler_for_reference,
             ),
-            pattern_matcher: PatternMatcher::new(cwt_analyzer.clone(), utils.clone()),
+            pattern_matcher: PatternMatcher::new(
+                cwt_analyzer.clone(),
+                utils.clone(),
+                subtype_handler.clone(),
+            ),
             property_navigator: PropertyNavigator::new(cwt_analyzer.clone(), utils.clone()),
             scope_handler: ScopeHandler::new(cwt_analyzer.clone()),
-            subtype_handler: SubtypeHandler::new(cwt_analyzer.clone()),
+            subtype_handler,
             cwt_analyzer,
             cache,
         }

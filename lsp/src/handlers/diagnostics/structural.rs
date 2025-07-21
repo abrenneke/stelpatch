@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use cw_parser::AstValue;
+use cw_parser::{AstEntityItem, AstValue};
 
 use crate::handlers::{
     cache::TypeCache,
-    scoped_type::{CwtTypeOrSpecialRef, ScopedType},
+    scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType},
 };
 
 /// Check if a value is structurally compatible with a type (without content validation)
@@ -13,6 +13,132 @@ pub fn is_value_structurally_compatible(
     expected_type: Arc<ScopedType>,
 ) -> bool {
     is_value_structurally_compatible_with_depth(value, expected_type, 0)
+}
+
+/// Calculate a structural compatibility score (higher is better match)
+/// Returns a score from 0.0 to 1.0, where 1.0 is perfect structural match
+pub fn calculate_structural_compatibility_score(
+    value: &AstValue<'_>,
+    expected_type: Arc<ScopedType>,
+) -> f64 {
+    calculate_structural_compatibility_score_with_depth(value, expected_type, 0)
+}
+
+/// Calculate structural compatibility score with recursion depth limit
+fn calculate_structural_compatibility_score_with_depth(
+    value: &AstValue<'_>,
+    expected_type: Arc<ScopedType>,
+    depth: usize,
+) -> f64 {
+    // Prevent infinite recursion
+    if depth > 10 {
+        return 0.0;
+    }
+
+    if !TypeCache::is_initialized() {
+        return 0.5; // Default to neutral score if cache not available
+    }
+
+    let cache = TypeCache::get().unwrap();
+    let resolved_type = cache.resolve_type(expected_type.clone());
+
+    match (&resolved_type.cwt_type_for_matching(), value) {
+        // Block types with entities - score based on key matches
+        (CwtTypeOrSpecialRef::Block(_), AstValue::Entity(entity)) => {
+            let mut total_keys = 0;
+            let mut matching_keys = 0;
+
+            for item in &entity.items {
+                if let AstEntityItem::Expression(expr) = item {
+                    total_keys += 1;
+                    let key_name = expr.key.raw_value();
+
+                    if let PropertyNavigationResult::Success(_) = cache
+                        .get_resolver()
+                        .navigate_to_property(expected_type.clone(), key_name)
+                    {
+                        matching_keys += 1;
+                    }
+                }
+            }
+
+            if total_keys == 0 {
+                return 1.0; // Empty entity matches empty block perfectly
+            }
+
+            matching_keys as f64 / total_keys as f64
+        }
+
+        // Block types are structurally compatible with entities
+        (CwtTypeOrSpecialRef::Block(_), AstValue::Entity(_)) => 0.8,
+
+        // Exact type matches get high scores
+        (CwtTypeOrSpecialRef::Literal(_), AstValue::String(_)) => 0.9,
+        (CwtTypeOrSpecialRef::LiteralSet(_), AstValue::String(_)) => 0.9,
+        (CwtTypeOrSpecialRef::Array(_), AstValue::Entity(_)) => 0.8,
+
+        // Simple types - check basic compatibility
+        (CwtTypeOrSpecialRef::Simple(simple_type), _) => {
+            if is_value_compatible_with_simple_type_structurally(value, simple_type) {
+                0.9
+            } else {
+                0.0
+            }
+        }
+
+        // Union types - return the best score from any member
+        (CwtTypeOrSpecialRef::Union(types), _) => types
+            .iter()
+            .map(|union_type| {
+                calculate_structural_compatibility_score_with_depth(
+                    value,
+                    Arc::new(ScopedType::new_cwt(
+                        union_type.clone(),
+                        expected_type.scope_stack().clone(),
+                        expected_type.in_scripted_effect_block().cloned(),
+                    )),
+                    depth + 1,
+                )
+            })
+            .fold(0.0, f64::max),
+
+        // Comparable types - check compatibility with base type
+        (CwtTypeOrSpecialRef::Comparable(base_type), _) => {
+            calculate_structural_compatibility_score_with_depth(
+                value,
+                Arc::new(ScopedType::new_cwt(
+                    (***base_type).clone(),
+                    expected_type.scope_stack().clone(),
+                    expected_type.in_scripted_effect_block().cloned(),
+                )),
+                depth + 1,
+            )
+        }
+
+        // Reference types - moderate score
+        (CwtTypeOrSpecialRef::Reference(_), _) => 0.7,
+
+        // Unknown types get neutral score
+        (CwtTypeOrSpecialRef::Unknown, _) => 0.5,
+
+        // Any type accepts everything
+        (CwtTypeOrSpecialRef::Any, _) => 0.6,
+
+        // ScopedUnion - return best score from any member
+        (CwtTypeOrSpecialRef::ScopedUnion(scoped_types), _) => scoped_types
+            .iter()
+            .map(|scoped_type| {
+                calculate_structural_compatibility_score_with_depth(
+                    value,
+                    scoped_type.clone(),
+                    depth + 1,
+                )
+            })
+            .fold(0.0, f64::max),
+
+        // Everything else is incompatible
+        _ => 0.0,
+    }
 }
 
 /// Check if a value is structurally compatible with a type with recursion depth limit

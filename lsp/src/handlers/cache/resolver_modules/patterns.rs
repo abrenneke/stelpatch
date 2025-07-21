@@ -1,4 +1,4 @@
-use super::ResolverUtils;
+use super::{ResolverUtils, SubtypeHandler};
 use cw_model::types::{CwtAnalyzer, PatternProperty, PatternType};
 use cw_model::{AliasName, BlockType};
 use std::sync::Arc;
@@ -6,13 +6,19 @@ use std::sync::Arc;
 pub struct PatternMatcher {
     pub cwt_analyzer: Arc<CwtAnalyzer>,
     pub utils: Arc<ResolverUtils>,
+    pub subtype_handler: Arc<SubtypeHandler>,
 }
 
 impl PatternMatcher {
-    pub fn new(cwt_analyzer: Arc<CwtAnalyzer>, utils: Arc<ResolverUtils>) -> Self {
+    pub fn new(
+        cwt_analyzer: Arc<CwtAnalyzer>,
+        utils: Arc<ResolverUtils>,
+        subtype_handler: Arc<SubtypeHandler>,
+    ) -> Self {
         Self {
             cwt_analyzer,
             utils,
+            subtype_handler,
         }
     }
 
@@ -77,6 +83,40 @@ impl PatternMatcher {
                 }
             }
             PatternType::Type { key: type_key } => {
+                // Check if this is a subtype reference (contains a dot)
+                if let Some(dot_pos) = type_key.find('.') {
+                    let (base_type, subtype) = type_key.split_at(dot_pos);
+                    let subtype = &subtype[1..]; // Remove the leading dot
+
+                    // Get the base type definition
+                    let type_def = self.cwt_analyzer.get_type(base_type);
+
+                    if let Some(type_def) = type_def {
+                        if let Some(path) = type_def.path.as_ref() {
+                            // CWT paths are prefixed with "game/"
+                            let path = path.trim_start_matches("game/");
+
+                            // Get the CWT type for this namespace
+                            if let Some(cwt_type) = self.cwt_analyzer.get_type(base_type) {
+                                // Use subtype handler to filter entities by subtype
+                                let filtered_keys = self
+                                    .subtype_handler
+                                    .get_entity_keys_in_namespace_for_subtype(
+                                        path,
+                                        &cwt_type.rules,
+                                        subtype,
+                                    );
+
+                                return filtered_keys.contains(&key.to_string());
+                            }
+                        }
+                    }
+
+                    // If subtype filtering failed, fall back to false
+                    return false;
+                }
+
+                // Handle regular type references (no subtype)
                 if let Some(namespace_keys) = self.utils.get_namespace_keys_for_type_ref(type_key) {
                     namespace_keys.contains(key)
                 } else {
@@ -124,6 +164,40 @@ impl PatternMatcher {
                 }
             }
             PatternType::Type { key } => {
+                // Check if this is a subtype reference (contains a dot)
+                if let Some(dot_pos) = key.find('.') {
+                    let (base_type, subtype) = key.split_at(dot_pos);
+                    let subtype = &subtype[1..]; // Remove the leading dot
+
+                    // Get the base type definition
+                    let type_def = self.cwt_analyzer.get_type(base_type);
+
+                    if let Some(type_def) = type_def {
+                        if let Some(path) = type_def.path.as_ref() {
+                            // CWT paths are prefixed with "game/"
+                            let path = path.trim_start_matches("game/");
+
+                            // Get the CWT type for this namespace
+                            if let Some(cwt_type) = self.cwt_analyzer.get_type(base_type) {
+                                // Use subtype handler to filter entities by subtype
+                                let filtered_keys = self
+                                    .subtype_handler
+                                    .get_entity_keys_in_namespace_for_subtype(
+                                        path,
+                                        &cwt_type.rules,
+                                        subtype,
+                                    );
+
+                                return filtered_keys;
+                            }
+                        }
+                    }
+
+                    // If subtype filtering failed, return empty
+                    return Vec::new();
+                }
+
+                // Handle regular type references (no subtype)
                 if let Some(namespace_keys) = self.utils.get_namespace_keys_for_type_ref(key) {
                     namespace_keys.iter().cloned().collect()
                 } else {
