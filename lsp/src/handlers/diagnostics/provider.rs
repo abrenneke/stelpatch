@@ -142,7 +142,8 @@ impl DiagnosticsProvider {
                         .determine_matching_subtypes(namespace_type.clone(), &entity);
 
                     if !matching_subtypes.is_empty() {
-                        Arc::new(namespace_type.with_subtypes(matching_subtypes))
+                        type_cache
+                            .apply_subtype_scope_changes(namespace_type.clone(), matching_subtypes)
                     } else {
                         namespace_type.clone()
                     }
@@ -298,9 +299,9 @@ impl DiagnosticsProvider {
                                             );
 
                                         if !matching_subtypes.is_empty() {
-                                            Arc::new(
-                                                nested_filtered_namespace_type
-                                                    .with_subtypes(matching_subtypes),
+                                            type_cache.apply_subtype_scope_changes(
+                                                nested_filtered_namespace_type.clone(),
+                                                matching_subtypes,
                                             )
                                         } else {
                                             nested_filtered_namespace_type.clone()
@@ -353,7 +354,10 @@ impl DiagnosticsProvider {
                             );
 
                         if !matching_subtypes.is_empty() {
-                            Arc::new(filtered_namespace_type.with_subtypes(matching_subtypes))
+                            type_cache.apply_subtype_scope_changes(
+                                filtered_namespace_type.clone(),
+                                matching_subtypes,
+                            )
                         } else {
                             filtered_namespace_type.clone()
                         }

@@ -31,17 +31,19 @@ impl SubtypeHandler {
             return match type_key_filter {
                 TypeKeyFilter::Specific(key) => {
                     // Check if the entity has the specific key OR if the original key matches
-                    entity.properties.kv.contains_key(key)
-                        || entity
-                            .properties
-                            .kv
-                            .get(ORIGINAL_KEY_PROPERTY)
-                            .and_then(|prop_list| prop_list.0.first())
-                            .and_then(|prop| match &prop.value {
-                                Value::String(s) => Some(s.contains(key)),
-                                _ => None,
-                            })
-                            .unwrap_or(false)
+                    let has_property = entity.properties.kv.contains_key(key);
+                    let original_key_matches = entity
+                        .properties
+                        .kv
+                        .get(ORIGINAL_KEY_PROPERTY)
+                        .and_then(|prop_list| prop_list.0.first())
+                        .and_then(|prop| match &prop.value {
+                            Value::String(s) => Some(s.contains(key)),
+                            _ => None,
+                        })
+                        .unwrap_or(false);
+
+                    has_property || original_key_matches
                 }
                 TypeKeyFilter::Not(key) => {
                     // Check if the entity does NOT have the specific key AND the original key doesn't match
@@ -291,7 +293,9 @@ impl SubtypeHandler {
                     }
 
                     // Directly evaluate if the subtype matches
-                    if self.does_subtype_match(subtype_def, entity) {
+                    let matches = self.does_subtype_match(subtype_def, entity);
+
+                    if matches {
                         matching_subtypes.insert(subtype_name.clone());
                     } else {
                         matching_subtypes.insert(format!("!{}", subtype_name));

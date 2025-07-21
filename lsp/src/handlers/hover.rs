@@ -113,9 +113,8 @@ where
             && self.position_offset <= entity_span.end.offset
         {
             // Store this entity as context for type resolution
-            if self.found_entity_context.is_none() {
-                self.found_entity_context = Some(node);
-            }
+            // Always update to the innermost entity containing the position
+            self.found_entity_context = Some(node);
         }
 
         // Continue with normal entity walking
@@ -274,42 +273,83 @@ pub fn hover(
                     let mut is_skip_root_key_container = false;
 
                     // For unions, we need to check each type for skip_root_key
-                    if let CwtTypeOrSpecialRef::Union(union_types) =
-                        namespace_type.cwt_type_for_matching()
-                    {
-                        for union_type in union_types {
-                            let type_name = union_type.get_type_name();
-                            if !type_name.is_empty() {
-                                if let Some(type_def) =
-                                    type_cache.get_cwt_analyzer().get_type(&type_name)
-                                {
-                                    if let Some(skip_root_key) = &type_def.skip_root_key {
-                                        let should_skip = match skip_root_key {
-                                            cw_model::SkipRootKey::Specific(skip_key) => {
-                                                container_key.to_lowercase()
-                                                    == skip_key.to_lowercase()
-                                            }
-                                            cw_model::SkipRootKey::Any => true,
-                                            cw_model::SkipRootKey::Except(exceptions) => {
-                                                !exceptions.iter().any(|exception| {
-                                                    exception.to_lowercase()
-                                                        == container_key.to_lowercase()
-                                                })
-                                            }
-                                            cw_model::SkipRootKey::Multiple(keys) => {
-                                                keys.iter().any(|k| {
-                                                    k.to_lowercase() == container_key.to_lowercase()
-                                                })
-                                            }
-                                        };
+                    match namespace_type.cwt_type_for_matching() {
+                        CwtTypeOrSpecialRef::Union(union_types) => {
+                            for union_type in union_types {
+                                let type_name = union_type.get_type_name();
+                                if !type_name.is_empty() {
+                                    if let Some(type_def) =
+                                        type_cache.get_cwt_analyzer().get_type(&type_name)
+                                    {
+                                        if let Some(skip_root_key) = &type_def.skip_root_key {
+                                            let should_skip = match skip_root_key {
+                                                cw_model::SkipRootKey::Specific(skip_key) => {
+                                                    container_key.to_lowercase()
+                                                        == skip_key.to_lowercase()
+                                                }
+                                                cw_model::SkipRootKey::Any => true,
+                                                cw_model::SkipRootKey::Except(exceptions) => {
+                                                    !exceptions.iter().any(|exception| {
+                                                        exception.to_lowercase()
+                                                            == container_key.to_lowercase()
+                                                    })
+                                                }
+                                                cw_model::SkipRootKey::Multiple(keys) => {
+                                                    keys.iter().any(|k| {
+                                                        k.to_lowercase()
+                                                            == container_key.to_lowercase()
+                                                    })
+                                                }
+                                            };
 
-                                        if should_skip {
-                                            is_skip_root_key_container = true;
-                                            break;
+                                            if should_skip {
+                                                is_skip_root_key_container = true;
+                                                break;
+                                            }
                                         }
                                     }
                                 }
                             }
+                        }
+                        CwtTypeOrSpecialRef::ScopedUnion(scoped_union_types) => {
+                            for scoped_type in scoped_union_types {
+                                let type_name = scoped_type.get_type_name();
+                                if !type_name.is_empty() {
+                                    if let Some(type_def) =
+                                        type_cache.get_cwt_analyzer().get_type(&type_name)
+                                    {
+                                        if let Some(skip_root_key) = &type_def.skip_root_key {
+                                            let should_skip = match skip_root_key {
+                                                cw_model::SkipRootKey::Specific(skip_key) => {
+                                                    container_key.to_lowercase()
+                                                        == skip_key.to_lowercase()
+                                                }
+                                                cw_model::SkipRootKey::Any => true,
+                                                cw_model::SkipRootKey::Except(exceptions) => {
+                                                    !exceptions.iter().any(|exception| {
+                                                        exception.to_lowercase()
+                                                            == container_key.to_lowercase()
+                                                    })
+                                                }
+                                                cw_model::SkipRootKey::Multiple(keys) => {
+                                                    keys.iter().any(|k| {
+                                                        k.to_lowercase()
+                                                            == container_key.to_lowercase()
+                                                    })
+                                                }
+                                            };
+
+                                            if should_skip {
+                                                is_skip_root_key_container = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            // Not a union type, no skip_root_key handling needed
                         }
                     }
 
@@ -377,9 +417,12 @@ pub fn hover(
                                 );
 
                             let validation_type = if !matching_subtypes.is_empty() {
-                                Arc::new(filtered_namespace_type.with_subtypes(matching_subtypes))
+                                type_cache.apply_subtype_scope_changes(
+                                    filtered_namespace_type.clone(),
+                                    matching_subtypes,
+                                )
                             } else {
-                                filtered_namespace_type
+                                filtered_namespace_type.clone()
                             };
 
                             (validation_type, nested_property_path)
@@ -407,7 +450,10 @@ pub fn hover(
                             );
 
                         let validation_type = if !matching_subtypes.is_empty() {
-                            Arc::new(filtered_namespace_type.with_subtypes(matching_subtypes))
+                            type_cache.apply_subtype_scope_changes(
+                                filtered_namespace_type.clone(),
+                                matching_subtypes,
+                            )
                         } else {
                             filtered_namespace_type
                         };

@@ -5,6 +5,7 @@ use tower_lsp::lsp_types::Diagnostic;
 
 use crate::handlers::{
     cache::TypeCache, diagnostics::diagnostic::create_value_mismatch_diagnostic, scope::ScopeStack,
+    utils::contains_scripted_argument,
 };
 
 /// Validate a scope reference value (handles dotted paths like "prev.from")
@@ -18,6 +19,11 @@ pub fn validate_scope_reference(
     // Handle special case "any" which allows any scope navigation or link
     if scope_key == "any" {
         return validate_scope_path(value, scope_stack, span, content);
+    }
+
+    // Handle scripted arguments - always allow scope_key in $VARIABLE$ format
+    if contains_scripted_argument(value) {
+        return None;
     }
 
     // For specific scope types, validate that the value resolves to that scope type

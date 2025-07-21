@@ -25,11 +25,9 @@ impl<'a> TypeFormatter<'a> {
     pub fn format_type(&self, scoped_type: Arc<ScopedType>, property_name: Option<&str>) -> String {
         let mut result = self.format_type_with_depth(scoped_type.clone(), 0, property_name);
 
-        // Add scope information if it's not the default scope
+        // Add scope information
         let scope_info = self.format_scope_info(&scoped_type);
-        if !scope_info.is_empty() {
-            result = format!("{}\n{}", result, scope_info);
-        }
+        result = format!("{}\n{}", result, scope_info);
 
         result
     }
@@ -37,13 +35,7 @@ impl<'a> TypeFormatter<'a> {
     /// Format scope information for display
     fn format_scope_info(&self, scoped_type: &ScopedType) -> String {
         let scope_stack = scoped_type.scope_stack();
-
-        // Only show scope info if it's not the default unknown scope
-        if scope_stack.current_scope().scope_type != "unknown" {
-            format!("Scope: {}", scope_stack)
-        } else {
-            String::new()
-        }
+        format!("Scope: {}", scope_stack)
     }
 
     /// Format a type description with depth control and optional property name context

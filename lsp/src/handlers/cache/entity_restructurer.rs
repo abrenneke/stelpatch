@@ -994,8 +994,10 @@ impl EntityRestructurer {
             }
         }
 
-        // No restructuring applies, return as-is
-        (entity_key.to_string(), container_entity)
+        // No restructuring applies, but still add original key for subtype determination
+        let mut entity = container_entity;
+        Self::add_original_key_to_entity_static(&mut entity, entity_key);
+        (entity_key.to_string(), entity)
     }
 
     /// Static version of add_original_key_to_entity for use in static contexts

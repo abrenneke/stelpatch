@@ -111,7 +111,7 @@ impl<'resolver> ValueSetCollector<'resolver> {
             .determine_matching_subtypes(filtered_scoped_type.clone(), &entity);
 
         if !matching_subtypes.is_empty() {
-            Arc::new(filtered_scoped_type.with_subtypes(matching_subtypes))
+            type_cache.apply_subtype_scope_changes(filtered_scoped_type.clone(), matching_subtypes)
         } else {
             filtered_scoped_type
         }

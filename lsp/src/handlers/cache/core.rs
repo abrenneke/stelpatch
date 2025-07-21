@@ -4,14 +4,16 @@ use cw_model::{
     TypeDefinition, TypeKeyFilter, entity_from_ast,
 };
 use cw_parser::CwtModuleCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use crate::handlers::cache::resolver::TypeResolver;
-use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
+use crate::handlers::scoped_type::{
+    CwtTypeOrSpecial, CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType,
+};
 
 use super::types::TypeInfo;
 
@@ -95,7 +97,7 @@ impl TypeCache {
                 // we need to set up a scope stack where this=any, prev=any, prevprev=any, etc.
                 // This allows validation of prev/prevprev scope references without requiring
                 // specific scope types that can't be determined statically.
-                if namespace == "common/scripted_effects" {
+                if namespace == "common/scripted_effects" || namespace == "common/script_values" {
                     let mut scripted_effect_scopes = HashMap::new();
                     scripted_effect_scopes.insert("this".to_string(), "any".to_string());
                     scripted_effect_scopes.insert("prev".to_string(), "any".to_string());
@@ -878,13 +880,86 @@ impl TypeCache {
                     .determine_matching_subtypes(base_type.clone(), entity);
 
                 if !detected_subtypes.is_empty() {
-                    // Create a new scoped type with the detected subtypes
-                    return Arc::new(base_type.with_subtypes(detected_subtypes));
+                    // Create a new scoped type with the detected subtypes AND apply subtype scope changes
+                    return self.apply_subtype_scope_changes(base_type, detected_subtypes);
                 }
             }
         }
 
         base_type
+    }
+
+    /// Apply scope changes from subtypes and return a new scoped type with the subtypes applied
+    pub fn apply_subtype_scope_changes(
+        &self,
+        base_type: Arc<ScopedType>,
+        subtypes: HashSet<String>,
+    ) -> Arc<ScopedType> {
+        // Start with the base scoped type
+        let mut result_scope_stack = base_type.scope_stack().clone();
+        let result_in_scripted_effect = base_type.in_scripted_effect_block().cloned();
+
+        // Apply scope changes from each matching subtype
+        if let CwtTypeOrSpecialRef::Block(block_type) = base_type.cwt_type_for_matching() {
+            for subtype_name in &subtypes {
+                // Skip inverted subtypes (they start with !)
+                if subtype_name.starts_with('!') {
+                    continue;
+                }
+
+                if let Some(subtype_def) = block_type.subtypes.get(subtype_name) {
+                    // Apply push_scope if present
+                    if let Some(push_scope) = &subtype_def.options.push_scope {
+                        if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(push_scope) {
+                            if let Err(e) =
+                                result_scope_stack.push_scope_type(scope_name.to_string())
+                            {
+                                eprintln!(
+                                    "Failed to push scope '{}' for subtype '{}': {}",
+                                    scope_name, subtype_name, e
+                                );
+                            }
+                        }
+                    }
+
+                    // Apply replace_scope if present
+                    if let Some(replace_scope) = &subtype_def.options.replace_scope {
+                        let mut new_scopes = HashMap::new();
+                        for (key, value) in replace_scope {
+                            if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(value) {
+                                new_scopes.insert(key.clone(), scope_name.to_string());
+                            }
+                        }
+
+                        if let Err(e) = result_scope_stack.replace_scope_from_strings(new_scopes) {
+                            eprintln!(
+                                "Failed to replace scope for subtype '{}': {}",
+                                subtype_name, e
+                            );
+                        }
+                    }
+                }
+            }
+        } else {
+            // For non-block types, fall back to the original method
+            return Arc::new(base_type.with_subtypes(subtypes));
+        }
+
+        // Create the new scoped type with the subtypes and updated scope context
+        let cwt_type = match base_type.cwt_type() {
+            CwtTypeOrSpecial::CwtType(cwt_type) => cwt_type.clone(),
+            CwtTypeOrSpecial::ScopedUnion(_) => {
+                // For scoped unions, we need to use a different approach
+                return Arc::new(base_type.with_subtypes(subtypes));
+            }
+        };
+
+        Arc::new(ScopedType::new_cwt_with_subtypes(
+            cwt_type,
+            result_scope_stack,
+            subtypes,
+            result_in_scripted_effect,
+        ))
     }
 
     /// Check if the cache is ready
