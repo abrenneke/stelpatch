@@ -314,7 +314,7 @@ impl ReferenceResolver {
                 if let Some(alias_def) = self.cwt_analyzer.get_alias(alias_pattern) {
                     match &alias_pattern.name {
                         AliasName::Static(name) => {
-                            if name == property_name {
+                            if name.to_lowercase() == property_name.to_lowercase() {
                                 results.push((alias_def.to.clone(), Some(alias_def.clone()), None));
                             }
                         }

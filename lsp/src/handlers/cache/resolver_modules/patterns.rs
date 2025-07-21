@@ -62,7 +62,7 @@ impl PatternMatcher {
                     for alias_pattern in aliases_in_category {
                         match &alias_pattern.name {
                             AliasName::Static(name) => {
-                                if name == key {
+                                if name.to_lowercase() == key.to_lowercase() {
                                     return true;
                                 }
                             }
