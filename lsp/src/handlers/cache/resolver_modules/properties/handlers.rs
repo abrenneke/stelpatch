@@ -112,6 +112,79 @@ pub fn handle_pattern_property(
     PropertyNavigationResult::Success(Arc::new(property_scoped))
 }
 
+/// Handle navigation to multiple pattern properties with potential AliasMatchLeft resolution
+pub fn handle_pattern_property_all_matches(
+    cwt_analyzer: Arc<CwtAnalyzer>,
+    reference_resolver: Arc<ReferenceResolver>,
+    scoped_type: Arc<ScopedType>,
+    pattern_property: &PatternProperty,
+    property_name: &str,
+) -> Vec<PropertyNavigationResult> {
+    // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
+    match &*pattern_property.value_type {
+        CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
+            // Resolve ALL AliasMatchLeft matches using the property name
+            let all_results = reference_resolver.resolve_all_alias_match_left(key, property_name);
+
+            let mut property_results = Vec::new();
+
+            for (resolved_value_type, alias_def, scripted_effect_block) in all_results {
+                // Apply scope changes - first from alias definition, then from pattern property
+                let mut current_scope = scoped_type.scope_stack().clone();
+
+                // Apply alias scope changes if present
+                if let Some(alias_def) = alias_def {
+                    if alias_def.changes_scope() {
+                        match apply_alias_scope_changes(
+                            cwt_analyzer.clone(),
+                            &current_scope,
+                            &alias_def,
+                        ) {
+                            Ok(new_scope) => current_scope = new_scope,
+                            Err(error) => {
+                                property_results.push(PropertyNavigationResult::ScopeError(error));
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                // Apply pattern property scope changes if present
+                if pattern_property.changes_scope() {
+                    match pattern_property.apply_scope_changes(&current_scope, &cwt_analyzer) {
+                        Ok(new_scope) => current_scope = new_scope,
+                        Err(error) => {
+                            property_results.push(PropertyNavigationResult::ScopeError(error));
+                            continue;
+                        }
+                    }
+                }
+
+                let property_scoped = ScopedType::new_cwt_with_subtypes(
+                    resolved_value_type,
+                    current_scope,
+                    scoped_type.subtypes().clone(),
+                    scripted_effect_block,
+                );
+
+                property_results.push(PropertyNavigationResult::Success(Arc::new(property_scoped)));
+            }
+
+            property_results
+        }
+        _ => {
+            // No AliasMatchLeft - use the original handler
+            vec![handle_pattern_property(
+                cwt_analyzer,
+                reference_resolver,
+                scoped_type,
+                pattern_property,
+                property_name,
+            )]
+        }
+    }
+}
+
 /// Handle navigation to a subtype-specific property
 pub fn handle_subtype_property(
     cwt_analyzer: Arc<CwtAnalyzer>,
@@ -199,4 +272,79 @@ pub fn handle_subtype_pattern_property(
     );
 
     PropertyNavigationResult::Success(Arc::new(property_scoped))
+}
+
+/// Handle navigation to multiple subtype pattern properties with potential AliasMatchLeft resolution
+pub fn handle_subtype_pattern_property_all_matches(
+    cwt_analyzer: Arc<CwtAnalyzer>,
+    reference_resolver: Arc<ReferenceResolver>,
+    scoped_type: Arc<ScopedType>,
+    subtype_pattern_property: &PatternProperty,
+    property_name: &str,
+) -> Vec<PropertyNavigationResult> {
+    // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
+    match &*subtype_pattern_property.value_type {
+        CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
+            // Resolve ALL AliasMatchLeft matches using the property name
+            let all_results = reference_resolver.resolve_all_alias_match_left(key, property_name);
+
+            let mut property_results = Vec::new();
+
+            for (resolved_value_type, alias_def, scripted_effect_block) in all_results {
+                // Apply scope changes - first from alias definition, then from pattern property
+                let mut current_scope = scoped_type.scope_stack().clone();
+
+                // Apply alias scope changes if present
+                if let Some(alias_def) = alias_def {
+                    if alias_def.changes_scope() {
+                        match apply_alias_scope_changes(
+                            cwt_analyzer.clone(),
+                            &current_scope,
+                            &alias_def,
+                        ) {
+                            Ok(new_scope) => current_scope = new_scope,
+                            Err(error) => {
+                                property_results.push(PropertyNavigationResult::ScopeError(error));
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                // Apply pattern property scope changes if present
+                if subtype_pattern_property.changes_scope() {
+                    match subtype_pattern_property
+                        .apply_scope_changes(&current_scope, &cwt_analyzer)
+                    {
+                        Ok(new_scope) => current_scope = new_scope,
+                        Err(error) => {
+                            property_results.push(PropertyNavigationResult::ScopeError(error));
+                            continue;
+                        }
+                    }
+                }
+
+                let property_scoped = ScopedType::new_cwt_with_subtypes(
+                    resolved_value_type,
+                    current_scope,
+                    scoped_type.subtypes().clone(),
+                    scripted_effect_block,
+                );
+
+                property_results.push(PropertyNavigationResult::Success(Arc::new(property_scoped)));
+            }
+
+            property_results
+        }
+        _ => {
+            // No AliasMatchLeft - use the original handler
+            vec![handle_subtype_pattern_property(
+                cwt_analyzer,
+                reference_resolver,
+                scoped_type,
+                subtype_pattern_property,
+                property_name,
+            )]
+        }
+    }
 }

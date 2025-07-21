@@ -36,6 +36,21 @@ impl PatternMatcher {
         None
     }
 
+    /// Check if a key matches any pattern properties in a block and return ALL matches
+    pub fn key_matches_all_patterns<'b>(
+        &self,
+        key: &str,
+        block_type: &'b BlockType,
+    ) -> Vec<&'b PatternProperty> {
+        let mut matches = Vec::new();
+        for pattern_property in &block_type.pattern_properties {
+            if self.key_matches_pattern_type(key, &pattern_property.pattern_type) {
+                matches.push(pattern_property);
+            }
+        }
+        matches
+    }
+
     /// Check if a key matches a specific pattern type
     pub fn key_matches_pattern_type(&self, key: &str, pattern_type: &PatternType) -> bool {
         match pattern_type {

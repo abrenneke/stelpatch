@@ -298,4 +298,80 @@ impl ReferenceResolver {
             None,
         )
     }
+
+    /// Resolve ALL AliasMatchLeft references using a specific property name
+    /// Returns Vec of all (resolved_type, alias_definition_if_found, scripted_name)
+    pub fn resolve_all_alias_match_left(
+        &self,
+        category: &str,
+        property_name: &str,
+    ) -> Vec<(Arc<CwtType>, Option<AliasDefinition>, Option<String>)> {
+        let mut results = Vec::new();
+
+        // Look up ALL aliases in category that match the property_name
+        if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(category) {
+            for alias_pattern in aliases_in_category {
+                if let Some(alias_def) = self.cwt_analyzer.get_alias(alias_pattern) {
+                    match &alias_pattern.name {
+                        AliasName::Static(name) => {
+                            if name == property_name {
+                                results.push((alias_def.to.clone(), Some(alias_def.clone()), None));
+                            }
+                        }
+                        AliasName::TypeRef(type_name) => {
+                            // Check if property_name is a valid key for this type
+                            if let Some(namespace_keys) =
+                                self.utils.get_namespace_keys_for_type_ref(type_name)
+                            {
+                                if namespace_keys.contains(&property_name.to_string()) {
+                                    // Special case for scripted_effect - we need to know the name
+                                    // of the scripted effect to set the scoped type context
+                                    if type_name == "scripted_effect"
+                                        || type_name == "scripted_trigger"
+                                    {
+                                        results.push((
+                                            alias_def.to.clone(),
+                                            Some(alias_def.clone()),
+                                            Some(property_name.to_string()),
+                                        ));
+                                    } else {
+                                        results.push((
+                                            alias_def.to.clone(),
+                                            Some(alias_def.clone()),
+                                            None,
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                        AliasName::Enum(enum_name) => {
+                            // Check if property_name is a valid enum value
+                            if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
+                                if enum_def.values.contains(property_name) {
+                                    results.push((
+                                        alias_def.to.clone(),
+                                        Some(alias_def.clone()),
+                                        None,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // If no matches found, return the original AliasMatchLeft
+        if results.is_empty() {
+            results.push((
+                Arc::new(CwtType::Reference(ReferenceType::AliasMatchLeft {
+                    key: category.to_string(),
+                })),
+                None,
+                None,
+            ));
+        }
+
+        results
+    }
 }
