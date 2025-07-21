@@ -1,3 +1,5 @@
+use cw_parser::AstValue;
+
 use crate::{Entity, EntityVisitor};
 
 /// A value is anything after an =
@@ -149,10 +151,26 @@ where
     fn visit_color(&mut self, node: &cw_parser::AstColor<'b>) -> () {
         *self.value = Value::Color(Color {
             color_type: node.color_type.to_string(),
-            r: node.r.value.to_string(),
-            g: node.g.value.to_string(),
-            b: node.b.value.to_string(),
-            a: node.a.as_ref().map(|a| a.value.to_string()),
+            r: match &node.r {
+                AstValue::Number(n) => n.value.value.to_string(),
+                AstValue::String(s) => s.value.to_string(),
+                _ => panic!("Expected number or string"),
+            },
+            g: match &node.g {
+                AstValue::Number(n) => n.value.value.to_string(),
+                AstValue::String(s) => s.value.to_string(),
+                _ => panic!("Expected number or string"),
+            },
+            b: match &node.b {
+                AstValue::Number(n) => n.value.value.to_string(),
+                AstValue::String(s) => s.value.to_string(),
+                _ => panic!("Expected number or string"),
+            },
+            a: node.a.as_ref().map(|a| match a {
+                AstValue::Number(n) => n.value.value.to_string(),
+                AstValue::String(s) => s.value.to_string(),
+                _ => panic!("Expected number or string"),
+            }),
         });
     }
 

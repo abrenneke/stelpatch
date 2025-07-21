@@ -262,6 +262,7 @@ pub(crate) fn cwt_identifier_part<'a>(
         identifier_parser("type", CwtReferenceType::Type),
         identifier_parser("subtype", CwtReferenceType::Subtype),
         identifier_parser("complex_enum", CwtReferenceType::ComplexEnum),
+        identifier_parser("single_alias", CwtReferenceType::SingleAlias),
     ))
     .with_span()
     .context(StrContext::Label("cwt_identifier"))

@@ -58,6 +58,21 @@ pub fn get_available_properties(
                                 properties.extend(enum_def.values.iter().cloned());
                             }
                         }
+                        AliasName::TypeRefWithPrefixSuffix(type_name, prefix, suffix) => {
+                            if let Some(namespace_keys) =
+                                utils.get_namespace_keys_for_type_ref(type_name)
+                            {
+                                for key in namespace_keys.iter() {
+                                    let property = match (prefix, suffix) {
+                                        (Some(p), Some(s)) => format!("{}{}{}", p, key, s),
+                                        (Some(p), None) => format!("{}{}", p, key),
+                                        (None, Some(s)) => format!("{}{}", key, s),
+                                        (None, None) => key.clone(),
+                                    };
+                                    properties.push(property);
+                                }
+                            }
+                        }
                     }
                 }
             }

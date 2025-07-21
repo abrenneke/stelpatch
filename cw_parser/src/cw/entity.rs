@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use winnow::{
     LocatingSlice, ModalResult, Parser,
-    combinator::{alt, cut_err, repeat_till},
+    combinator::{alt, cut_err, eof, repeat_till},
     error::StrContext,
 };
 
@@ -152,7 +152,8 @@ impl<'a> AstNode<'a> for AstEntity<'a> {
 pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstEntity<'a>> {
     let leading_comments = opt_ws_and_comments.parse_next(input)?;
 
-    let start = '{'.span().parse_next(input)?;
+    // paradox PLS, [ is not valid
+    let start = (alt(('{', '['))).span().parse_next(input)?;
 
     let ((expressions, _), span): ((Vec<_>, _), _) = cut_err(repeat_till(
         0..,
@@ -167,7 +168,7 @@ pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstE
                 .map(AstBlockItem::Conditional)
                 .context(StrContext::Label("conditional block entity item")),
         )),
-        (opt_ws_and_comments, '}'),
+        (opt_ws_and_comments, alt(("}", "]", eof))),
     ))
     .with_span()
     .context(StrContext::Label("expression"))

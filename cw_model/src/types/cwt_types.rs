@@ -453,6 +453,29 @@ impl AliasPattern {
             name: AliasName::Enum(name.to_string()),
         }
     }
+
+    pub fn new_type_ref_with_prefix_suffix(
+        category: &str,
+        name: &str,
+        prefix: Option<&str>,
+        suffix: Option<&str>,
+    ) -> Self {
+        let formatted_name = match (prefix, suffix) {
+            (Some(p), Some(s)) => format!("{}{}{}", p, name, s),
+            (Some(p), None) => format!("{}{}", p, name),
+            (None, Some(s)) => format!("{}{}", name, s),
+            (None, None) => name.to_string(),
+        };
+        Self {
+            full_text: format!("{}:{}", category, formatted_name),
+            category: category.to_string(),
+            name: AliasName::TypeRefWithPrefixSuffix(
+                name.to_string(),
+                prefix.map(|s| s.to_string()),
+                suffix.map(|s| s.to_string()),
+            ),
+        }
+    }
 }
 
 impl std::fmt::Display for AliasPattern {
@@ -479,6 +502,7 @@ impl Eq for AliasPattern {}
 pub enum AliasName {
     Static(String),
     TypeRef(String),
+    TypeRefWithPrefixSuffix(String, Option<String>, Option<String>),
     Enum(String),
 }
 

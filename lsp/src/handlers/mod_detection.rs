@@ -1,6 +1,6 @@
 use super::utils::log_message_sync;
-use anyhow::{Result, anyhow};
-use cw_games::stellaris::STELLARIS_INSTALL_PATH;
+use crate::base_game::GAME_INSTALL_PATH;
+use anyhow::{anyhow, Result};
 use cw_model::{GameMod, LoadMode, ModDefinition};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -8,7 +8,7 @@ use tower_lsp::Client;
 
 /// Check if a file path is part of the base game directory
 pub fn is_base_game_file(file_path: &Path) -> bool {
-    if let Some(install_path) = STELLARIS_INSTALL_PATH.as_ref() {
+    if let Some(install_path) = GAME_INSTALL_PATH.as_ref() {
         file_path.starts_with(install_path)
     } else {
         false

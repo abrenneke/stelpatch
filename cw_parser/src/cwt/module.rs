@@ -567,4 +567,11 @@ alias[trigger:exists] = scope[any]
 
         let _result = CwtModule::from_input(input).unwrap();
     }
+
+    #[test]
+    fn what() {
+        let input = r#"single_alias[trigger_clause] = {}"#;
+
+        let _result = CwtModule::from_input(input).unwrap();
+    }
 }

@@ -34,7 +34,21 @@ where
 pub(crate) fn valid_value_terminator_char(c: char) -> bool {
     matches!(
         c,
-        ' ' | '#' | '}' | ']' | ')' | '\n' | '\r' | '\t' | '=' | '>' | '<' | ';' | '§'
+        ' ' | '#'
+            | '}'
+            | ']'
+            | ')'
+            | '\n'
+            | '\r'
+            | '\t'
+            | '='
+            | '>'
+            | '<'
+            | ';'
+            | '§'
+            | '?'
+            | '"'
+            | '{'
     ) || c.is_alphabetic() // shouldn't be here but paradox fucked up
 }
 

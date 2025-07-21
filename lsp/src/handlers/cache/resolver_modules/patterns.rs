@@ -84,6 +84,41 @@ impl PatternMatcher {
                                     }
                                 }
                             }
+                            AliasName::TypeRefWithPrefixSuffix(name, prefix, suffix) => {
+                                // Check if key matches pattern with prefix/suffix
+                                let mut stripped_key = key;
+
+                                // Remove prefix if present
+                                if let Some(prefix_str) = prefix {
+                                    if let Some(without_prefix) =
+                                        stripped_key.strip_prefix(prefix_str)
+                                    {
+                                        stripped_key = without_prefix;
+                                    } else {
+                                        return false; // Key doesn't start with required prefix
+                                    }
+                                }
+
+                                // Remove suffix if present
+                                if let Some(suffix_str) = suffix {
+                                    if let Some(without_suffix) =
+                                        stripped_key.strip_suffix(suffix_str)
+                                    {
+                                        stripped_key = without_suffix;
+                                    } else {
+                                        return false; // Key doesn't end with required suffix
+                                    }
+                                }
+
+                                // Check if the remaining key matches any type from this namespace
+                                if let Some(namespace_keys) =
+                                    self.utils.get_namespace_keys_for_type_ref(name)
+                                {
+                                    if namespace_keys.contains(&stripped_key.to_string()) {
+                                        return true;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -164,6 +199,21 @@ impl PatternMatcher {
                             AliasName::Enum(enum_name) => {
                                 if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
                                     completions.extend(enum_def.values.iter().cloned());
+                                }
+                            }
+                            AliasName::TypeRefWithPrefixSuffix(type_name, prefix, suffix) => {
+                                if let Some(namespace_keys) =
+                                    self.utils.get_namespace_keys_for_type_ref(type_name)
+                                {
+                                    for key in namespace_keys.iter() {
+                                        let completion = match (prefix, suffix) {
+                                            (Some(p), Some(s)) => format!("{}{}{}", p, key, s),
+                                            (Some(p), None) => format!("{}{}", p, key),
+                                            (None, Some(s)) => format!("{}{}", key, s),
+                                            (None, None) => key.clone(),
+                                        };
+                                        completions.push(completion);
+                                    }
                                 }
                             }
                         }

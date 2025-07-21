@@ -8,17 +8,17 @@ use winnow::{
 };
 
 use crate::{
-    AstComment, AstNode, AstNumber, AstToken, get_comments, number_val, opt_trailing_comment,
-    opt_ws_and_comments, with_opt_trailing_ws,
+    AstComment, AstNode, AstNumber, AstToken, AstValue, get_comments, number_val,
+    opt_trailing_comment, opt_ws_and_comments, unquoted_string, with_opt_trailing_ws,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AstColor<'a> {
     pub color_type: AstToken<'a>,
-    pub r: AstNumber<'a>,
-    pub g: AstNumber<'a>,
-    pub b: AstNumber<'a>,
-    pub a: Option<AstNumber<'a>>,
+    pub r: AstValue<'a>,
+    pub g: AstValue<'a>,
+    pub b: AstValue<'a>,
+    pub a: Option<AstValue<'a>>,
     pub span: Range<usize>,
 
     pub leading_comments: Vec<AstComment<'a>>,
@@ -41,10 +41,10 @@ impl<'a> AstColor<'a> {
     ) -> Self {
         Self {
             color_type: AstToken::new(color_type, color_type_span),
-            r: AstNumber::new(r, r_span),
-            g: AstNumber::new(g, g_span),
-            b: AstNumber::new(b, b_span),
-            a: a.map(|a| AstNumber::new(a, a_span.unwrap())),
+            r: AstValue::Number(AstNumber::new(r, r_span)),
+            g: AstValue::Number(AstNumber::new(g, g_span)),
+            b: AstValue::Number(AstNumber::new(b, b_span)),
+            a: a.map(|a| AstValue::Number(AstNumber::new(a, a_span.unwrap()))),
             span,
             leading_comments: vec![],
             trailing_comment: None,
@@ -70,20 +70,45 @@ impl<'a> AstNode<'a> for AstColor<'a> {
 pub(crate) fn color<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstColor<'a>> {
     let leading_comments = opt_ws_and_comments.parse_next(input)?;
 
-    let (color_type, color_type_span) =
-        with_opt_trailing_ws(alt((literal("rgb"), literal("hsv"))).with_span())
-            .context(StrContext::Label("color type"))
-            .parse_next(input)?;
+    let (color_type, color_type_span) = with_opt_trailing_ws(
+        alt((
+            literal("rgb"),
+            literal("hsv360"),
+            literal("hsv"),
+            // Not colors but good enough for now
+            literal("cylindrical"),
+            literal("cartesian"),
+        ))
+        .with_span(),
+    )
+    .context(StrContext::Label("color type"))
+    .parse_next(input)?;
 
     let start = color_type_span.start;
 
     let ((r, g, b, a), span) = delimited(
         '{',
         with_opt_trailing_ws(cut_err((
-            number_val.context(StrContext::Label("color a")),
-            number_val.context(StrContext::Label("color b")),
-            number_val.context(StrContext::Label("color c")),
-            opt(number_val).context(StrContext::Label("color d")),
+            alt((
+                number_val.map(AstValue::Number),
+                unquoted_string.map(AstValue::String),
+            ))
+            .context(StrContext::Label("color a")),
+            alt((
+                number_val.map(AstValue::Number),
+                unquoted_string.map(AstValue::String),
+            ))
+            .context(StrContext::Label("color b")),
+            alt((
+                number_val.map(AstValue::Number),
+                unquoted_string.map(AstValue::String),
+            ))
+            .context(StrContext::Label("color c")),
+            opt(alt((
+                number_val.map(AstValue::Number),
+                unquoted_string.map(AstValue::String),
+            )))
+            .context(StrContext::Label("color d")),
         ))),
         '}',
     )
@@ -121,9 +146,9 @@ mod tests {
             result,
             AstColor {
                 color_type: AstToken::new("rgb", 0..3),
-                r: AstNumber::new("255", 6..9),
-                g: AstNumber::new("128", 10..13),
-                b: AstNumber::new("0", 14..15),
+                r: AstValue::Number(AstNumber::new("255", 6..9)),
+                g: AstValue::Number(AstNumber::new("128", 10..13)),
+                b: AstValue::Number(AstNumber::new("0", 14..15)),
                 a: None,
                 span: 0..17,
                 leading_comments: vec![],
@@ -141,9 +166,9 @@ mod tests {
             result,
             AstColor {
                 color_type: AstToken::new("hsv", 0..3),
-                r: AstNumber::new("120", 6..9),
-                g: AstNumber::new("0.5", 10..13),
-                b: AstNumber::new("1", 14..15),
+                r: AstValue::Number(AstNumber::new("120", 6..9)),
+                g: AstValue::Number(AstNumber::new("0.5", 10..13)),
+                b: AstValue::Number(AstNumber::new("1", 14..15)),
                 a: None,
                 span: 0..17,
                 leading_comments: vec![],
@@ -161,10 +186,10 @@ mod tests {
             result,
             AstColor {
                 color_type: AstToken::new("rgb", 0..3),
-                r: AstNumber::new("255", 6..9),
-                g: AstNumber::new("128", 10..13),
-                b: AstNumber::new("0", 14..15),
-                a: Some(AstNumber::new("0.5", 16..19)),
+                r: AstValue::Number(AstNumber::new("255", 6..9)),
+                g: AstValue::Number(AstNumber::new("128", 10..13)),
+                b: AstValue::Number(AstNumber::new("0", 14..15)),
+                a: Some(AstValue::Number(AstNumber::new("0.5", 16..19))),
                 span: 0..21,
                 leading_comments: vec![],
                 trailing_comment: None,
@@ -181,10 +206,10 @@ mod tests {
             result,
             AstColor {
                 color_type: AstToken::new("hsv", 0..3),
-                r: AstNumber::new("120", 6..9),
-                g: AstNumber::new("0.5", 10..13),
-                b: AstNumber::new("1", 14..15),
-                a: Some(AstNumber::new("0.8", 16..19)),
+                r: AstValue::Number(AstNumber::new("120", 6..9)),
+                g: AstValue::Number(AstNumber::new("0.5", 10..13)),
+                b: AstValue::Number(AstNumber::new("1", 14..15)),
+                a: Some(AstValue::Number(AstNumber::new("0.8", 16..19))),
                 span: 0..21,
                 leading_comments: vec![],
                 trailing_comment: None,
@@ -199,9 +224,9 @@ mod tests {
             result,
             AstColor {
                 color_type: AstToken::new("rgb", 0..3),
-                r: AstNumber::new("255", 4..7),
-                g: AstNumber::new("128", 8..11),
-                b: AstNumber::new("0", 12..13),
+                r: AstValue::Number(AstNumber::new("255", 4..7)),
+                g: AstValue::Number(AstNumber::new("128", 8..11)),
+                b: AstValue::Number(AstNumber::new("0", 12..13)),
                 a: None,
                 span: 0..14,
                 leading_comments: vec![],
@@ -217,9 +242,9 @@ mod tests {
             result,
             AstColor {
                 color_type: AstToken::new("hsv", 0..3),
-                r: AstNumber::new("120", 4..7),
-                g: AstNumber::new("0.5", 8..11),
-                b: AstNumber::new("1", 12..13),
+                r: AstValue::Number(AstNumber::new("120", 4..7)),
+                g: AstValue::Number(AstNumber::new("0.5", 8..11)),
+                b: AstValue::Number(AstNumber::new("1", 12..13)),
                 a: None,
                 span: 0..14,
                 leading_comments: vec![],
@@ -239,24 +264,24 @@ mod tests {
             result,
             AstColor {
                 color_type: AstToken::new("rgb", 0..3),
-                r: AstNumber {
+                r: AstValue::Number(AstNumber {
                     value: AstToken::new("255", 6..9),
                     leading_comments: vec![],
                     trailing_comment: Some(AstComment::new("red", 10..14)),
                     is_percentage: false,
-                },
-                g: AstNumber {
+                }),
+                g: AstValue::Number(AstNumber {
                     value: AstToken::new("128", 16..19),
                     leading_comments: vec![],
                     trailing_comment: Some(AstComment::new("green", 20..26)),
                     is_percentage: false,
-                },
-                b: AstNumber {
+                }),
+                b: AstValue::Number(AstNumber {
                     value: AstToken::new("0", 28..29),
                     leading_comments: vec![],
                     trailing_comment: Some(AstComment::new("blue", 30..35)),
                     is_percentage: false,
-                },
+                }),
                 a: None,
                 span: 0..38,
                 leading_comments: vec![],
@@ -276,24 +301,24 @@ mod tests {
             result,
             AstColor {
                 color_type: AstToken::new("hsv", 0..3),
-                r: AstNumber {
+                r: AstValue::Number(AstNumber {
                     value: AstToken::new("120", 6..9),
                     leading_comments: vec![],
                     trailing_comment: Some(AstComment::new("hue", 10..14)),
                     is_percentage: false,
-                },
-                g: AstNumber {
+                }),
+                g: AstValue::Number(AstNumber {
                     value: AstToken::new("0.5", 16..19),
                     leading_comments: vec![],
                     trailing_comment: Some(AstComment::new("saturation", 20..31)),
                     is_percentage: false,
-                },
-                b: AstNumber {
+                }),
+                b: AstValue::Number(AstNumber {
                     value: AstToken::new("1", 33..34),
                     leading_comments: vec![],
                     trailing_comment: Some(AstComment::new("value", 35..41)),
                     is_percentage: false,
-                },
+                }),
                 a: None,
                 span: 0..44,
                 leading_comments: vec![],
@@ -344,30 +369,30 @@ mod tests {
                 ],
                 trailing_comment: Some(AstComment::new(" This is a trailing comment", 362..390)),
                 color_type: AstToken::new("rgb", 99..102),
-                r: AstNumber {
+                r: AstValue::Number(AstNumber {
                     value: AstToken::new("255", 150..153),
                     leading_comments: vec![AstComment::new(" Leading r", 122..133),],
                     trailing_comment: Some(AstComment::new(" Trailing r", 154..166)),
                     is_percentage: false,
-                },
-                g: AstNumber {
+                }),
+                g: AstValue::Number(AstNumber {
                     value: AstToken::new("128", 211..214),
                     leading_comments: vec![AstComment::new(" Leading g", 183..194),],
                     trailing_comment: Some(AstComment::new(" Trailing g", 215..227)),
                     is_percentage: false,
-                },
-                b: AstNumber {
+                }),
+                b: AstValue::Number(AstNumber {
                     value: AstToken::new("0", 272..273),
                     leading_comments: vec![AstComment::new(" Leading b", 244..255),],
                     trailing_comment: Some(AstComment::new(" Trailing b", 274..286)),
                     is_percentage: false,
-                },
-                a: Some(AstNumber {
+                }),
+                a: Some(AstValue::Number(AstNumber {
                     value: AstToken::new("0.5", 331..334),
                     leading_comments: vec![AstComment::new(" Leading a", 303..314),],
                     trailing_comment: Some(AstComment::new(" Trailing a", 335..347)),
                     is_percentage: false,
-                }),
+                })),
                 span: 99..361,
             }
         );

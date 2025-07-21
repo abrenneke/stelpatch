@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
-use cw_games::stellaris::BaseGame;
+use crate::base_game::BaseGame;
 use cw_model::GameMod;
 
 /// Cache for file existence checks in the game directory and loaded mods

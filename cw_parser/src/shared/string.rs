@@ -89,7 +89,7 @@ impl<'a> Hash for AstString<'a> {
 fn is_valid_identifier_start_char(c: char) -> bool {
     c.is_ascii_alphanumeric()
         || match c {
-            '_' | '-' | '$' | '@' => true,
+            '_' | '-' | '$' | '@' | '\'' | '.' => true,
             _ => false,
         }
 }
@@ -131,6 +131,32 @@ pub(crate) fn unquoted_string<'a>(
 }
 
 /// A string that is quoted with double quotes. Allows spaces and other characters that would otherwise be invalid in an unquoted string.
+pub(crate) fn bracketed_string<'a>(
+    input: &mut LocatingSlice<&'a str>,
+) -> ModalResult<AstString<'a>> {
+    let leading_comments = opt_ws_and_comments.parse_next(input)?;
+
+    let (s, range) = terminated_value(delimited(
+        '[',
+        take_while(0.., is_valid_identifier_char),
+        ']',
+    ))
+    .with_span()
+    .context(StrContext::Label("quoted_string"))
+    .parse_next(input)?;
+
+    let trailing_comment = opt_trailing_comment.parse_next(input)?;
+
+    Ok(AstString {
+        value: AstToken::new(s, range),
+        is_quoted: true,
+        leading_newlines: get_leading_newlines_count(&leading_comments),
+        leading_comments: get_comments(&leading_comments),
+        trailing_comment,
+    })
+}
+
+/// A string that is quoted with double quotes. Allows spaces and other characters that would otherwise be invalid in an unquoted string.
 pub(crate) fn quoted_string<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstString<'a>> {
     let leading_comments = opt_ws_and_comments.parse_next(input)?;
 
@@ -164,7 +190,7 @@ pub(crate) fn quoted_string<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResu
 pub(crate) fn quoted_or_unquoted_string<'a>(
     input: &mut LocatingSlice<&'a str>,
 ) -> ModalResult<AstString<'a>> {
-    alt((quoted_string, unquoted_string))
+    alt((quoted_string, unquoted_string, bracketed_string))
         .context(StrContext::Label("quoted_or_unquoted_string"))
         .parse_next(input)
 }

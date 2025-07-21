@@ -241,7 +241,8 @@ impl TypeCache {
         // Fall back to hardcoded path if relative path doesn't work
         let dir_path = cwt_path.unwrap_or_else(|| {
             eprintln!("Using hardcoded config path");
-            Path::new(r"D:\dev\github\cwtools-stellaris-config\config").to_path_buf()
+            // Path::new(r"D:\dev\github\cwtools-stellaris-config\config").to_path_buf()
+            Path::new(r"D:\dev\github\cwtools-vic3-config\config").to_path_buf()
         });
 
         let mut cwt_analyzer = CwtAnalyzer::new();
@@ -282,16 +283,20 @@ impl TypeCache {
             if let Ok(content) = fs::read_to_string(cwt_file) {
                 let module = CwtModuleCell::from_input(content);
 
-                if let Ok(module_ref) = module.borrow_dependent().as_ref() {
-                    if let Err(errors) = cwt_analyzer.convert_module(module_ref) {
-                        eprintln!(
-                            "Errors converting {}: {} errors",
-                            cwt_file.display(),
-                            errors.len()
-                        );
+                match module.borrow_dependent().as_ref() {
+                    Ok(module_ref) => {
+                        if let Err(errors) = cwt_analyzer.convert_module(module_ref) {
+                            eprintln!(
+                                "Errors converting {}: {} errors",
+                                cwt_file.display(),
+                                errors.len()
+                            );
+                        }
                     }
-                } else {
-                    eprintln!("Failed to parse CWT file: {}", cwt_file.display());
+                    Err(error) => {
+                        eprintln!("Failed to parse CWT file: {}", cwt_file.display());
+                        eprintln!("{}", error);
+                    }
                 }
             }
         }

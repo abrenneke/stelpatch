@@ -20,6 +20,7 @@ pub enum Operator {
     MinusEquals,
     PlusEquals,
     MultiplyEquals,
+    ConditionalAssignment,
 }
 
 impl std::fmt::Display for Operator {
@@ -34,6 +35,7 @@ impl std::fmt::Display for Operator {
             Self::MinusEquals => "-=",
             Self::PlusEquals => "+=",
             Self::MultiplyEquals => "*=",
+            Self::ConditionalAssignment => "?=",
         };
         write!(f, "{}", s)
     }
@@ -59,6 +61,7 @@ impl FromStr for Operator {
             "-=" => Ok(Operator::MinusEquals),
             "+=" => Ok(Operator::PlusEquals),
             "*=" => Ok(Operator::MultiplyEquals),
+            "?=" => Ok(Operator::ConditionalAssignment),
             _ => Err(StringError::new(format!("Unknown operator: {}", s))),
         }
     }
@@ -115,6 +118,7 @@ pub(crate) fn operator<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<As
         literal("="),
         literal(">"),
         literal("<"),
+        literal("?="),
     ))
     .with_span()
     .parse_next(input)?;

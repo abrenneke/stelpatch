@@ -187,6 +187,21 @@ impl ReferenceResolver {
                                     properties.extend(enum_def.values.iter().cloned());
                                 }
                             }
+                            AliasName::TypeRefWithPrefixSuffix(type_name, prefix, suffix) => {
+                                if let Some(namespace_keys) =
+                                    self.utils.get_namespace_keys_for_type_ref(type_name)
+                                {
+                                    for key in namespace_keys.iter() {
+                                        let property = match (prefix, suffix) {
+                                            (Some(p), Some(s)) => format!("{}{}{}", p, key, s),
+                                            (Some(p), None) => format!("{}{}", p, key),
+                                            (None, Some(s)) => format!("{}{}", key, s),
+                                            (None, None) => key.clone(),
+                                        };
+                                        properties.insert(property);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -284,6 +299,52 @@ impl ReferenceResolver {
                                 }
                             }
                         }
+                        AliasName::TypeRefWithPrefixSuffix(name, prefix, suffix) => {
+                            // Strip prefix and suffix from property_name and check if it matches the type
+                            let mut stripped_name = property_name;
+
+                            // Remove prefix if present
+                            if let Some(prefix_str) = prefix {
+                                if let Some(without_prefix) = stripped_name.strip_prefix(prefix_str)
+                                {
+                                    stripped_name = without_prefix;
+                                } else {
+                                    continue; // Property name doesn't start with required prefix
+                                }
+                            }
+
+                            // Remove suffix if present
+                            if let Some(suffix_str) = suffix {
+                                if let Some(without_suffix) = stripped_name.strip_suffix(suffix_str)
+                                {
+                                    stripped_name = without_suffix;
+                                } else {
+                                    continue; // Property name doesn't end with required suffix
+                                }
+                            }
+
+                            // Check if the remaining name is a valid key for this type
+                            if let Some(namespace_keys) =
+                                self.utils.get_namespace_keys_for_type_ref(name)
+                            {
+                                if namespace_keys.contains(&stripped_name.to_string()) {
+                                    // Special case for scripted_effect/scripted_trigger
+                                    if name == "scripted_effect" || name == "scripted_trigger" {
+                                        return (
+                                            alias_def.to.clone(),
+                                            Some(alias_def.clone()),
+                                            Some(stripped_name.to_string()),
+                                        );
+                                    } else {
+                                        return (
+                                            alias_def.to.clone(),
+                                            Some(alias_def.clone()),
+                                            None,
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -353,6 +414,52 @@ impl ReferenceResolver {
                                         Some(alias_def.clone()),
                                         None,
                                     ));
+                                }
+                            }
+                        }
+                        AliasName::TypeRefWithPrefixSuffix(name, prefix, suffix) => {
+                            // Strip prefix and suffix from property_name and check if it matches the type
+                            let mut stripped_name = property_name;
+
+                            // Remove prefix if present
+                            if let Some(prefix_str) = prefix {
+                                if let Some(without_prefix) = stripped_name.strip_prefix(prefix_str)
+                                {
+                                    stripped_name = without_prefix;
+                                } else {
+                                    continue; // Property name doesn't start with required prefix
+                                }
+                            }
+
+                            // Remove suffix if present
+                            if let Some(suffix_str) = suffix {
+                                if let Some(without_suffix) = stripped_name.strip_suffix(suffix_str)
+                                {
+                                    stripped_name = without_suffix;
+                                } else {
+                                    continue; // Property name doesn't end with required suffix
+                                }
+                            }
+
+                            // Check if the remaining name is a valid key for this type
+                            if let Some(namespace_keys) =
+                                self.utils.get_namespace_keys_for_type_ref(name)
+                            {
+                                if namespace_keys.contains(&stripped_name.to_string()) {
+                                    // Special case for scripted_effect/scripted_trigger
+                                    if name == "scripted_effect" || name == "scripted_trigger" {
+                                        results.push((
+                                            alias_def.to.clone(),
+                                            Some(alias_def.clone()),
+                                            Some(stripped_name.to_string()),
+                                        ));
+                                    } else {
+                                        results.push((
+                                            alias_def.to.clone(),
+                                            Some(alias_def.clone()),
+                                            None,
+                                        ));
+                                    }
                                 }
                             }
                         }

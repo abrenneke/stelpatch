@@ -156,11 +156,11 @@ where
         // Color type keyword (rgb/hsv) as custom COLOR type
         self.add_token(&node.color_type, CwSemanticTokenType::Color.as_u32());
         // Color components as numbers
-        self.visit_number(&node.r);
-        self.visit_number(&node.g);
-        self.visit_number(&node.b);
+        self.visit_value(&node.r);
+        self.visit_value(&node.g);
+        self.visit_value(&node.b);
         if let Some(a) = &node.a {
-            self.visit_number(a);
+            self.visit_value(a);
         }
     }
 

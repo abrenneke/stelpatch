@@ -11,6 +11,7 @@ pub enum Operator {
     MinusEquals,
     PlusEquals,
     MultiplyEquals,
+    ConditionalAssignment,
 }
 
 impl std::fmt::Display for Operator {
@@ -25,6 +26,7 @@ impl std::fmt::Display for Operator {
             Self::MinusEquals => "-=",
             Self::PlusEquals => "+=",
             Self::MultiplyEquals => "*=",
+            Self::ConditionalAssignment => "?=",
         };
         write!(f, "{}", s)
     }
@@ -48,6 +50,7 @@ impl From<cw_parser::Operator> for Operator {
             cw_parser::Operator::PlusEquals => Self::PlusEquals,
             cw_parser::Operator::MultiplyEquals => Self::MultiplyEquals,
             cw_parser::Operator::NotEqual => Self::NotEqual,
+            cw_parser::Operator::ConditionalAssignment => Self::ConditionalAssignment,
         }
     }
 }

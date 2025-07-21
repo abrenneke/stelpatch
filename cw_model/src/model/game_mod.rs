@@ -71,7 +71,9 @@ impl GameMod {
         let base_path = PathBuf::from(definition.path.as_ref().unwrap());
 
         // Define glob patterns for different file types
+        // Support both Stellaris and Victoria 3 directory structures
         let glob_patterns = vec![
+            // Stellaris patterns (simple structure)
             "common/**/*.txt",
             "interface/**/*.gui",
             "interface/**/*.gfx",
@@ -84,6 +86,32 @@ impl GameMod {
             "music/**/*.asset",
             "sound/**/*.txt",
             "sound/**/*.asset",
+            // Victoria 3 patterns (modular structure)
+            // Game-specific files
+            "game/common/**/*.txt",
+            "game/interface/**/*.txt",
+            "game/events/**/*.txt",
+            "game/gfx/**/*.gfx",
+            "game/gfx/**/*.asset",
+            "game/gfx/**/*.txt",
+            "game/gui/**/*.gui",
+            "game/gui/**/*.gfx",
+            "game/map_data/**/*.txt",
+            "game/music/**/*.txt",
+            "game/music/**/*.asset",
+            "game/sound/**/*.txt",
+            "game/sound/**/*.asset",
+            // Framework files (jomini)
+            "jomini/common/**/*.txt",
+            "jomini/gfx/**/*.gfx",
+            "jomini/gfx/**/*.asset",
+            "jomini/gui/**/*.gui",
+            "jomini/gui/**/*.gfx",
+            // Engine files (clausewitz)
+            "clausewitz/gfx/**/*.gfx",
+            "clausewitz/gfx/**/*.asset",
+            "clausewitz/gui/**/*.gui",
+            "clausewitz/gui/**/*.gfx",
         ];
 
         // Define ignore patterns for files to exclude (simple filename matching)
@@ -101,6 +129,7 @@ impl GameMod {
             "CREDITS.txt",
             "TODO.txt",
             "todo.txt",
+            "info.txt",
         ];
 
         let mut paths = vec![];

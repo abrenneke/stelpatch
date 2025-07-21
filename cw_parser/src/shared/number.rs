@@ -72,6 +72,9 @@ pub(crate) fn number_val<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<
     // WTF paradox
     opt('§').void().parse_next(input)?;
 
+    // paradox pls
+    opt(']').void().parse_next(input)?;
+
     peek(value_terminator)
         .context(StrContext::Label("number_val terminator"))
         .parse_next(input)?;

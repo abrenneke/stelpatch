@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use tower_lsp::Client;
 
+pub mod base_game;
 pub mod handlers;
 pub mod semantic_token_collector;
 

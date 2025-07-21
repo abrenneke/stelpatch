@@ -88,8 +88,21 @@ impl<'a> AliasVisitor<'a> {
                                 options,
                             );
                         }
-                        _ => {
-                            panic!("Unknown identifier type for alias in rule: {:?}", rule);
+                        CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => {
+                            let name = key_id.name.raw_value();
+                            let alias_pattern = AliasPattern::new_type_ref_with_prefix_suffix(
+                                category, name, prefix, suffix,
+                            );
+                            self.insert_or_merge_alias(
+                                alias_pattern,
+                                category,
+                                name,
+                                new_to_type,
+                                options,
+                            );
+                        }
+                        ref unknown => {
+                            panic!("Unknown identifier type for alias in rule: {:?}", unknown);
                         }
                     },
                     AstCwtIdentifierOrString::String(key_str) => {

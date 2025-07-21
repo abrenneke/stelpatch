@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use cw_games::stellaris::BaseGame;
+use crate::base_game::BaseGame;
 use cw_model::{Entity, LowerCaseHashMap};
 
 use crate::handlers::cache::{GameDataCache, Namespace};

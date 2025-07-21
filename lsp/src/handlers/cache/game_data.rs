@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 
-use cw_games::stellaris::BaseGame;
+use crate::base_game::BaseGame;
 use cw_model::LowerCaseHashMap;
 use cw_model::{Entity, GameMod, LoadMode, Value};
 
