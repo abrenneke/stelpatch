@@ -53,6 +53,9 @@ impl ScopeHandler {
     /// Get all scope properties
     pub fn get_all_scope_properties(&self) -> Vec<String> {
         ScopeStack::get_all_scope_properties()
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
     }
 
     /// Get all link properties

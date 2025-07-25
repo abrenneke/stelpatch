@@ -254,28 +254,28 @@ impl ScopeStack {
         }
     }
 
-    pub fn get_all_scope_properties() -> Vec<String> {
-        vec![
-            "this".to_string(),
-            "THIS".to_string(),
-            "root".to_string(),
-            "ROOT".to_string(),
-            "from".to_string(),
-            "FROM".to_string(),
-            "fromfrom".to_string(),
-            "FROMFROM".to_string(),
-            "fromfromfrom".to_string(),
-            "FROMFROMFROM".to_string(),
-            "fromfromfromfrom".to_string(),
-            "FROMFROMFROMFROM".to_string(),
-            "prev".to_string(),
-            "PREV".to_string(),
-            "prevprev".to_string(),
-            "PREVPREV".to_string(),
-            "prevprevprev".to_string(),
-            "PREVPREVPREV".to_string(),
-            "prevprevprevprev".to_string(),
-            "PREVPREVPREVPREV".to_string(),
+    pub fn get_all_scope_properties() -> &'static [&'static str] {
+        &[
+            "this",
+            "THIS",
+            "root",
+            "ROOT",
+            "from",
+            "FROM",
+            "fromfrom",
+            "FROMFROM",
+            "fromfromfrom",
+            "FROMFROMFROM",
+            "fromfromfromfrom",
+            "FROMFROMFROMFROM",
+            "prev",
+            "PREV",
+            "prevprev",
+            "PREVPREV",
+            "prevprevprev",
+            "PREVPREVPREV",
+            "prevprevprevprev",
+            "PREVPREVPREVPREV",
         ]
     }
 
@@ -300,7 +300,10 @@ impl ScopeStack {
     pub fn available_scope_names(&self) -> Vec<String> {
         // If current scope is "unknown", return all possible scope properties as fallback
         if self.current_scope().scope_type == "unknown" {
-            return Self::get_all_scope_properties();
+            return Self::get_all_scope_properties()
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
         }
 
         let mut names = vec![

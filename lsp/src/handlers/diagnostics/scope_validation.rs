@@ -176,7 +176,11 @@ fn validate_scope_path(
 
     // Add scope properties
     if is_unknown_scope && !Settings::global().report_unknown_scopes {
-        valid_properties.extend(ScopeStack::get_all_scope_properties());
+        valid_properties.extend(
+            ScopeStack::get_all_scope_properties()
+                .iter()
+                .map(|s| s.to_string()),
+        );
     } else {
         valid_properties.extend(scope_stack.available_scope_names());
     }

@@ -16,7 +16,7 @@ use crate::handlers::{
             subtypes::{get_all_subtype_pattern_properties, get_subtype_property},
         },
     },
-    scope::ScopeError,
+    scope::{ScopeError, ScopeStack},
     scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
     settings::Settings,
     utils::contains_scripted_argument,
@@ -39,6 +39,26 @@ pub fn navigate_to_block_property(
         // This is a scope property - push that scope onto the current stack
         let mut new_scope_context = scoped_type.scope_stack().clone();
         match new_scope_context.push_scope(scope_context.clone()) {
+            Ok(()) => {
+                let result = ScopedType::new_with_subtypes(
+                    scoped_type.cwt_type().clone(),
+                    new_scope_context,
+                    scoped_type.subtypes().clone(),
+                    scoped_type.in_scripted_effect_block().cloned(),
+                );
+                let scope_result = PropertyNavigationResult::Success(Arc::new(result));
+                collect_navigation_result(scope_result, &mut successful_results, &mut scope_errors);
+            }
+            Err(scope_error) => {
+                let scope_result = PropertyNavigationResult::ScopeError(scope_error);
+                collect_navigation_result(scope_result, &mut successful_results, &mut scope_errors);
+            }
+        }
+    } else if !Settings::global().report_unknown_scopes
+        && ScopeStack::get_all_scope_properties().contains(&property_name)
+    {
+        let mut new_scope_context = scoped_type.scope_stack().clone();
+        match new_scope_context.push_scope_type(property_name) {
             Ok(()) => {
                 let result = ScopedType::new_with_subtypes(
                     scoped_type.cwt_type().clone(),
