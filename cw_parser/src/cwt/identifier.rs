@@ -192,6 +192,51 @@ fn identifier_parser<'a>(
     }
 }
 
+/// Special parser for alias that can handle complex keys with type references
+fn alias_parser<'a>() -> impl Parser<
+    LocatingSlice<&'a str>,
+    (
+        AstCwtIdentifierOrString<'a>,
+        Option<AstString<'a>>,
+        bool,
+        CwtReferenceType<'a>,
+    ),
+    ErrMode<winnow::error::ContextError>,
+> {
+    move |input: &mut LocatingSlice<&'a str>| {
+        // Try standard alias parsing first
+        let mut standard_input = *input;
+        if let Ok(result) =
+            identifier_parser("alias", CwtReferenceType::Alias).parse_next(&mut standard_input)
+        {
+            *input = standard_input;
+            return Ok(result);
+        }
+
+        // Fallback: parse complex alias manually
+        let (_, _, is_not, scope, complex_content, _) = (
+            "alias",
+            "[",
+            opt("!"),
+            opt(scope),
+            take_while(1.., |c: char| c != ']'), // Take everything until closing bracket
+            "]",
+        )
+            .parse_next(input)?;
+
+        // Create a string from the complex content
+        let span = 0..complex_content.len(); // Simple span for now
+        let key_string = AstString::new(complex_content, false, span);
+
+        Ok((
+            AstCwtIdentifierOrString::String(key_string),
+            scope,
+            is_not.is_some(),
+            CwtReferenceType::AliasComplex,
+        ))
+    }
+}
+
 pub(crate) fn cwt_identifier<'a>(
     input: &mut LocatingSlice<&'a str>,
 ) -> ModalResult<AstCwtIdentifier<'a>> {
@@ -241,7 +286,7 @@ pub(crate) fn cwt_identifier_part<'a>(
                     identifier_type,
                 )
             }),
-        identifier_parser("alias", CwtReferenceType::Alias),
+        alias_parser(),
         identifier_parser("icon", CwtReferenceType::Icon),
         identifier_parser("filepath", CwtReferenceType::Filepath),
         // Standard bracket identifiers
@@ -512,6 +557,20 @@ mod tests {
                 assert!(result.is_type_key());
             }
             _ => panic!("Expected TypeRef identifier type"),
+        }
+    }
+
+    #[test]
+    fn test_cwt_identifier_alias_complex_with_type_ref() {
+        let mut input = LocatingSlice::new("alias[trigger:modifier:<modifier_type>]");
+        let result = cwt_identifier.parse_next(&mut input).unwrap();
+
+        match result.identifier_type {
+            CwtReferenceType::AliasComplex => {
+                assert_eq!(result.name.scope.as_ref().unwrap().raw_value(), "trigger");
+                assert_eq!(result.name.raw_value(), "modifier:<modifier_type>");
+            }
+            _ => panic!("Expected AliasComplex identifier type"),
         }
     }
 }

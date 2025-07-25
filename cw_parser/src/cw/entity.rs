@@ -152,8 +152,7 @@ impl<'a> AstNode<'a> for AstEntity<'a> {
 pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstEntity<'a>> {
     let leading_comments = opt_ws_and_comments.parse_next(input)?;
 
-    // paradox PLS, [ is not valid
-    let start = (alt(('{', '['))).span().parse_next(input)?;
+    let start = '{'.span().parse_next(input)?;
 
     let ((expressions, _), span): ((Vec<_>, _), _) = cut_err(repeat_till(
         0..,

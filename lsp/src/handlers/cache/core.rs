@@ -10,6 +10,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
+use crate::base_game;
 use crate::handlers::cache::resolver::TypeResolver;
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType,
@@ -240,9 +241,8 @@ impl TypeCache {
 
         // Fall back to hardcoded path if relative path doesn't work
         let dir_path = cwt_path.unwrap_or_else(|| {
-            eprintln!("Using hardcoded config path");
-            // Path::new(r"D:\dev\github\cwtools-stellaris-config\config").to_path_buf()
-            Path::new(r"D:\dev\github\cwtools-vic3-config\config").to_path_buf()
+            eprintln!("Using default config path for current game");
+            base_game::game::get_default_config_path()
         });
 
         let mut cwt_analyzer = CwtAnalyzer::new();

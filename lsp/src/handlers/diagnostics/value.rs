@@ -240,6 +240,9 @@ pub fn is_value_compatible_with_simple_type(
 
         (AstValue::Maths(_), SimpleType::Float) => None, // Valid, calculated value
         (AstValue::Maths(_), SimpleType::Int) => None,   // Valid, calculated value
+        (AstValue::Maths(_), SimpleType::ValueField) => None, // Valid, calculated value
+        (AstValue::Maths(_), SimpleType::IntValueField) => None, // Valid, calculated value
+        (AstValue::Maths(_), SimpleType::PercentageField) => None, // Valid, calculated value
 
         // Type mismatches
         (_, simple_type) => Some(create_type_mismatch_diagnostic(

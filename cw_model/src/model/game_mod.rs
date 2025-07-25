@@ -86,6 +86,7 @@ impl GameMod {
             "music/**/*.asset",
             "sound/**/*.txt",
             "sound/**/*.asset",
+            "map/**/*.txt",
             // Victoria 3 patterns (modular structure)
             // Game-specific files
             "game/common/**/*.txt",

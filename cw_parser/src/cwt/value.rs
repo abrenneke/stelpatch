@@ -95,6 +95,8 @@ pub enum CwtReferenceType<'a> {
     Subtype,
     /// Complex enum reference: complex_enum[key]
     ComplexEnum,
+    /// Alias with complex key containing type refs: alias[scope:complex_key]
+    AliasComplex,
 }
 
 /// Types of alias references

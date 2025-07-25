@@ -108,6 +108,9 @@ impl CwtConverter {
             CwtReferenceType::ComplexEnum => ReferenceType::ComplexEnum {
                 key: identifier.name.raw_value().to_string(),
             },
+            CwtReferenceType::AliasComplex => ReferenceType::Alias {
+                key: identifier.name.raw_value().to_string(),
+            },
         };
 
         CwtType::Reference(reference_type)
