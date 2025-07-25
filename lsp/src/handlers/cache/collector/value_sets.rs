@@ -27,6 +27,15 @@ impl<'resolver> ValueSetCollector<'resolver> {
         }
     }
 
+    /// Extract the flag name from a country flag value, removing scope information after '@'
+    fn extract_flag_name(value: &str) -> String {
+        if let Some(at_pos) = value.find('@') {
+            value[..at_pos].to_string()
+        } else {
+            value.to_string()
+        }
+    }
+
     pub fn collect(mut self) -> LowerCaseHashMap<HashSet<String>> {
         // Get namespaces from GameDataCache, then use EntityRestructurer for entity access
         let namespaces = match GameDataCache::get() {
@@ -161,7 +170,7 @@ impl<'resolver> ValueSetCollector<'resolver> {
                 let mut values = HashSet::new();
                 for value in property_value.0.iter() {
                     if let Some(value) = value.value.as_string() {
-                        values.insert(value.clone());
+                        values.insert(Self::extract_flag_name(value));
                     }
                 }
                 if !values.is_empty() {
@@ -231,7 +240,7 @@ impl<'resolver> ValueSetCollector<'resolver> {
                     let mut values = HashSet::new();
                     for item in items {
                         if let Some(string_value) = item.as_string() {
-                            values.insert(string_value.clone());
+                            values.insert(Self::extract_flag_name(string_value));
                         }
                     }
                     if !values.is_empty() {

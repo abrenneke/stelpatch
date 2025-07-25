@@ -1,9 +1,12 @@
 use tower_lsp::{LspService, Server};
 
-use cw_lsp::CwLspServer;
+use cw_lsp::{CwLspServer, handlers::settings::Settings};
 
 #[tokio::main]
 async fn main() {
+    // Initialize global settings from command line arguments
+    Settings::init_global_from_args();
+
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 

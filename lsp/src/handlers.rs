@@ -17,7 +17,7 @@ mod scope;
 mod scoped_type;
 mod semantic_tokens;
 mod server_lifecycle;
-mod settings;
+pub mod settings;
 pub mod utils;
 
 #[tower_lsp::async_trait]

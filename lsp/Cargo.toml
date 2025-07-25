@@ -9,6 +9,7 @@ path = "src/bin/diagnostics_runner.rs"
 
 [dependencies]
 anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
 colored = "2.1"
 cw_format = { path = "../cw_format" }
 cw_games = { path = "../cw_games" }

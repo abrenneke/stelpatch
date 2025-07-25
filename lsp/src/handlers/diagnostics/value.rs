@@ -8,7 +8,7 @@ use crate::handlers::{
     cache::{EntityRestructurer, FileIndex, FullAnalysis, GameDataCache, ModDataCache, TypeCache},
     diagnostics::diagnostic::create_type_mismatch_diagnostic,
     scope::ScopeStack,
-    settings::VALIDATE_LOCALISATION,
+    settings::Settings,
     utils::contains_scripted_argument,
 };
 
@@ -22,7 +22,7 @@ pub fn is_value_compatible_with_simple_type(
 ) -> Option<Diagnostic> {
     match (value, simple_type) {
         (AstValue::String(_), SimpleType::Localisation) => {
-            if VALIDATE_LOCALISATION {
+            if Settings::global().validate_localisation {
                 // TODO: Implement proper localisation validation
                 Some(create_type_mismatch_diagnostic(
                     value.span_range(),
@@ -34,7 +34,7 @@ pub fn is_value_compatible_with_simple_type(
             }
         }
         (AstValue::String(_), SimpleType::LocalisationSynced) => {
-            if VALIDATE_LOCALISATION {
+            if Settings::global().validate_localisation {
                 // TODO: Implement proper localisation validation
                 Some(create_type_mismatch_diagnostic(
                     value.span_range(),
@@ -46,7 +46,7 @@ pub fn is_value_compatible_with_simple_type(
             }
         }
         (AstValue::String(_), SimpleType::LocalisationInline) => {
-            if VALIDATE_LOCALISATION {
+            if Settings::global().validate_localisation {
                 // TODO: Implement proper localisation validation
                 Some(create_type_mismatch_diagnostic(
                     value.span_range(),

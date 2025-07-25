@@ -5,7 +5,7 @@ use tower_lsp::lsp_types::Diagnostic;
 
 use crate::handlers::{
     cache::TypeCache, diagnostics::diagnostic::create_value_mismatch_diagnostic, scope::ScopeStack,
-    utils::contains_scripted_argument,
+    settings::Settings, utils::contains_scripted_argument,
 };
 
 /// Validate a scope reference value (handles dotted paths like "prev.from")
@@ -43,6 +43,10 @@ pub fn validate_scope_reference(
     {
         if let Some(expected_scope_type) = analyzer.resolve_scope_name(scope_key) {
             if final_scope_type != expected_scope_type && final_scope_type != "any" {
+                if final_scope_type == "unknown" && !Settings::global().report_unknown_scopes {
+                    return None;
+                }
+
                 return Some(create_value_mismatch_diagnostic(
                     span,
                     &format!(
@@ -66,6 +70,11 @@ pub fn validate_scopegroup_reference(
     span: Range<usize>,
     content: &str,
 ) -> Option<Diagnostic> {
+    // Handle scripted arguments - always allow values with $VARIABLE$ format
+    if contains_scripted_argument(value) {
+        return None;
+    }
+
     if !TypeCache::is_initialized() {
         return None;
     }
@@ -91,6 +100,10 @@ pub fn validate_scopegroup_reference(
                 });
 
             if !is_valid {
+                if final_scope_type == "unknown" && !Settings::global().report_unknown_scopes {
+                    return None;
+                }
+
                 return Some(create_value_mismatch_diagnostic(
                     span,
                     &format!(
@@ -116,6 +129,11 @@ fn validate_scope_path(
     span: Range<usize>,
     content: &str,
 ) -> Option<Diagnostic> {
+    // Handle scripted arguments - always allow values with $VARIABLE$ format
+    if contains_scripted_argument(value) {
+        return None;
+    }
+
     if !TypeCache::is_initialized() {
         return None;
     }
@@ -154,11 +172,16 @@ fn validate_scope_path(
     let current_scope_type = &scope_stack.current_scope().scope_type;
     let mut valid_properties = Vec::new();
 
+    let is_unknown_scope = current_scope_type == "unknown";
+
     // Add scope properties
-    valid_properties.extend(scope_stack.available_scope_names());
+    if is_unknown_scope && !Settings::global().report_unknown_scopes {
+        valid_properties.extend(ScopeStack::get_all_scope_properties());
+    } else {
+        valid_properties.extend(scope_stack.available_scope_names());
+    }
 
     // Add links that can be used from the current scope
-    let is_unknown_scope = current_scope_type == "unknown";
     for (link_name, link_def) in analyzer.get_links() {
         if is_unknown_scope || link_def.can_be_used_from(current_scope_type, &analyzer) {
             valid_properties.push(link_name.clone());
@@ -196,6 +219,11 @@ fn resolve_scope_path_to_final_type(
     scope_stack: &ScopeStack,
     analyzer: &CwtAnalyzer,
 ) -> Option<String> {
+    // Handle scripted arguments - return "any" since we can't determine the exact type
+    if contains_scripted_argument(value) {
+        return Some("any".to_string());
+    }
+
     let parts: Vec<&str> = value.split('.').collect();
     if parts.is_empty() {
         return None;
@@ -240,6 +268,13 @@ fn simulate_scope_navigation(
     for (i, part) in parts.iter().enumerate() {
         if part.is_empty() {
             return Err(format!("Empty scope name at position {}", i + 1));
+        }
+
+        // Handle scripted arguments in individual parts - allow any navigation
+        if contains_scripted_argument(part) {
+            // If a part contains scripted arguments, we can't validate the rest of the path
+            // so we return "any" to indicate it could resolve to anything
+            return Ok("any".to_string());
         }
 
         // Basic validation: scope/link names should be valid identifiers
@@ -293,6 +328,11 @@ fn navigate_from_scope(
 ) -> Result<String, String> {
     let is_unknown_scope = from_scope_type == "unknown";
 
+    // Handle scripted arguments in property names - allow any navigation
+    if contains_scripted_argument(property_name) {
+        return Ok("any".to_string());
+    }
+
     // Handle event_target: references
     if property_name.starts_with("event_target:") {
         return Ok("any".to_string());
@@ -335,6 +375,10 @@ fn navigate_from_scope(
         if is_unknown_scope || link_def.can_be_used_from(from_scope_type, analyzer) {
             available_options.push(link_name.clone());
         }
+    }
+
+    if is_unknown_scope && !Settings::global().report_unknown_scopes {
+        return Ok("unknown".to_string());
     }
 
     Err(format!(

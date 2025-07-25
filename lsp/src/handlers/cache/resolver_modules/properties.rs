@@ -57,20 +57,6 @@ impl PropertyNavigator {
             return self.navigate_to_complex_property(scoped_type, property_name);
         }
 
-        // First, check if this property is a scope property (from, fromfrom, etc.)
-        if let Some(scope_context) = scoped_type.scope_stack().get_scope_by_name(property_name) {
-            // This is a scope property - push that scope onto the current stack
-            let mut new_scope_context = scoped_type.scope_stack().clone();
-            new_scope_context.push_scope(scope_context.clone()).unwrap();
-            let result = ScopedType::new_with_subtypes(
-                scoped_type.cwt_type().clone(),
-                new_scope_context,
-                scoped_type.subtypes().clone(),
-                scoped_type.in_scripted_effect_block().cloned(),
-            );
-            return PropertyNavigationResult::Success(Arc::new(result));
-        }
-
         // Handle regular properties based on the current type
         match scoped_type.cwt_type_for_matching() {
             CwtTypeOrSpecialRef::Block(block) => navigation::navigate_to_block_property(

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::env;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -7,53 +6,31 @@ use std::sync::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use clap::Parser;
 use colored::Colorize;
 use cw_lsp::handlers::cache::FullAnalysis;
 use cw_lsp::handlers::cache::{EntityRestructurer, FileIndex, GameDataCache, TypeCache};
 use cw_lsp::handlers::diagnostics::provider::DiagnosticsProvider;
+use cw_lsp::handlers::settings::Settings;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use tower_lsp::lsp_types::Diagnostic;
 
-/// Command line arguments
-#[derive(Debug, Default)]
+/// Diagnostics runner with integrated settings
+#[derive(Debug, Parser)]
+#[command(name = "diagnostics_runner")]
+#[command(about = "Run diagnostics on Clausewitz script files")]
 struct Args {
+    /// Path to directory or file to process
+    #[arg(help = "Directory or file to process")]
     path: String,
-    print_diagnostics: bool,
-}
 
-fn parse_args() -> Result<Args, String> {
-    let args: Vec<String> = env::args().collect();
+    /// Print all diagnostics to console
+    #[arg(long, short, help = "Print all diagnostics to console")]
+    print: bool,
 
-    if args.len() < 2 {
-        return Err("Usage: diagnostics_runner [--print] <directory|file>".to_string());
-    }
-
-    let mut parsed = Args::default();
-    let mut i = 1;
-
-    while i < args.len() {
-        match args[i].as_str() {
-            "--print" => {
-                parsed.print_diagnostics = true;
-                i += 1;
-            }
-            _ => {
-                if parsed.path.is_empty() {
-                    parsed.path = args[i].clone();
-                    i += 1;
-                } else {
-                    return Err(format!("Unexpected argument: {}", args[i]));
-                }
-            }
-        }
-    }
-
-    if parsed.path.is_empty() {
-        return Err("Usage: diagnostics_runner [--print] <directory|file>".to_string());
-    }
-
-    Ok(parsed)
+    #[command(flatten)]
+    settings: Settings,
 }
 
 /// Recursively find all .txt files in a directory
@@ -145,13 +122,10 @@ fn print_diagnostic(file_path: &Path, diagnostic: &Diagnostic, show_file_path: b
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = match parse_args() {
-        Ok(args) => args,
-        Err(e) => {
-            eprintln!("{} {}", "Error:".red().bold(), e.bright_white());
-            std::process::exit(1);
-        }
-    };
+    let args = Args::parse();
+
+    // Initialize global settings with the parsed settings
+    Settings::init_global(args.settings.clone());
 
     let input_path = Path::new(&args.path);
     if !input_path.exists() {
@@ -242,7 +216,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let total_diagnostics = AtomicUsize::new(0);
     let processed_files = AtomicUsize::new(0);
-    let all_diagnostics = if args.print_diagnostics {
+    let all_diagnostics = if args.print {
         Some(Mutex::new(Vec::new()))
     } else {
         None
@@ -269,12 +243,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     txt_files.par_iter().for_each(|file_path| {
         match fs::read_to_string(&file_path) {
             Ok(content) => {
-                let (diagnostic_count, diagnostics) = generate_file_diagnostics(
-                    &file_path,
-                    &content,
-                    &provider,
-                    args.print_diagnostics,
-                );
+                let (diagnostic_count, diagnostics) =
+                    generate_file_diagnostics(&file_path, &content, &provider, args.print);
                 total_diagnostics.fetch_add(diagnostic_count, Ordering::Relaxed);
                 processed_files.fetch_add(1, Ordering::Relaxed);
 
@@ -314,7 +284,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Print diagnostics if requested
-    if args.print_diagnostics {
+    if args.print {
         if let Some(all_diags) = all_diagnostics {
             let all_diags_lock = all_diags.lock().unwrap();
             if !all_diags_lock.is_empty() {

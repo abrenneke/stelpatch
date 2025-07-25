@@ -503,6 +503,7 @@ name = "cw_lsp"
 version = "0.0.5"
 dependencies = [
  "anyhow",
+ "clap",
  "colored 2.2.0",
  "cw_format",
  "cw_games",

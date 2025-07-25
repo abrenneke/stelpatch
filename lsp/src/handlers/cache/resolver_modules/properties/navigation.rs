@@ -18,7 +18,7 @@ use crate::handlers::{
     },
     scope::ScopeError,
     scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
-    settings::VALIDATE_LOCALISATION,
+    settings::Settings,
     utils::contains_scripted_argument,
 };
 
@@ -34,7 +34,29 @@ pub fn navigate_to_block_property(
     let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
     let mut scope_errors = Vec::new();
 
-    // First, check regular properties
+    // First, check if this property is a scope property (from, fromfrom, prev, etc.)
+    if let Some(scope_context) = scoped_type.scope_stack().get_scope_by_name(property_name) {
+        // This is a scope property - push that scope onto the current stack
+        let mut new_scope_context = scoped_type.scope_stack().clone();
+        match new_scope_context.push_scope(scope_context.clone()) {
+            Ok(()) => {
+                let result = ScopedType::new_with_subtypes(
+                    scoped_type.cwt_type().clone(),
+                    new_scope_context,
+                    scoped_type.subtypes().clone(),
+                    scoped_type.in_scripted_effect_block().cloned(),
+                );
+                let scope_result = PropertyNavigationResult::Success(Arc::new(result));
+                collect_navigation_result(scope_result, &mut successful_results, &mut scope_errors);
+            }
+            Err(scope_error) => {
+                let scope_result = PropertyNavigationResult::ScopeError(scope_error);
+                collect_navigation_result(scope_result, &mut successful_results, &mut scope_errors);
+            }
+        }
+    }
+
+    // Second, check regular properties
     if let Some(property) = block.properties.get(property_name) {
         let result = handle_regular_property(
             cwt_analyzer.clone(),
@@ -45,7 +67,7 @@ pub fn navigate_to_block_property(
         collect_navigation_result(result, &mut successful_results, &mut scope_errors);
     }
 
-    // Second, check if there's a subtype-specific property
+    // Third, check if there's a subtype-specific property
     for subtype_name in scoped_type.subtypes() {
         if let Some(subtype_property) = get_subtype_property(block, subtype_name, property_name) {
             let result = handle_subtype_property(
@@ -76,7 +98,7 @@ pub fn navigate_to_block_property(
         }
     }
 
-    // Third, check for special "scalar" key that matches any string
+    // Fourth, check for special "scalar" key that matches any string
     if let Some(scalar_property) = block.properties.get("scalar") {
         let result = handle_regular_property(
             cwt_analyzer.clone(),
@@ -100,7 +122,7 @@ pub fn navigate_to_block_property(
     }
 
     if let Some(localisation_property) = block.properties.get("localisation") {
-        if !VALIDATE_LOCALISATION {
+        if !Settings::global().validate_localisation {
             let result = handle_regular_property(
                 cwt_analyzer.clone(),
                 scoped_type.clone(),
@@ -111,7 +133,7 @@ pub fn navigate_to_block_property(
         }
     }
 
-    // Fourth, check for special inline_script property
+    // Fifth, check for special inline_script property
     if property_name == "inline_script" {
         let inline_script_type = CwtTypeOrSpecial::CwtType(
             cwt_analyzer
@@ -143,7 +165,7 @@ pub fn navigate_to_block_property(
         successful_results.push(Arc::new(result));
     }
 
-    // Fifth, check pattern properties - collect ALL matches, not just the first
+    // Sixth, check pattern properties - collect ALL matches, not just the first
     let matching_pattern_properties =
         pattern_matcher.key_matches_all_patterns(property_name, block);
     for pattern_property in matching_pattern_properties {
@@ -159,7 +181,7 @@ pub fn navigate_to_block_property(
         }
     }
 
-    // Sixth, check the special scripted_effect_params enum
+    // Seventh, check the special scripted_effect_params enum
     if let Some(scripted_effect_name) = scoped_type.in_scripted_effect_block() {
         if let Some(full_analysis) = FullAnalysis::get() {
             if let Some(arguments) = full_analysis
