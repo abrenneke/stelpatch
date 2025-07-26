@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
+use lasso::{Spur, ThreadedRodeo};
+
 use crate::{Entity, Operator, Value, ValueVisitor};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Properties {
-    pub kv: HashMap<String, PropertyInfoList>,
+    pub kv: HashMap<Spur, PropertyInfoList>,
     pub is_module: bool,
 }
 
@@ -157,17 +159,18 @@ impl From<Entity> for PropertyInfoList {
     }
 }
 
-pub(crate) struct PropertyVisitor<'a> {
+pub(crate) struct PropertyVisitor<'a, 'interner> {
     property: &'a mut PropertyInfo,
+    interner: &'interner ThreadedRodeo,
 }
 
-impl<'a> PropertyVisitor<'a> {
-    pub fn new(property: &'a mut PropertyInfo) -> Self {
-        Self { property }
+impl<'a, 'interner> PropertyVisitor<'a, 'interner> {
+    pub fn new(property: &'a mut PropertyInfo, interner: &'interner ThreadedRodeo) -> Self {
+        Self { property, interner }
     }
 }
 
-impl<'a, 'b, 'ast> cw_parser::AstVisitor<'b, 'ast> for PropertyVisitor<'a>
+impl<'a, 'b, 'ast, 'interner> cw_parser::AstVisitor<'b, 'ast> for PropertyVisitor<'a, 'interner>
 where
     'b: 'ast,
 {
@@ -177,7 +180,7 @@ where
 
     fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> () {
         let mut value = Value::default();
-        let mut value_visitor = ValueVisitor::new(&mut value);
+        let mut value_visitor = ValueVisitor::new(&mut value, self.interner);
         value_visitor.visit_value(node);
         self.property.value = value;
     }

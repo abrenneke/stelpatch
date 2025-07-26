@@ -1,6 +1,9 @@
+use crate::interner::get_interner;
+
 use super::{ResolverUtils, SubtypeHandler};
 use cw_model::types::{CwtAnalyzer, PatternProperty, PatternType};
 use cw_model::{AliasName, BlockType};
+use lasso::Spur;
 use std::sync::Arc;
 
 pub struct PatternMatcher {
@@ -25,7 +28,7 @@ impl PatternMatcher {
     /// Check if a key matches any pattern property in a block
     pub fn key_matches_pattern<'b>(
         &self,
-        key: &str,
+        key: Spur,
         block_type: &'b BlockType,
     ) -> Option<&'b PatternProperty> {
         for pattern_property in &block_type.pattern_properties {
@@ -39,7 +42,7 @@ impl PatternMatcher {
     /// Check if a key matches any pattern properties in a block and return ALL matches
     pub fn key_matches_all_patterns<'b>(
         &self,
-        key: &str,
+        key: Spur,
         block_type: &'b BlockType,
     ) -> Vec<&'b PatternProperty> {
         let mut matches = Vec::new();
@@ -52,46 +55,48 @@ impl PatternMatcher {
     }
 
     /// Check if a key matches a specific pattern type
-    pub fn key_matches_pattern_type(&self, key: &str, pattern_type: &PatternType) -> bool {
+    pub fn key_matches_pattern_type(&self, key: Spur, pattern_type: &PatternType) -> bool {
+        let interner = get_interner();
         match pattern_type {
             PatternType::AliasName { category } => {
                 // Check if the key matches any alias name from this category
                 if let Some(aliases_in_category) =
-                    self.cwt_analyzer.get_aliases_for_category(category)
+                    self.cwt_analyzer.get_aliases_for_category(*category)
                 {
                     for alias_pattern in aliases_in_category {
                         match &alias_pattern.name {
                             AliasName::Static(name) => {
-                                if name.to_lowercase() == key.to_lowercase() {
+                                if *name == key {
                                     return true;
                                 }
                             }
                             AliasName::TypeRef(type_name) => {
                                 // Check if key matches any type from this namespace
                                 if let Some(namespace_keys) =
-                                    self.utils.get_namespace_keys_for_type_ref(type_name)
+                                    self.utils.get_namespace_keys_for_type_ref(*type_name)
                                 {
-                                    if namespace_keys.contains(&key.to_string()) {
+                                    if namespace_keys.contains(&key) {
                                         return true;
                                     }
                                 }
                             }
                             AliasName::Enum(enum_name) => {
                                 // Check if key matches any enum value
-                                if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
-                                    if enum_def.values.contains(key) {
+                                if let Some(enum_def) = self.cwt_analyzer.get_enum(*enum_name) {
+                                    if enum_def.values.contains(&key) {
                                         return true;
                                     }
                                 }
                             }
                             AliasName::TypeRefWithPrefixSuffix(name, prefix, suffix) => {
                                 // Check if key matches pattern with prefix/suffix
+                                let key = interner.resolve(&key);
                                 let mut stripped_key = key;
 
                                 // Remove prefix if present
                                 if let Some(prefix_str) = prefix {
                                     if let Some(without_prefix) =
-                                        stripped_key.strip_prefix(prefix_str)
+                                        stripped_key.strip_prefix(interner.resolve(&prefix_str))
                                     {
                                         stripped_key = without_prefix;
                                     } else {
@@ -102,7 +107,7 @@ impl PatternMatcher {
                                 // Remove suffix if present
                                 if let Some(suffix_str) = suffix {
                                     if let Some(without_suffix) =
-                                        stripped_key.strip_suffix(suffix_str)
+                                        stripped_key.strip_suffix(interner.resolve(&suffix_str))
                                     {
                                         stripped_key = without_suffix;
                                     } else {
@@ -112,9 +117,11 @@ impl PatternMatcher {
 
                                 // Check if the remaining key matches any type from this namespace
                                 if let Some(namespace_keys) =
-                                    self.utils.get_namespace_keys_for_type_ref(name)
+                                    self.utils.get_namespace_keys_for_type_ref(*name)
                                 {
-                                    if namespace_keys.contains(&stripped_key.to_string()) {
+                                    if namespace_keys
+                                        .contains(&interner.get_or_intern(stripped_key))
+                                    {
                                         return true;
                                     }
                                 }
@@ -126,17 +133,20 @@ impl PatternMatcher {
             }
             PatternType::Enum { key: enum_key } => {
                 // Check if the key matches any enum value
-                if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_key) {
-                    enum_def.values.contains(key)
+                if let Some(enum_def) = self.cwt_analyzer.get_enum(*enum_key) {
+                    enum_def.values.contains(&key)
                 } else {
                     false
                 }
             }
             PatternType::Type { key: type_key } => {
                 // Check if this is a subtype reference (contains a dot)
-                if let Some(dot_pos) = type_key.find('.') {
-                    let (base_type, subtype) = type_key.split_at(dot_pos);
+                let type_key_str = interner.resolve(&type_key);
+                if let Some(dot_pos) = type_key_str.find('.') {
+                    let (base_type, subtype) = type_key_str.split_at(dot_pos);
                     let subtype = &subtype[1..]; // Remove the leading dot
+
+                    let base_type = interner.get_or_intern(base_type);
 
                     // Get the base type definition
                     let type_def = self.cwt_analyzer.get_type(base_type);
@@ -144,7 +154,7 @@ impl PatternMatcher {
                     if let Some(type_def) = type_def {
                         if let Some(path) = type_def.path.as_ref() {
                             // CWT paths are prefixed with "game/"
-                            let path = path.trim_start_matches("game/");
+                            let path = interner.resolve(&path).trim_start_matches("game/");
 
                             // Get the CWT type for this namespace
                             if let Some(cwt_type) = self.cwt_analyzer.get_type(base_type) {
@@ -152,12 +162,12 @@ impl PatternMatcher {
                                 let filtered_keys = self
                                     .subtype_handler
                                     .get_entity_keys_in_namespace_for_subtype(
-                                        path,
+                                        interner.get_or_intern(path),
                                         &cwt_type.rules,
-                                        subtype,
+                                        interner.get_or_intern(subtype),
                                     );
 
-                                return filtered_keys.contains(&key.to_string());
+                                return filtered_keys.contains(&key);
                             }
                         }
                     }
@@ -167,8 +177,9 @@ impl PatternMatcher {
                 }
 
                 // Handle regular type references (no subtype)
-                if let Some(namespace_keys) = self.utils.get_namespace_keys_for_type_ref(type_key) {
-                    namespace_keys.contains(key)
+                if let Some(namespace_keys) = self.utils.get_namespace_keys_for_type_ref(*type_key)
+                {
+                    namespace_keys.contains(&key)
                 } else {
                     false
                 }
@@ -178,39 +189,64 @@ impl PatternMatcher {
 
     /// Get all possible completions for a pattern type
     pub fn get_pattern_completions(&self, pattern_type: &PatternType) -> Vec<String> {
+        let interner = get_interner();
         match pattern_type {
             PatternType::AliasName { category } => {
                 let mut completions = Vec::new();
                 if let Some(aliases_in_category) =
-                    self.cwt_analyzer.get_aliases_for_category(category)
+                    self.cwt_analyzer.get_aliases_for_category(*category)
                 {
                     for alias_pattern in aliases_in_category {
                         match &alias_pattern.name {
                             AliasName::Static(name) => {
-                                completions.push(name.clone());
+                                completions.push(interner.resolve(name).to_string());
                             }
                             AliasName::TypeRef(type_name) => {
                                 if let Some(namespace_keys) =
-                                    self.utils.get_namespace_keys_for_type_ref(type_name)
+                                    self.utils.get_namespace_keys_for_type_ref(*type_name)
                                 {
-                                    completions.extend(namespace_keys.iter().cloned());
+                                    completions.extend(
+                                        namespace_keys
+                                            .iter()
+                                            .cloned()
+                                            .map(|k| interner.resolve(&k).to_string()),
+                                    );
                                 }
                             }
                             AliasName::Enum(enum_name) => {
-                                if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
-                                    completions.extend(enum_def.values.iter().cloned());
+                                if let Some(enum_def) = self.cwt_analyzer.get_enum(*enum_name) {
+                                    completions.extend(
+                                        enum_def
+                                            .values
+                                            .iter()
+                                            .cloned()
+                                            .map(|v| interner.resolve(&v).to_string()),
+                                    );
                                 }
                             }
                             AliasName::TypeRefWithPrefixSuffix(type_name, prefix, suffix) => {
                                 if let Some(namespace_keys) =
-                                    self.utils.get_namespace_keys_for_type_ref(type_name)
+                                    self.utils.get_namespace_keys_for_type_ref(*type_name)
                                 {
                                     for key in namespace_keys.iter() {
                                         let completion = match (prefix, suffix) {
-                                            (Some(p), Some(s)) => format!("{}{}{}", p, key, s),
-                                            (Some(p), None) => format!("{}{}", p, key),
-                                            (None, Some(s)) => format!("{}{}", key, s),
-                                            (None, None) => key.clone(),
+                                            (Some(p), Some(s)) => format!(
+                                                "{}{}{}",
+                                                interner.resolve(p),
+                                                interner.resolve(key),
+                                                interner.resolve(s)
+                                            ),
+                                            (Some(p), None) => format!(
+                                                "{}{}",
+                                                interner.resolve(p),
+                                                interner.resolve(key)
+                                            ),
+                                            (None, Some(s)) => format!(
+                                                "{}{}",
+                                                interner.resolve(key),
+                                                interner.resolve(s)
+                                            ),
+                                            (None, None) => interner.resolve(key).to_string(),
                                         };
                                         completions.push(completion);
                                     }
@@ -222,25 +258,34 @@ impl PatternMatcher {
                 completions
             }
             PatternType::Enum { key } => {
-                if let Some(enum_def) = self.cwt_analyzer.get_enum(key) {
-                    enum_def.values.iter().cloned().collect()
+                if let Some(enum_def) = self.cwt_analyzer.get_enum(*key) {
+                    enum_def
+                        .values
+                        .iter()
+                        .cloned()
+                        .map(|v| interner.resolve(&v).to_string())
+                        .collect()
                 } else {
                     Vec::new()
                 }
             }
             PatternType::Type { key } => {
                 // Check if this is a subtype reference (contains a dot)
-                if let Some(dot_pos) = key.find('.') {
-                    let (base_type, subtype) = key.split_at(dot_pos);
+                let key_str = interner.resolve(&key);
+                if let Some(dot_pos) = key_str.find('.') {
+                    let (base_type, subtype) = key_str.split_at(dot_pos);
                     let subtype = &subtype[1..]; // Remove the leading dot
+
+                    let base_type = interner.get_or_intern(base_type);
 
                     // Get the base type definition
                     let type_def = self.cwt_analyzer.get_type(base_type);
 
                     if let Some(type_def) = type_def {
                         if let Some(path) = type_def.path.as_ref() {
+                            let path_str = interner.resolve(path);
                             // CWT paths are prefixed with "game/"
-                            let path = path.trim_start_matches("game/");
+                            let path_str = path_str.trim_start_matches("game/");
 
                             // Get the CWT type for this namespace
                             if let Some(cwt_type) = self.cwt_analyzer.get_type(base_type) {
@@ -248,12 +293,15 @@ impl PatternMatcher {
                                 let filtered_keys = self
                                     .subtype_handler
                                     .get_entity_keys_in_namespace_for_subtype(
-                                        path,
+                                        *path,
                                         &cwt_type.rules,
-                                        subtype,
+                                        interner.get_or_intern(subtype),
                                     );
 
-                                return filtered_keys;
+                                return filtered_keys
+                                    .iter()
+                                    .map(|k| interner.resolve(k).to_string())
+                                    .collect();
                             }
                         }
                     }
@@ -263,8 +311,12 @@ impl PatternMatcher {
                 }
 
                 // Handle regular type references (no subtype)
-                if let Some(namespace_keys) = self.utils.get_namespace_keys_for_type_ref(key) {
-                    namespace_keys.iter().cloned().collect()
+                if let Some(namespace_keys) = self.utils.get_namespace_keys_for_type_ref(*key) {
+                    namespace_keys
+                        .iter()
+                        .cloned()
+                        .map(|k| interner.resolve(&k).to_string())
+                        .collect()
                 } else {
                     Vec::new()
                 }

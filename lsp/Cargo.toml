@@ -18,6 +18,7 @@ cw_parser = { path = "../cw_parser" }
 dashmap = "6.1"
 futures = "0.3"
 indicatif = { version = "0.17", features = ["rayon"] }
+lasso = { version = "0.7.3", features = ["multi-threaded"] }
 rayon = "1.10.0"
 self_cell = "1.2.0"
 serde = { version = "1.0", features = ["derive"] }

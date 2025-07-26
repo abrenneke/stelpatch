@@ -4,6 +4,7 @@
 //! cardinality constraints, and other rule-specific configuration.
 
 use cw_parser::{CwtCommentRangeBound, CwtOptionExpression, cwt::AstCwtRule};
+use lasso::{Spur, ThreadedRodeo};
 use std::collections::HashMap;
 
 use crate::TypeKeyFilter;
@@ -15,28 +16,28 @@ pub struct RuleOptions {
     pub cardinality: Option<CardinalityConstraint>,
 
     /// Scope constraint
-    pub scope: Option<Vec<String>>,
+    pub scope: Option<Vec<Spur>>,
 
     /// Push scope
-    pub push_scope: Option<String>,
+    pub push_scope: Option<Spur>,
 
     /// Replace scope mappings
-    pub replace_scope: Option<HashMap<String, String>>,
+    pub replace_scope: Option<HashMap<Spur, Spur>>,
 
     /// Documentation comment
-    pub documentation: Option<String>,
+    pub documentation: Option<Spur>,
 
     /// Severity
-    pub severity: Option<String>,
+    pub severity: Option<Spur>,
 
     /// Starts with
-    pub starts_with: Option<String>,
+    pub starts_with: Option<Spur>,
 
     /// Type key filter
     pub type_key_filter: Option<TypeKeyFilter>,
 
     /// Graph related types
-    pub graph_related_types: Vec<String>,
+    pub graph_related_types: Vec<Spur>,
 }
 
 /// Cardinality constraint for CWT rules
@@ -54,7 +55,7 @@ impl RuleOptions {
     }
 
     /// Parse rule options from a CWT rule AST node
-    pub fn from_rule(rule: &AstCwtRule) -> Self {
+    pub fn from_rule(rule: &AstCwtRule, interner: &ThreadedRodeo) -> Self {
         let mut options = RuleOptions::default();
 
         // Process all CWT options from the parsed AST
@@ -76,7 +77,7 @@ impl RuleOptions {
                 }
                 "push_scope" => {
                     let scope = cwt_option.value.as_identifier().unwrap();
-                    options.push_scope = Some(scope.to_string());
+                    options.push_scope = Some(interner.get_or_intern(scope.to_string()));
                 }
                 "replace_scope" => {
                     let replacements = cwt_option.value.as_list().unwrap();
@@ -84,8 +85,9 @@ impl RuleOptions {
                     for replacement in replacements {
                         let (from, to) = replacement.as_assignment().unwrap();
                         replace_map.insert(
-                            from.to_string(),
-                            to.as_string_or_identifier().unwrap().to_string(),
+                            interner.get_or_intern(from.to_string()),
+                            interner
+                                .get_or_intern(to.as_string_or_identifier().unwrap().to_string()),
                         );
                     }
                     options.replace_scope = Some(replace_map);
@@ -94,42 +96,47 @@ impl RuleOptions {
                     let scopes = match &cwt_option.value {
                         CwtOptionExpression::Block(scopes) => scopes
                             .iter()
-                            .map(|s| s.as_string().unwrap().to_string())
+                            .map(|s| interner.get_or_intern(s.as_string().unwrap().to_string()))
                             .collect(),
-                        CwtOptionExpression::String(scope) => vec![scope.to_string()],
+                        CwtOptionExpression::String(scope) => {
+                            vec![interner.get_or_intern(scope.to_string())]
+                        }
                         _ => vec![],
                     };
                     options.scope = Some(scopes);
                 }
                 "severity" => {
-                    options.severity =
-                        Some(cwt_option.value.as_identifier().unwrap().parse().unwrap());
+                    options.severity = Some(
+                        interner
+                            .get_or_intern(cwt_option.value.as_identifier().unwrap().to_string()),
+                    );
                 }
                 "starts_with" => {
                     options.starts_with = Some(
-                        cwt_option
-                            .value
-                            .as_string_or_identifier()
-                            .unwrap()
-                            .to_string(),
+                        interner.get_or_intern(
+                            cwt_option
+                                .value
+                                .as_string_or_identifier()
+                                .unwrap()
+                                .to_string(),
+                        ),
                     );
                 }
                 "type_key_filter" => {
                     options.type_key_filter = match (&cwt_option.value, cwt_option.is_ne) {
-                        (CwtOptionExpression::Identifier(id), false) => {
-                            Some(TypeKeyFilter::Specific(id.to_string()))
-                        }
+                        (CwtOptionExpression::Identifier(id), false) => Some(
+                            TypeKeyFilter::Specific(interner.get_or_intern(id.to_string())),
+                        ),
                         (CwtOptionExpression::Identifier(id), true) => {
-                            Some(TypeKeyFilter::Not(id.to_string()))
+                            Some(TypeKeyFilter::Not(interner.get_or_intern(id.to_string())))
                         }
                         (CwtOptionExpression::Block(list), false) => Some(TypeKeyFilter::OneOf(
                             list.iter()
-                                .map(|t| t.as_string_or_identifier().unwrap().to_string())
-                                .collect(),
-                        )),
-                        (CwtOptionExpression::Block(list), true) => Some(TypeKeyFilter::Not(
-                            list.iter()
-                                .map(|t| t.as_string_or_identifier().unwrap().to_string())
+                                .map(|t| {
+                                    interner.get_or_intern(
+                                        t.as_string_or_identifier().unwrap().to_string(),
+                                    )
+                                })
                                 .collect(),
                         )),
                         _ => None,
@@ -141,7 +148,9 @@ impl RuleOptions {
                         .as_list()
                         .unwrap()
                         .iter()
-                        .map(|t| t.as_string_or_identifier().unwrap().to_string())
+                        .map(|t| {
+                            interner.get_or_intern(t.as_string_or_identifier().unwrap().to_string())
+                        })
                         .collect();
                 }
                 _ => {}
@@ -151,11 +160,13 @@ impl RuleOptions {
         // Extract documentation from the rule
         if !rule.documentation.is_empty() {
             options.documentation = Some(
-                rule.documentation
-                    .iter()
-                    .map(|d| d.text.to_string())
-                    .collect::<Vec<String>>()
-                    .join("\n"),
+                interner.get_or_intern(
+                    rule.documentation
+                        .iter()
+                        .map(|d| d.text.to_string())
+                        .collect::<Vec<String>>()
+                        .join("\n"),
+                ),
             );
         }
 

@@ -1,10 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 mod complex_enums;
 mod scripted_effect_arguments;
 mod value_sets;
 
-use cw_model::LowerCaseHashMap;
+use lasso::Spur;
 
 use crate::handlers::cache::{
     collector::{
@@ -15,31 +15,31 @@ use crate::handlers::cache::{
 };
 
 pub struct DataCollector<'resolver> {
-    value_sets: LowerCaseHashMap<HashSet<String>>,
-    complex_enums: LowerCaseHashMap<HashSet<String>>,
-    scripted_effect_arguments: LowerCaseHashMap<HashSet<String>>, // Also scripted triggers for convenience... might be wrong because clashes
+    value_sets: HashMap<Spur, HashSet<Spur>>,
+    complex_enums: HashMap<Spur, HashSet<Spur>>,
+    scripted_effect_arguments: HashMap<Spur, HashSet<Spur>>, // Also scripted triggers for convenience... might be wrong because clashes
     type_resolver: &'resolver TypeResolver,
 }
 
 impl<'resolver> DataCollector<'resolver> {
     pub fn new(type_resolver: &'resolver TypeResolver) -> Self {
         Self {
-            value_sets: LowerCaseHashMap::new(),
-            complex_enums: LowerCaseHashMap::new(),
-            scripted_effect_arguments: LowerCaseHashMap::new(),
+            value_sets: HashMap::new(),
+            complex_enums: HashMap::new(),
+            scripted_effect_arguments: HashMap::new(),
             type_resolver,
         }
     }
 
-    pub fn value_sets(&self) -> &LowerCaseHashMap<HashSet<String>> {
+    pub fn value_sets(&self) -> &HashMap<Spur, HashSet<Spur>> {
         &self.value_sets
     }
 
-    pub fn complex_enums(&self) -> &LowerCaseHashMap<HashSet<String>> {
+    pub fn complex_enums(&self) -> &HashMap<Spur, HashSet<Spur>> {
         &self.complex_enums
     }
 
-    pub fn scripted_effect_arguments(&self) -> &LowerCaseHashMap<HashSet<String>> {
+    pub fn scripted_effect_arguments(&self) -> &HashMap<Spur, HashSet<Spur>> {
         &self.scripted_effect_arguments
     }
 

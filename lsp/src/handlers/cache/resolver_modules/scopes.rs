@@ -1,5 +1,6 @@
-use crate::handlers::scope::ScopeStack;
+use crate::{handlers::scope::ScopeStack, interner::get_interner};
 use cw_model::types::{CwtAnalyzer, LinkDefinition};
+use lasso::Spur;
 use std::sync::Arc;
 
 pub struct ScopeHandler {
@@ -15,25 +16,32 @@ impl ScopeHandler {
     /// Returns Some(description) if valid, None if invalid
     pub fn is_valid_scope_or_link_property(
         &self,
-        property_name: &str,
+        property_name: Spur,
         scope_stack: &ScopeStack,
     ) -> Option<String> {
+        let interner = get_interner();
         // First, check if this property is a scope property (from, fromfrom, etc.)
         if let Some(scope_context) = scope_stack.get_scope_by_name(property_name) {
-            return Some(format!("scope property ({})", scope_context.scope_type));
+            return Some(format!(
+                "scope property ({})",
+                interner.resolve(&scope_context.scope_type)
+            ));
         }
 
         // Second, check if this property is a link property
         let current_scope = &scope_stack.current_scope().scope_type;
-        if let Some(link_def) = self.is_link_property(property_name, current_scope) {
-            return Some(format!("link property ({})", link_def.output_scope));
+        if let Some(link_def) = self.is_link_property(property_name, *current_scope) {
+            return Some(format!(
+                "link property ({})",
+                interner.resolve(&link_def.output_scope)
+            ));
         }
 
         None
     }
 
     /// Get all available scope properties and link properties for the current scope
-    pub fn get_available_scope_and_link_properties(&self, scope_stack: &ScopeStack) -> Vec<String> {
+    pub fn get_available_scope_and_link_properties(&self, scope_stack: &ScopeStack) -> Vec<Spur> {
         let mut properties = Vec::new();
 
         // Add scope properties (from, fromfrom, etc.) based on the current scope stack
@@ -42,10 +50,9 @@ impl ScopeHandler {
 
         // Add link properties based on the current scope
         let current_scope = &scope_stack.current_scope().scope_type;
-        let link_properties = self.get_scope_link_properties(current_scope);
+        let link_properties = self.get_scope_link_properties(*current_scope);
         properties.extend(link_properties);
 
-        properties.sort();
         properties.dedup();
         properties
     }
@@ -59,17 +66,17 @@ impl ScopeHandler {
     }
 
     /// Get all link properties
-    pub fn get_all_link_properties(&self) -> Vec<String> {
+    pub fn get_all_link_properties(&self) -> Vec<Spur> {
         self.cwt_analyzer.get_links().keys().cloned().collect()
     }
 
     /// Get all available link properties for the current scope
-    pub fn get_scope_link_properties(&self, scope: &str) -> Vec<String> {
+    pub fn get_scope_link_properties(&self, scope: Spur) -> Vec<Spur> {
         let mut link_properties = Vec::new();
 
         for (link_name, link_def) in self.cwt_analyzer.get_links() {
-            if link_def.can_be_used_from(scope, &self.cwt_analyzer) {
-                link_properties.push(link_name.clone());
+            if link_def.can_be_used_from(scope, &self.cwt_analyzer, get_interner()) {
+                link_properties.push(*link_name);
             }
         }
 
@@ -77,9 +84,9 @@ impl ScopeHandler {
     }
 
     /// Check if a property name is a link property for the current scope
-    pub fn is_link_property(&self, property_name: &str, scope: &str) -> Option<&LinkDefinition> {
+    pub fn is_link_property(&self, property_name: Spur, scope: Spur) -> Option<&LinkDefinition> {
         if let Some(link_def) = self.cwt_analyzer.get_link(property_name) {
-            if link_def.can_be_used_from(scope, &self.cwt_analyzer) {
+            if link_def.can_be_used_from(scope, &self.cwt_analyzer, get_interner()) {
                 return Some(link_def);
             }
         }

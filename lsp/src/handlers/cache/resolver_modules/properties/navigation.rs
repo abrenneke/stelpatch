@@ -1,25 +1,29 @@
 use std::sync::Arc;
 
 use cw_model::{BlockType, CwtAnalyzer, CwtType, PatternType, ReferenceType};
+use lasso::Spur;
 
-use crate::handlers::{
-    cache::{
-        FullAnalysis, PatternMatcher, ReferenceResolver,
-        resolver_modules::properties::{
-            handlers::{
-                handle_pattern_property, handle_pattern_property_all_matches,
-                handle_regular_property, handle_subtype_pattern_property_all_matches,
-                handle_subtype_property,
+use crate::{
+    handlers::{
+        cache::{
+            FullAnalysis, PatternMatcher, ReferenceResolver,
+            resolver_modules::properties::{
+                handlers::{
+                    handle_pattern_property, handle_pattern_property_all_matches,
+                    handle_regular_property, handle_subtype_pattern_property_all_matches,
+                    handle_subtype_property,
+                },
+                links::is_link_property,
+                scope_changes::apply_alias_scope_changes,
+                subtypes::{get_all_subtype_pattern_properties, get_subtype_property},
             },
-            links::is_link_property,
-            scope_changes::apply_alias_scope_changes,
-            subtypes::{get_all_subtype_pattern_properties, get_subtype_property},
         },
+        scope::{ScopeError, ScopeStack},
+        scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
+        settings::Settings,
+        utils::contains_scripted_argument,
     },
-    scope::{ScopeError, ScopeStack},
-    scoped_type::{CwtTypeOrSpecial, PropertyNavigationResult, ScopedType},
-    settings::Settings,
-    utils::contains_scripted_argument,
+    interner::get_interner,
 };
 
 pub fn navigate_to_block_property(
@@ -28,8 +32,9 @@ pub fn navigate_to_block_property(
     pattern_matcher: Arc<PatternMatcher>,
     scoped_type: Arc<ScopedType>,
     block: &BlockType,
-    property_name: &str,
+    property_name: Spur,
 ) -> PropertyNavigationResult {
+    let interner = get_interner();
     // Collect ALL possible matches instead of returning early
     let mut successful_results: Vec<Arc<ScopedType>> = Vec::new();
     let mut scope_errors = Vec::new();
@@ -55,7 +60,7 @@ pub fn navigate_to_block_property(
             }
         }
     } else if !Settings::global().report_unknown_scopes
-        && ScopeStack::get_all_scope_properties().contains(&property_name)
+        && ScopeStack::get_all_scope_properties().contains(&interner.resolve(&property_name))
     {
         let mut new_scope_context = scoped_type.scope_stack().clone();
         match new_scope_context.push_scope_type(property_name) {
@@ -77,7 +82,7 @@ pub fn navigate_to_block_property(
     }
 
     // Second, check regular properties
-    if let Some(property) = block.properties.get(property_name) {
+    if let Some(property) = block.properties.get(&property_name) {
         let result = handle_regular_property(
             cwt_analyzer.clone(),
             scoped_type.clone(),
@@ -89,7 +94,7 @@ pub fn navigate_to_block_property(
 
     // Third, check if there's a subtype-specific property
     for subtype_name in scoped_type.subtypes() {
-        if let Some(subtype_property) = get_subtype_property(block, subtype_name, property_name) {
+        if let Some(subtype_property) = get_subtype_property(block, *subtype_name, property_name) {
             let result = handle_subtype_property(
                 cwt_analyzer.clone(),
                 scoped_type.clone(),
@@ -101,7 +106,7 @@ pub fn navigate_to_block_property(
         let matching_subtype_pattern_properties = get_all_subtype_pattern_properties(
             pattern_matcher.clone(),
             block,
-            subtype_name,
+            *subtype_name,
             property_name,
         );
         for subtype_pattern_property in matching_subtype_pattern_properties {
@@ -119,7 +124,7 @@ pub fn navigate_to_block_property(
     }
 
     // Fourth, check for special "scalar" key that matches any string
-    if let Some(scalar_property) = block.properties.get("scalar") {
+    if let Some(scalar_property) = block.properties.get(&interner.get_or_intern("scalar")) {
         let result = handle_regular_property(
             cwt_analyzer.clone(),
             scoped_type.clone(),
@@ -129,8 +134,8 @@ pub fn navigate_to_block_property(
         collect_navigation_result(result, &mut successful_results, &mut scope_errors);
     }
 
-    if let Some(int_property) = block.properties.get("int") {
-        if property_name.parse::<i32>().is_ok() {
+    if let Some(int_property) = block.properties.get(&interner.get_or_intern("int")) {
+        if interner.resolve(&property_name).parse::<i32>().is_ok() {
             let result = handle_regular_property(
                 cwt_analyzer.clone(),
                 scoped_type.clone(),
@@ -141,7 +146,10 @@ pub fn navigate_to_block_property(
         }
     }
 
-    if let Some(localisation_property) = block.properties.get("localisation") {
+    if let Some(localisation_property) = block
+        .properties
+        .get(&interner.get_or_intern("localisation"))
+    {
         if !Settings::global().validate_localisation {
             let result = handle_regular_property(
                 cwt_analyzer.clone(),
@@ -154,10 +162,10 @@ pub fn navigate_to_block_property(
     }
 
     // Fifth, check for special inline_script property
-    if property_name == "inline_script" {
+    if property_name == interner.get_or_intern("inline_script") {
         let inline_script_type = CwtTypeOrSpecial::CwtType(
             cwt_analyzer
-                .get_type("$inline_script")
+                .get_type(interner.get_or_intern("$inline_script"))
                 .unwrap()
                 .rules
                 .clone(),
@@ -171,9 +179,14 @@ pub fn navigate_to_block_property(
         successful_results.push(Arc::new(inline_script_scoped));
     }
 
-    if property_name.starts_with("event_target:") {
+    if interner
+        .resolve(&property_name)
+        .starts_with("event_target:")
+    {
         let mut new_scope = scoped_type.scope_stack().branch();
-        new_scope.push_scope_type("unknown").unwrap(); // We don't store what scope the event target is right now
+        new_scope
+            .push_scope_type(interner.get_or_intern("unknown"))
+            .unwrap(); // We don't store what scope the event target is right now
 
         let result = ScopedType::new_with_subtypes(
             scoped_type.cwt_type().clone(),
@@ -210,8 +223,8 @@ pub fn navigate_to_block_property(
             {
                 for pattern_property in &block.pattern_properties {
                     if let PatternType::Enum { key } = &pattern_property.pattern_type {
-                        if key == "scripted_effect_params" {
-                            if arguments.contains(property_name) {
+                        if *key == interner.get_or_intern("scripted_effect_params") {
+                            if arguments.contains(&property_name) {
                                 let result = handle_pattern_property(
                                     cwt_analyzer.clone(),
                                     reference_resolver.clone(),
@@ -245,11 +258,11 @@ pub fn navigate_to_block_property(
 
     // Finally, check if this property is a link property (as fallback)
     let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
-    if let Some(link_def) = is_link_property(&cwt_analyzer, property_name, current_scope) {
+    if let Some(link_def) = is_link_property(&cwt_analyzer, property_name, *current_scope) {
         // This is a link property - create a scoped type with the output scope
         let mut new_scope_context = scoped_type.scope_stack().clone();
         if new_scope_context
-            .push_scope_type(&link_def.output_scope)
+            .push_scope_type(link_def.output_scope)
             .is_ok()
         {
             let result = ScopedType::new_with_subtypes(
@@ -294,9 +307,10 @@ pub fn navigate_to_alias_property(
     cwt_analyzer: Arc<CwtAnalyzer>,
     reference_resolver: Arc<ReferenceResolver>,
     scoped_type: Arc<ScopedType>,
-    key: &str,
-    property_name: &str,
+    key: Spur,
+    property_name: Spur,
 ) -> PropertyNavigationResult {
+    let interner = get_interner();
     // For alias_match_left[category], we need to look up ALL matching aliases
     // category:property_name and return all their types
     let all_alias_results = reference_resolver.resolve_all_alias_match_left(key, property_name);
@@ -361,11 +375,11 @@ pub fn navigate_to_alias_property(
     if !found_match {
         // No matching alias was found - check if this property is a link property as fallback
         let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
-        if let Some(link_def) = is_link_property(&cwt_analyzer, property_name, current_scope) {
+        if let Some(link_def) = is_link_property(&cwt_analyzer, property_name, *current_scope) {
             // This is a link property - create a scoped type with the output scope
             let mut new_scope_context = scoped_type.scope_stack().clone();
             new_scope_context
-                .push_scope_type(&link_def.output_scope)
+                .push_scope_type(link_def.output_scope)
                 .unwrap();
             let result = ScopedType::new_with_subtypes(
                 scoped_type.cwt_type().clone(),

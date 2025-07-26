@@ -1,9 +1,10 @@
 use cw_model::types::CwtAnalyzer;
 use cw_model::{
-    BlockType, CwtType, Entity, LowerCaseHashMap, Property, ReferenceType, SimpleType,
-    TypeDefinition, TypeKeyFilter, entity_from_ast,
+    BlockType, CwtType, Entity, Property, ReferenceType, SimpleType, TypeDefinition, TypeKeyFilter,
+    entity_from_ast,
 };
 use cw_parser::CwtModuleCell;
+use lasso::Spur;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
@@ -15,12 +16,13 @@ use crate::handlers::cache::resolver::TypeResolver;
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType,
 };
+use crate::interner::get_interner;
 
 use super::types::TypeInfo;
 
 /// Cache for Stellaris type information that's loaded once and shared across requests
 pub struct TypeCache {
-    namespace_types: HashMap<String, Vec<Arc<ScopedType>>>,
+    namespace_types: HashMap<Spur, Vec<Arc<ScopedType>>>,
     cwt_analyzer: Arc<CwtAnalyzer>,
     resolver: TypeResolver,
 }
@@ -47,14 +49,17 @@ impl TypeCache {
 
             // Load CWT files - these contain all the type definitions we need
             let mut cwt_analyzer = Self::load_cwt_files();
+            let interner = get_interner();
 
             eprintln!("Building cache from CWT types");
 
             // Pre-compute entity types for quick lookups
-            let mut namespace_types: HashMap<String, Vec<Arc<ScopedType>>> = HashMap::new();
+            let mut namespace_types: HashMap<Spur, Vec<Arc<ScopedType>>> = HashMap::new();
             for (type_name, type_def) in cwt_analyzer.get_types() {
+                let type_name = get_interner().resolve(type_name);
                 // Extract namespace from the path
                 let namespace = if let Some(path) = &type_def.path {
+                    let path = get_interner().resolve(path);
                     // Remove the "game/common" prefix to get the namespace
                     // e.g., "game/common/ambient_objects" -> "ambient_objects"
                     // e.g., "game/common/buildings/districts" -> "buildings/districts"
@@ -72,19 +77,19 @@ impl TypeCache {
                     ScopedType::new_cwt(type_def.rules.clone(), Default::default(), None);
 
                 if let Some(push_scope) = type_def.rule_options.push_scope.as_ref() {
-                    if let Some(scope_name) = cwt_analyzer.resolve_scope_name(push_scope) {
+                    if let Some(scope_name) = cwt_analyzer.resolve_scope_name(*push_scope) {
                         scoped_type
                             .scope_stack_mut()
-                            .push_scope_type(scope_name.to_string())
+                            .push_scope_type(scope_name)
                             .unwrap();
                     }
                 }
 
                 if let Some(replace_scope) = type_def.rule_options.replace_scope.as_ref() {
-                    let mut new_scopes = HashMap::new();
+                    let mut new_scopes: HashMap<Spur, Spur> = HashMap::new();
                     for (key, value) in replace_scope {
-                        if let Some(scope_name) = cwt_analyzer.resolve_scope_name(value) {
-                            new_scopes.insert(key.clone(), scope_name.to_string());
+                        if let Some(scope_name) = cwt_analyzer.resolve_scope_name(*value) {
+                            new_scopes.insert(*key, scope_name);
                         }
                     }
 
@@ -99,19 +104,47 @@ impl TypeCache {
                 // This allows validation of prev/prevprev scope references without requiring
                 // specific scope types that can't be determined statically.
                 if namespace == "common/scripted_effects" || namespace == "common/script_values" {
-                    let mut scripted_effect_scopes = HashMap::new();
-                    scripted_effect_scopes.insert("this".to_string(), "any".to_string());
-                    scripted_effect_scopes.insert("prev".to_string(), "any".to_string());
-                    scripted_effect_scopes.insert("prevprev".to_string(), "any".to_string());
-                    scripted_effect_scopes.insert("prevprevprev".to_string(), "any".to_string());
-                    scripted_effect_scopes
-                        .insert("prevprevprevprev".to_string(), "any".to_string());
-                    scripted_effect_scopes.insert("root".to_string(), "any".to_string());
-                    scripted_effect_scopes.insert("from".to_string(), "any".to_string());
-                    scripted_effect_scopes.insert("fromfrom".to_string(), "any".to_string());
-                    scripted_effect_scopes.insert("fromfromfrom".to_string(), "any".to_string());
-                    scripted_effect_scopes
-                        .insert("fromfromfromfrom".to_string(), "any".to_string());
+                    let mut scripted_effect_scopes: HashMap<Spur, Spur> = HashMap::new();
+                    scripted_effect_scopes.insert(
+                        interner.get_or_intern("this"),
+                        interner.get_or_intern("any"),
+                    );
+                    scripted_effect_scopes.insert(
+                        interner.get_or_intern("prev"),
+                        interner.get_or_intern("any"),
+                    );
+                    scripted_effect_scopes.insert(
+                        interner.get_or_intern("prevprev"),
+                        interner.get_or_intern("any"),
+                    );
+                    scripted_effect_scopes.insert(
+                        interner.get_or_intern("prevprevprev"),
+                        interner.get_or_intern("any"),
+                    );
+                    scripted_effect_scopes.insert(
+                        interner.get_or_intern("prevprevprevprev"),
+                        interner.get_or_intern("any"),
+                    );
+                    scripted_effect_scopes.insert(
+                        interner.get_or_intern("root"),
+                        interner.get_or_intern("any"),
+                    );
+                    scripted_effect_scopes.insert(
+                        interner.get_or_intern("from"),
+                        interner.get_or_intern("any"),
+                    );
+                    scripted_effect_scopes.insert(
+                        interner.get_or_intern("fromfrom"),
+                        interner.get_or_intern("any"),
+                    );
+                    scripted_effect_scopes.insert(
+                        interner.get_or_intern("fromfromfrom"),
+                        interner.get_or_intern("any"),
+                    );
+                    scripted_effect_scopes.insert(
+                        interner.get_or_intern("fromfromfromfrom"),
+                        interner.get_or_intern("any"),
+                    );
 
                     scoped_type
                         .scope_stack_mut()
@@ -121,21 +154,21 @@ impl TypeCache {
 
                 // Store the type rules for this namespace
                 namespace_types
-                    .entry(namespace)
+                    .entry(interner.get_or_intern(namespace))
                     .or_default()
                     .push(Arc::new(scoped_type));
             }
 
             // Modifiers are loaded separately so artificially add a modifier type
             cwt_analyzer.add_type(
-                "modifier",
+                interner.get_or_intern("modifier"),
                 TypeDefinition {
-                    path: Some("game/modifiers".to_string()),
+                    path: Some(interner.get_or_intern("game/modifiers")),
                     name_field: None,
                     skip_root_key: None,
-                    localisation: LowerCaseHashMap::new(),
+                    localisation: HashMap::new(),
                     rules: Arc::new(CwtType::Unknown),
-                    subtypes: LowerCaseHashMap::new(),
+                    subtypes: HashMap::new(),
                     options: Default::default(),
                     rule_options: Default::default(),
                     modifiers: Default::default(),
@@ -143,11 +176,11 @@ impl TypeCache {
             );
 
             let mut inline_script_block = BlockType {
-                type_name: "$inline_script".to_string(),
-                properties: LowerCaseHashMap::new(),
-                subtypes: LowerCaseHashMap::new(),
-                subtype_properties: LowerCaseHashMap::new(),
-                subtype_pattern_properties: LowerCaseHashMap::new(),
+                type_name: interner.get_or_intern("$inline_script"),
+                properties: HashMap::new(),
+                subtypes: HashMap::new(),
+                subtype_properties: HashMap::new(),
+                subtype_pattern_properties: HashMap::new(),
                 pattern_properties: vec![],
                 localisation: None,
                 modifiers: Default::default(),
@@ -155,7 +188,7 @@ impl TypeCache {
             };
 
             inline_script_block.properties.insert(
-                "script".to_string(),
+                interner.get_or_intern("script"),
                 Property {
                     property_type: Arc::new(CwtType::Reference(ReferenceType::InlineScript)),
                     documentation: None,
@@ -164,7 +197,7 @@ impl TypeCache {
             );
 
             inline_script_block.properties.insert(
-                "scalar".to_string(),
+                interner.get_or_intern("scalar"),
                 Property {
                     property_type: Arc::new(CwtType::Any),
                     documentation: None,
@@ -174,13 +207,13 @@ impl TypeCache {
 
             // inline_script is special, it can appear anywhere and is not defined in the cwt files
             cwt_analyzer.add_type(
-                "$inline_script",
+                interner.get_or_intern("$inline_script"),
                 TypeDefinition {
-                    path: Some("game/$inline_scripts".to_string()),
+                    path: Some(interner.get_or_intern("game/$inline_scripts")),
                     name_field: None,
                     skip_root_key: None,
-                    subtypes: LowerCaseHashMap::new(),
-                    localisation: LowerCaseHashMap::new(),
+                    subtypes: HashMap::new(),
+                    localisation: HashMap::new(),
                     rules: Arc::new(CwtType::Union(vec![
                         // inline_script = {}
                         Arc::new(CwtType::Block(inline_script_block)),
@@ -285,7 +318,8 @@ impl TypeCache {
 
                 match module.borrow_dependent().as_ref() {
                     Ok(module_ref) => {
-                        if let Err(errors) = cwt_analyzer.convert_module(module_ref) {
+                        if let Err(errors) = cwt_analyzer.convert_module(module_ref, get_interner())
+                        {
                             eprintln!(
                                 "Errors converting {}: {} errors",
                                 cwt_file.display(),
@@ -310,30 +344,36 @@ impl TypeCache {
         cwt_analyzer
     }
 
-    pub fn get_actual_namespace(namespace: &str) -> &str {
-        if namespace.starts_with("gfx/portraits/portraits") {
-            return "gfx/portraits/portraits";
+    pub fn get_actual_namespace(namespace: Spur) -> Spur {
+        let interner = get_interner();
+        let namespace_str = interner.resolve(&namespace);
+
+        if namespace_str.starts_with("gfx/portraits/portraits") {
+            return interner.get_or_intern("gfx/portraits/portraits");
         }
 
-        if namespace.starts_with("gfx/") {
-            return "gfx";
+        if namespace_str.starts_with("gfx/") {
+            return interner.get_or_intern("gfx");
         }
 
         namespace
     }
 
     /// Get type information for a specific namespace
-    pub fn get_namespace_types(&self, namespace: &str) -> Option<Vec<Arc<ScopedType>>> {
+    pub fn get_namespace_types(&self, namespace: Spur) -> Option<Vec<Arc<ScopedType>>> {
         let namespace = Self::get_actual_namespace(namespace);
+        let interner = get_interner();
 
         let mut all_types = vec![];
 
-        if let Some(types) = self.namespace_types.get(namespace) {
+        if let Some(types) = self.namespace_types.get(&namespace) {
             all_types.extend(types.clone());
         }
 
-        if namespace.starts_with("gfx/models") {
-            if let Some(types) = self.namespace_types.get("gfx") {
+        let namespace_str = interner.resolve(&namespace);
+
+        if namespace_str.starts_with("gfx/models") {
+            if let Some(types) = self.namespace_types.get(&interner.get_or_intern("gfx")) {
                 all_types.extend(types.clone());
             }
         }
@@ -347,10 +387,11 @@ impl TypeCache {
 
     pub fn get_namespace_type(
         &self,
-        namespace: &str,
+        namespace: Spur,
         file_path: Option<&str>,
     ) -> Option<Arc<ScopedType>> {
         let namespace = Self::get_actual_namespace(namespace);
+        let interner = get_interner();
 
         if let Some(namespace_types) = self.get_namespace_types(namespace) {
             if namespace_types.is_empty() {
@@ -363,11 +404,11 @@ impl TypeCache {
             // this takes precence over the union type
             for scoped_type in &namespace_types {
                 if let CwtTypeOrSpecialRef::Block(block) = scoped_type.cwt_type_for_matching() {
-                    if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                    if let Some(type_def) = self.cwt_analyzer.get_type(block.type_name) {
                         if let Some(path_file) = type_def.options.path_file.as_ref() {
                             // path_file == file_path
                             if let Some(file_path) = file_path {
-                                if file_path.contains(path_file) {
+                                if file_path.contains(interner.resolve(path_file)) {
                                     if let CwtTypeOrSpecialRef::Block(block) =
                                         scoped_type.cwt_type_for_matching()
                                     {
@@ -388,7 +429,10 @@ impl TypeCache {
 
                         // namespace contains path
                         if let Some(path) = type_def.path.as_ref() {
-                            if namespace.contains(path.trim_start_matches("game/")) {
+                            let namespace_str = interner.resolve(&namespace);
+                            if namespace_str
+                                .contains(interner.resolve(path).trim_start_matches("game/"))
+                            {
                                 if let CwtTypeOrSpecialRef::Block(block) =
                                     scoped_type.cwt_type_for_matching()
                                 {
@@ -464,28 +508,28 @@ impl TypeCache {
                 for t in union_types {
                     match &**t {
                         CwtType::Block(block) => {
-                            if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                            if let Some(type_def) = self.cwt_analyzer.get_type(block.type_name) {
                                 if let Some(type_key_filter) =
                                     type_def.rule_options.type_key_filter.as_ref()
                                 {
                                     match type_key_filter {
                                         TypeKeyFilter::Specific(key) => {
-                                            if entity.properties.kv.contains_key(&key.to_string()) {
+                                            if entity.properties.kv.contains_key(key) {
                                                 filtered_types
                                                     .push(Arc::new(CwtType::Block(block.clone())));
                                             }
                                         }
                                         TypeKeyFilter::OneOf(keys) => {
-                                            if keys.iter().any(|key| {
-                                                entity.properties.kv.contains_key(&key.to_string())
-                                            }) {
+                                            if keys
+                                                .iter()
+                                                .any(|key| entity.properties.kv.contains_key(key))
+                                            {
                                                 filtered_types
                                                     .push(Arc::new(CwtType::Block(block.clone())));
                                             }
                                         }
                                         TypeKeyFilter::Not(key) => {
-                                            if !entity.properties.kv.contains_key(&key.to_string())
-                                            {
+                                            if !entity.properties.kv.contains_key(key) {
                                                 filtered_types
                                                     .push(Arc::new(CwtType::Block(block.clone())));
                                             }
@@ -531,26 +575,26 @@ impl TypeCache {
                 for scoped_t in scoped_union_types {
                     match scoped_t.cwt_type_for_matching() {
                         CwtTypeOrSpecialRef::Block(block) => {
-                            if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                            if let Some(type_def) = self.cwt_analyzer.get_type(block.type_name) {
                                 if let Some(type_key_filter) =
                                     type_def.rule_options.type_key_filter.as_ref()
                                 {
                                     match type_key_filter {
                                         TypeKeyFilter::Specific(key) => {
-                                            if entity.properties.kv.contains_key(&key.to_string()) {
+                                            if entity.properties.kv.contains_key(key) {
                                                 filtered_types.push(scoped_t.clone());
                                             }
                                         }
                                         TypeKeyFilter::OneOf(keys) => {
-                                            if keys.iter().any(|key| {
-                                                entity.properties.kv.contains_key(&key.to_string())
-                                            }) {
+                                            if keys
+                                                .iter()
+                                                .any(|key| entity.properties.kv.contains_key(key))
+                                            {
                                                 filtered_types.push(scoped_t.clone());
                                             }
                                         }
                                         TypeKeyFilter::Not(key) => {
-                                            if !entity.properties.kv.contains_key(&key.to_string())
-                                            {
+                                            if !entity.properties.kv.contains_key(key) {
                                                 filtered_types.push(scoped_t.clone());
                                             }
                                         }
@@ -599,7 +643,7 @@ impl TypeCache {
     pub fn filter_union_types_by_key(
         &self,
         scoped_type: Arc<ScopedType>,
-        entity_key: &str,
+        entity_key: Spur,
     ) -> Arc<ScopedType> {
         match scoped_type.cwt_type_for_matching() {
             CwtTypeOrSpecialRef::Union(union_types) => {
@@ -607,25 +651,25 @@ impl TypeCache {
                 for t in union_types {
                     match &**t {
                         CwtType::Block(block) => {
-                            if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                            if let Some(type_def) = self.cwt_analyzer.get_type(block.type_name) {
                                 if let Some(type_key_filter) =
                                     type_def.rule_options.type_key_filter.as_ref()
                                 {
                                     match type_key_filter {
                                         TypeKeyFilter::Specific(key) => {
-                                            if entity_key == key {
+                                            if entity_key == *key {
                                                 filtered_types
                                                     .push(Arc::new(CwtType::Block(block.clone())));
                                             }
                                         }
                                         TypeKeyFilter::OneOf(keys) => {
-                                            if keys.iter().any(|key| entity_key == key) {
+                                            if keys.iter().any(|key| entity_key == *key) {
                                                 filtered_types
                                                     .push(Arc::new(CwtType::Block(block.clone())));
                                             }
                                         }
                                         TypeKeyFilter::Not(key) => {
-                                            if entity_key != key {
+                                            if entity_key != *key {
                                                 filtered_types
                                                     .push(Arc::new(CwtType::Block(block.clone())));
                                             }
@@ -673,23 +717,23 @@ impl TypeCache {
                 for scoped_t in scoped_union_types {
                     match scoped_t.cwt_type_for_matching() {
                         CwtTypeOrSpecialRef::Block(block) => {
-                            if let Some(type_def) = self.cwt_analyzer.get_type(&block.type_name) {
+                            if let Some(type_def) = self.cwt_analyzer.get_type(block.type_name) {
                                 if let Some(type_key_filter) =
                                     type_def.rule_options.type_key_filter.as_ref()
                                 {
                                     match type_key_filter {
                                         TypeKeyFilter::Specific(key) => {
-                                            if entity_key == key {
+                                            if entity_key == *key {
                                                 filtered_types.push(scoped_t.clone());
                                             }
                                         }
                                         TypeKeyFilter::OneOf(keys) => {
-                                            if keys.iter().any(|key| entity_key == key) {
+                                            if keys.iter().any(|key| entity_key == *key) {
                                                 filtered_types.push(scoped_t.clone());
                                             }
                                         }
                                         TypeKeyFilter::Not(key) => {
-                                            if entity_key != key {
+                                            if entity_key != *key {
                                                 filtered_types.push(scoped_t.clone());
                                             }
                                         }
@@ -743,15 +787,16 @@ impl TypeCache {
     /// Use `get_property_type` for simple string-based property lookups without AST context.
     pub fn get_property_type_from_ast(
         &self,
-        namespace: &str,
+        namespace: Spur,
         entity: &cw_parser::AstEntity<'_>,
         property_path: &str,
         file_path: Option<&str>,
     ) -> Option<TypeInfo> {
         // Get the base namespace type
         let namespace_type = self.get_namespace_type(namespace, file_path)?;
+        let interner = get_interner();
 
-        let model_entity = entity_from_ast(entity);
+        let model_entity = entity_from_ast(entity, get_interner());
 
         // Apply subtype narrowing to the namespace type
         let narrowed_namespace_type =
@@ -773,7 +818,10 @@ impl TypeCache {
 
             match &current_type.cwt_type_for_matching() {
                 CwtTypeOrSpecialRef::Block(_) => {
-                    match self.resolver.navigate_to_property(current_type, part) {
+                    match self
+                        .resolver
+                        .navigate_to_property(current_type, interner.get_or_intern(part))
+                    {
                         PropertyNavigationResult::Success(scoped_type) => {
                             current_type = scoped_type;
                         }
@@ -792,7 +840,7 @@ impl TypeCache {
                                 documentation: None,
                                 source_info: Some(format!(
                                     "Property not found in {} entity",
-                                    namespace
+                                    interner.resolve(&namespace)
                                 )),
                             });
                         }
@@ -800,7 +848,10 @@ impl TypeCache {
                 }
                 CwtTypeOrSpecialRef::Reference(_) => {
                     // Handle reference types using the resolver
-                    match self.resolver.navigate_to_property(current_type, part) {
+                    match self
+                        .resolver
+                        .navigate_to_property(current_type, interner.get_or_intern(part))
+                    {
                         PropertyNavigationResult::Success(scoped_type) => {
                             current_type = scoped_type;
                         }
@@ -819,7 +870,7 @@ impl TypeCache {
                                 documentation: None,
                                 source_info: Some(format!(
                                     "Property not found in {} entity",
-                                    namespace
+                                    interner.resolve(&namespace)
                                 )),
                             });
                         }
@@ -827,7 +878,10 @@ impl TypeCache {
                 }
                 CwtTypeOrSpecialRef::Union(_) | CwtTypeOrSpecialRef::ScopedUnion(_) => {
                     // Let the resolver handle union types - it has the proper logic for this
-                    match self.resolver.navigate_to_property(current_type, part) {
+                    match self
+                        .resolver
+                        .navigate_to_property(current_type, interner.get_or_intern(part))
+                    {
                         PropertyNavigationResult::Success(scoped_type) => {
                             current_type = scoped_type;
                         }
@@ -846,7 +900,7 @@ impl TypeCache {
                                 documentation: None,
                                 source_info: Some(format!(
                                     "Property not found in {} entity",
-                                    namespace
+                                    interner.resolve(&namespace)
                                 )),
                             });
                         }
@@ -898,8 +952,9 @@ impl TypeCache {
     pub fn apply_subtype_scope_changes(
         &self,
         base_type: Arc<ScopedType>,
-        subtypes: HashSet<String>,
+        subtypes: HashSet<Spur>,
     ) -> Arc<ScopedType> {
+        let interner = get_interner();
         // Start with the base scoped type
         let mut result_scope_stack = base_type.scope_stack().clone();
         let result_in_scripted_effect = base_type.in_scripted_effect_block().cloned();
@@ -907,21 +962,23 @@ impl TypeCache {
         // Apply scope changes from each matching subtype
         if let CwtTypeOrSpecialRef::Block(block_type) = base_type.cwt_type_for_matching() {
             for subtype_name in &subtypes {
+                let subtype_name_str = interner.resolve(subtype_name);
                 // Skip inverted subtypes (they start with !)
-                if subtype_name.starts_with('!') {
+                if subtype_name_str.starts_with('!') {
                     continue;
                 }
 
                 if let Some(subtype_def) = block_type.subtypes.get(subtype_name) {
                     // Apply push_scope if present
                     if let Some(push_scope) = &subtype_def.options.push_scope {
-                        if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(push_scope) {
-                            if let Err(e) =
-                                result_scope_stack.push_scope_type(scope_name.to_string())
-                            {
+                        if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(*push_scope)
+                        {
+                            if let Err(e) = result_scope_stack.push_scope_type(scope_name) {
                                 eprintln!(
                                     "Failed to push scope '{}' for subtype '{}': {}",
-                                    scope_name, subtype_name, e
+                                    interner.resolve(&scope_name),
+                                    interner.resolve(subtype_name),
+                                    e
                                 );
                             }
                         }
@@ -931,15 +988,16 @@ impl TypeCache {
                     if let Some(replace_scope) = &subtype_def.options.replace_scope {
                         let mut new_scopes = HashMap::new();
                         for (key, value) in replace_scope {
-                            if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(value) {
-                                new_scopes.insert(key.clone(), scope_name.to_string());
+                            if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(*value) {
+                                new_scopes.insert(key.clone(), scope_name);
                             }
                         }
 
                         if let Err(e) = result_scope_stack.replace_scope_from_strings(new_scopes) {
                             eprintln!(
                                 "Failed to replace scope for subtype '{}': {}",
-                                subtype_name, e
+                                interner.resolve(subtype_name),
+                                e
                             );
                         }
                     }

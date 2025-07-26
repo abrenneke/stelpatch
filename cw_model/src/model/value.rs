@@ -1,34 +1,35 @@
 use cw_parser::AstValue;
+use lasso::{Spur, ThreadedRodeo};
 
 use crate::{Entity, EntityVisitor};
 
 /// A value is anything after an =
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Value {
-    String(String),
-    Number(String),
+    String(Spur),
+    Number(Spur),
     Entity(Entity),
     Color(Color),
-    Maths(String),
+    Maths(Spur),
 }
 
 impl Default for Value {
     fn default() -> Self {
-        Self::String(String::new())
+        Self::String(Spur::default())
     }
 }
 
 impl ToString for Value {
     fn to_string(&self) -> String {
         match self {
-            Self::String(v) => format!("{}", v),
-            Self::Number(v) => format!("{}", v),
+            Self::String(v) => format!("{:?}", v),
+            Self::Number(v) => format!("{:?}", v),
             Self::Entity(v) => format!("{}", v.to_string()),
             Self::Color(c) => match &c.a {
                 Some(a) => format!("{} {{ {} {} {} {} }}", c.color_type, c.r, c.g, c.b, a),
                 None => format!("{} {{ {} {} {} }}", c.color_type, c.r, c.g, c.b),
             },
-            Self::Maths(v) => format!("{}", v),
+            Self::Maths(v) => format!("{:?}", v),
         }
     }
 }
@@ -57,7 +58,7 @@ impl Value {
         }
     }
 
-    pub fn string(&self) -> &String {
+    pub fn string(&self) -> &Spur {
         if let Value::String(s) = self {
             s
         } else {
@@ -65,7 +66,7 @@ impl Value {
         }
     }
 
-    pub fn number(&self) -> &String {
+    pub fn number(&self) -> &Spur {
         if let Value::Number(i) = self {
             i
         } else {
@@ -81,7 +82,7 @@ impl Value {
         }
     }
 
-    pub fn maths(&self) -> &String {
+    pub fn maths(&self) -> &Spur {
         if let Value::Maths(m) = self {
             m
         } else {
@@ -117,7 +118,7 @@ impl Value {
         }
     }
 
-    pub fn as_string(&self) -> Option<&String> {
+    pub fn as_string(&self) -> Option<&Spur> {
         if let Value::String(s) = self {
             Some(s)
         } else {
@@ -126,26 +127,27 @@ impl Value {
     }
 }
 
-pub(crate) struct ValueVisitor<'a> {
+pub(crate) struct ValueVisitor<'a, 'interner> {
     value: &'a mut Value,
+    interner: &'interner ThreadedRodeo,
 }
 
-impl<'a> ValueVisitor<'a> {
-    pub fn new(value: &'a mut Value) -> Self {
-        Self { value }
+impl<'a, 'interner> ValueVisitor<'a, 'interner> {
+    pub fn new(value: &'a mut Value, interner: &'interner ThreadedRodeo) -> Self {
+        Self { value, interner }
     }
 }
 
-impl<'a, 'b, 'ast> cw_parser::AstVisitor<'b, 'ast> for ValueVisitor<'a>
+impl<'a, 'b, 'ast, 'interner> cw_parser::AstVisitor<'b, 'ast> for ValueVisitor<'a, 'interner>
 where
     'b: 'ast,
 {
     fn visit_string(&mut self, node: &cw_parser::AstString<'b>) -> () {
-        *self.value = Value::String(node.value.value.to_string());
+        *self.value = Value::String(self.interner.get_or_intern(node.raw_value()));
     }
 
     fn visit_number(&mut self, node: &cw_parser::AstNumber<'b>) -> () {
-        *self.value = Value::Number(node.value.value.to_string());
+        *self.value = Value::Number(self.interner.get_or_intern(node.value.value));
     }
 
     fn visit_color(&mut self, node: &cw_parser::AstColor<'b>) -> () {
@@ -175,12 +177,12 @@ where
     }
 
     fn visit_maths(&mut self, node: &cw_parser::AstMaths<'b>) -> () {
-        *self.value = Value::Maths(node.value.value.to_string());
+        *self.value = Value::Maths(self.interner.get_or_intern(node.value.value));
     }
 
     fn visit_entity(&mut self, node: &cw_parser::AstEntity<'b>) -> () {
         let mut entity = Entity::new();
-        let mut entity_visitor = EntityVisitor::new(&mut entity);
+        let mut entity_visitor = EntityVisitor::new(&mut entity, self.interner);
         entity_visitor.visit_entity(node);
         *self.value = Value::Entity(entity);
     }

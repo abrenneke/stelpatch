@@ -2,8 +2,10 @@ use crate::handlers::cache::ORIGINAL_KEY_PROPERTY;
 use crate::handlers::cache::entity_restructurer::EntityRestructurer;
 use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, ScopedType};
+use crate::interner::get_interner;
 use cw_model::types::CwtAnalyzer;
 use cw_model::{CwtType, Entity, TypeKeyFilter, Value};
+use lasso::Spur;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -19,14 +21,16 @@ impl SubtypeHandler {
     /// Directly evaluate if a subtype matches based on its condition_properties and options
     /// This replaces the condition derivation + matching approach
     fn does_subtype_match(&self, subtype_def: &cw_model::types::Subtype, entity: &Entity) -> bool {
+        let interner = get_interner();
+
         // Handle CWT options that affect matching first (these take precedence)
         if let Some(starts_with) = &subtype_def.options.starts_with {
             // Check if any key in entity starts with the prefix
-            return entity
-                .properties
-                .kv
-                .keys()
-                .any(|key| key.starts_with(starts_with));
+            return entity.properties.kv.keys().any(|key| {
+                interner
+                    .resolve(key)
+                    .starts_with(interner.resolve(starts_with))
+            });
         } else if let Some(type_key_filter) = &subtype_def.options.type_key_filter {
             return match type_key_filter {
                 TypeKeyFilter::Specific(key) => {
@@ -35,10 +39,12 @@ impl SubtypeHandler {
                     let original_key_matches = entity
                         .properties
                         .kv
-                        .get(ORIGINAL_KEY_PROPERTY)
+                        .get(&interner.get_or_intern(ORIGINAL_KEY_PROPERTY))
                         .and_then(|prop_list| prop_list.0.first())
                         .and_then(|prop| match &prop.value {
-                            Value::String(s) => Some(s.contains(key)),
+                            Value::String(s) => {
+                                Some(interner.resolve(s).contains(interner.resolve(key)))
+                            }
                             _ => None,
                         })
                         .unwrap_or(false);
@@ -51,10 +57,12 @@ impl SubtypeHandler {
                         && entity
                             .properties
                             .kv
-                            .get(ORIGINAL_KEY_PROPERTY)
+                            .get(&interner.get_or_intern(ORIGINAL_KEY_PROPERTY))
                             .and_then(|prop_list| prop_list.0.first())
                             .and_then(|prop| match &prop.value {
-                                Value::String(s) => Some(!s.contains(key)),
+                                Value::String(s) => {
+                                    Some(!interner.resolve(s).contains(interner.resolve(key)))
+                                }
                                 _ => Some(true),
                             })
                             .unwrap_or(true)
@@ -66,10 +74,12 @@ impl SubtypeHandler {
                         || entity
                             .properties
                             .kv
-                            .get(ORIGINAL_KEY_PROPERTY)
+                            .get(&interner.get_or_intern(ORIGINAL_KEY_PROPERTY))
                             .and_then(|prop_list| prop_list.0.first())
                             .and_then(|prop| match &prop.value {
-                                Value::String(s) => Some(keys.iter().any(|key| s.contains(key))),
+                                Value::String(s) => Some(keys.iter().any(|key| {
+                                    interner.resolve(s).contains(interner.resolve(key))
+                                })),
                                 _ => None,
                             })
                             .unwrap_or(false)
@@ -86,18 +96,18 @@ impl SubtypeHandler {
         subtype_def
             .condition_properties
             .iter()
-            .all(|(key, property)| self.does_property_match_condition(key, property, entity))
+            .all(|(key, property)| self.does_property_match_condition(*key, property, entity))
     }
 
     /// Check if a property in an entity matches a specific condition
     fn does_property_match_condition(
         &self,
-        property_key: &str,
+        property_key: Spur,
         condition_property: &cw_model::types::Property,
         entity: &Entity,
     ) -> bool {
         // Check cardinality constraints first
-        let property_count = if entity.properties.kv.contains_key(property_key) {
+        let property_count = if entity.properties.kv.contains_key(&property_key) {
             1u32
         } else {
             0u32
@@ -111,7 +121,7 @@ impl SubtypeHandler {
         }
 
         // Get the actual property from the entity
-        let actual_property = entity.properties.kv.get(property_key);
+        let actual_property = entity.properties.kv.get(&property_key);
 
         match &*condition_property.property_type {
             CwtType::Literal(expected_value) => {
@@ -213,7 +223,7 @@ impl SubtypeHandler {
         expected_block
             .properties
             .iter()
-            .all(|(key, property)| self.does_property_match_condition(key, property, entity))
+            .all(|(key, property)| self.does_property_match_condition(*key, property, entity))
     }
 
     /// Check if a property count satisfies cardinality constraints
@@ -248,7 +258,7 @@ impl SubtypeHandler {
     }
 
     /// Get all available subtypes for a given type
-    pub fn get_available_subtypes(&self, cwt_type: &CwtType) -> Vec<String> {
+    pub fn get_available_subtypes(&self, cwt_type: &CwtType) -> Vec<Spur> {
         match cwt_type {
             CwtType::Block(block) => block.subtypes.keys().cloned().collect(),
             _ => Vec::new(),
@@ -256,9 +266,9 @@ impl SubtypeHandler {
     }
 
     /// Check if a type has a specific subtype
-    pub fn has_subtype(&self, cwt_type: &CwtType, subtype_name: &str) -> bool {
+    pub fn has_subtype(&self, cwt_type: &CwtType, subtype_name: Spur) -> bool {
         match cwt_type {
-            CwtType::Block(block) => block.subtypes.contains_key(subtype_name),
+            CwtType::Block(block) => block.subtypes.contains_key(&subtype_name),
             _ => false,
         }
     }
@@ -267,10 +277,10 @@ impl SubtypeHandler {
     pub fn get_subtype_definition<'b>(
         &self,
         cwt_type: &'b CwtType,
-        subtype_name: &str,
+        subtype_name: Spur,
     ) -> Option<&'b cw_model::types::Subtype> {
         match cwt_type {
-            CwtType::Block(block) => block.subtypes.get(subtype_name),
+            CwtType::Block(block) => block.subtypes.get(&subtype_name),
             _ => None,
         }
     }
@@ -281,7 +291,9 @@ impl SubtypeHandler {
         &self,
         scoped_type: Arc<ScopedType>,
         entity: &Entity,
-    ) -> HashSet<String> {
+    ) -> HashSet<Spur> {
+        let interner = get_interner();
+
         match scoped_type.cwt_type_for_matching() {
             CwtTypeOrSpecialRef::Block(block) => {
                 // Check each subtype condition and collect all matches
@@ -298,7 +310,9 @@ impl SubtypeHandler {
                     if matches {
                         matching_subtypes.insert(subtype_name.clone());
                     } else {
-                        matching_subtypes.insert(format!("!{}", subtype_name));
+                        matching_subtypes.insert(
+                            interner.get_or_intern(format!("!{}", interner.resolve(subtype_name))),
+                        );
                     }
                 }
 
@@ -311,10 +325,10 @@ impl SubtypeHandler {
     /// Get entity keys from a namespace that match a specific subtype
     pub fn get_entity_keys_in_namespace_for_subtype(
         &self,
-        namespace: &str,
+        namespace: Spur,
         cwt_type: &CwtType,
-        subtype_name: &str,
-    ) -> Vec<String> {
+        subtype_name: Spur,
+    ) -> Vec<Spur> {
         // Get the subtype definition
         let subtype_def = match self.get_subtype_definition(cwt_type, subtype_name) {
             Some(def) => def,
@@ -355,8 +369,8 @@ impl SubtypeHandler {
 
         // Apply push_scope if present
         if let Some(push_scope) = &subtype_def.options.push_scope {
-            if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(push_scope) {
-                new_scope.push_scope_type(scope_name.to_string())?;
+            if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(*push_scope) {
+                new_scope.push_scope_type(scope_name)?;
             }
         }
 
@@ -365,8 +379,8 @@ impl SubtypeHandler {
             let mut new_scopes = HashMap::new();
 
             for (key, value) in replace_scope {
-                if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(value) {
-                    new_scopes.insert(key.clone(), scope_name.to_string());
+                if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(*value) {
+                    new_scopes.insert(key.clone(), scope_name);
                 }
             }
 
@@ -381,7 +395,7 @@ impl SubtypeHandler {
         &self,
         scope_stack: &ScopeStack,
         cwt_type: &CwtType,
-        active_subtypes: &HashSet<String>,
+        active_subtypes: &HashSet<Spur>,
     ) -> Result<ScopeStack, ScopeError> {
         let mut new_scope = scope_stack.branch();
 
@@ -389,7 +403,7 @@ impl SubtypeHandler {
             CwtType::Block(block) => {
                 // Apply scope changes from all active subtypes
                 for subtype_name in active_subtypes {
-                    if let Some(subtype_def) = block.subtypes.get(subtype_name) {
+                    if let Some(subtype_def) = block.subtypes.get(&subtype_name) {
                         new_scope = self.apply_subtype_scope_changes(&new_scope, subtype_def)?;
                     }
                 }

@@ -14,7 +14,7 @@ pub fn apply_alias_scope_changes(
 
     // Apply push_scope if present
     if let Some(push_scope) = &alias_def.options.push_scope {
-        if let Some(scope_name) = cwt_analyzer.resolve_scope_name(push_scope) {
+        if let Some(scope_name) = cwt_analyzer.resolve_scope_name(*push_scope) {
             new_scope.push_scope_type(scope_name)?;
         }
     }
@@ -24,8 +24,8 @@ pub fn apply_alias_scope_changes(
         let mut new_scopes = HashMap::new();
 
         for (key, value) in replace_scope {
-            if let Some(scope_name) = cwt_analyzer.resolve_scope_name(value) {
-                new_scopes.insert(key.clone(), scope_name.to_string());
+            if let Some(scope_name) = cwt_analyzer.resolve_scope_name(*value) {
+                new_scopes.insert(*key, scope_name);
             }
         }
 

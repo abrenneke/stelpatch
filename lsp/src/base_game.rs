@@ -25,11 +25,13 @@ pub use victoria_3::VICTORIA_3_INSTALL_PATH as GAME_INSTALL_PATH;
 
 /// Game-agnostic wrapper functions
 pub mod game {
+    use crate::interner::get_interner;
+
     use super::*;
 
     /// Load the base game as a mod definition
     pub fn load_global_as_mod_definition(load_mode: LoadMode) -> &'static GameMod {
-        BaseGame::load_global_as_mod_definition(load_mode)
+        BaseGame::load_global_as_mod_definition(load_mode, get_interner())
     }
 
     /// Load the base game with optional custom install path
@@ -37,7 +39,7 @@ pub mod game {
         install_path: Option<&std::path::Path>,
         load_mode: LoadMode,
     ) -> Result<GameMod> {
-        BaseGame::load_as_mod_definition(install_path, load_mode)
+        BaseGame::load_as_mod_definition(install_path, load_mode, get_interner())
     }
 
     /// Get the game installation directory on Windows
@@ -47,7 +49,7 @@ pub mod game {
 
     /// Load modifiers from the game logs directory
     pub fn load_modifiers() -> Result<Vec<Modifier>> {
-        BaseGame::load_modifiers()
+        BaseGame::load_modifiers(get_interner())
     }
 
     /// Get the default config path for the current game

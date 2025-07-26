@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use cw_parser::{AstEntity, AstModule, AstVisitor};
 use indent::indent_all_by;
+use lasso::{Spur, ThreadedRodeo};
 
 use crate::{
     ConditionalBlock, ConditionalBlockVisitor, Operator, Properties, PropertyInfo,
@@ -19,7 +20,7 @@ pub struct Entity {
     pub properties: Properties,
 
     /// Conditional blocks in the entity, like [[CONDITION] { a b c }]
-    pub conditional_blocks: HashMap<String, ConditionalBlock>,
+    pub conditional_blocks: HashMap<Spur, ConditionalBlock>,
 }
 
 impl ToString for Entity {
@@ -59,10 +60,10 @@ impl Entity {
         }
     }
 
-    pub fn with_property(mut self, key: &str, value: Value) -> Self {
+    pub fn with_property(mut self, key: &str, value: Value, interner: &ThreadedRodeo) -> Self {
         self.properties
             .kv
-            .entry(key.to_string())
+            .entry(interner.get_or_intern(key.to_string()))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(PropertyInfo {
@@ -76,11 +77,12 @@ impl Entity {
         mut self,
         key: &str,
         values: I,
+        interner: &ThreadedRodeo,
     ) -> Self {
         let items = self
             .properties
             .kv
-            .entry(key.to_string())
+            .entry(interner.get_or_intern(key.to_string()))
             .or_insert_with(PropertyInfoList::new);
         for value in values {
             items.push(PropertyInfo {
@@ -96,10 +98,11 @@ impl Entity {
         key: &str,
         operator: Operator,
         value: Value,
+        interner: &ThreadedRodeo,
     ) -> Self {
         self.properties
             .kv
-            .entry(key.to_string())
+            .entry(interner.get_or_intern(key.to_string()))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(PropertyInfo { operator, value });
@@ -112,7 +115,7 @@ impl Entity {
     }
 
     pub fn with_conditional(mut self, value: ConditionalBlock) -> Self {
-        self.conditional_blocks.insert(value.key.clone(), value);
+        self.conditional_blocks.insert(value.key, value);
         self
     }
 }
@@ -146,42 +149,43 @@ pub enum EntityMergeMode {
     Unknown,
 }
 
-pub fn entity_from_ast<'a>(ast: &AstEntity<'a>) -> Entity {
+pub fn entity_from_ast<'a>(ast: &AstEntity<'a>, interner: &ThreadedRodeo) -> Entity {
     let mut entity = Entity::new();
-    let mut entity_visitor = EntityVisitor::new(&mut entity);
+    let mut entity_visitor = EntityVisitor::new(&mut entity, interner);
     entity_visitor.visit_entity(ast);
     entity
 }
 
-pub fn entity_from_module_ast<'a>(ast: &AstModule<'a>) -> Entity {
+pub fn entity_from_module_ast<'a>(ast: &AstModule<'a>, interner: &ThreadedRodeo) -> Entity {
     let mut entity = Entity::new();
-    let mut entity_visitor = EntityVisitor::new(&mut entity);
+    let mut entity_visitor = EntityVisitor::new(&mut entity, interner);
     entity_visitor.visit_module(ast);
     entity
 }
 
-pub(crate) struct EntityVisitor<'a> {
+pub(crate) struct EntityVisitor<'a, 'interner> {
     entity: &'a mut Entity,
+    interner: &'interner ThreadedRodeo,
 }
 
-impl<'a> EntityVisitor<'a> {
-    pub fn new(entity: &'a mut Entity) -> Self {
-        Self { entity }
+impl<'a, 'interner> EntityVisitor<'a, 'interner> {
+    pub fn new(entity: &'a mut Entity, interner: &'interner ThreadedRodeo) -> Self {
+        Self { entity, interner }
     }
 }
 
-impl<'a, 'b, 'ast> cw_parser::AstVisitor<'b, 'ast> for EntityVisitor<'a>
+impl<'a, 'b, 'ast, 'interner> cw_parser::AstVisitor<'b, 'ast> for EntityVisitor<'a, 'interner>
 where
     'b: 'ast,
 {
     fn visit_expression(&mut self, node: &cw_parser::AstExpression<'b>) -> () {
         let mut property = PropertyInfo::default();
-        let mut property_visitor = PropertyVisitor::new(&mut property);
+        let mut property_visitor = PropertyVisitor::new(&mut property, self.interner);
         property_visitor.visit_expression(node);
         self.entity
             .properties
             .kv
-            .entry(node.key.value.to_string())
+            .entry(self.interner.get_or_intern(node.key.value.to_string()))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(property);
@@ -189,17 +193,19 @@ where
 
     fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> () {
         let mut value = Value::default();
-        let mut value_visitor = ValueVisitor::new(&mut value);
+        let mut value_visitor = ValueVisitor::new(&mut value, self.interner);
         value_visitor.visit_value(node);
         self.entity.items.push(value);
     }
 
     fn visit_conditional_block(&mut self, node: &cw_parser::AstConditionalBlock<'b>) -> () {
         let mut conditional_block = ConditionalBlock::default();
-        let mut conditional_block_visitor = ConditionalBlockVisitor::new(&mut conditional_block);
+        let mut conditional_block_visitor =
+            ConditionalBlockVisitor::new(&mut conditional_block, self.interner);
         conditional_block_visitor.visit_conditional_block(node);
-        self.entity
-            .conditional_blocks
-            .insert(node.key.to_string(), conditional_block);
+        self.entity.conditional_blocks.insert(
+            self.interner.get_or_intern(node.key.clone()),
+            conditional_block,
+        );
     }
 }

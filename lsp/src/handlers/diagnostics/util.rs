@@ -3,18 +3,33 @@ use std::ops::Range;
 use cw_model::CwtType;
 use tower_lsp::lsp_types::Position;
 
+use crate::interner::get_interner;
+
 /// Get a human-readable name for a CWT type
 pub fn get_type_name(cwt_type: &CwtType) -> String {
+    let interner = get_interner();
     match cwt_type {
         CwtType::Simple(simple_type) => format!("{:?}", simple_type),
         CwtType::Block(_) => "block".to_string(),
-        CwtType::Literal(value) => format!("'{}'", value),
+        CwtType::Literal(value) => format!("'{}'", interner.resolve(value)),
         CwtType::LiteralSet(values) => {
             let value_list: Vec<_> = values.iter().take(3).collect();
             if values.len() > 3 {
-                format!("one of {:?}...", value_list)
+                format!(
+                    "one of {:?}...",
+                    value_list
+                        .iter()
+                        .map(|v| interner.resolve(v))
+                        .collect::<Vec<_>>()
+                )
             } else {
-                format!("one of {:?}", value_list)
+                format!(
+                    "one of {:?}",
+                    value_list
+                        .iter()
+                        .map(|v| interner.resolve(v))
+                        .collect::<Vec<_>>()
+                )
             }
         }
         CwtType::Array(_) => "array".to_string(),

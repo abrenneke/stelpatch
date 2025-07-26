@@ -2,9 +2,12 @@ use std::sync::Arc;
 
 use cw_parser::{AstEntityItem, AstValue};
 
-use crate::handlers::{
-    cache::TypeCache,
-    scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType},
+use crate::{
+    handlers::{
+        cache::TypeCache,
+        scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType},
+    },
+    interner::get_interner,
 };
 
 /// Check if a value is structurally compatible with a type (without content validation)
@@ -39,6 +42,7 @@ fn calculate_structural_compatibility_score_with_depth(
         return 0.5; // Default to neutral score if cache not available
     }
 
+    let interner = get_interner();
     let cache = TypeCache::get().unwrap();
     let resolved_type = cache.resolve_type(expected_type.clone());
 
@@ -51,7 +55,7 @@ fn calculate_structural_compatibility_score_with_depth(
             for item in &entity.items {
                 if let AstEntityItem::Expression(expr) = item {
                     total_keys += 1;
-                    let key_name = expr.key.raw_value();
+                    let key_name = interner.get_or_intern(expr.key.raw_value());
 
                     if let PropertyNavigationResult::Success(_) = cache
                         .get_resolver()

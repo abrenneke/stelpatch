@@ -1,4 +1,5 @@
 use cw_parser::{AstConditionalBlock, AstExpression, AstValue, AstVisitor};
+use lasso::{Spur, ThreadedRodeo};
 
 use crate::{Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value, ValueVisitor};
 
@@ -6,7 +7,7 @@ use crate::{Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value, 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConditionalBlock {
     pub is_not: bool,
-    pub key: String,
+    pub key: Spur,
     pub items: Vec<Value>,
     pub properties: Properties,
 }
@@ -15,7 +16,7 @@ impl ConditionalBlock {
     pub fn new() -> Self {
         Self {
             is_not: false,
-            key: String::new(),
+            key: Spur::default(),
             items: Vec::new(),
             properties: Properties::new(),
         }
@@ -36,7 +37,7 @@ impl ToString for ConditionalBlock {
             buf.push_str("!");
         }
 
-        buf.push_str(&self.key);
+        buf.push_str(format!("{:?}", self.key).as_str());
         buf.push_str("]\n");
 
         for value in &self.items {
@@ -44,7 +45,7 @@ impl ToString for ConditionalBlock {
             buf.push_str(&value);
         }
         for (key, value) in &self.properties.kv {
-            let value = format!("{} {}\n", key, value.to_string());
+            let value = format!("{:?} {}\n", key, value.to_string());
             buf.push_str(&value);
         }
 
@@ -53,35 +54,42 @@ impl ToString for ConditionalBlock {
     }
 }
 
-pub(crate) struct ConditionalBlockVisitor<'a> {
+pub(crate) struct ConditionalBlockVisitor<'a, 'interner> {
     conditional_block: &'a mut ConditionalBlock,
+    interner: &'interner ThreadedRodeo,
 }
 
-impl<'a> ConditionalBlockVisitor<'a> {
-    pub fn new(conditional_block: &'a mut ConditionalBlock) -> Self {
-        Self { conditional_block }
+impl<'a, 'interner> ConditionalBlockVisitor<'a, 'interner> {
+    pub fn new(
+        conditional_block: &'a mut ConditionalBlock,
+        interner: &'interner ThreadedRodeo,
+    ) -> Self {
+        Self {
+            conditional_block,
+            interner,
+        }
     }
 }
 
-impl<'a, 'b, 'ast> AstVisitor<'b, 'ast> for ConditionalBlockVisitor<'a>
+impl<'a, 'b, 'ast, 'interner> AstVisitor<'b, 'ast> for ConditionalBlockVisitor<'a, 'interner>
 where
     'b: 'ast,
 {
     fn visit_conditional_block(&mut self, node: &AstConditionalBlock<'b>) -> () {
         self.conditional_block.is_not = node.is_not;
-        self.conditional_block.key = node.key.to_string();
+        self.conditional_block.key = self.interner.get_or_intern(node.key.raw_value());
 
         self.walk_conditional_block(node);
     }
 
     fn visit_expression(&mut self, node: &AstExpression<'b>) -> () {
         let mut property = PropertyInfo::default();
-        let mut property_visitor = PropertyVisitor::new(&mut property);
+        let mut property_visitor = PropertyVisitor::new(&mut property, self.interner);
         property_visitor.visit_expression(node);
         self.conditional_block
             .properties
             .kv
-            .entry(node.key.value.to_string())
+            .entry(self.interner.get_or_intern(node.key.value.to_string()))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(property);
@@ -89,7 +97,7 @@ where
 
     fn visit_value(&mut self, node: &AstValue<'b>) -> () {
         let mut value = Value::default();
-        let mut value_visitor = ValueVisitor::new(&mut value);
+        let mut value_visitor = ValueVisitor::new(&mut value, self.interner);
         value_visitor.visit_value(node);
         self.conditional_block.items.push(value);
     }

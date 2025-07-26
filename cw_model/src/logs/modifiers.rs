@@ -1,16 +1,18 @@
+use lasso::{Spur, ThreadedRodeo};
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Modifier {
-    pub name: String,
-    pub categories: Vec<String>,
+    pub name: Spur,
+    pub categories: Vec<Spur>,
 }
 
 impl Modifier {
-    pub fn new(name: String, categories: Vec<String>) -> Self {
+    pub fn new(name: Spur, categories: Vec<Spur>) -> Self {
         Self { name, categories }
     }
 }
 
-pub fn parse_modifier_log(log_content: &str) -> Vec<Modifier> {
+pub fn parse_modifier_log(log_content: &str, interner: &ThreadedRodeo) -> Vec<Modifier> {
     let mut modifiers = Vec::new();
     let mut found_definitions = false;
 
@@ -30,7 +32,7 @@ pub fn parse_modifier_log(log_content: &str) -> Vec<Modifier> {
 
         // Parse modifier entries that start with "- "
         if line.starts_with("- ") {
-            if let Some(modifier) = parse_modifier_line(line) {
+            if let Some(modifier) = parse_modifier_line(line, &interner) {
                 modifiers.push(modifier);
             }
         }
@@ -39,7 +41,7 @@ pub fn parse_modifier_log(log_content: &str) -> Vec<Modifier> {
     modifiers
 }
 
-fn parse_modifier_line(line: &str) -> Option<Modifier> {
+fn parse_modifier_line(line: &str, interner: &ThreadedRodeo) -> Option<Modifier> {
     // Remove the "- " prefix
     let line = line.strip_prefix("- ")?;
 
@@ -47,13 +49,13 @@ fn parse_modifier_line(line: &str) -> Option<Modifier> {
     let parts: Vec<&str> = line.split(", Category: ").collect();
 
     if parts.len() == 2 {
-        let name = parts[0].trim().to_string();
+        let name = interner.get_or_intern(parts[0].trim());
         let categories_str = parts[1].trim();
 
         // Split categories by comma and trim whitespace
-        let categories: Vec<String> = categories_str
+        let categories: Vec<Spur> = categories_str
             .split(',')
-            .map(|cat| cat.trim().to_string())
+            .map(|cat| interner.get_or_intern(cat.trim()))
             .collect();
 
         Some(Modifier::new(name, categories))
@@ -68,6 +70,7 @@ mod tests {
 
     #[test]
     fn test_parse_modifier_log() {
+        let interner = ThreadedRodeo::new();
         let log_content = r#"[13:52:17][modifier.cpp:1999]: 
  == MODIFIER DOCUMENTATION ==
 Note on Modifier Categories:
@@ -84,32 +87,38 @@ Printing Modifier Definitions:
 - ship_hull_add, Category: Orbital Stations, Space Stations, Military Ships
 "#;
 
-        let modifiers = parse_modifier_log(log_content);
+        let modifiers = parse_modifier_log(log_content, &interner);
 
         assert_eq!(modifiers.len(), 7);
         assert_eq!(
             modifiers[0],
-            Modifier::new("blank_modifier".to_string(), vec!["Pops".to_string()])
+            Modifier::new(
+                interner.get_or_intern("blank_modifier"),
+                vec![interner.get_or_intern("Pops")]
+            )
         );
         assert_eq!(
             modifiers[1],
-            Modifier::new("pop_political_power".to_string(), vec!["Pops".to_string()])
+            Modifier::new(
+                interner.get_or_intern("pop_political_power"),
+                vec![interner.get_or_intern("Pops")]
+            )
         );
         assert_eq!(
             modifiers[5],
             Modifier::new(
-                "pop_environment_tolerance".to_string(),
-                vec!["Habitability".to_string()]
+                interner.get_or_intern("pop_environment_tolerance"),
+                vec![interner.get_or_intern("Habitability")]
             )
         );
         assert_eq!(
             modifiers[6],
             Modifier::new(
-                "ship_hull_add".to_string(),
+                interner.get_or_intern("ship_hull_add"),
                 vec![
-                    "Orbital Stations".to_string(),
-                    "Space Stations".to_string(),
-                    "Military Ships".to_string()
+                    interner.get_or_intern("Orbital Stations"),
+                    interner.get_or_intern("Space Stations"),
+                    interner.get_or_intern("Military Ships")
                 ]
             )
         );
@@ -117,37 +126,40 @@ Printing Modifier Definitions:
 
     #[test]
     fn test_parse_modifier_line() {
+        let interner = ThreadedRodeo::new();
         let line = "- pop_happiness, Category: Pops";
-        let modifier = parse_modifier_line(line).unwrap();
+        let modifier = parse_modifier_line(line, &interner).unwrap();
 
-        assert_eq!(modifier.name, "pop_happiness");
-        assert_eq!(modifier.categories, vec!["Pops".to_string()]);
+        assert_eq!(modifier.name, interner.get_or_intern("pop_happiness"));
+        assert_eq!(modifier.categories, vec![interner.get_or_intern("Pops")]);
     }
 
     #[test]
     fn test_parse_multiple_categories() {
+        let interner = ThreadedRodeo::new();
         let line = "- ship_hull_add, Category: Orbital Stations, Space Stations, Military Ships, Civilian Ships, Science Ships, Transport Ships, Ship Design Stats";
-        let modifier = parse_modifier_line(line).unwrap();
+        let modifier = parse_modifier_line(line, &interner).unwrap();
 
-        assert_eq!(modifier.name, "ship_hull_add");
+        assert_eq!(modifier.name, interner.get_or_intern("ship_hull_add"));
         assert_eq!(
             modifier.categories,
             vec![
-                "Orbital Stations".to_string(),
-                "Space Stations".to_string(),
-                "Military Ships".to_string(),
-                "Civilian Ships".to_string(),
-                "Science Ships".to_string(),
-                "Transport Ships".to_string(),
-                "Ship Design Stats".to_string()
+                interner.get_or_intern("Orbital Stations"),
+                interner.get_or_intern("Space Stations"),
+                interner.get_or_intern("Military Ships"),
+                interner.get_or_intern("Civilian Ships"),
+                interner.get_or_intern("Science Ships"),
+                interner.get_or_intern("Transport Ships"),
+                interner.get_or_intern("Ship Design Stats")
             ]
         );
     }
 
     #[test]
     fn test_parse_invalid_line() {
+        let interner = ThreadedRodeo::new();
         let line = "- invalid_line_format";
-        let result = parse_modifier_line(line);
+        let result = parse_modifier_line(line, &interner);
 
         assert!(result.is_none());
     }

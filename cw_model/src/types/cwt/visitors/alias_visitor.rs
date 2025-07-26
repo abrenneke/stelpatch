@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use cw_parser::{AstCwtIdentifierOrString, AstCwtRule, CwtReferenceType, CwtVisitor};
+use lasso::{Spur, ThreadedRodeo};
 
 use crate::{
     AliasDefinition, AliasPattern, ConversionError, CwtAnalysisData, CwtConverter, CwtOptions,
@@ -13,14 +14,15 @@ use crate::{
 };
 
 /// Specialized visitor for alias definitions
-pub struct AliasVisitor<'a> {
+pub struct AliasVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
+    interner: &'interner ThreadedRodeo,
 }
 
-impl<'a> AliasVisitor<'a> {
+impl<'a, 'interner> AliasVisitor<'a, 'interner> {
     /// Create a new alias visitor
-    pub fn new(data: &'a mut CwtAnalysisData) -> Self {
-        Self { data }
+    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+        Self { data, interner }
     }
 
     /// Check if this visitor can handle the given rule
@@ -60,15 +62,16 @@ impl<'a> AliasVisitor<'a> {
     fn process_regular_alias(&mut self, rule: &AstCwtRule) {
         if let Some(identifier) = &rule.key.as_identifier() {
             if let Some(scope) = &identifier.name.scope {
-                let category = scope.raw_value();
-                let new_to_type = CwtConverter::convert_value(&rule.value, None);
-                let options = CwtOptions::from_rule(rule);
+                let category = self.interner.get_or_intern(scope.raw_value());
+                let new_to_type = CwtConverter::convert_value(&rule.value, None, self.interner);
+                let options = CwtOptions::from_rule(rule, self.interner);
 
                 match &identifier.name.key {
                     AstCwtIdentifierOrString::Identifier(key_id) => match key_id.identifier_type {
                         CwtReferenceType::TypeRef => {
-                            let name = key_id.name.raw_value();
-                            let alias_pattern = AliasPattern::new_type_ref(category, name);
+                            let name = self.interner.get_or_intern(key_id.name.raw_value());
+                            let alias_pattern =
+                                AliasPattern::new_type_ref(category, name, self.interner);
                             self.insert_or_merge_alias(
                                 alias_pattern,
                                 category,
@@ -78,8 +81,9 @@ impl<'a> AliasVisitor<'a> {
                             );
                         }
                         CwtReferenceType::Enum => {
-                            let name = key_id.name.raw_value();
-                            let alias_pattern = AliasPattern::new_enum(category, name);
+                            let name = self.interner.get_or_intern(key_id.name.raw_value());
+                            let alias_pattern =
+                                AliasPattern::new_enum(category, name, self.interner);
                             self.insert_or_merge_alias(
                                 alias_pattern,
                                 category,
@@ -89,9 +93,13 @@ impl<'a> AliasVisitor<'a> {
                             );
                         }
                         CwtReferenceType::TypeRefWithPrefixSuffix(prefix, suffix) => {
-                            let name = key_id.name.raw_value();
+                            let name = self.interner.get_or_intern(key_id.name.raw_value());
                             let alias_pattern = AliasPattern::new_type_ref_with_prefix_suffix(
-                                category, name, prefix, suffix,
+                                category,
+                                name,
+                                prefix.map(|p| self.interner.get_or_intern(p)),
+                                suffix.map(|s| self.interner.get_or_intern(s)),
+                                self.interner,
                             );
                             self.insert_or_merge_alias(
                                 alias_pattern,
@@ -106,8 +114,8 @@ impl<'a> AliasVisitor<'a> {
                         }
                     },
                     AstCwtIdentifierOrString::String(key_str) => {
-                        let name = key_str.raw_value();
-                        let alias_pattern = AliasPattern::new_basic(category, name);
+                        let name = self.interner.get_or_intern(key_str.raw_value());
+                        let alias_pattern = AliasPattern::new_basic(category, name, self.interner);
                         self.insert_or_merge_alias(
                             alias_pattern,
                             category,
@@ -127,8 +135,8 @@ impl<'a> AliasVisitor<'a> {
     fn insert_or_merge_alias(
         &mut self,
         alias_pattern: AliasPattern,
-        category: &str,
-        name: &str,
+        category: Spur,
+        name: Spur,
         new_to_type: Arc<CwtType>,
         options: CwtOptions,
     ) {
@@ -152,8 +160,8 @@ impl<'a> AliasVisitor<'a> {
         } else {
             // First definition, insert as normal
             let alias_def = AliasDefinition {
-                category: category.to_string(),
-                name: name.to_string(),
+                category,
+                name,
                 to: new_to_type,
                 options,
             };
@@ -164,11 +172,11 @@ impl<'a> AliasVisitor<'a> {
     /// Process a single alias definition
     fn process_single_alias(&mut self, rule: &AstCwtRule) {
         if let Some(identifier) = &rule.key.as_identifier() {
-            let name = identifier.name.key.name();
-            let new_alias_type = CwtConverter::convert_value(&rule.value, None);
-            let _options = CwtOptions::from_rule(rule); // Extract options even if not used for single aliases
+            let name = self.interner.get_or_intern(identifier.name.key.name());
+            let new_alias_type = CwtConverter::convert_value(&rule.value, None, self.interner);
+            let _options = CwtOptions::from_rule(rule, self.interner); // Extract options even if not used for single aliases
 
-            if let Some(existing_type) = self.data.single_aliases.get_mut(name) {
+            if let Some(existing_type) = self.data.single_aliases.get_mut(&name) {
                 // Merge with existing single alias by creating a union
                 let old_type = std::mem::replace(existing_type, Arc::new(CwtType::Unknown));
                 *existing_type = match &*old_type {
@@ -185,9 +193,7 @@ impl<'a> AliasVisitor<'a> {
                 };
             } else {
                 // First definition, insert as normal
-                self.data
-                    .single_aliases
-                    .insert(name.to_string(), new_alias_type);
+                self.data.single_aliases.insert(name, new_alias_type);
             }
         } else {
             self.data.errors.push(ConversionError::InvalidAliasFormat);
@@ -195,7 +201,7 @@ impl<'a> AliasVisitor<'a> {
     }
 }
 
-impl<'a> CwtVisitor<'a> for AliasVisitor<'a> {
+impl<'a, 'interner> CwtVisitor<'a> for AliasVisitor<'a, 'interner> {
     fn visit_rule(&mut self, rule: &AstCwtRule<'a>) {
         if self.can_handle_rule(rule) {
             self.process_alias_definition(rule);
@@ -215,7 +221,8 @@ mod tests {
     #[test]
     fn scope_exists() {
         let mut data = CwtAnalysisData::new();
-        let mut visitor = AliasVisitor::new(&mut data);
+        let interner = ThreadedRodeo::new();
+        let mut visitor = AliasVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
 #any scope

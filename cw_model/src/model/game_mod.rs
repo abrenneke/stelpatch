@@ -3,6 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use anyhow::anyhow;
 use colored::*;
 use glob::glob;
+use lasso::ThreadedRodeo;
 use rayon::prelude::*;
 
 use crate::{ModDefinition, Module, Namespace};
@@ -53,21 +54,31 @@ impl GameMod {
         self.namespaces.get(namespace)
     }
 
-    fn parse_serial(paths: &Vec<PathBuf>) -> Vec<Result<Module, anyhow::Error>> {
+    fn parse_serial(
+        paths: &Vec<PathBuf>,
+        interner: &ThreadedRodeo,
+    ) -> Vec<Result<Module, anyhow::Error>> {
         paths
             .iter()
-            .map(move |path| Module::from_file(path))
+            .map(move |path| Module::from_file(path, interner))
             .collect()
     }
 
-    fn parse_parallel(paths: &Vec<PathBuf>) -> Vec<Result<Module, anyhow::Error>> {
+    fn parse_parallel(
+        paths: &Vec<PathBuf>,
+        interner: &ThreadedRodeo,
+    ) -> Vec<Result<Module, anyhow::Error>> {
         paths
             .par_iter()
-            .map(move |path| Module::from_file(path))
+            .map(move |path| Module::from_file(path, interner))
             .collect()
     }
 
-    pub fn load(definition: ModDefinition, mode: LoadMode) -> Result<Self, anyhow::Error> {
+    pub fn load(
+        definition: ModDefinition,
+        mode: LoadMode,
+        interner: &ThreadedRodeo,
+    ) -> Result<Self, anyhow::Error> {
         let base_path = PathBuf::from(definition.path.as_ref().unwrap());
 
         // Define glob patterns for different file types
@@ -177,8 +188,8 @@ impl GameMod {
         let mut mod_modules = vec![];
 
         let modules = match mode {
-            LoadMode::Serial => Self::parse_serial(&paths),
-            LoadMode::Parallel => Self::parse_parallel(&paths),
+            LoadMode::Serial => Self::parse_serial(&paths, interner),
+            LoadMode::Parallel => Self::parse_parallel(&paths, interner),
         };
 
         for (module, path) in modules.into_iter().zip(paths.iter()) {

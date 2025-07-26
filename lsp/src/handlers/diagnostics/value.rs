@@ -2,14 +2,20 @@ use std::ops::Range;
 
 use cw_model::SimpleType;
 use cw_parser::{AstNode, AstValue};
+use lasso::Spur;
 use tower_lsp::lsp_types::Diagnostic;
 
-use crate::handlers::{
-    cache::{EntityRestructurer, FileIndex, FullAnalysis, GameDataCache, ModDataCache, TypeCache},
-    diagnostics::diagnostic::create_type_mismatch_diagnostic,
-    scope::ScopeStack,
-    settings::Settings,
-    utils::contains_scripted_argument,
+use crate::{
+    handlers::{
+        cache::{
+            EntityRestructurer, FileIndex, FullAnalysis, GameDataCache, ModDataCache, TypeCache,
+        },
+        diagnostics::diagnostic::create_type_mismatch_diagnostic,
+        scope::ScopeStack,
+        settings::Settings,
+        utils::contains_scripted_argument,
+    },
+    interner::get_interner,
 };
 
 /// Check if a value is compatible with a simple type with scope context, returning a diagnostic if incompatible
@@ -18,8 +24,9 @@ pub fn is_value_compatible_with_simple_type(
     simple_type: &SimpleType,
     content: &str,
     scope_manager: &ScopeStack,
-    current_namespace: Option<&str>,
+    current_namespace: Option<Spur>,
 ) -> Option<Diagnostic> {
+    let interner = get_interner();
     match (value, simple_type) {
         (AstValue::String(_), SimpleType::Localisation) => {
             if Settings::global().validate_localisation {
@@ -93,7 +100,7 @@ pub fn is_value_compatible_with_simple_type(
             ))
         }
         (AstValue::String(scope_field), SimpleType::ScopeField) => {
-            let field_name = scope_field.raw_value();
+            let field_name = interner.get_or_intern(scope_field.raw_value());
 
             // Use the unified function to check both scope fields and link properties
             let type_cache = TypeCache::get().unwrap();
@@ -112,8 +119,12 @@ pub fn is_value_compatible_with_simple_type(
                     value.span_range(),
                     &format!(
                         "Invalid scope field or link '{}'. Available options: {}",
-                        field_name,
-                        available_properties.join(", ")
+                        interner.resolve(&field_name),
+                        available_properties
+                            .iter()
+                            .map(|s| interner.resolve(s))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     ),
                     content,
                 ))
@@ -141,7 +152,7 @@ pub fn is_value_compatible_with_simple_type(
         (AstValue::Number(_), SimpleType::ValueField) => None, // Valid
         (AstValue::String(s), SimpleType::ValueField) => {
             validate_value_field_string(
-                s.raw_value(),
+                interner.get_or_intern(s.raw_value()),
                 value.span_range(),
                 content,
                 current_namespace,
@@ -160,10 +171,12 @@ pub fn is_value_compatible_with_simple_type(
             }
         }
         (AstValue::String(s), SimpleType::Int) => {
-            let val = s.raw_value();
-            if val.starts_with("@") {
+            let val = interner.get_or_intern(s.raw_value());
+            if interner.resolve(&val).starts_with("@") {
                 validate_scripted_variable(val, value.span_range(), content, current_namespace)
-            } else if val.starts_with("$") && val.ends_with("$") {
+            } else if interner.resolve(&val).starts_with("$")
+                && interner.resolve(&val).ends_with("$")
+            {
                 None // Argument in scripted effect
             } else {
                 Some(create_type_mismatch_diagnostic(
@@ -175,10 +188,12 @@ pub fn is_value_compatible_with_simple_type(
         }
         (AstValue::Number(_), SimpleType::Float) => None, // Valid
         (AstValue::String(s), SimpleType::Float) => {
-            let val = s.raw_value();
-            if val.starts_with("@") {
+            let val = interner.get_or_intern(s.raw_value());
+            if interner.resolve(&val).starts_with("@") {
                 validate_scripted_variable(val, value.span_range(), content, current_namespace)
-            } else if val.starts_with("$") && val.ends_with("$") {
+            } else if interner.resolve(&val).starts_with("$")
+                && interner.resolve(&val).ends_with("$")
+            {
                 None // Argument in scripted effect
             } else {
                 Some(create_type_mismatch_diagnostic(
@@ -212,7 +227,7 @@ pub fn is_value_compatible_with_simple_type(
         }
         (AstValue::String(s), SimpleType::IntValueField) => {
             validate_value_field_string(
-                s.raw_value(),
+                interner.get_or_intern(s.raw_value()),
                 value.span_range(),
                 content,
                 current_namespace,
@@ -221,10 +236,12 @@ pub fn is_value_compatible_with_simple_type(
         }
 
         (AstValue::String(s), SimpleType::Bool) => {
-            let val = s.raw_value();
-            if val == "yes" || val == "no" {
+            let val = interner.get_or_intern(s.raw_value());
+            if interner.resolve(&val) == "yes" || interner.resolve(&val) == "no" {
                 None // Valid boolean
-            } else if val.starts_with("$") && val.ends_with("$") {
+            } else if interner.resolve(&val).starts_with("$")
+                && interner.resolve(&val).ends_with("$")
+            {
                 None // Argument in scripted effect
             } else {
                 Some(create_type_mismatch_diagnostic(
@@ -259,43 +276,47 @@ pub fn is_value_compatible_with_simple_type(
 
 /// Validate a scripted variable reference
 fn validate_scripted_variable(
-    variable_name: &str,
+    variable_name: Spur,
     span_range: Range<usize>,
     content: &str,
-    current_namespace: Option<&str>,
+    current_namespace: Option<Spur>,
 ) -> Option<tower_lsp::lsp_types::Diagnostic> {
     validate_scripted_variable_exists(variable_name, span_range, content, current_namespace)
 }
 
 /// Helper function to validate value field strings (used by both ValueField and IntValueField)
 fn validate_value_field_string(
-    value_str: &str,
+    value_str: Spur,
     span_range: Range<usize>,
     content: &str,
-    current_namespace: Option<&str>,
+    current_namespace: Option<Spur>,
     include_integer_in_error: bool,
 ) -> Option<Diagnostic> {
-    if value_str.starts_with("@") {
+    let interner = get_interner();
+    if interner.resolve(&value_str).starts_with("@") {
         validate_scripted_variable(value_str, span_range, content, current_namespace)
     } else if contains_scripted_argument(value_str) {
         None // Argument in scripted effect
-    } else if value_str.starts_with("modifier:") {
+    } else if interner.resolve(&value_str).starts_with("modifier:") {
         None // Modifier reference - anything after modifier: is valid for now
-    } else if let Some(colon_pos) = value_str.find(':') {
+    } else if let Some(colon_pos) = interner.resolve(&value_str).find(':') {
         // Check if there's a dot before the colon (complex path like "from.trigger:empire_size")
-        if value_str[..colon_pos].contains('.') {
+        if interner.resolve(&value_str)[..colon_pos].contains('.') {
             None // Complex path - skip validation
-        } else if value_str.starts_with("value:") {
+        } else if interner.resolve(&value_str).starts_with("value:") {
             // Extract the script value name, handling parameterized format
             // Format: value:my_value|PARAM1|value1|PARAM2|value2|
-            let value_part = value_str.split("value:").nth(1).unwrap();
+            let value_part = interner.resolve(&value_str).split("value:").nth(1).unwrap();
             let value_name = if let Some(pipe_pos) = value_part.find('|') {
                 &value_part[..pipe_pos]
             } else {
                 value_part
             };
 
-            let entity = EntityRestructurer::get_entity("common/script_values", value_name);
+            let entity = EntityRestructurer::get_entity(
+                interner.get_or_intern("common/script_values"),
+                interner.get_or_intern(value_name),
+            );
 
             if entity.is_none() {
                 Some(create_type_mismatch_diagnostic(
@@ -315,7 +336,7 @@ fn validate_value_field_string(
         if let Some(full_analysis) = FullAnalysis::get() {
             // Check if this value exists in any of the dynamic value sets
             for (_key, value_set) in &full_analysis.dynamic_value_sets {
-                if value_set.contains(value_str) {
+                if value_set.contains(&value_str) {
                     return None; // Valid value from a value set
                 }
             }
@@ -335,20 +356,21 @@ fn validate_value_field_string(
 
 /// Check if a scripted variable exists in the game data
 fn validate_scripted_variable_exists(
-    variable_name: &str,
+    variable_name: Spur,
     span_range: Range<usize>,
     content: &str,
-    current_namespace: Option<&str>,
+    current_namespace: Option<Spur>,
 ) -> Option<tower_lsp::lsp_types::Diagnostic> {
+    let interner = get_interner();
     if let Some(cache) = GameDataCache::get() {
         // Check global scripted variables from base game
-        if cache.scripted_variables.contains_key(variable_name) {
+        if cache.scripted_variables.contains_key(&variable_name) {
             return None; // Valid scripted variable
         }
 
         // Check global scripted variables from mod data
         let mod_scripted_variables = ModDataCache::get_scripted_variables();
-        if mod_scripted_variables.contains_key(variable_name) {
+        if mod_scripted_variables.contains_key(&variable_name) {
             return None; // Valid scripted variable
         }
 
@@ -358,14 +380,15 @@ fn validate_scripted_variable_exists(
             if let Some(namespace_variables) =
                 EntityRestructurer::get_namespace_scripted_variables(namespace_name)
             {
-                if namespace_variables.contains_key(variable_name) {
+                if namespace_variables.contains_key(&variable_name) {
                     None // Valid scripted variable
                 } else {
                     Some(create_type_mismatch_diagnostic(
                         span_range,
                         &format!(
                             "Unknown scripted variable '{}' in namespace '{}'",
-                            variable_name, namespace_name
+                            interner.resolve(&variable_name),
+                            interner.resolve(&namespace_name)
                         ),
                         content,
                     ))
@@ -375,7 +398,8 @@ fn validate_scripted_variable_exists(
                     span_range,
                     &format!(
                         "Unknown scripted variable '{}' (namespace '{}' not found)",
-                        variable_name, namespace_name
+                        interner.resolve(&variable_name),
+                        interner.resolve(&namespace_name)
                     ),
                     content,
                 ))

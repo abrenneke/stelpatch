@@ -1,5 +1,8 @@
+use lasso::Spur;
 use tower_lsp::lsp_types::Position;
 use tower_lsp::{Client, lsp_types::MessageType};
+
+use crate::interner::get_interner;
 
 /// Log a message synchronously by using block_in_place
 pub fn log_message_sync(_client: &Client, message_type: MessageType, message: String) {
@@ -105,7 +108,9 @@ pub fn extract_namespace_from_uri(uri: &str) -> Option<String> {
     None
 }
 
-pub fn contains_scripted_argument(identifier: &str) -> bool {
+pub fn contains_scripted_argument(identifier: Spur) -> bool {
+    let interner = get_interner();
+    let identifier = interner.resolve(&identifier);
     if let Some(first_dollar_index) = identifier.find('$') {
         if let Some(last_dollar_index) = identifier.rfind('$') {
             if first_dollar_index != last_dollar_index {

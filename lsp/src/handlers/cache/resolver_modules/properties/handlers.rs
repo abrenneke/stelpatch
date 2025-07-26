@@ -1,12 +1,17 @@
 use std::{collections::HashSet, sync::Arc};
 
-use cw_model::{AliasDefinition, CwtAnalyzer, CwtType, PatternProperty, Property, ReferenceType};
+use cw_model::{CwtAnalyzer, CwtType, PatternProperty, Property, ReferenceType};
+use lasso::Spur;
 
-use crate::handlers::{
-    cache::{
-        ReferenceResolver, resolver_modules::properties::scope_changes::apply_alias_scope_changes,
+use crate::{
+    handlers::{
+        cache::{
+            ReferenceResolver,
+            resolver_modules::properties::scope_changes::apply_alias_scope_changes,
+        },
+        scoped_type::{PropertyNavigationResult, ScopeAwareProperty, ScopedType},
     },
-    scoped_type::{PropertyNavigationResult, ScopeAwareProperty, ScopedType},
+    interner::get_interner,
 };
 
 /// Handle navigation to a regular property
@@ -14,7 +19,7 @@ pub fn handle_regular_property(
     cwt_analyzer: Arc<CwtAnalyzer>,
     scoped_type: Arc<ScopedType>,
     property: &Property,
-    _property_name: &str,
+    _property_name: Spur,
 ) -> PropertyNavigationResult {
     // Check if this property changes scope
     if property.changes_scope() {
@@ -66,14 +71,17 @@ pub fn handle_pattern_property(
     reference_resolver: Arc<ReferenceResolver>,
     scoped_type: Arc<ScopedType>,
     pattern_property: &PatternProperty,
-    property_name: &str,
+    property_name: Spur,
 ) -> PropertyNavigationResult {
+    let interner = get_interner();
+
     // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
     let (resolved_value_type, alias_def, scripted_effect_block) =
         match &*pattern_property.value_type {
             CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
                 // Resolve the AliasMatchLeft using the property name
-                let result = reference_resolver.resolve_alias_match_left(key, property_name);
+                let result = reference_resolver
+                    .resolve_alias_match_left(interner.get_or_intern(key), property_name);
 
                 result
             }
@@ -119,13 +127,16 @@ pub fn handle_pattern_property_all_matches(
     reference_resolver: Arc<ReferenceResolver>,
     scoped_type: Arc<ScopedType>,
     pattern_property: &PatternProperty,
-    property_name: &str,
+    property_name: Spur,
 ) -> Vec<PropertyNavigationResult> {
+    let interner = get_interner();
+
     // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
     match &*pattern_property.value_type {
         CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
             // Resolve ALL AliasMatchLeft matches using the property name
-            let all_results = reference_resolver.resolve_all_alias_match_left(key, property_name);
+            let all_results = reference_resolver
+                .resolve_all_alias_match_left(interner.get_or_intern(key), property_name);
 
             let mut property_results = Vec::new();
 
@@ -224,22 +235,20 @@ pub fn handle_subtype_pattern_property(
     reference_resolver: Arc<ReferenceResolver>,
     scoped_type: Arc<ScopedType>,
     subtype_pattern_property: &PatternProperty,
-    property_name: &str,
+    property_name: Spur,
 ) -> PropertyNavigationResult {
+    let interner = get_interner();
     // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
     let (resolved_value_type, alias_def, scripted_effect_block) =
         match &*subtype_pattern_property.value_type {
             CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
                 // Resolve the AliasMatchLeft using the property name
-                let result = reference_resolver.resolve_alias_match_left(key, property_name);
+                let result = reference_resolver
+                    .resolve_alias_match_left(interner.get_or_intern(key), property_name);
 
                 result
             }
-            _ => (
-                subtype_pattern_property.value_type.clone(),
-                None::<AliasDefinition>,
-                None::<String>,
-            ),
+            _ => (subtype_pattern_property.value_type.clone(), None, None),
         };
 
     // Apply scope changes - first from alias definition, then from pattern property
@@ -281,13 +290,15 @@ pub fn handle_subtype_pattern_property_all_matches(
     reference_resolver: Arc<ReferenceResolver>,
     scoped_type: Arc<ScopedType>,
     subtype_pattern_property: &PatternProperty,
-    property_name: &str,
+    property_name: Spur,
 ) -> Vec<PropertyNavigationResult> {
+    let interner = get_interner();
     // Check if the pattern property's value type is an AliasMatchLeft that needs resolution
     match &*subtype_pattern_property.value_type {
         CwtType::Reference(ReferenceType::AliasMatchLeft { key }) => {
             // Resolve ALL AliasMatchLeft matches using the property name
-            let all_results = reference_resolver.resolve_all_alias_match_left(key, property_name);
+            let all_results = reference_resolver
+                .resolve_all_alias_match_left(interner.get_or_intern(key), property_name);
 
             let mut property_results = Vec::new();
 

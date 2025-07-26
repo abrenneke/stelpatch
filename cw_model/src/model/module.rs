@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use cw_parser::{AstModuleCell, AstValue, AstVisitor};
+use lasso::ThreadedRodeo;
 use path_slash::PathBufExt;
 
 use crate::{Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value};
@@ -30,7 +31,7 @@ impl Module {
         }
     }
 
-    pub fn from_file(file_path: &Path) -> Result<Self, anyhow::Error> {
+    pub fn from_file(file_path: &Path, interner: &ThreadedRodeo) -> Result<Self, anyhow::Error> {
         let (namespace, module_name) = Self::get_module_info(file_path);
 
         if module_name.starts_with("99_README") {
@@ -42,7 +43,7 @@ impl Module {
         let ast = AstModuleCell::from_input(file_content);
 
         let mut module = Self::new(namespace, module_name);
-        let mut module_visitor = ModuleVisitor::new(&mut module);
+        let mut module_visitor = ModuleVisitor::new(&mut module, interner);
 
         match ast.borrow_dependent() {
             Ok(ast) => module_visitor.visit_module(ast),
@@ -131,35 +132,37 @@ impl ToString for Module {
             buf.push_str(&value);
         }
         for (key, value) in &self.properties.kv {
-            let value = format!("{} = {}\n", key, value.to_string());
+            let value = format!("{:?} = {}\n", key, value.to_string());
             buf.push_str(&value);
         }
         buf
     }
 }
 
-pub(crate) struct ModuleVisitor<'a> {
+pub(crate) struct ModuleVisitor<'a, 'interner> {
     module: &'a mut Module,
+    interner: &'interner ThreadedRodeo,
 }
 
-impl<'a> ModuleVisitor<'a> {
-    pub fn new(module: &'a mut Module) -> Self {
-        Self { module }
+impl<'a, 'interner> ModuleVisitor<'a, 'interner> {
+    pub fn new(module: &'a mut Module, interner: &'interner ThreadedRodeo) -> Self {
+        Self { module, interner }
     }
 }
 
-impl<'a, 'b, 'ast> cw_parser::AstVisitor<'b, 'ast> for ModuleVisitor<'a>
+impl<'a, 'b, 'ast, 'interner> cw_parser::AstVisitor<'b, 'ast> for ModuleVisitor<'a, 'interner>
 where
     'b: 'ast,
 {
     fn visit_expression(&mut self, node: &cw_parser::AstExpression<'b>) -> () {
         let mut property = PropertyInfo::default();
-        let mut property_visitor = PropertyVisitor::new(&mut property);
+        let mut property_visitor = PropertyVisitor::new(&mut property, self.interner);
         property_visitor.visit_expression(node);
+        let key = self.interner.get_or_intern(node.key.value.to_string());
         self.module
             .properties
             .kv
-            .entry(node.key.value.to_string())
+            .entry(key)
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(property);
@@ -168,9 +171,9 @@ where
     fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> () {
         match node {
             AstValue::String(string) => {
-                self.module
-                    .values
-                    .push(Value::String(string.raw_value().to_string()));
+                self.module.values.push(Value::String(
+                    self.interner.get_or_intern(string.raw_value()),
+                ));
             }
             _ => {}
         }

@@ -1,5 +1,6 @@
 use cw_model::types::CwtAnalyzer;
 use cw_parser::CwtModuleCell;
+use lasso::ThreadedRodeo;
 
 use std::env;
 use std::fs;
@@ -126,6 +127,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Total rules: {}", total_rules);
     }
 
+    let interner = ThreadedRodeo::new();
+
     // Convert the parsed modules using CwtConverter
     if !modules.is_empty() && parse_errors.is_empty() {
         println!("\n=== CONVERTING TO INFERRED TYPES ===");
@@ -143,7 +146,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let module = module.borrow_dependent().as_ref().unwrap();
             let file_convert_start = Instant::now();
 
-            match converter.convert_module(module) {
+            match converter.convert_module(module, &interner) {
                 Ok(()) => {
                     let convert_duration = file_convert_start.elapsed();
                     println!("✓ ({:.2?})", convert_duration);
@@ -178,17 +181,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !converter.get_types().is_empty() {
             println!("\n=== TYPE DEFINITIONS ===");
             for (name, type_def) in converter.get_types() {
-                println!("  Type: {}", name);
+                println!("  Type: {}", interner.resolve(name));
                 if let Some(path) = &type_def.path {
-                    println!("    Path: {}", path);
+                    println!("    Path: {}", interner.resolve(path));
                 }
                 if let Some(name_field) = &type_def.name_field {
-                    println!("    Name field: {}", name_field);
+                    println!("    Name field: {}", interner.resolve(name_field));
                 }
                 if !type_def.subtypes.is_empty() {
                     println!("    Subtypes: {}", type_def.subtypes.len());
                     for (subtype_name, _) in &type_def.subtypes {
-                        println!("      - {}", subtype_name);
+                        println!("      - {}", interner.resolve(subtype_name));
                     }
                 }
                 if !type_def.localisation.is_empty() {
@@ -215,13 +218,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !converter.get_enums().is_empty() {
             println!("\n=== ENUM DEFINITIONS ===");
             for (name, enum_def) in converter.get_enums() {
-                println!("  Enum: {}", name);
+                println!("  Enum: {}", interner.resolve(name));
                 if !enum_def.values.is_empty() {
                     println!("    Values: {:?}", enum_def.values);
                 }
                 if let Some(complex) = &enum_def.complex {
                     println!("    Complex enum:");
-                    println!("      Path: {}", complex.path);
+                    println!("      Path: {}", interner.resolve(&complex.path));
                     println!("      Start from root: {}", complex.start_from_root);
                     println!("      Name structure: {:?}", complex.name_structure);
                 }
@@ -233,7 +236,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !converter.get_value_sets().is_empty() {
             println!("\n=== VALUE SETS ===");
             for (name, values) in converter.get_value_sets() {
-                println!("  Value set: {}", name);
+                println!("  Value set: {}", interner.resolve(name));
                 println!("    Values: {:?}", values);
                 println!();
             }
@@ -244,8 +247,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("\n=== ALIASES ===");
             for (name, alias) in converter.get_aliases() {
                 println!("  Alias: {}", name);
-                println!("    Category: {}", alias.category);
-                println!("    Name: {}", alias.name);
+                println!("    Category: {}", interner.resolve(&alias.category));
+                println!("    Name: {}", interner.resolve(&alias.name));
                 println!("    Rules: {:?}", alias.to);
                 println!();
             }
@@ -255,7 +258,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !converter.get_single_aliases().is_empty() {
             println!("\n=== SINGLE ALIASES ===");
             for (name, alias_type) in converter.get_single_aliases() {
-                println!("  Single alias: {}", name);
+                println!("  Single alias: {}", interner.resolve(name));
                 println!("    Type: {:?}", alias_type);
                 println!();
             }
@@ -265,7 +268,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !converter.get_types().is_empty() {
             println!("\n=== RULES ===");
             for (name, rule) in converter.get_types() {
-                println!("  Rule: {}", name);
+                println!("  Rule: {}", interner.resolve(name));
                 println!("    Definition: {:?}", rule);
                 println!();
             }

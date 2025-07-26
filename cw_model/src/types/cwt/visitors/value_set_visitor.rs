@@ -8,17 +8,19 @@ use super::registry::CwtAnalysisData;
 use cw_parser::cwt::{
     AstCwtBlock, AstCwtIdentifierOrString, AstCwtRule, CwtReferenceType, CwtValue, CwtVisitor,
 };
+use lasso::{Spur, ThreadedRodeo};
 use std::collections::HashSet;
 
 /// Specialized visitor for value set definitions
-pub struct ValueSetVisitor<'a> {
+pub struct ValueSetVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
+    interner: &'interner ThreadedRodeo,
 }
 
-impl<'a> ValueSetVisitor<'a> {
+impl<'a, 'interner> ValueSetVisitor<'a, 'interner> {
     /// Create a new value set visitor
-    pub fn new(data: &'a mut CwtAnalysisData) -> Self {
-        Self { data }
+    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+        Self { data, interner }
     }
 
     /// Check if this visitor can handle the given rule
@@ -55,10 +57,10 @@ impl<'a> ValueSetVisitor<'a> {
     }
 
     /// Extract the value set name from a rule
-    fn extract_value_set_name(&self, rule: &AstCwtRule) -> Option<String> {
+    fn extract_value_set_name(&self, rule: &AstCwtRule) -> Option<Spur> {
         if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
             if matches!(identifier.identifier_type, CwtReferenceType::ValueSet) {
-                return Some(identifier.name.raw_value().to_string());
+                return Some(self.interner.get_or_intern(identifier.name.raw_value()));
             }
         }
 
@@ -94,7 +96,7 @@ impl<'a> ValueSetVisitor<'a> {
     }
 }
 
-impl<'a> CwtVisitor<'a> for ValueSetVisitor<'a> {
+impl<'a, 'interner> CwtVisitor<'a> for ValueSetVisitor<'a, 'interner> {
     fn visit_rule(&mut self, rule: &AstCwtRule<'a>) {
         if self.can_handle_rule(rule) {
             self.process_value_set_definition(rule);

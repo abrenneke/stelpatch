@@ -6,16 +6,19 @@ use tower_lsp::Client;
 
 pub mod base_game;
 pub mod handlers;
+pub mod interner;
 pub mod semantic_token_collector;
 
 use handlers::cache::game_data::ModDataCache;
 use handlers::document_cache::DocumentCache;
+use lasso::ThreadedRodeo;
 
 pub struct CwLspServer {
     client: Client,
     documents: Arc<RwLock<HashMap<String, String>>>,
     document_cache: DocumentCache,
     mod_cache: Arc<RwLock<HashMap<PathBuf, GameMod>>>,
+    interner: ThreadedRodeo,
 }
 
 impl CwLspServer {
@@ -25,6 +28,7 @@ impl CwLspServer {
             documents: Arc::new(RwLock::new(HashMap::new())),
             document_cache: DocumentCache::new(),
             mod_cache: Arc::new(RwLock::new(HashMap::new())),
+            interner: ThreadedRodeo::new(),
         }
     }
 

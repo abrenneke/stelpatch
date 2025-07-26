@@ -9,11 +9,12 @@ use cw_parser::{
         CwtValue,
     },
 };
-use std::sync::Arc;
+use lasso::{Spur, ThreadedRodeo};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    BlockType, CwtOptions, CwtType, LowerCaseHashMap, PatternProperty, PatternType, Property,
-    ReferenceType, SimpleType,
+    BlockType, CwtOptions, CwtType, PatternProperty, PatternType, Property, ReferenceType,
+    SimpleType,
 };
 
 /// Converter for CWT values to CwtType
@@ -117,12 +118,14 @@ impl CwtConverter {
     }
 
     /// Convert a CWT block to our type system
-    pub fn convert_block(block: &AstCwtBlock, type_name: Option<String>) -> CwtType {
-        let mut properties: LowerCaseHashMap<Property> = LowerCaseHashMap::new();
-        let mut subtype_properties: LowerCaseHashMap<LowerCaseHashMap<Property>> =
-            LowerCaseHashMap::new();
-        let mut subtype_pattern_properties: LowerCaseHashMap<Vec<PatternProperty>> =
-            LowerCaseHashMap::new();
+    pub fn convert_block(
+        block: &AstCwtBlock,
+        type_name: Option<Spur>,
+        interner: &ThreadedRodeo,
+    ) -> CwtType {
+        let mut properties: HashMap<Spur, Property> = HashMap::new();
+        let mut subtype_properties: HashMap<Spur, HashMap<Spur, Property>> = HashMap::new();
+        let mut subtype_pattern_properties: HashMap<Spur, Vec<PatternProperty>> = HashMap::new();
         let mut pattern_properties = Vec::new();
         let mut union_values = Vec::new();
 
@@ -135,14 +138,15 @@ impl CwtConverter {
                             match key_id.identifier_type {
                                 CwtReferenceType::Enum => {
                                     let enum_key = key_id.name.raw_value().to_string();
-                                    let value_type = Self::convert_value(&rule.value, None);
+                                    let value_type =
+                                        Self::convert_value(&rule.value, None, interner);
 
                                     pattern_properties.push(PatternProperty {
                                         pattern_type: PatternType::Enum {
-                                            key: enum_key.clone(),
+                                            key: interner.get_or_intern(enum_key),
                                         },
                                         value_type: value_type.clone(),
-                                        options: CwtOptions::from_rule(rule),
+                                        options: CwtOptions::from_rule(rule, interner),
                                         documentation: None,
                                     });
 
@@ -150,14 +154,15 @@ impl CwtConverter {
                                 }
                                 CwtReferenceType::TypeRef => {
                                     let type_name = key_id.name.raw_value().to_string();
-                                    let value_type = Self::convert_value(&rule.value, None);
+                                    let value_type =
+                                        Self::convert_value(&rule.value, None, interner);
 
                                     pattern_properties.push(PatternProperty {
                                         pattern_type: PatternType::Type {
-                                            key: type_name.clone(),
+                                            key: interner.get_or_intern(type_name),
                                         },
                                         value_type: value_type.clone(),
-                                        options: CwtOptions::from_rule(rule),
+                                        options: CwtOptions::from_rule(rule, interner),
                                         documentation: None,
                                     });
 
@@ -173,13 +178,15 @@ impl CwtConverter {
                                         }
                                         // Handle alias_name[foo:x] = bar
                                         AstCwtIdentifierOrString::String(key_str) => {
-                                            let value_type = Self::convert_value(&rule.value, None);
+                                            let value_type =
+                                                Self::convert_value(&rule.value, None, interner);
                                             pattern_properties.push(PatternProperty {
                                                 pattern_type: PatternType::AliasName {
-                                                    category: key_str.raw_value().to_string(),
+                                                    category: interner
+                                                        .get_or_intern(key_str.raw_value()),
                                                 },
                                                 value_type: value_type.clone(),
-                                                options: CwtOptions::from_rule(rule),
+                                                options: CwtOptions::from_rule(rule, interner),
                                                 documentation: None,
                                             });
                                             continue;
@@ -187,7 +194,8 @@ impl CwtConverter {
                                     }
                                 }
                                 CwtReferenceType::Subtype => {
-                                    let value_type = Self::convert_value(&rule.value, None);
+                                    let value_type =
+                                        Self::convert_value(&rule.value, None, interner);
 
                                     let subtype_name = if key_id.is_not {
                                         format!("!{}", key_id.name.raw_value().to_string())
@@ -195,17 +203,18 @@ impl CwtConverter {
                                         key_id.name.raw_value().to_string()
                                     };
 
-                                    let subtype_map =
-                                        subtype_properties.entry(subtype_name.clone()).or_default();
+                                    let subtype_map = subtype_properties
+                                        .entry(interner.get_or_intern(&subtype_name))
+                                        .or_default();
                                     let subtype_patterns = subtype_pattern_properties
-                                        .entry(subtype_name.clone())
+                                        .entry(interner.get_or_intern(&subtype_name))
                                         .or_default();
 
                                     if let CwtType::Block(block) = &*value_type {
                                         // Extract regular properties
                                         for (key, value) in block.properties.iter() {
                                             subtype_map.insert(
-                                                key.clone(),
+                                                *key,
                                                 Property {
                                                     property_type: value.property_type.clone(),
                                                     options: value.options.clone(),
@@ -235,10 +244,10 @@ impl CwtConverter {
                         _ => {}
                     }
 
-                    let options = CwtOptions::from_rule(rule);
+                    let options = CwtOptions::from_rule(rule, interner);
 
                     let key = rule.key.name();
-                    let value_type = Self::convert_value(&rule.value, None);
+                    let value_type = Self::convert_value(&rule.value, None, interner);
                     let property_def = Property {
                         property_type: value_type,
                         options,
@@ -246,8 +255,7 @@ impl CwtConverter {
                     };
 
                     // Handle duplicate keys by creating unions
-                    let key_string = key.to_string();
-                    if let Some(existing_property) = properties.get(&key_string) {
+                    if let Some(existing_property) = properties.get(&interner.get_or_intern(key)) {
                         // Key already exists, create a union
                         let union_type = match &*existing_property.property_type {
                             CwtType::Union(existing_types) => {
@@ -270,14 +278,14 @@ impl CwtConverter {
                             options: CwtOptions::default(),
                             documentation: None,
                         };
-                        properties.insert(key_string, unified_property);
+                        properties.insert(interner.get_or_intern(key), unified_property);
                     } else {
                         // Key doesn't exist yet, insert normally
-                        properties.insert(key_string, property_def);
+                        properties.insert(interner.get_or_intern(key), property_def);
                     }
                 }
                 AstCwtExpression::Value(value) => {
-                    let value_type = Self::convert_value(value, None);
+                    let value_type = Self::convert_value(value, None, interner);
                     union_values.push(value_type);
                 }
                 AstCwtExpression::Identifier(id) => {
@@ -294,7 +302,7 @@ impl CwtConverter {
         CwtType::Block(BlockType {
             type_name: type_name.unwrap_or_default(),
             properties,
-            subtypes: LowerCaseHashMap::new(),
+            subtypes: HashMap::new(),
             subtype_properties,
             subtype_pattern_properties,
             pattern_properties,
@@ -305,12 +313,18 @@ impl CwtConverter {
     }
 
     /// Convert a CWT value to our type system
-    pub fn convert_value(value: &CwtValue, type_name: Option<String>) -> Arc<CwtType> {
+    pub fn convert_value(
+        value: &CwtValue,
+        type_name: Option<Spur>,
+        interner: &ThreadedRodeo,
+    ) -> Arc<CwtType> {
         match value {
             CwtValue::Simple(simple) => Arc::new(Self::convert_simple_value(simple)),
             CwtValue::Identifier(identifier) => Arc::new(Self::convert_identifier(identifier)),
-            CwtValue::Block(block) => Arc::new(Self::convert_block(block, type_name)),
-            CwtValue::String(s) => Arc::new(CwtType::Literal(s.raw_value().to_string())),
+            CwtValue::Block(block) => Arc::new(Self::convert_block(block, type_name, interner)),
+            CwtValue::String(s) => {
+                Arc::new(CwtType::Literal(interner.get_or_intern(s.raw_value())))
+            }
         }
     }
 }

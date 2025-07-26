@@ -3,7 +3,9 @@ use crate::handlers::cache::resolver_modules::properties::navigation::collect_na
 use crate::handlers::scoped_type::{
     CwtTypeOrSpecial, CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType,
 };
+use crate::interner::get_interner;
 use cw_model::{CwtAnalyzer, ReferenceType};
+use lasso::Spur;
 use std::sync::Arc;
 
 use super::ResolverUtils;
@@ -50,11 +52,15 @@ impl PropertyNavigator {
     pub fn navigate_to_property(
         &self,
         scoped_type: Arc<ScopedType>,
-        property_name: &str,
+        property_name: Spur,
     ) -> PropertyNavigationResult {
+        let interner = get_interner();
+
+        let property_path = interner.resolve(&property_name);
+
         // Handle complex properties (containing dots) by navigating through each part
-        if property_name.contains('.') {
-            return self.navigate_to_complex_property(scoped_type, property_name);
+        if property_path.contains('.') {
+            return self.navigate_to_complex_property(scoped_type, &property_path);
         }
 
         // Handle regular properties based on the current type
@@ -72,7 +78,7 @@ impl PropertyNavigator {
                     self.cwt_analyzer.clone(),
                     self.reference_resolver.clone(),
                     scoped_type.clone(),
-                    key,
+                    get_interner().get_or_intern(key),
                     property_name,
                 )
             }
@@ -165,12 +171,12 @@ impl PropertyNavigator {
                 // For other types, check if this property is a link property as fallback
                 let current_scope = &scoped_type.scope_stack().current_scope().scope_type;
                 if let Some(link_def) =
-                    is_link_property(&self.cwt_analyzer, property_name, current_scope)
+                    is_link_property(&self.cwt_analyzer, property_name, *current_scope)
                 {
                     // This is a link property - create a scoped type with the output scope
                     let mut new_scope_context = scoped_type.scope_stack().clone();
                     new_scope_context
-                        .push_scope_type(&link_def.output_scope)
+                        .push_scope_type(link_def.output_scope)
                         .unwrap();
                     let result = ScopedType::new_with_subtypes(
                         scoped_type.cwt_type().clone(),
@@ -194,7 +200,8 @@ impl PropertyNavigator {
         let parts: Vec<&str> = property_path.split('.').collect();
 
         for part in parts {
-            match self.navigate_to_property(current_scoped_type, part) {
+            match self.navigate_to_property(current_scoped_type, get_interner().get_or_intern(part))
+            {
                 PropertyNavigationResult::Success(result) => {
                     current_scoped_type = result;
                 }

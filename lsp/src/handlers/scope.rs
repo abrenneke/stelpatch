@@ -1,32 +1,34 @@
 use std::collections::HashMap;
 use std::fmt;
 
+use lasso::Spur;
+
 use cw_model::TypeFingerprint;
+
+use crate::interner::get_interner;
 
 /// Represents a scope context in Stellaris CWT
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeContext {
     /// The current scope type (e.g., "country", "planet", "fleet", "ship", etc.)
-    pub scope_type: String,
+    pub scope_type: Spur,
 }
 
 impl ScopeContext {
-    pub fn new(scope_type: impl Into<String>) -> Self {
-        Self {
-            scope_type: scope_type.into(),
-        }
+    pub fn new(scope_type: Spur) -> Self {
+        Self { scope_type }
     }
 }
 
 impl TypeFingerprint for ScopeContext {
     fn fingerprint(&self) -> String {
-        format!("{}", self.scope_type)
+        format!("{:?}", self.scope_type)
     }
 }
 
 impl fmt::Display for ScopeContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.scope_type)
+        write!(f, "{:?}", self.scope_type)
     }
 }
 
@@ -65,7 +67,7 @@ impl ScopeStack {
     }
 
     /// Create a new scope stack with a default initial scope
-    pub fn default_with_root(initial_scope_type: impl Into<String>) -> Self {
+    pub fn default_with_root(initial_scope_type: Spur) -> Self {
         Self::new(ScopeContext::new(initial_scope_type))
     }
 
@@ -81,7 +83,7 @@ impl ScopeStack {
     }
 
     /// Push a new scope onto the stack using a string scope type
-    pub fn push_scope_type(&mut self, scope_type: impl Into<String>) -> Result<(), ScopeError> {
+    pub fn push_scope_type(&mut self, scope_type: Spur) -> Result<(), ScopeError> {
         let scope = ScopeContext::new(scope_type);
         self.push_scope(scope)
     }
@@ -90,23 +92,25 @@ impl ScopeStack {
     /// This rebuilds the stack from deepest to shallowest scope and sets explicit references
     pub fn replace_scope(
         &mut self,
-        replacements: HashMap<String, ScopeContext>,
+        replacements: HashMap<Spur, ScopeContext>,
     ) -> Result<(), ScopeError> {
+        let interner = get_interner();
+
         // Clear the current stack
         self.scopes.clear();
 
         // Build new stack from deepest to shallowest for prev scopes
         // Order: prevprevprevprev, prevprevprev, prevprev, prev, this
         let stack_order = [
-            "prevprevprevprev",
-            "prevprevprev",
-            "prevprev",
-            "prev",
-            "this",
+            interner.get_or_intern("prevprevprevprev"),
+            interner.get_or_intern("prevprevprev"),
+            interner.get_or_intern("prevprev"),
+            interner.get_or_intern("prev"),
+            interner.get_or_intern("this"),
         ];
 
         for &scope_name in &stack_order {
-            if let Some(scope) = replacements.get(scope_name) {
+            if let Some(scope) = replacements.get(&scope_name) {
                 if self.scopes.len() >= self.max_depth {
                     return Err(ScopeError::StackOverflow {
                         max_depth: self.max_depth,
@@ -117,13 +121,19 @@ impl ScopeStack {
         }
 
         // Set explicit scope references
-        self.from = replacements.get("from").cloned();
-        self.fromfrom = replacements.get("fromfrom").cloned();
-        self.fromfromfrom = replacements.get("fromfromfrom").cloned();
-        self.fromfromfromfrom = replacements.get("fromfromfromfrom").cloned();
+        self.from = replacements.get(&interner.get_or_intern("from")).cloned();
+        self.fromfrom = replacements
+            .get(&interner.get_or_intern("fromfrom"))
+            .cloned();
+        self.fromfromfrom = replacements
+            .get(&interner.get_or_intern("fromfromfrom"))
+            .cloned();
+        self.fromfromfromfrom = replacements
+            .get(&interner.get_or_intern("fromfromfromfrom"))
+            .cloned();
 
         // Set root if specified (only replace_scope can change root)
-        if let Some(root_scope) = replacements.get("root") {
+        if let Some(root_scope) = replacements.get(&interner.get_or_intern("root")) {
             self.root = root_scope.clone();
         }
 
@@ -139,9 +149,9 @@ impl ScopeStack {
     /// Helper method to replace scope using string replacements (converts to ScopeContext)
     pub fn replace_scope_from_strings(
         &mut self,
-        replacements: HashMap<String, String>,
+        replacements: HashMap<Spur, Spur>,
     ) -> Result<(), ScopeError> {
-        let scope_replacements: HashMap<String, ScopeContext> = replacements
+        let scope_replacements: HashMap<Spur, ScopeContext> = replacements
             .into_iter()
             .map(|(k, v)| (k, ScopeContext::new(v)))
             .collect();
@@ -164,7 +174,7 @@ impl ScopeStack {
             return Some(from);
         }
 
-        if self.current_scope().scope_type == "unknown" {
+        if self.current_scope().scope_type == get_interner().get_or_intern("unknown") {
             return Some(self.current_scope());
         }
 
@@ -177,7 +187,7 @@ impl ScopeStack {
             return Some(fromfrom);
         }
 
-        if self.current_scope().scope_type == "unknown" {
+        if self.current_scope().scope_type == get_interner().get_or_intern("unknown") {
             return Some(self.current_scope());
         }
 
@@ -190,7 +200,7 @@ impl ScopeStack {
             return Some(fromfromfrom);
         }
 
-        if self.current_scope().scope_type == "unknown" {
+        if self.current_scope().scope_type == get_interner().get_or_intern("unknown") {
             return Some(self.current_scope());
         }
 
@@ -203,7 +213,7 @@ impl ScopeStack {
             return Some(fromfromfromfrom);
         }
 
-        if self.current_scope().scope_type == "unknown" {
+        if self.current_scope().scope_type == get_interner().get_or_intern("unknown") {
             return Some(self.current_scope());
         }
 
@@ -214,7 +224,7 @@ impl ScopeStack {
     pub fn prev_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 2 {
             Some(&self.scopes[self.scopes.len() - 2])
-        } else if self.current_scope().scope_type == "unknown" {
+        } else if self.current_scope().scope_type == get_interner().get_or_intern("unknown") {
             Some(self.current_scope())
         } else {
             None
@@ -225,7 +235,7 @@ impl ScopeStack {
     pub fn prevprev_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 3 {
             Some(&self.scopes[self.scopes.len() - 3])
-        } else if self.current_scope().scope_type == "unknown" {
+        } else if self.current_scope().scope_type == get_interner().get_or_intern("unknown") {
             Some(self.current_scope())
         } else {
             None
@@ -236,7 +246,7 @@ impl ScopeStack {
     pub fn prevprevprev_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 4 {
             Some(&self.scopes[self.scopes.len() - 4])
-        } else if self.current_scope().scope_type == "unknown" {
+        } else if self.current_scope().scope_type == get_interner().get_or_intern("unknown") {
             Some(self.current_scope())
         } else {
             None
@@ -247,7 +257,7 @@ impl ScopeStack {
     pub fn prevprevprevprev_scope(&self) -> Option<&ScopeContext> {
         if self.scopes.len() >= 5 {
             Some(&self.scopes[self.scopes.len() - 5])
-        } else if self.current_scope().scope_type == "unknown" {
+        } else if self.current_scope().scope_type == get_interner().get_or_intern("unknown") {
             Some(self.current_scope())
         } else {
             None
@@ -280,7 +290,9 @@ impl ScopeStack {
     }
 
     /// Get scope by name (this, root, from, fromfrom, prev, prevprev, etc.)
-    pub fn get_scope_by_name(&self, name: &str) -> Option<&ScopeContext> {
+    pub fn get_scope_by_name(&self, name: Spur) -> Option<&ScopeContext> {
+        let interner = get_interner();
+        let name = interner.resolve(&name);
         match name {
             "this" | "THIS" => Some(self.current_scope()),
             "root" | "ROOT" => Some(self.root_scope()),
@@ -297,65 +309,67 @@ impl ScopeStack {
     }
 
     /// Get all available scope names at the current depth
-    pub fn available_scope_names(&self) -> Vec<String> {
+    pub fn available_scope_names(&self) -> Vec<Spur> {
+        let interner = get_interner();
+
         // If current scope is "unknown", return all possible scope properties as fallback
-        if self.current_scope().scope_type == "unknown" {
+        if self.current_scope().scope_type == get_interner().get_or_intern("unknown") {
             return Self::get_all_scope_properties()
                 .iter()
-                .map(|s| s.to_string())
+                .map(|s| interner.get_or_intern(s))
                 .collect();
         }
 
         let mut names = vec![
-            "this".to_string(),
-            "root".to_string(),
-            "THIS".to_string(),
-            "ROOT".to_string(),
+            interner.get_or_intern("this"),
+            interner.get_or_intern("root"),
+            interner.get_or_intern("THIS"),
+            interner.get_or_intern("ROOT"),
         ];
 
         // Add explicit scope references if they exist
         if self.from.is_some() {
-            names.push("from".to_string());
-            names.push("FROM".to_string());
+            names.push(interner.get_or_intern("from"));
+            names.push(interner.get_or_intern("FROM"));
         }
         if self.fromfrom.is_some() {
-            names.push("fromfrom".to_string());
-            names.push("FROMFROM".to_string());
+            names.push(interner.get_or_intern("fromfrom"));
+            names.push(interner.get_or_intern("FROMFROM"));
         }
         if self.fromfromfrom.is_some() {
-            names.push("fromfromfrom".to_string());
-            names.push("FROMFROMFROM".to_string());
+            names.push(interner.get_or_intern("fromfromfrom"));
+            names.push(interner.get_or_intern("FROMFROMFROM"));
         }
         if self.fromfromfromfrom.is_some() {
-            names.push("fromfromfromfrom".to_string());
-            names.push("FROMFROMFROMFROM".to_string());
+            names.push(interner.get_or_intern("fromfromfromfrom"));
+            names.push(interner.get_or_intern("FROMFROMFROMFROM"));
         }
 
         // Add stack-based scope references if they exist
         if self.scopes.len() >= 2 {
-            names.push("prev".to_string());
-            names.push("PREV".to_string());
+            names.push(interner.get_or_intern("prev"));
+            names.push(interner.get_or_intern("PREV"));
         }
         if self.scopes.len() >= 3 {
-            names.push("prevprev".to_string());
-            names.push("PREVPREV".to_string());
+            names.push(interner.get_or_intern("prevprev"));
+            names.push(interner.get_or_intern("PREVPREV"));
         }
         if self.scopes.len() >= 4 {
-            names.push("prevprevprev".to_string());
-            names.push("PREVPREVPREV".to_string());
+            names.push(interner.get_or_intern("prevprevprev"));
+            names.push(interner.get_or_intern("PREVPREVPREV"));
         }
         if self.scopes.len() >= 5 {
-            names.push("prevprevprevprev".to_string());
-            names.push("PREVPREVPREVPREV".to_string());
+            names.push(interner.get_or_intern("prevprevprevprev"));
+            names.push(interner.get_or_intern("PREVPREVPREVPREV"));
         }
         names
     }
 
     /// Validate that a scope name is valid in the current context
-    pub fn validate_scope_name(&self, name: &str) -> Result<&ScopeContext, ScopeError> {
+    pub fn validate_scope_name(&self, name: Spur) -> Result<&ScopeContext, ScopeError> {
         self.get_scope_by_name(name)
             .ok_or_else(|| ScopeError::InvalidScopeName {
-                name: name.to_string(),
+                name: get_interner().resolve(&name).to_string(),
             })
     }
 
@@ -365,7 +379,7 @@ impl ScopeStack {
     }
 
     /// Check if a scope name is valid at the current depth
-    pub fn is_valid_scope_name(&self, name: &str) -> bool {
+    pub fn is_valid_scope_name(&self, name: Spur) -> bool {
         self.get_scope_by_name(name).is_some()
     }
 
@@ -481,7 +495,7 @@ impl std::fmt::Display for ScopeStack {
 
 impl Default for ScopeStack {
     fn default() -> Self {
-        Self::new(ScopeContext::new("unknown"))
+        Self::new(ScopeContext::new(get_interner().get_or_intern("unknown")))
     }
 }
 
@@ -515,50 +529,102 @@ mod tests {
 
     #[test]
     fn test_scope_stack_basic() {
-        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+        let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Test initial state
-        assert_eq!(stack.current_scope().scope_type, "country");
-        assert_eq!(stack.root_scope().scope_type, "country");
+        assert_eq!(
+            stack.current_scope().scope_type,
+            get_interner().get_or_intern("country")
+        );
+        assert_eq!(
+            stack.root_scope().scope_type,
+            get_interner().get_or_intern("country")
+        );
         assert_eq!(stack.prev_scope(), None);
         assert_eq!(stack.from_scope(), None);
         assert_eq!(stack.depth(), 1);
 
         // Test push scope (this affects the stack, not explicit references)
-        stack.push_scope(ScopeContext::new("planet")).unwrap();
-        assert_eq!(stack.current_scope().scope_type, "planet");
-        assert_eq!(stack.root_scope().scope_type, "country");
-        assert_eq!(stack.prev_scope().unwrap().scope_type, "country");
+        stack
+            .push_scope(ScopeContext::new(get_interner().get_or_intern("planet")))
+            .unwrap();
+        assert_eq!(
+            stack.current_scope().scope_type,
+            get_interner().get_or_intern("planet")
+        );
+        assert_eq!(
+            stack.root_scope().scope_type,
+            get_interner().get_or_intern("country")
+        );
+        assert_eq!(
+            stack.prev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("country")
+        );
         assert_eq!(stack.from_scope(), None); // Still no explicit from reference
         assert_eq!(stack.depth(), 2);
 
         // Test another push
-        stack.push_scope(ScopeContext::new("pop")).unwrap();
-        assert_eq!(stack.current_scope().scope_type, "pop");
-        assert_eq!(stack.prev_scope().unwrap().scope_type, "planet");
-        assert_eq!(stack.prevprev_scope().unwrap().scope_type, "country");
+        stack
+            .push_scope(ScopeContext::new(get_interner().get_or_intern("pop")))
+            .unwrap();
+        assert_eq!(
+            stack.current_scope().scope_type,
+            get_interner().get_or_intern("pop")
+        );
+        assert_eq!(
+            stack.prev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("planet")
+        );
+        assert_eq!(
+            stack.prevprev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("country")
+        );
         assert_eq!(stack.from_scope(), None); // Still no explicit from reference
         assert_eq!(stack.depth(), 3);
     }
 
     #[test]
     fn test_explicit_scope_references() {
-        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+        let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Set explicit scope references via replace_scope
         let mut replacements = HashMap::new();
-        replacements.insert("this".to_string(), ScopeContext::new("pop"));
-        replacements.insert("from".to_string(), ScopeContext::new("planet"));
-        replacements.insert("fromfrom".to_string(), ScopeContext::new("system"));
-        replacements.insert("root".to_string(), ScopeContext::new("empire"));
+        replacements.insert(
+            get_interner().get_or_intern("this"),
+            ScopeContext::new(get_interner().get_or_intern("pop")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("from"),
+            ScopeContext::new(get_interner().get_or_intern("planet")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("fromfrom"),
+            ScopeContext::new(get_interner().get_or_intern("system")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("root"),
+            ScopeContext::new(get_interner().get_or_intern("empire")),
+        );
 
         stack.replace_scope(replacements).unwrap();
 
         // Test explicit references
-        assert_eq!(stack.current_scope().scope_type, "pop");
-        assert_eq!(stack.root_scope().scope_type, "empire");
-        assert_eq!(stack.from_scope().unwrap().scope_type, "planet");
-        assert_eq!(stack.fromfrom_scope().unwrap().scope_type, "system");
+        assert_eq!(
+            stack.current_scope().scope_type,
+            get_interner().get_or_intern("pop")
+        );
+        assert_eq!(
+            stack.root_scope().scope_type,
+            get_interner().get_or_intern("empire")
+        );
+        assert_eq!(
+            stack.from_scope().unwrap().scope_type,
+            get_interner().get_or_intern("planet")
+        );
+        assert_eq!(
+            stack.fromfrom_scope().unwrap().scope_type,
+            get_interner().get_or_intern("system")
+        );
         assert_eq!(stack.fromfromfrom_scope(), None);
 
         // Test that stack-based scopes are independent
@@ -568,117 +634,256 @@ mod tests {
 
     #[test]
     fn test_stack_vs_explicit_scopes() {
-        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+        let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Build up a stack and set explicit references
         let mut replacements = HashMap::new();
-        replacements.insert("this".to_string(), ScopeContext::new("pop"));
-        replacements.insert("prev".to_string(), ScopeContext::new("planet"));
-        replacements.insert("prevprev".to_string(), ScopeContext::new("system"));
-        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
-        replacements.insert("fromfrom".to_string(), ScopeContext::new("ship"));
-        replacements.insert("root".to_string(), ScopeContext::new("empire"));
+        replacements.insert(
+            get_interner().get_or_intern("this"),
+            ScopeContext::new(get_interner().get_or_intern("pop")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("prev"),
+            ScopeContext::new(get_interner().get_or_intern("planet")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("prevprev"),
+            ScopeContext::new(get_interner().get_or_intern("system")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("from"),
+            ScopeContext::new(get_interner().get_or_intern("fleet")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("fromfrom"),
+            ScopeContext::new(get_interner().get_or_intern("ship")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("root"),
+            ScopeContext::new(get_interner().get_or_intern("empire")),
+        );
 
         stack.replace_scope(replacements).unwrap();
 
         // Test stack-based scopes
-        assert_eq!(stack.current_scope().scope_type, "pop");
-        assert_eq!(stack.prev_scope().unwrap().scope_type, "planet");
-        assert_eq!(stack.prevprev_scope().unwrap().scope_type, "system");
+        assert_eq!(
+            stack.current_scope().scope_type,
+            get_interner().get_or_intern("pop")
+        );
+        assert_eq!(
+            stack.prev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("planet")
+        );
+        assert_eq!(
+            stack.prevprev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("system")
+        );
         assert_eq!(stack.depth(), 3);
 
         // Test explicit scopes
-        assert_eq!(stack.from_scope().unwrap().scope_type, "fleet");
-        assert_eq!(stack.fromfrom_scope().unwrap().scope_type, "ship");
-        assert_eq!(stack.root_scope().scope_type, "empire");
+        assert_eq!(
+            stack.from_scope().unwrap().scope_type,
+            get_interner().get_or_intern("fleet")
+        );
+        assert_eq!(
+            stack.fromfrom_scope().unwrap().scope_type,
+            get_interner().get_or_intern("ship")
+        );
+        assert_eq!(
+            stack.root_scope().scope_type,
+            get_interner().get_or_intern("empire")
+        );
     }
 
     #[test]
     fn test_scope_name_resolution() {
-        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+        let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Set up both stack and explicit scopes
         let mut replacements = HashMap::new();
-        replacements.insert("this".to_string(), ScopeContext::new("pop"));
-        replacements.insert("prev".to_string(), ScopeContext::new("planet"));
-        replacements.insert("prevprev".to_string(), ScopeContext::new("system"));
-        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
-        replacements.insert("fromfrom".to_string(), ScopeContext::new("ship"));
-        replacements.insert("root".to_string(), ScopeContext::new("empire"));
+        replacements.insert(
+            get_interner().get_or_intern("this"),
+            ScopeContext::new(get_interner().get_or_intern("pop")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("prev"),
+            ScopeContext::new(get_interner().get_or_intern("planet")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("prevprev"),
+            ScopeContext::new(get_interner().get_or_intern("system")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("from"),
+            ScopeContext::new(get_interner().get_or_intern("fleet")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("fromfrom"),
+            ScopeContext::new(get_interner().get_or_intern("ship")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("root"),
+            ScopeContext::new(get_interner().get_or_intern("empire")),
+        );
 
         stack.replace_scope(replacements).unwrap();
 
         // Test scope name resolution
-        assert_eq!(stack.get_scope_by_name("this").unwrap().scope_type, "pop");
         assert_eq!(
-            stack.get_scope_by_name("root").unwrap().scope_type,
-            "empire"
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("this"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("pop")
         );
         assert_eq!(
-            stack.get_scope_by_name("prev").unwrap().scope_type,
-            "planet"
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("root"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("empire")
         );
         assert_eq!(
-            stack.get_scope_by_name("prevprev").unwrap().scope_type,
-            "system"
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("prev"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("planet")
         );
-        assert_eq!(stack.get_scope_by_name("from").unwrap().scope_type, "fleet");
         assert_eq!(
-            stack.get_scope_by_name("fromfrom").unwrap().scope_type,
-            "ship"
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("prevprev"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("system")
         );
-        assert_eq!(stack.get_scope_by_name("fromfromfrom"), None);
-        assert_eq!(stack.get_scope_by_name("prevprevprev"), None);
+        assert_eq!(
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("from"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("fleet")
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("fromfrom"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("ship")
+        );
+        assert_eq!(
+            stack.get_scope_by_name(get_interner().get_or_intern("fromfromfrom")),
+            None
+        );
+        assert_eq!(
+            stack.get_scope_by_name(get_interner().get_or_intern("prevprevprev")),
+            None
+        );
 
         // Test case variations
-        assert_eq!(stack.get_scope_by_name("THIS").unwrap().scope_type, "pop");
         assert_eq!(
-            stack.get_scope_by_name("ROOT").unwrap().scope_type,
-            "empire"
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("THIS"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("pop")
         );
-        assert_eq!(stack.get_scope_by_name("FROM").unwrap().scope_type, "fleet");
         assert_eq!(
-            stack.get_scope_by_name("PREV").unwrap().scope_type,
-            "planet"
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("ROOT"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("empire")
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("FROM"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("fleet")
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("PREV"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("planet")
         );
     }
 
     #[test]
     fn test_available_scope_names() {
-        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+        let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Initially, only this and root are available
         let mut available = stack.available_scope_names();
         available.sort();
-        let mut expected = vec!["this", "root", "THIS", "ROOT"];
+        let mut expected = vec![
+            get_interner().get_or_intern("this"),
+            get_interner().get_or_intern("root"),
+            get_interner().get_or_intern("THIS"),
+            get_interner().get_or_intern("ROOT"),
+        ];
         expected.sort();
         assert_eq!(available, expected);
 
         // Add stack scopes
-        stack.push_scope(ScopeContext::new("planet")).unwrap();
-        stack.push_scope(ScopeContext::new("pop")).unwrap();
+        stack
+            .push_scope(ScopeContext::new(get_interner().get_or_intern("planet")))
+            .unwrap();
+        stack
+            .push_scope(ScopeContext::new(get_interner().get_or_intern("pop")))
+            .unwrap();
 
         let mut available = stack.available_scope_names();
         available.sort();
         let mut expected = vec![
-            "this", "root", "THIS", "ROOT", "prev", "PREV", "prevprev", "PREVPREV",
+            get_interner().get_or_intern("this"),
+            get_interner().get_or_intern("root"),
+            get_interner().get_or_intern("THIS"),
+            get_interner().get_or_intern("ROOT"),
+            get_interner().get_or_intern("prev"),
+            get_interner().get_or_intern("PREV"),
+            get_interner().get_or_intern("prevprev"),
+            get_interner().get_or_intern("PREVPREV"),
         ];
         expected.sort();
         assert_eq!(available, expected);
 
         // Add explicit scopes via replace_scope
         let mut replacements = HashMap::new();
-        replacements.insert("this".to_string(), ScopeContext::new("pop"));
-        replacements.insert("prev".to_string(), ScopeContext::new("planet"));
-        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
-        replacements.insert("fromfrom".to_string(), ScopeContext::new("ship"));
+        replacements.insert(
+            get_interner().get_or_intern("this"),
+            ScopeContext::new(get_interner().get_or_intern("pop")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("prev"),
+            ScopeContext::new(get_interner().get_or_intern("planet")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("from"),
+            ScopeContext::new(get_interner().get_or_intern("fleet")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("fromfrom"),
+            ScopeContext::new(get_interner().get_or_intern("ship")),
+        );
 
         stack.replace_scope(replacements).unwrap();
 
         let mut available = stack.available_scope_names();
         available.sort();
         let mut expected = vec![
-            "this", "root", "THIS", "ROOT", "prev", "PREV", "from", "FROM", "fromfrom", "FROMFROM",
+            get_interner().get_or_intern("this"),
+            get_interner().get_or_intern("root"),
+            get_interner().get_or_intern("THIS"),
+            get_interner().get_or_intern("ROOT"),
+            get_interner().get_or_intern("prev"),
+            get_interner().get_or_intern("PREV"),
+            get_interner().get_or_intern("from"),
+            get_interner().get_or_intern("FROM"),
+            get_interner().get_or_intern("fromfrom"),
+            get_interner().get_or_intern("FROMFROM"),
         ];
         expected.sort();
         assert_eq!(available, expected);
@@ -686,118 +891,238 @@ mod tests {
 
     #[test]
     fn test_replace_scope_with_all_levels() {
-        let mut stack = ScopeStack::new(ScopeContext::new("original_root"));
+        let mut stack = ScopeStack::new(ScopeContext::new(
+            get_interner().get_or_intern("original_root"),
+        ));
 
         // Test with all levels including prevprevprevprev and fromfromfromfrom
         let mut replacements = HashMap::new();
-        replacements.insert("this".to_string(), ScopeContext::new("pop"));
-        replacements.insert("prev".to_string(), ScopeContext::new("planet"));
-        replacements.insert("prevprev".to_string(), ScopeContext::new("system"));
-        replacements.insert("prevprevprev".to_string(), ScopeContext::new("sector"));
-        replacements.insert("prevprevprevprev".to_string(), ScopeContext::new("country"));
-        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
-        replacements.insert("fromfrom".to_string(), ScopeContext::new("ship"));
-        replacements.insert("fromfromfrom".to_string(), ScopeContext::new("component"));
-        replacements.insert("fromfromfromfrom".to_string(), ScopeContext::new("weapon"));
-        replacements.insert("root".to_string(), ScopeContext::new("empire"));
+        replacements.insert(
+            get_interner().get_or_intern("this"),
+            ScopeContext::new(get_interner().get_or_intern("pop")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("prev"),
+            ScopeContext::new(get_interner().get_or_intern("planet")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("prevprev"),
+            ScopeContext::new(get_interner().get_or_intern("system")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("prevprevprev"),
+            ScopeContext::new(get_interner().get_or_intern("sector")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("prevprevprevprev"),
+            ScopeContext::new(get_interner().get_or_intern("country")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("from"),
+            ScopeContext::new(get_interner().get_or_intern("fleet")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("fromfrom"),
+            ScopeContext::new(get_interner().get_or_intern("ship")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("fromfromfrom"),
+            ScopeContext::new(get_interner().get_or_intern("component")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("fromfromfromfrom"),
+            ScopeContext::new(get_interner().get_or_intern("weapon")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("root"),
+            ScopeContext::new(get_interner().get_or_intern("empire")),
+        );
 
         stack.replace_scope(replacements).unwrap();
 
         // Verify stack scopes
-        assert_eq!(stack.current_scope().scope_type, "pop");
-        assert_eq!(stack.prev_scope().unwrap().scope_type, "planet");
-        assert_eq!(stack.prevprev_scope().unwrap().scope_type, "system");
-        assert_eq!(stack.prevprevprev_scope().unwrap().scope_type, "sector");
+        assert_eq!(
+            stack.current_scope().scope_type,
+            get_interner().get_or_intern("pop")
+        );
+        assert_eq!(
+            stack.prev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("planet")
+        );
+        assert_eq!(
+            stack.prevprev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("system")
+        );
+        assert_eq!(
+            stack.prevprevprev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("sector")
+        );
         assert_eq!(
             stack.prevprevprevprev_scope().unwrap().scope_type,
-            "country"
+            get_interner().get_or_intern("country")
         );
         assert_eq!(stack.depth(), 5);
 
         // Verify explicit scopes
-        assert_eq!(stack.from_scope().unwrap().scope_type, "fleet");
-        assert_eq!(stack.fromfrom_scope().unwrap().scope_type, "ship");
-        assert_eq!(stack.fromfromfrom_scope().unwrap().scope_type, "component");
-        assert_eq!(stack.fromfromfromfrom_scope().unwrap().scope_type, "weapon");
-        assert_eq!(stack.root_scope().scope_type, "empire");
+        assert_eq!(
+            stack.from_scope().unwrap().scope_type,
+            get_interner().get_or_intern("fleet")
+        );
+        assert_eq!(
+            stack.fromfrom_scope().unwrap().scope_type,
+            get_interner().get_or_intern("ship")
+        );
+        assert_eq!(
+            stack.fromfromfrom_scope().unwrap().scope_type,
+            get_interner().get_or_intern("component")
+        );
+        assert_eq!(
+            stack.fromfromfromfrom_scope().unwrap().scope_type,
+            get_interner().get_or_intern("weapon")
+        );
+        assert_eq!(
+            stack.root_scope().scope_type,
+            get_interner().get_or_intern("empire")
+        );
 
         // Test scope name resolution for all levels
-        assert_eq!(stack.get_scope_by_name("this").unwrap().scope_type, "pop");
         assert_eq!(
-            stack.get_scope_by_name("prev").unwrap().scope_type,
-            "planet"
-        );
-        assert_eq!(
-            stack.get_scope_by_name("prevprev").unwrap().scope_type,
-            "system"
-        );
-        assert_eq!(
-            stack.get_scope_by_name("prevprevprev").unwrap().scope_type,
-            "sector"
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("this"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("pop")
         );
         assert_eq!(
             stack
-                .get_scope_by_name("prevprevprevprev")
+                .get_scope_by_name(get_interner().get_or_intern("prev"))
                 .unwrap()
                 .scope_type,
-            "country"
-        );
-        assert_eq!(stack.get_scope_by_name("from").unwrap().scope_type, "fleet");
-        assert_eq!(
-            stack.get_scope_by_name("fromfrom").unwrap().scope_type,
-            "ship"
-        );
-        assert_eq!(
-            stack.get_scope_by_name("fromfromfrom").unwrap().scope_type,
-            "component"
+            get_interner().get_or_intern("planet")
         );
         assert_eq!(
             stack
-                .get_scope_by_name("fromfromfromfrom")
+                .get_scope_by_name(get_interner().get_or_intern("prevprev"))
                 .unwrap()
                 .scope_type,
-            "weapon"
+            get_interner().get_or_intern("system")
         );
         assert_eq!(
-            stack.get_scope_by_name("root").unwrap().scope_type,
-            "empire"
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("prevprevprev"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("sector")
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("prevprevprevprev"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("country")
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("from"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("fleet")
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("fromfrom"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("ship")
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("fromfromfrom"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("component")
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("fromfromfromfrom"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("weapon")
+        );
+        assert_eq!(
+            stack
+                .get_scope_by_name(get_interner().get_or_intern("root"))
+                .unwrap()
+                .scope_type,
+            get_interner().get_or_intern("empire")
         );
     }
 
     #[test]
     fn test_replace_scope_partial() {
-        let mut stack = ScopeStack::new(ScopeContext::new("original_root"));
+        let mut stack = ScopeStack::new(ScopeContext::new(
+            get_interner().get_or_intern("original_root"),
+        ));
 
         // Test partial replacement (only some scopes specified)
         let mut partial_replacements = HashMap::new();
-        partial_replacements.insert("this".to_string(), ScopeContext::new("pop"));
-        partial_replacements.insert("prev".to_string(), ScopeContext::new("planet"));
-        partial_replacements.insert("from".to_string(), ScopeContext::new("fleet"));
+        partial_replacements.insert(
+            get_interner().get_or_intern("this"),
+            ScopeContext::new(get_interner().get_or_intern("pop")),
+        );
+        partial_replacements.insert(
+            get_interner().get_or_intern("prev"),
+            ScopeContext::new(get_interner().get_or_intern("planet")),
+        );
+        partial_replacements.insert(
+            get_interner().get_or_intern("from"),
+            ScopeContext::new(get_interner().get_or_intern("fleet")),
+        );
         // No prevprev, fromfrom, or root specified
 
         stack.replace_scope(partial_replacements).unwrap();
 
         // Should only have specified scopes
-        assert_eq!(stack.current_scope().scope_type, "pop");
-        assert_eq!(stack.prev_scope().unwrap().scope_type, "planet");
+        assert_eq!(
+            stack.current_scope().scope_type,
+            get_interner().get_or_intern("pop")
+        );
+        assert_eq!(
+            stack.prev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("planet")
+        );
         assert_eq!(stack.prevprev_scope(), None);
-        assert_eq!(stack.from_scope().unwrap().scope_type, "fleet");
+        assert_eq!(
+            stack.from_scope().unwrap().scope_type,
+            get_interner().get_or_intern("fleet")
+        );
         assert_eq!(stack.fromfrom_scope(), None);
-        assert_eq!(stack.root_scope().scope_type, "original_root"); // Root unchanged
+        assert_eq!(
+            stack.root_scope().scope_type,
+            get_interner().get_or_intern("original_root")
+        ); // Root unchanged
         assert_eq!(stack.depth(), 2);
     }
 
     #[test]
     fn test_replace_scope_empty() {
-        let mut stack = ScopeStack::new(ScopeContext::new("original_root"));
+        let mut stack = ScopeStack::new(ScopeContext::new(
+            get_interner().get_or_intern("original_root"),
+        ));
 
         // Replace with empty map
         let replacements = HashMap::new();
         stack.replace_scope(replacements).unwrap();
 
         // Should have root as the only scope
-        assert_eq!(stack.current_scope().scope_type, "original_root");
-        assert_eq!(stack.root_scope().scope_type, "original_root");
+        assert_eq!(
+            stack.current_scope().scope_type,
+            get_interner().get_or_intern("original_root")
+        );
+        assert_eq!(
+            stack.root_scope().scope_type,
+            get_interner().get_or_intern("original_root")
+        );
         assert_eq!(stack.depth(), 1);
         assert_eq!(stack.prev_scope(), None);
         assert_eq!(stack.from_scope(), None);
@@ -805,36 +1130,59 @@ mod tests {
 
     #[test]
     fn test_push_scope_affects_stack_only() {
-        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+        let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Set explicit from reference
         let mut replacements = HashMap::new();
-        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
+        replacements.insert(
+            get_interner().get_or_intern("from"),
+            ScopeContext::new(get_interner().get_or_intern("fleet")),
+        );
         stack.replace_scope(replacements).unwrap();
 
         // Now push some scopes
-        stack.push_scope(ScopeContext::new("planet")).unwrap();
-        stack.push_scope(ScopeContext::new("pop")).unwrap();
+        stack
+            .push_scope(ScopeContext::new(get_interner().get_or_intern("planet")))
+            .unwrap();
+        stack
+            .push_scope(ScopeContext::new(get_interner().get_or_intern("pop")))
+            .unwrap();
 
         // Explicit from should be unchanged
-        assert_eq!(stack.from_scope().unwrap().scope_type, "fleet");
+        assert_eq!(
+            stack.from_scope().unwrap().scope_type,
+            get_interner().get_or_intern("fleet")
+        );
 
         // Stack should have new scopes
-        assert_eq!(stack.current_scope().scope_type, "pop");
-        assert_eq!(stack.prev_scope().unwrap().scope_type, "planet");
-        assert_eq!(stack.prevprev_scope().unwrap().scope_type, "country");
+        assert_eq!(
+            stack.current_scope().scope_type,
+            get_interner().get_or_intern("pop")
+        );
+        assert_eq!(
+            stack.prev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("planet")
+        );
+        assert_eq!(
+            stack.prevprev_scope().unwrap().scope_type,
+            get_interner().get_or_intern("country")
+        );
         assert_eq!(stack.depth(), 3);
     }
 
     #[test]
     fn test_scope_overflow() {
-        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+        let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
         stack.max_depth = 3;
 
-        stack.push_scope(ScopeContext::new("planet")).unwrap();
-        stack.push_scope(ScopeContext::new("pop")).unwrap();
+        stack
+            .push_scope(ScopeContext::new(get_interner().get_or_intern("planet")))
+            .unwrap();
+        stack
+            .push_scope(ScopeContext::new(get_interner().get_or_intern("pop")))
+            .unwrap();
 
-        let result = stack.push_scope(ScopeContext::new("job"));
+        let result = stack.push_scope(ScopeContext::new(get_interner().get_or_intern("job")));
         assert!(matches!(
             result,
             Err(ScopeError::StackOverflow { max_depth: 3 })
@@ -843,29 +1191,66 @@ mod tests {
 
     #[test]
     fn test_validation() {
-        let mut stack = ScopeStack::new(ScopeContext::new("country"));
+        let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Set up some scopes
         let mut replacements = HashMap::new();
-        replacements.insert("this".to_string(), ScopeContext::new("pop"));
-        replacements.insert("prev".to_string(), ScopeContext::new("planet"));
-        replacements.insert("from".to_string(), ScopeContext::new("fleet"));
+        replacements.insert(
+            get_interner().get_or_intern("this"),
+            ScopeContext::new(get_interner().get_or_intern("pop")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("prev"),
+            ScopeContext::new(get_interner().get_or_intern("planet")),
+        );
+        replacements.insert(
+            get_interner().get_or_intern("from"),
+            ScopeContext::new(get_interner().get_or_intern("fleet")),
+        );
         stack.replace_scope(replacements).unwrap();
 
         // Test valid scope names
-        assert!(stack.validate_scope_name("this").is_ok());
-        assert!(stack.validate_scope_name("root").is_ok());
-        assert!(stack.validate_scope_name("prev").is_ok());
-        assert!(stack.validate_scope_name("from").is_ok());
-        assert!(stack.is_valid_scope_name("THIS"));
-        assert!(stack.is_valid_scope_name("ROOT"));
-        assert!(stack.is_valid_scope_name("PREV"));
-        assert!(stack.is_valid_scope_name("FROM"));
+        assert!(
+            stack
+                .validate_scope_name(get_interner().get_or_intern("this"))
+                .is_ok()
+        );
+        assert!(
+            stack
+                .validate_scope_name(get_interner().get_or_intern("root"))
+                .is_ok()
+        );
+        assert!(
+            stack
+                .validate_scope_name(get_interner().get_or_intern("prev"))
+                .is_ok()
+        );
+        assert!(
+            stack
+                .validate_scope_name(get_interner().get_or_intern("from"))
+                .is_ok()
+        );
+        assert!(stack.is_valid_scope_name(get_interner().get_or_intern("THIS")));
+        assert!(stack.is_valid_scope_name(get_interner().get_or_intern("ROOT")));
+        assert!(stack.is_valid_scope_name(get_interner().get_or_intern("PREV")));
+        assert!(stack.is_valid_scope_name(get_interner().get_or_intern("FROM")));
 
         // Test invalid scope names
-        assert!(stack.validate_scope_name("invalid").is_err());
-        assert!(stack.validate_scope_name("prevprev").is_err()); // Not available at depth 2
-        assert!(stack.validate_scope_name("fromfrom").is_err()); // Not set
-        assert!(!stack.is_valid_scope_name("nonexistent"));
+        assert!(
+            stack
+                .validate_scope_name(get_interner().get_or_intern("invalid"))
+                .is_err()
+        );
+        assert!(
+            stack
+                .validate_scope_name(get_interner().get_or_intern("prevprev"))
+                .is_err()
+        ); // Not available at depth 2
+        assert!(
+            stack
+                .validate_scope_name(get_interner().get_or_intern("fromfrom"))
+                .is_err()
+        ); // Not set
+        assert!(!stack.is_valid_scope_name(get_interner().get_or_intern("nonexistent")));
     }
 }

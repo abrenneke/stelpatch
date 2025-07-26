@@ -3,11 +3,15 @@ use std::{
     sync::Arc,
 };
 
-use crate::handlers::scope::{ScopeContext, ScopeError, ScopeStack};
+use crate::{
+    handlers::scope::{ScopeContext, ScopeError, ScopeStack},
+    interner::get_interner,
+};
 use cw_model::{
     ArrayType, BlockType, CwtAnalyzer, CwtType, PatternProperty, Property, ReferenceType,
     SimpleType, TypeFingerprint,
 };
+use lasso::Spur;
 
 /// A wrapper that combines a CWT type with its scope context
 /// This ensures that types always carry information about what scope they exist in
@@ -20,10 +24,10 @@ pub struct ScopedType {
     scope_context: ScopeStack,
 
     /// The active subtypes (multiple can be active at once)
-    subtypes: HashSet<String>,
+    subtypes: HashSet<Spur>,
 
     /// If we're inside a block that's a scripted_effect, this activates VARIABLEs. Value is the name of the scripted_effect.
-    in_scripted_effect_block: Option<String>,
+    in_scripted_effect_block: Option<Spur>,
 }
 
 impl std::fmt::Debug for ScopedType {
@@ -56,7 +60,11 @@ impl TypeFingerprint for ScopedType {
         );
 
         if !self.subtypes.is_empty() {
-            let mut subtypes_vec: Vec<_> = self.subtypes.iter().map(|s| s.to_string()).collect();
+            let mut subtypes_vec: Vec<_> = self
+                .subtypes
+                .iter()
+                .map(|s| get_interner().resolve(s))
+                .collect();
             subtypes_vec.sort(); // Ensure consistent ordering for fingerprints
             let subtypes_str = subtypes_vec.join(",");
             format!("{}[subtypes:{}]", base, subtypes_str)
@@ -92,10 +100,10 @@ pub enum CwtTypeOrSpecialRef<'a> {
     Union(&'a Vec<Arc<CwtType>>),
 
     /// Literal string values
-    Literal(&'a String),
+    Literal(&'a Spur),
 
     /// Set of literal values
-    LiteralSet(&'a HashSet<String>),
+    LiteralSet(&'a HashSet<Spur>),
 
     /// Comparable types (for triggers with == operator)
     Comparable(&'a Box<Arc<CwtType>>),
@@ -108,16 +116,16 @@ pub enum CwtTypeOrSpecialRef<'a> {
 }
 
 impl CwtTypeOrSpecial {
-    pub fn get_type_name(&self) -> &str {
+    pub fn get_type_name(&self) -> Spur {
         match self {
             CwtTypeOrSpecial::CwtType(cwt_type) => cwt_type.get_type_name(),
-            CwtTypeOrSpecial::ScopedUnion(_) => "",
+            CwtTypeOrSpecial::ScopedUnion(_) => Spur::default(),
         }
     }
 
     pub fn type_name_for_display(&self) -> String {
         match self {
-            CwtTypeOrSpecial::CwtType(cwt_type) => cwt_type.type_name_for_display(),
+            CwtTypeOrSpecial::CwtType(cwt_type) => cwt_type.type_name_for_display(get_interner()),
             CwtTypeOrSpecial::ScopedUnion(union_types) => {
                 if union_types.is_empty() {
                     "(empty scoped union)".to_string()
@@ -156,7 +164,7 @@ impl ScopedType {
         }
     }
 
-    pub fn get_type_name(&self) -> &str {
+    pub fn get_type_name(&self) -> Spur {
         self.cwt_type.get_type_name()
     }
 
@@ -167,8 +175,8 @@ impl ScopedType {
     pub fn new_with_subtype(
         cwt_type: CwtTypeOrSpecial,
         scope_context: ScopeStack,
-        subtype: Option<String>,
-        scripted_effect_name: Option<String>,
+        subtype: Option<Spur>,
+        scripted_effect_name: Option<Spur>,
     ) -> Self {
         Self {
             cwt_type,
@@ -181,8 +189,8 @@ impl ScopedType {
     pub fn new_with_subtypes(
         cwt_type: CwtTypeOrSpecial,
         scope_context: ScopeStack,
-        subtypes: HashSet<String>,
-        scripted_effect_name: Option<String>,
+        subtypes: HashSet<Spur>,
+        scripted_effect_name: Option<Spur>,
     ) -> Self {
         Self {
             cwt_type,
@@ -196,7 +204,7 @@ impl ScopedType {
     pub fn new_cwt(
         cwt_type: Arc<CwtType>,
         scope_context: ScopeStack,
-        scripted_effect_name: Option<String>,
+        scripted_effect_name: Option<Spur>,
     ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
@@ -209,8 +217,8 @@ impl ScopedType {
     pub fn new_cwt_with_subtypes(
         cwt_type: Arc<CwtType>,
         scope_context: ScopeStack,
-        subtypes: HashSet<String>,
-        scripted_effect_name: Option<String>,
+        subtypes: HashSet<Spur>,
+        scripted_effect_name: Option<Spur>,
     ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
@@ -223,7 +231,7 @@ impl ScopedType {
     pub fn new_scoped_union(
         scoped_types: Vec<Arc<ScopedType>>,
         scope_context: ScopeStack,
-        scripted_effect_name: Option<String>,
+        scripted_effect_name: Option<Spur>,
     ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::ScopedUnion(scoped_types),
@@ -236,8 +244,8 @@ impl ScopedType {
     /// Create a scoped type with a default root scope
     pub fn with_root_scope(
         cwt_type: Arc<CwtType>,
-        root_scope_type: impl Into<String>,
-        scripted_effect_name: Option<String>,
+        root_scope_type: Spur,
+        scripted_effect_name: Option<Spur>,
     ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
@@ -249,9 +257,9 @@ impl ScopedType {
 
     pub fn with_root_scope_and_subtype(
         cwt_type: Arc<CwtType>,
-        root_scope_type: impl Into<String>,
-        subtype: Option<String>,
-        scripted_effect_name: Option<String>,
+        root_scope_type: Spur,
+        subtype: Option<Spur>,
+        scripted_effect_name: Option<Spur>,
     ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
@@ -263,9 +271,9 @@ impl ScopedType {
 
     pub fn with_root_scope_and_subtypes(
         cwt_type: Arc<CwtType>,
-        root_scope_type: impl Into<String>,
-        subtypes: HashSet<String>,
-        scripted_effect_name: Option<String>,
+        root_scope_type: Spur,
+        subtypes: HashSet<Spur>,
+        scripted_effect_name: Option<Spur>,
     ) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
@@ -284,7 +292,7 @@ impl ScopedType {
         }
     }
 
-    pub fn child_with_subtype(&self, cwt_type: Arc<CwtType>, subtype: Option<String>) -> Self {
+    pub fn child_with_subtype(&self, cwt_type: Arc<CwtType>, subtype: Option<Spur>) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: self.scope_context.clone(),
@@ -293,7 +301,7 @@ impl ScopedType {
         }
     }
 
-    pub fn child_with_subtypes(&self, cwt_type: Arc<CwtType>, subtypes: HashSet<String>) -> Self {
+    pub fn child_with_subtypes(&self, cwt_type: Arc<CwtType>, subtypes: HashSet<Spur>) -> Self {
         Self {
             cwt_type: CwtTypeOrSpecial::CwtType(cwt_type),
             scope_context: self.scope_context.clone(),
@@ -342,28 +350,28 @@ impl ScopedType {
         &mut self.scope_context
     }
 
-    pub fn in_scripted_effect_block(&self) -> Option<&String> {
+    pub fn in_scripted_effect_block(&self) -> Option<&Spur> {
         self.in_scripted_effect_block.as_ref()
     }
 
     /// Get the active subtypes, if any
-    pub fn subtypes(&self) -> &HashSet<String> {
+    pub fn subtypes(&self) -> &HashSet<Spur> {
         &self.subtypes
     }
 
     /// Set the active subtypes
-    pub fn set_subtypes(&mut self, subtypes: HashSet<String>) {
+    pub fn set_subtypes(&mut self, subtypes: HashSet<Spur>) {
         self.subtypes = subtypes;
     }
 
     /// Add a subtype to the active subtypes
-    pub fn add_subtype(&mut self, subtype: String) {
+    pub fn add_subtype(&mut self, subtype: Spur) {
         self.subtypes.insert(subtype);
     }
 
     /// Remove a subtype from the active subtypes
-    pub fn remove_subtype(&mut self, subtype: &str) {
-        self.subtypes.remove(subtype);
+    pub fn remove_subtype(&mut self, subtype: Spur) {
+        self.subtypes.remove(&subtype);
     }
 
     /// Clear all active subtypes
@@ -372,7 +380,7 @@ impl ScopedType {
     }
 
     /// Create a new instance with a different set of subtypes
-    pub fn with_subtypes(&self, subtypes: HashSet<String>) -> Self {
+    pub fn with_subtypes(&self, subtypes: HashSet<Spur>) -> Self {
         Self {
             cwt_type: self.cwt_type.clone(),
             scope_context: self.scope_context.clone(),
@@ -382,7 +390,7 @@ impl ScopedType {
     }
 
     /// Create a new instance with a single subtype (for backward compatibility)
-    pub fn with_subtype(&self, subtype: Option<String>) -> Self {
+    pub fn with_subtype(&self, subtype: Option<Spur>) -> Self {
         let subtypes = subtype.into_iter().collect();
         Self {
             cwt_type: self.cwt_type.clone(),
@@ -393,7 +401,7 @@ impl ScopedType {
     }
 
     /// Create a new instance with additional subtypes
-    pub fn with_additional_subtypes(&self, additional_subtypes: HashSet<String>) -> Self {
+    pub fn with_additional_subtypes(&self, additional_subtypes: HashSet<Spur>) -> Self {
         let mut new_subtypes = self.subtypes.clone();
         new_subtypes.extend(additional_subtypes);
         Self {
@@ -404,13 +412,13 @@ impl ScopedType {
         }
     }
 
-    pub fn set_in_scripted_effect_block(&mut self, scripted_effect_name: String) {
+    pub fn set_in_scripted_effect_block(&mut self, scripted_effect_name: Spur) {
         self.in_scripted_effect_block = Some(scripted_effect_name);
     }
 
     /// Check if this scoped type has a specific subtype
-    pub fn has_subtype(&self, subtype_name: &str) -> bool {
-        self.subtypes.contains(subtype_name)
+    pub fn has_subtype(&self, subtype_name: Spur) -> bool {
+        self.subtypes.contains(&subtype_name)
     }
 
     /// Check if this scoped type has any subtype
@@ -430,27 +438,27 @@ impl ScopedType {
     }
 
     /// Get available scope field names for this scoped type
-    pub fn available_scope_fields(&self) -> Vec<String> {
+    pub fn available_scope_fields(&self) -> Vec<Spur> {
         self.scope_context.available_scope_names()
     }
 
     /// Validate a scope field value in this type's context
-    pub fn validate_scope_field(&self, field_name: &str) -> Result<&ScopeContext, ScopeError> {
+    pub fn validate_scope_field(&self, field_name: Spur) -> Result<&ScopeContext, ScopeError> {
         self.scope_context.validate_scope_name(field_name)
     }
 
     /// Get the current scope type (equivalent to `this` in Stellaris)
-    pub fn current_scope_type(&self) -> &str {
-        &self.scope_context.current_scope().scope_type
+    pub fn current_scope_type(&self) -> Spur {
+        self.scope_context.current_scope().scope_type
     }
 
     /// Get the root scope type
-    pub fn root_scope_type(&self) -> &str {
-        &self.scope_context.root_scope().scope_type
+    pub fn root_scope_type(&self) -> Spur {
+        self.scope_context.root_scope().scope_type
     }
 
     /// Check if a scope field name is valid in the current context
-    pub fn is_valid_scope_field(&self, field_name: &str) -> bool {
+    pub fn is_valid_scope_field(&self, field_name: Spur) -> bool {
         self.scope_context.is_valid_scope_name(field_name)
     }
 
@@ -528,8 +536,8 @@ impl ScopeAwareProperty for Property {
 
         // Apply push_scope if present
         if let Some(push_scope) = &self.options.push_scope {
-            if let Some(scope_name) = analyzer.resolve_scope_name(push_scope) {
-                new_scope.push_scope_type(scope_name.to_string())?;
+            if let Some(scope_name) = analyzer.resolve_scope_name(*push_scope) {
+                new_scope.push_scope_type(scope_name)?;
             }
         }
 
@@ -538,8 +546,8 @@ impl ScopeAwareProperty for Property {
             let mut new_scopes = HashMap::new();
 
             for (key, value) in replace_scope {
-                if let Some(scope_name) = analyzer.resolve_scope_name(value) {
-                    new_scopes.insert(key.clone(), scope_name.to_string());
+                if let Some(scope_name) = analyzer.resolve_scope_name(*value) {
+                    new_scopes.insert(key.clone(), scope_name);
                 }
             }
 
@@ -566,8 +574,8 @@ impl ScopeAwareProperty for PatternProperty {
 
         // Apply push_scope if present
         if let Some(push_scope) = &self.options.push_scope {
-            if let Some(scope_name) = analyzer.resolve_scope_name(push_scope) {
-                new_scope.push_scope_type(scope_name.to_string())?;
+            if let Some(scope_name) = analyzer.resolve_scope_name(*push_scope) {
+                new_scope.push_scope_type(scope_name)?;
             }
         }
 
@@ -576,8 +584,8 @@ impl ScopeAwareProperty for PatternProperty {
             let mut new_scopes = HashMap::new();
 
             for (key, value) in replace_scope {
-                if let Some(scope_name) = analyzer.resolve_scope_name(value) {
-                    new_scopes.insert(key.clone(), scope_name.to_string());
+                if let Some(scope_name) = analyzer.resolve_scope_name(*value) {
+                    new_scopes.insert(key.clone(), scope_name);
                 }
             }
 
@@ -595,11 +603,18 @@ mod tests {
     #[test]
     fn test_scoped_type_creation() {
         let cwt_type = Arc::new(CwtType::Simple(SimpleType::ScopeField));
-        let scoped_type = ScopedType::with_root_scope(cwt_type, "country", None);
+        let scoped_type =
+            ScopedType::with_root_scope(cwt_type, get_interner().get_or_intern("country"), None);
 
         assert!(scoped_type.is_scope_field());
-        assert_eq!(scoped_type.current_scope_type(), "country");
-        assert_eq!(scoped_type.root_scope_type(), "country");
+        assert_eq!(
+            scoped_type.current_scope_type(),
+            get_interner().get_or_intern("country")
+        );
+        assert_eq!(
+            scoped_type.root_scope_type(),
+            get_interner().get_or_intern("country")
+        );
         assert!(scoped_type.subtypes().is_empty());
     }
 
@@ -608,76 +623,95 @@ mod tests {
         let cwt_type = Arc::new(CwtType::Simple(SimpleType::ScopeField));
         let scoped_type = ScopedType::with_root_scope_and_subtype(
             cwt_type,
-            "country",
-            Some("pop_spawned".to_string()),
+            get_interner().get_or_intern("country"),
+            Some(get_interner().get_or_intern("pop_spawned")),
             None,
         );
 
         assert!(scoped_type.is_scope_field());
-        assert_eq!(scoped_type.current_scope_type(), "country");
-        assert_eq!(scoped_type.root_scope_type(), "country");
+        assert_eq!(
+            scoped_type.current_scope_type(),
+            get_interner().get_or_intern("country")
+        );
+        assert_eq!(
+            scoped_type.root_scope_type(),
+            get_interner().get_or_intern("country")
+        );
         assert_eq!(
             scoped_type.subtypes(),
-            &HashSet::from(["pop_spawned".to_string()])
+            &HashSet::from([get_interner().get_or_intern("pop_spawned")])
         );
-        assert!(scoped_type.has_subtype("pop_spawned"));
-        assert!(!scoped_type.has_subtype("buildable"));
+        assert!(scoped_type.has_subtype(get_interner().get_or_intern("pop_spawned")));
+        assert!(!scoped_type.has_subtype(get_interner().get_or_intern("buildable")));
         assert!(scoped_type.has_any_subtype());
     }
 
     #[test]
     fn test_subtype_manipulation() {
         let cwt_type = Arc::new(CwtType::Simple(SimpleType::ScopeField));
-        let mut scoped_type = ScopedType::with_root_scope(cwt_type, "country", None);
+        let mut scoped_type =
+            ScopedType::with_root_scope(cwt_type, get_interner().get_or_intern("country"), None);
 
         // Initially no subtypes
         assert!(scoped_type.subtypes().is_empty());
         assert!(!scoped_type.has_any_subtype());
 
         // Set subtypes
-        scoped_type.set_subtypes(HashSet::from(["pop_spawned".to_string()]));
+        scoped_type.set_subtypes(HashSet::from([get_interner().get_or_intern("pop_spawned")]));
         assert_eq!(
             scoped_type.subtypes(),
-            &HashSet::from(["pop_spawned".to_string()])
+            &HashSet::from([get_interner().get_or_intern("pop_spawned")])
         );
-        assert!(scoped_type.has_subtype("pop_spawned"));
+        assert!(scoped_type.has_subtype(get_interner().get_or_intern("pop_spawned")));
         assert!(scoped_type.has_any_subtype());
 
         // Create new instance with different subtypes
-        let new_scoped_type = scoped_type.with_subtype(Some("buildable".to_string()));
+        let new_scoped_type =
+            scoped_type.with_subtype(Some(get_interner().get_or_intern("buildable")));
         assert_eq!(
             new_scoped_type.subtypes(),
-            &HashSet::from(["buildable".to_string()])
+            &HashSet::from([get_interner().get_or_intern("buildable")])
         );
-        assert!(new_scoped_type.has_subtype("buildable"));
+        assert!(new_scoped_type.has_subtype(get_interner().get_or_intern("buildable")));
 
         // Original should be unchanged
         assert_eq!(
             scoped_type.subtypes(),
-            &HashSet::from(["pop_spawned".to_string()])
+            &HashSet::from([get_interner().get_or_intern("pop_spawned")])
         );
     }
 
     #[test]
     fn test_scope_field_validation() {
         let cwt_type = Arc::new(CwtType::Simple(SimpleType::ScopeField));
-        let mut scope_manager = ScopeStack::default_with_root("country");
-        scope_manager.push_scope_type("planet").unwrap();
+        let mut scope_manager =
+            ScopeStack::default_with_root(get_interner().get_or_intern("country"));
+        scope_manager
+            .push_scope_type(get_interner().get_or_intern("planet"))
+            .unwrap();
 
         let scoped_type = ScopedType::new_cwt(cwt_type, scope_manager, None);
 
         // Valid scope fields
-        assert!(scoped_type.is_valid_scope_field("this"));
-        assert!(scoped_type.is_valid_scope_field("root"));
-        assert!(scoped_type.is_valid_scope_field("prev")); // Stack-based previous scope
+        assert!(scoped_type.is_valid_scope_field(get_interner().get_or_intern("this")));
+        assert!(scoped_type.is_valid_scope_field(get_interner().get_or_intern("root")));
+        assert!(scoped_type.is_valid_scope_field(get_interner().get_or_intern("prev"))); // Stack-based previous scope
 
         // Invalid scope field
-        assert!(!scoped_type.is_valid_scope_field("invalid"));
-        assert!(!scoped_type.is_valid_scope_field("from")); // Explicit scope reference not set
+        assert!(!scoped_type.is_valid_scope_field(get_interner().get_or_intern("invalid")));
+        assert!(!scoped_type.is_valid_scope_field(get_interner().get_or_intern("from"))); // Explicit scope reference not set
 
         // Test validation
-        assert!(scoped_type.validate_scope_field("this").is_ok());
-        assert!(scoped_type.validate_scope_field("invalid").is_err());
+        assert!(
+            scoped_type
+                .validate_scope_field(get_interner().get_or_intern("this"))
+                .is_ok()
+        );
+        assert!(
+            scoped_type
+                .validate_scope_field(get_interner().get_or_intern("invalid"))
+                .is_err()
+        );
     }
 
     #[test]
@@ -685,8 +719,8 @@ mod tests {
         let cwt_type = Arc::new(CwtType::Simple(SimpleType::ScopeField));
         let scoped_type = ScopedType::with_root_scope_and_subtype(
             cwt_type,
-            "country",
-            Some("pop_spawned".to_string()),
+            get_interner().get_or_intern("country"),
+            Some(get_interner().get_or_intern("pop_spawned")),
             None,
         );
 

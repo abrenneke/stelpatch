@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use cw_model::{CwtType, ReferenceType};
 use cw_parser::{AstEntityItem, AstNode, AstValue};
+use lasso::Spur;
 use tower_lsp::lsp_types::Diagnostic;
 
 use crate::handlers::utils::contains_scripted_argument;
@@ -21,13 +22,18 @@ use crate::handlers::{
     scope::ScopeStack,
     scoped_type::{CwtTypeOrSpecial, CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType},
 };
+use crate::interner::get_interner;
 
 /// Extract possible string values from a CwtType for error messages
 fn extract_possible_values(cwt_type: &CwtType) -> Vec<String> {
+    let interner = get_interner();
     match cwt_type {
-        CwtType::Literal(value) => vec![format!("\"{}\"", value)],
+        CwtType::Literal(value) => vec![format!("\"{}\"", interner.resolve(value))],
         CwtType::LiteralSet(values) => {
-            let mut sorted_values: Vec<_> = values.iter().map(|v| format!("\"{}\"", v)).collect();
+            let mut sorted_values: Vec<_> = values
+                .iter()
+                .map(|v| format!("\"{}\"", interner.resolve(v)))
+                .collect();
             sorted_values.sort();
             sorted_values
         }
@@ -53,7 +59,7 @@ pub fn validate_entity_value(
     value: &AstValue<'_>,
     expected_type: Arc<ScopedType>,
     content: &str,
-    namespace: &str,
+    namespace: Spur,
     depth: usize,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
@@ -68,13 +74,14 @@ pub fn validate_entity_value(
         return diagnostics;
     }
     let cache = TypeCache::get().unwrap();
+    let interner = get_interner();
 
     match value {
         AstValue::Entity(entity) => {
             // Validate each property in the entity
             for item in &entity.items {
                 if let AstEntityItem::Expression(expr) = item {
-                    let key_name = expr.key.raw_value();
+                    let key_name = interner.get_or_intern(expr.key.raw_value());
 
                     if let PropertyNavigationResult::Success(property_type) = cache
                         .get_resolver()
@@ -117,7 +124,7 @@ fn validate_union_types(
     value: &AstValue<'_>,
     union_types: Vec<Arc<ScopedType>>,
     content: &str,
-    namespace: &str,
+    namespace: Spur,
     depth: usize,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
@@ -202,7 +209,7 @@ fn validate_value_against_type(
     value: &AstValue<'_>,
     expected_type: Arc<ScopedType>,
     content: &str,
-    namespace: &str,
+    namespace: Spur,
     depth: usize,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
@@ -218,6 +225,7 @@ fn validate_value_against_type(
     }
 
     let cache = TypeCache::get().unwrap();
+    let interner = get_interner();
     let resolved_type = cache.resolve_type(expected_type.clone());
 
     match (&resolved_type.cwt_type_for_matching(), value) {
@@ -240,12 +248,12 @@ fn validate_value_against_type(
 
         // Literal value validation
         (CwtTypeOrSpecialRef::Literal(literal_value), AstValue::String(string_value)) => {
-            if string_value.raw_value().to_lowercase() != *literal_value.to_lowercase() {
+            if string_value.raw_value().to_lowercase() != interner.resolve(literal_value) {
                 let diagnostic = create_value_mismatch_diagnostic(
                     value.span_range(),
                     &format!(
                         "Expected '{}' but got '{}'",
-                        literal_value,
+                        interner.resolve(literal_value),
                         string_value.raw_value()
                     ),
                     content,
@@ -255,12 +263,13 @@ fn validate_value_against_type(
         }
 
         (CwtTypeOrSpecialRef::Literal(literal_value), AstValue::Number(number_value)) => {
-            if number_value.value.value != *literal_value {
+            if number_value.value.value != interner.resolve(literal_value) {
                 let diagnostic = create_value_mismatch_diagnostic(
                     value.span_range(),
                     &format!(
                         "Expected '{}' but got '{}'",
-                        literal_value, number_value.value.value
+                        interner.resolve(literal_value),
+                        number_value.value.value
                     ),
                     content,
                 );
@@ -272,7 +281,10 @@ fn validate_value_against_type(
             // Expected a literal string but got something else
             let diagnostic = create_type_mismatch_diagnostic(
                 value.span_range(),
-                &format!("Expected string literal '{}'", literal_value),
+                &format!(
+                    "Expected string literal '{}'",
+                    interner.resolve(literal_value)
+                ),
                 content,
             );
             diagnostics.push(diagnostic);
@@ -280,9 +292,10 @@ fn validate_value_against_type(
 
         // Literal set validation
         (CwtTypeOrSpecialRef::LiteralSet(valid_values), AstValue::String(string_value)) => {
+            let string_value = interner.get_or_intern(string_value.raw_value());
             // Allow $ARGUMENT$ to be used as a value
-            if !contains_scripted_argument(string_value.raw_value()) {
-                if !valid_values.contains(&string_value.raw_value().to_lowercase()) {
+            if !contains_scripted_argument(string_value) {
+                if !valid_values.contains(&string_value) {
                     let valid_list: Vec<_> = valid_values.iter().collect();
                     let diagnostic = create_value_mismatch_diagnostic(
                         value.span_range(),
@@ -290,10 +303,10 @@ fn validate_value_against_type(
                             "Expected one of {} but got '{}'",
                             valid_list
                                 .iter()
-                                .map(|v| format!("\"{}\"", v))
+                                .map(|v| format!("\"{}\"", interner.resolve(v)))
                                 .collect::<Vec<_>>()
                                 .join(", "),
-                            string_value.raw_value()
+                            interner.resolve(&string_value)
                         ),
                         content,
                     );
@@ -305,13 +318,13 @@ fn validate_value_against_type(
         (CwtTypeOrSpecialRef::LiteralSet(set), AstValue::Number(num)) => {
             // A number is valid if when converted to a string, it is in the set
             let number_str = num.value.value;
-            if !set.iter().any(|s| s == &number_str) {
+            if !set.iter().any(|s| interner.resolve(s) == number_str) {
                 let diagnostic = create_value_mismatch_diagnostic(
                     value.span_range(),
                     &format!(
                         "Expected one of {} but got '{}'",
                         set.iter()
-                            .map(|s| format!("\"{}\"", s))
+                            .map(|s| format!("\"{}\"", interner.resolve(s)))
                             .collect::<Vec<_>>()
                             .join(", "),
                         number_str
@@ -335,7 +348,7 @@ fn validate_value_against_type(
         // Simple type validation
         (CwtTypeOrSpecialRef::Simple(simple_type), _) => {
             // Create a default scope for backward compatibility
-            let scope_manager = ScopeStack::default_with_root("unknown");
+            let scope_manager = ScopeStack::default_with_root(interner.get_or_intern("unknown"));
             if let Some(diagnostic) = is_value_compatible_with_simple_type(
                 value,
                 simple_type,
@@ -426,8 +439,8 @@ fn validate_value_against_type(
             ReferenceType::Scope { key } => {
                 if let AstValue::String(string_value) = value {
                     if let Some(diagnostic) = validate_scope_reference(
-                        string_value.raw_value(),
-                        key,
+                        interner.get_or_intern(string_value.raw_value()),
+                        interner.get_or_intern(key),
                         expected_type.scope_stack(),
                         value.span_range(),
                         content,
@@ -446,8 +459,8 @@ fn validate_value_against_type(
             ReferenceType::ScopeGroup { key } => {
                 if let AstValue::String(string_value) = value {
                     if let Some(diagnostic) = validate_scopegroup_reference(
-                        string_value.raw_value(),
-                        key,
+                        interner.get_or_intern(string_value.raw_value()),
+                        interner.get_or_intern(key),
                         expected_type.scope_stack(),
                         value.span_range(),
                         content,

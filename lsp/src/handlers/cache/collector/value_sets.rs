@@ -3,54 +3,59 @@ use std::{
     sync::Arc,
 };
 
-use cw_model::{CwtType, Entity, LowerCaseHashMap, PropertyInfoList, ReferenceType};
+use cw_model::{CwtType, Entity, PropertyInfoList, ReferenceType};
+use lasso::Spur;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use crate::handlers::{
-    cache::{
-        EntityRestructurer, GameDataCache, TypeCache, get_namespace_entity_type,
-        resolver::TypeResolver,
+use crate::{
+    handlers::{
+        cache::{
+            EntityRestructurer, GameDataCache, TypeCache, get_namespace_entity_type,
+            resolver::TypeResolver,
+        },
+        scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType},
     },
-    scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType},
+    interner::get_interner,
 };
 
 pub struct ValueSetCollector<'resolver> {
-    value_sets: LowerCaseHashMap<HashSet<String>>,
+    value_sets: HashMap<Spur, HashSet<Spur>>,
     type_resolver: &'resolver TypeResolver,
 }
 
 impl<'resolver> ValueSetCollector<'resolver> {
     pub fn new(type_resolver: &'resolver TypeResolver) -> Self {
         Self {
-            value_sets: LowerCaseHashMap::new(),
+            value_sets: HashMap::new(),
             type_resolver,
         }
     }
 
     /// Extract the flag name from a country flag value, removing scope information after '@'
-    fn extract_flag_name(value: &str) -> String {
-        if let Some(at_pos) = value.find('@') {
-            value[..at_pos].to_string()
+    fn extract_flag_name(value: Spur) -> Spur {
+        let value_str = get_interner().resolve(&value);
+        if let Some(at_pos) = value_str.find('@') {
+            get_interner().get_or_intern(&value_str[..at_pos])
         } else {
-            value.to_string()
+            value
         }
     }
 
-    pub fn collect(mut self) -> LowerCaseHashMap<HashSet<String>> {
+    pub fn collect(mut self) -> HashMap<Spur, HashSet<Spur>> {
         // Get namespaces from GameDataCache, then use EntityRestructurer for entity access
         let namespaces = match GameDataCache::get() {
             Some(game_data) => game_data.get_namespaces(),
-            None => return LowerCaseHashMap::new(), // Early return if game data not available
+            None => return HashMap::new(), // Early return if game data not available
         };
 
         // Collect value_sets from parallel processing using EntityRestructurer
-        let results: Vec<HashMap<String, HashSet<String>>> = namespaces
+        let results: Vec<HashMap<Spur, HashSet<Spur>>> = namespaces
             .par_iter()
             .filter_map(|(namespace, _namespace_data)| {
-                get_namespace_entity_type(namespace, None) // TODO: Add file_path
+                get_namespace_entity_type(*namespace, None) // TODO: Add file_path
                     .and_then(|namespace_type| namespace_type.scoped_type)
                     .map(|scoped_type| {
-                        self.collect_value_sets_from_namespace(namespace, scoped_type)
+                        self.collect_value_sets_from_namespace(*namespace, scoped_type)
                     })
             })
             .collect();
@@ -67,9 +72,9 @@ impl<'resolver> ValueSetCollector<'resolver> {
 
     fn collect_value_sets_from_namespace(
         &self,
-        namespace: &str,
+        namespace: Spur,
         scoped_type: Arc<ScopedType>,
-    ) -> HashMap<String, HashSet<String>> {
+    ) -> HashMap<Spur, HashSet<Spur>> {
         // Use EntityRestructurer to get entities instead of direct GameDataCache access
         let entities = match EntityRestructurer::get_all_namespace_entities(namespace) {
             Some(entities) => entities,
@@ -77,19 +82,18 @@ impl<'resolver> ValueSetCollector<'resolver> {
         };
 
         // Process entities in parallel within the namespace
-        let results: Vec<HashMap<String, HashSet<String>>> = entities
-            .as_inner()
+        let results: Vec<HashMap<Spur, HashSet<Spur>>> = entities
             .par_iter()
             .map(|(entity_name, entity)| {
                 // Perform subtype narrowing for this entity, similar to provider.rs
                 let narrowed_scoped_type =
-                    self.narrow_entity_type(entity_name, entity, scoped_type.clone());
+                    self.narrow_entity_type(*entity_name, entity, scoped_type.clone());
                 self.collect_value_sets_from_entity(entity, narrowed_scoped_type)
             })
             .collect();
 
         // Merge results from this namespace
-        let mut namespace_value_sets: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut namespace_value_sets: HashMap<Spur, HashSet<Spur>> = HashMap::new();
         for result in results {
             for (key, values) in result {
                 namespace_value_sets.entry(key).or_default().extend(values);
@@ -101,7 +105,7 @@ impl<'resolver> ValueSetCollector<'resolver> {
 
     fn narrow_entity_type(
         &self,
-        _entity_name: &str,
+        _entity_name: Spur,
         entity: &Entity,
         scoped_type: Arc<ScopedType>,
     ) -> Arc<ScopedType> {
@@ -130,13 +134,13 @@ impl<'resolver> ValueSetCollector<'resolver> {
         &self,
         entity: &Entity,
         scoped_type: Arc<ScopedType>,
-    ) -> HashMap<String, HashSet<String>> {
-        let mut entity_value_sets: HashMap<String, HashSet<String>> = HashMap::new();
+    ) -> HashMap<Spur, HashSet<Spur>> {
+        let mut entity_value_sets: HashMap<Spur, HashSet<Spur>> = HashMap::new();
 
         for (property_name, property_value) in entity.properties.kv.iter() {
             let property_type = self
                 .type_resolver
-                .navigate_to_property(scoped_type.clone(), property_name);
+                .navigate_to_property(scoped_type.clone(), *property_name);
 
             if let PropertyNavigationResult::Success(property_type) = property_type {
                 let nested_results =
@@ -162,20 +166,20 @@ impl<'resolver> ValueSetCollector<'resolver> {
         &self,
         property_value: &PropertyInfoList,
         property_type: Arc<ScopedType>,
-    ) -> HashMap<String, HashSet<String>> {
-        let mut property_value_sets: HashMap<String, HashSet<String>> = HashMap::new();
+    ) -> HashMap<Spur, HashSet<Spur>> {
+        let mut property_value_sets: HashMap<Spur, HashSet<Spur>> = HashMap::new();
 
         match property_type.cwt_type_for_matching() {
             CwtTypeOrSpecialRef::Reference(ReferenceType::ValueSet { key }) => {
                 let mut values = HashSet::new();
                 for value in property_value.0.iter() {
                     if let Some(value) = value.value.as_string() {
-                        values.insert(Self::extract_flag_name(value));
+                        values.insert(Self::extract_flag_name(*value));
                     }
                 }
                 if !values.is_empty() {
                     property_value_sets
-                        .entry(key.clone())
+                        .entry(get_interner().get_or_intern(key))
                         .or_default()
                         .extend(values);
                 }
@@ -230,8 +234,8 @@ impl<'resolver> ValueSetCollector<'resolver> {
         &self,
         items: &[cw_model::Value],
         scoped_type: Arc<ScopedType>,
-    ) -> HashMap<String, HashSet<String>> {
-        let mut item_value_sets: HashMap<String, HashSet<String>> = HashMap::new();
+    ) -> HashMap<Spur, HashSet<Spur>> {
+        let mut item_value_sets: HashMap<Spur, HashSet<Spur>> = HashMap::new();
 
         // Check if the scoped type has additional flags that are value sets
         if let CwtTypeOrSpecialRef::Block(block_type) = scoped_type.cwt_type_for_matching() {
@@ -240,11 +244,11 @@ impl<'resolver> ValueSetCollector<'resolver> {
                     let mut values = HashSet::new();
                     for item in items {
                         if let Some(string_value) = item.as_string() {
-                            values.insert(Self::extract_flag_name(string_value));
+                            values.insert(Self::extract_flag_name(*string_value));
                         }
                     }
                     if !values.is_empty() {
-                        item_value_sets.insert(key.clone(), values);
+                        item_value_sets.insert(get_interner().get_or_intern(key), values);
                     }
                 }
             }

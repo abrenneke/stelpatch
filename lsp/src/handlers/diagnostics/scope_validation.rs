@@ -1,23 +1,28 @@
 use std::ops::Range;
 
 use cw_model::types::CwtAnalyzer;
+use lasso::Spur;
 use tower_lsp::lsp_types::Diagnostic;
 
-use crate::handlers::{
-    cache::TypeCache, diagnostics::diagnostic::create_value_mismatch_diagnostic, scope::ScopeStack,
-    settings::Settings, utils::contains_scripted_argument,
+use crate::{
+    handlers::{
+        cache::TypeCache, diagnostics::diagnostic::create_value_mismatch_diagnostic,
+        scope::ScopeStack, settings::Settings, utils::contains_scripted_argument,
+    },
+    interner::get_interner,
 };
 
 /// Validate a scope reference value (handles dotted paths like "prev.from")
 pub fn validate_scope_reference(
-    value: &str,
-    scope_key: &str,
+    value: Spur,
+    scope_key: Spur,
     scope_stack: &ScopeStack,
     span: Range<usize>,
     content: &str,
 ) -> Option<Diagnostic> {
+    let interner = get_interner();
     // Handle special case "any" which allows any scope navigation or link
-    if scope_key == "any" {
+    if interner.resolve(&scope_key) == "any" {
         return validate_scope_path(value, scope_stack, span, content);
     }
 
@@ -42,8 +47,12 @@ pub fn validate_scope_reference(
     if let Some(final_scope_type) = resolve_scope_path_to_final_type(value, scope_stack, &analyzer)
     {
         if let Some(expected_scope_type) = analyzer.resolve_scope_name(scope_key) {
-            if final_scope_type != expected_scope_type && final_scope_type != "any" {
-                if final_scope_type == "unknown" && !Settings::global().report_unknown_scopes {
+            if final_scope_type != expected_scope_type
+                && interner.resolve(&final_scope_type) != "any"
+            {
+                if interner.resolve(&final_scope_type) == "unknown"
+                    && !Settings::global().report_unknown_scopes
+                {
                     return None;
                 }
 
@@ -51,7 +60,9 @@ pub fn validate_scope_reference(
                     span,
                     &format!(
                         "Expected scope of type '{}' but '{}' resolves to '{}'",
-                        scope_key, value, final_scope_type
+                        interner.resolve(&scope_key),
+                        interner.resolve(&value),
+                        interner.resolve(&final_scope_type)
                     ),
                     content,
                 ));
@@ -64,8 +75,8 @@ pub fn validate_scope_reference(
 
 /// Validate a scope group reference value (handles dotted paths like "prev.from")
 pub fn validate_scopegroup_reference(
-    value: &str,
-    scopegroup_key: &str,
+    value: Spur,
+    scopegroup_key: Spur,
     scope_stack: &ScopeStack,
     span: Range<usize>,
     content: &str,
@@ -78,6 +89,7 @@ pub fn validate_scopegroup_reference(
     if !TypeCache::is_initialized() {
         return None;
     }
+    let interner = get_interner();
     let cache = TypeCache::get().unwrap();
     let analyzer = cache.get_cwt_analyzer();
 
@@ -92,15 +104,17 @@ pub fn validate_scopegroup_reference(
             resolve_scope_path_to_final_type(value, scope_stack, &analyzer)
         {
             // Check if final scope type matches any member of the group
-            let is_valid = final_scope_type == "any"
+            let is_valid = interner.resolve(&final_scope_type) == "any"
                 || scope_group.members.iter().any(|member| {
                     analyzer
-                        .resolve_scope_name(member)
+                        .resolve_scope_name(*member)
                         .map_or(false, |resolved| resolved == final_scope_type)
                 });
 
             if !is_valid {
-                if final_scope_type == "unknown" && !Settings::global().report_unknown_scopes {
+                if interner.resolve(&final_scope_type) == "unknown"
+                    && !Settings::global().report_unknown_scopes
+                {
                     return None;
                 }
 
@@ -108,10 +122,15 @@ pub fn validate_scopegroup_reference(
                     span,
                     &format!(
                         "Expected scope from group '{}' (one of: {}) but '{}' resolves to '{}'",
-                        scopegroup_key,
-                        scope_group.members.join(", "),
-                        value,
-                        final_scope_type
+                        interner.resolve(&scopegroup_key),
+                        scope_group
+                            .members
+                            .iter()
+                            .map(|m| interner.resolve(m).to_string())
+                            .collect::<Vec<String>>()
+                            .join(", "),
+                        interner.resolve(&value),
+                        interner.resolve(&final_scope_type)
                     ),
                     content,
                 ));
@@ -124,7 +143,7 @@ pub fn validate_scopegroup_reference(
 
 /// Validate that a scope path is structurally valid (handles dotted paths)
 fn validate_scope_path(
-    value: &str,
+    value: Spur,
     scope_stack: &ScopeStack,
     span: Range<usize>,
     content: &str,
@@ -137,10 +156,11 @@ fn validate_scope_path(
     if !TypeCache::is_initialized() {
         return None;
     }
+    let interner = get_interner();
     let cache = TypeCache::get().unwrap();
     let analyzer = cache.get_cwt_analyzer();
 
-    let parts: Vec<&str> = value.split('.').collect();
+    let parts: Vec<&str> = interner.resolve(&value).split('.').collect();
     if parts.is_empty() {
         return Some(create_value_mismatch_diagnostic(
             span,
@@ -157,7 +177,10 @@ fn validate_scope_path(
             let remaining_parts = &parts[1..];
             let mut dummy_scope_stack = scope_stack.clone();
             // Push "any" scope to represent the event target
-            if dummy_scope_stack.push_scope_type("any").is_ok() {
+            if dummy_scope_stack
+                .push_scope_type(interner.get_or_intern("any"))
+                .is_ok()
+            {
                 let navigation_result =
                     simulate_scope_navigation(remaining_parts, &dummy_scope_stack, &analyzer);
                 if let Err(error_msg) = navigation_result {
@@ -170,16 +193,16 @@ fn validate_scope_path(
 
     // Get all valid navigation options from the current scope
     let current_scope_type = &scope_stack.current_scope().scope_type;
-    let mut valid_properties = Vec::new();
+    let mut valid_properties: Vec<Spur> = Vec::new();
 
-    let is_unknown_scope = current_scope_type == "unknown";
+    let is_unknown_scope = interner.resolve(&current_scope_type) == "unknown";
 
     // Add scope properties
     if is_unknown_scope && !Settings::global().report_unknown_scopes {
         valid_properties.extend(
             ScopeStack::get_all_scope_properties()
                 .iter()
-                .map(|s| s.to_string()),
+                .map(|s| interner.get_or_intern(s)),
         );
     } else {
         valid_properties.extend(scope_stack.available_scope_names());
@@ -187,20 +210,26 @@ fn validate_scope_path(
 
     // Add links that can be used from the current scope
     for (link_name, link_def) in analyzer.get_links() {
-        if is_unknown_scope || link_def.can_be_used_from(current_scope_type, &analyzer) {
+        if is_unknown_scope
+            || link_def.can_be_used_from(*current_scope_type, &analyzer, get_interner())
+        {
             valid_properties.push(link_name.clone());
         }
     }
 
     // Validate the first part against available options
     let first_part = parts[0];
-    if !valid_properties.contains(&first_part.to_string()) {
+    if !valid_properties.contains(&interner.get_or_intern(first_part)) {
         return Some(create_value_mismatch_diagnostic(
             span,
             &format!(
                 "Invalid scope or link name '{}'. Available options: {}",
                 first_part,
-                valid_properties.join(", ")
+                valid_properties
+                    .iter()
+                    .map(|s| interner.resolve(s).to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
             ),
             content,
         ));
@@ -219,16 +248,18 @@ fn validate_scope_path(
 
 /// Resolve a scope path to its final scope type (full implementation)
 fn resolve_scope_path_to_final_type(
-    value: &str,
+    value: Spur,
     scope_stack: &ScopeStack,
     analyzer: &CwtAnalyzer,
-) -> Option<String> {
+) -> Option<Spur> {
+    let interner = get_interner();
+
     // Handle scripted arguments - return "any" since we can't determine the exact type
     if contains_scripted_argument(value) {
-        return Some("any".to_string());
+        return Some(interner.get_or_intern("any"));
     }
 
-    let parts: Vec<&str> = value.split('.').collect();
+    let parts: Vec<&str> = interner.resolve(&value).split('.').collect();
     if parts.is_empty() {
         return None;
     }
@@ -237,16 +268,19 @@ fn resolve_scope_path_to_final_type(
     if parts[0].starts_with("event_target:") {
         if parts.len() == 1 {
             // Simple event_target reference resolves to "any"
-            return Some("any".to_string());
+            return Some(interner.get_or_intern("any"));
         } else {
             // For dotted paths, simulate navigation from "any" scope
             let remaining_parts = &parts[1..];
             let mut dummy_scope_stack = scope_stack.clone();
-            if dummy_scope_stack.push_scope_type("any").is_ok() {
+            if dummy_scope_stack
+                .push_scope_type(interner.get_or_intern("any"))
+                .is_ok()
+            {
                 return simulate_scope_navigation(remaining_parts, &dummy_scope_stack, analyzer)
                     .ok();
             }
-            return Some("any".to_string());
+            return Some(interner.get_or_intern("any"));
         }
     }
 
@@ -259,10 +293,12 @@ fn simulate_scope_navigation(
     parts: &[&str],
     scope_stack: &ScopeStack,
     analyzer: &CwtAnalyzer,
-) -> Result<String, String> {
+) -> Result<Spur, String> {
     if parts.is_empty() {
         return Err("Empty scope path".to_string());
     }
+
+    let interner = get_interner();
 
     // Start with the original scope stack and current scope
     let mut simulated_scope_stack = scope_stack.clone();
@@ -275,10 +311,10 @@ fn simulate_scope_navigation(
         }
 
         // Handle scripted arguments in individual parts - allow any navigation
-        if contains_scripted_argument(part) {
+        if contains_scripted_argument(interner.get_or_intern(part)) {
             // If a part contains scripted arguments, we can't validate the rest of the path
             // so we return "any" to indicate it could resolve to anything
-            return Ok("any".to_string());
+            return Ok(interner.get_or_intern("any"));
         }
 
         // Basic validation: scope/link names should be valid identifiers
@@ -291,12 +327,16 @@ fn simulate_scope_navigation(
         }
 
         // Navigate using the current simulated scope stack context
-        let navigation_result =
-            navigate_from_scope(part, &current_scope_type, &simulated_scope_stack, analyzer);
+        let navigation_result = navigate_from_scope(
+            interner.get_or_intern(part),
+            current_scope_type,
+            &simulated_scope_stack,
+            analyzer,
+        );
 
         match navigation_result {
             Ok(new_scope_type) => {
-                current_scope_type = new_scope_type.clone();
+                current_scope_type = new_scope_type;
 
                 // Update the simulated scope stack by pushing the new scope
                 // This simulates what would happen if we actually navigated to this scope
@@ -313,7 +353,9 @@ fn simulate_scope_navigation(
                 } else {
                     return Err(format!(
                         "At '{}' from scope '{}': {}",
-                        part, current_scope_type, error
+                        part,
+                        interner.resolve(&current_scope_type),
+                        error
                     ));
                 }
             }
@@ -325,21 +367,25 @@ fn simulate_scope_navigation(
 
 /// Navigate from a specific scope using a property name or link
 fn navigate_from_scope(
-    property_name: &str,
-    from_scope_type: &str,
+    property_name: Spur,
+    from_scope_type: Spur,
     scope_stack: &ScopeStack,
     analyzer: &CwtAnalyzer,
-) -> Result<String, String> {
-    let is_unknown_scope = from_scope_type == "unknown";
+) -> Result<Spur, String> {
+    let interner = get_interner();
+    let is_unknown_scope = interner.resolve(&from_scope_type) == "unknown";
 
     // Handle scripted arguments in property names - allow any navigation
     if contains_scripted_argument(property_name) {
-        return Ok("any".to_string());
+        return Ok(interner.get_or_intern("any"));
     }
 
     // Handle event_target: references
-    if property_name.starts_with("event_target:") {
-        return Ok("any".to_string());
+    if interner
+        .resolve(&property_name)
+        .starts_with("event_target:")
+    {
+        return Ok(interner.get_or_intern("any"));
     }
 
     // Check if it's a scope property first
@@ -349,21 +395,27 @@ fn navigate_from_scope(
 
     // Check if it's a link that can be used from the current scope
     if let Some(link_def) = analyzer.get_link(property_name) {
-        if is_unknown_scope || link_def.can_be_used_from(from_scope_type, analyzer) {
-            if let Some(resolved_output) = analyzer.resolve_scope_name(&link_def.output_scope) {
-                return Ok(resolved_output.to_string());
+        if is_unknown_scope || link_def.can_be_used_from(from_scope_type, analyzer, interner) {
+            if let Some(resolved_output) = analyzer.resolve_scope_name(link_def.output_scope) {
+                return Ok(resolved_output);
             } else {
                 return Err(format!(
                     "Link '{}' has unresolvable output scope '{}'",
-                    property_name, link_def.output_scope
+                    interner.resolve(&property_name),
+                    interner.resolve(&link_def.output_scope)
                 ));
             }
         } else {
             return Err(format!(
                 "Link '{}' cannot be used from scope '{}' (allowed from: {})",
-                property_name,
-                from_scope_type,
-                link_def.input_scopes.join(", ")
+                interner.resolve(&property_name),
+                interner.resolve(&from_scope_type),
+                link_def
+                    .input_scopes
+                    .iter()
+                    .map(|s| interner.resolve(s).to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
             ));
         }
     }
@@ -376,19 +428,23 @@ fn navigate_from_scope(
 
     // Add available links
     for (link_name, link_def) in analyzer.get_links() {
-        if is_unknown_scope || link_def.can_be_used_from(from_scope_type, analyzer) {
+        if is_unknown_scope || link_def.can_be_used_from(from_scope_type, analyzer, interner) {
             available_options.push(link_name.clone());
         }
     }
 
     if is_unknown_scope && !Settings::global().report_unknown_scopes {
-        return Ok("unknown".to_string());
+        return Ok(interner.get_or_intern("unknown"));
     }
 
     Err(format!(
         "Invalid scope or link name '{}'. Available options from scope '{}': {}",
-        property_name,
-        from_scope_type,
-        available_options.join(", ")
+        interner.resolve(&property_name),
+        interner.resolve(&from_scope_type),
+        available_options
+            .iter()
+            .map(|s| interner.resolve(s).to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
     ))
 }

@@ -4,12 +4,16 @@ use std::{
 };
 
 use cw_model::{
-    Entity, LowerCaseHashMap, Operator, PropertyInfo, PropertyInfoList, SkipRootKey,
-    TypeDefinition, TypeKeyFilter, Value, entity_from_ast,
+    Entity, Operator, PropertyInfo, PropertyInfoList, SkipRootKey, TypeDefinition, TypeKeyFilter,
+    Value, entity_from_ast,
 };
 use cw_parser::AstEntity;
+use lasso::Spur;
 
-use crate::handlers::cache::{GameDataCache, ModDataCache, Namespace, TypeCache};
+use crate::{
+    handlers::cache::{GameDataCache, ModDataCache, Namespace, TypeCache},
+    interner::get_interner,
+};
 
 /// Special property key used to store the original structural key
 /// This is needed for subtype determination when entities are restructured
@@ -76,16 +80,16 @@ pub struct EntityRestructurer {
 pub struct RestructuredEntities {
     /// Namespace -> Entity Name -> Entity
     /// For special types, entities are indexed by their name_field value
-    pub entities: LowerCaseHashMap<LowerCaseHashMap<Entity>>,
+    pub entities: HashMap<Spur, HashMap<Spur, Entity>>,
     /// Track which namespaces were restructured
-    pub restructured_namespaces: LowerCaseHashMap<RestructureInfo>,
+    pub restructured_namespaces: HashMap<Spur, RestructureInfo>,
 }
 
 /// Information about how a namespace was restructured
 #[derive(Clone, Debug)]
 pub struct RestructureInfo {
-    pub skip_root_key: Option<String>,
-    pub name_field: Option<String>,
+    pub skip_root_key: Option<Spur>,
+    pub name_field: Option<Spur>,
     pub original_entity_count: usize,
     pub restructured_entity_count: usize,
 }
@@ -103,16 +107,16 @@ impl EntityRestructurer {
 
     /// Add the original structural key to an entity as a special property
     /// This preserves the key information needed for subtype determination
-    fn add_original_key_to_entity(&self, mut entity: Entity, original_key: &str) -> Entity {
+    fn add_original_key_to_entity(&self, mut entity: Entity, original_key: Spur) -> Entity {
         entity
             .properties
             .kv
-            .entry(ORIGINAL_KEY_PROPERTY.to_string())
+            .entry(get_interner().get_or_intern(ORIGINAL_KEY_PROPERTY.to_string()))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(PropertyInfo {
                 operator: Operator::Equals,
-                value: Value::String(original_key.to_string()),
+                value: Value::String(original_key),
             });
 
         entity
@@ -120,7 +124,11 @@ impl EntityRestructurer {
 
     /// Extract the original key from an entity (if it was stored during restructuring)
     pub fn get_original_key_from_entity(entity: &Entity) -> Option<String> {
-        if let Some(property_list) = entity.properties.kv.get(ORIGINAL_KEY_PROPERTY) {
+        if let Some(property_list) = entity
+            .properties
+            .kv
+            .get(&get_interner().get_or_intern(ORIGINAL_KEY_PROPERTY.to_string()))
+        {
             if let Some(first_property) = property_list.0.first() {
                 return Some(first_property.value.to_string());
             }
@@ -156,24 +164,14 @@ impl EntityRestructurer {
         let start = std::time::Instant::now();
 
         let mut restructured = RestructuredEntities {
-            entities: LowerCaseHashMap::new(),
-            restructured_namespaces: LowerCaseHashMap::new(),
+            entities: HashMap::new(),
+            restructured_namespaces: HashMap::new(),
         };
 
         self.process_all_namespaces(&mut restructured);
 
         let duration = start.elapsed();
         eprintln!("Entity restructuring completed in {:?}", duration);
-        eprintln!(
-            "Restructured {} namespaces: {}",
-            restructured.restructured_namespaces.len(),
-            restructured
-                .restructured_namespaces
-                .keys()
-                .cloned()
-                .collect::<Vec<String>>()
-                .join(", "),
-        );
 
         // Now acquire the lock only to store the result
         let mut cache = RESTRUCTURED_ENTITIES.write().unwrap();
@@ -188,21 +186,17 @@ impl EntityRestructurer {
     fn process_all_namespaces(&self, restructured: &mut RestructuredEntities) {
         // Get type definitions that need special handling
         let types_with_special_loading = self.get_types_needing_restructure();
+        let interner = get_interner();
 
         eprintln!(
-            "Found {} types needing restructure: {}",
+            "Found {} types needing restructure",
             types_with_special_loading.len(),
-            types_with_special_loading
-                .keys()
-                .cloned()
-                .collect::<Vec<String>>()
-                .join(", ")
         );
 
         for (namespace, type_defs) in types_with_special_loading {
             if let Some(namespace_data) = self.game_data.get_namespaces().get(&namespace) {
                 let (entities, info) =
-                    self.process_namespace(&namespace, &type_defs, namespace_data);
+                    self.process_namespace(namespace, &type_defs, namespace_data);
 
                 restructured.entities.insert(namespace.clone(), entities);
                 restructured
@@ -211,29 +205,31 @@ impl EntityRestructurer {
             } else {
                 eprintln!(
                     "WARN: Namespace {} not found in game data, skipping",
-                    namespace
+                    interner.resolve(&namespace)
                 );
             }
         }
     }
 
     /// Get type definitions that need restructuring
-    fn get_types_needing_restructure(&self) -> LowerCaseHashMap<Vec<TypeDefinition>> {
-        let mut result: LowerCaseHashMap<Vec<TypeDefinition>> = LowerCaseHashMap::new();
+    fn get_types_needing_restructure(&self) -> HashMap<Spur, Vec<TypeDefinition>> {
+        let mut result: HashMap<Spur, Vec<TypeDefinition>> = HashMap::new();
+        let interner = get_interner();
 
         for (_type_name, type_def) in self.type_cache.get_cwt_analyzer().get_types() {
             // Check if this type needs any kind of restructuring
             if type_def.skip_root_key.is_some() || type_def.name_field.is_some() {
                 if let Some(path) = &type_def.path {
+                    let path = interner.resolve(path);
                     // Extract namespace from path (e.g., "game/interface" -> "interface")
                     let namespace = if let Some(stripped) = path.strip_prefix("game/") {
                         stripped.to_string()
                     } else {
-                        path.clone()
+                        path.to_string()
                     };
 
                     result
-                        .entry(namespace)
+                        .entry(interner.get_or_intern(namespace))
                         .or_insert_with(Vec::new)
                         .push(type_def.clone());
                 }
@@ -246,18 +242,21 @@ impl EntityRestructurer {
     /// Helper method to insert into a HashMap with duplicate detection using efficient counters
     fn insert_with_duplicate_warning(
         &self,
-        map: &mut LowerCaseHashMap<Entity>,
-        key_counters: &mut LowerCaseHashMap<u32>,
-        key: String,
+        map: &mut HashMap<Spur, Entity>,
+        key_counters: &mut HashMap<Spur, u32>,
+        key: Spur,
         entity: Entity,
         _context: &str,
-        _namespace: &str,
+        _namespace: Spur,
     ) {
+        let interner = get_interner();
+
         if let Some(_existing) = map.get(&key) {
             // Key collision detected - generate unique key for the new entity
             let counter = key_counters.entry(key.clone()).or_insert(1);
             *counter += 1;
-            let unique_key = format!("{}_{}", key, counter);
+            let unique_key =
+                interner.get_or_intern(format!("{}_{}", interner.resolve(&key), counter));
 
             map.insert(unique_key, entity);
             return;
@@ -269,11 +268,11 @@ impl EntityRestructurer {
     /// Helper method to extend a HashMap with duplicate detection
     fn extend_with_duplicate_warnings(
         &self,
-        target: &mut LowerCaseHashMap<Entity>,
-        key_counters: &mut LowerCaseHashMap<u32>,
-        source: LowerCaseHashMap<Entity>,
+        target: &mut HashMap<Spur, Entity>,
+        key_counters: &mut HashMap<Spur, u32>,
+        source: HashMap<Spur, Entity>,
         context: &str,
-        namespace: &str,
+        namespace: Spur,
     ) {
         for (key, entity) in source {
             self.insert_with_duplicate_warning(
@@ -290,12 +289,12 @@ impl EntityRestructurer {
     /// Process a single namespace according to its type definition
     fn process_namespace(
         &self,
-        namespace: &str,
+        namespace: Spur,
         type_defs: &Vec<TypeDefinition>,
         namespace_data: &Namespace,
-    ) -> (LowerCaseHashMap<Entity>, RestructureInfo) {
-        let mut restructured_entities = LowerCaseHashMap::new();
-        let mut key_counters: LowerCaseHashMap<u32> = LowerCaseHashMap::new();
+    ) -> (HashMap<Spur, Entity>, RestructureInfo) {
+        let mut restructured_entities = HashMap::new();
+        let mut key_counters: HashMap<Spur, u32> = HashMap::new();
         let mut original_count = 0;
 
         // Process each module in the namespace individually to avoid key overwrites
@@ -311,7 +310,7 @@ impl EntityRestructurer {
                         let skip_root_type_defs: Vec<&TypeDefinition> = type_defs
                             .iter()
                             .filter(|type_def| {
-                                self.should_skip_root_key(key, &type_def.skip_root_key)
+                                self.should_skip_root_key(*key, &type_def.skip_root_key)
                             })
                             .collect();
 
@@ -327,13 +326,13 @@ impl EntityRestructurer {
                                 &mut restructured_entities,
                                 &mut key_counters,
                                 extracted_entities,
-                                &format!("skip_root_key from container '{}'", key),
+                                &format!("skip_root_key from container '{:?}'", key),
                                 namespace,
                             );
                         } else {
                             // Get type definitions that are applicable for this specific entity
                             let applicable_type_defs =
-                                self.get_applicable_type_defs(key, type_defs);
+                                self.get_applicable_type_defs(*key, type_defs);
 
                             // if applicable_type_defs.is_empty() {
                             //     eprintln!(
@@ -354,13 +353,13 @@ impl EntityRestructurer {
                                 ) {
                                     // Add original key to entity to preserve subtype information
                                     let entity_with_original_key =
-                                        self.add_original_key_to_entity(entity.clone(), key);
+                                        self.add_original_key_to_entity(entity.clone(), *key);
                                     self.insert_with_duplicate_warning(
                                         &mut restructured_entities,
                                         &mut key_counters,
                                         entity_name,
                                         entity_with_original_key,
-                                        &format!("name_field from key '{}'", key),
+                                        &format!("name_field from key '{:?}'", key),
                                         namespace,
                                     );
                                 } else {
@@ -370,7 +369,7 @@ impl EntityRestructurer {
                                         &mut key_counters,
                                         key.clone(),
                                         entity.clone(),
-                                        &format!("name_field fallback from key '{}'", key),
+                                        &format!("name_field fallback from key '{:?}'", key),
                                         namespace,
                                     );
                                 }
@@ -381,7 +380,7 @@ impl EntityRestructurer {
                                     &mut key_counters,
                                     key.clone(),
                                     entity.clone(),
-                                    &format!("standard processing from key '{}'", key),
+                                    &format!("standard processing from key '{:?}'", key),
                                     namespace,
                                 );
                             }
@@ -412,22 +411,20 @@ impl EntityRestructurer {
     }
 
     /// Check if a root key should be skipped
-    fn should_skip_root_key(&self, key: &str, skip_config: &Option<SkipRootKey>) -> bool {
+    fn should_skip_root_key(&self, key: Spur, skip_config: &Option<SkipRootKey>) -> bool {
         match skip_config {
-            Some(SkipRootKey::Specific(skip_key)) => key.to_lowercase() == skip_key.to_lowercase(),
+            Some(SkipRootKey::Specific(skip_key)) => key == *skip_key,
             Some(SkipRootKey::Any) => true,
-            Some(SkipRootKey::Except(exceptions)) => !exceptions
-                .iter()
-                .any(|exception| exception.to_lowercase() == key.to_lowercase()),
-            Some(SkipRootKey::Multiple(keys)) => {
-                keys.iter().any(|k| k.to_lowercase() == key.to_lowercase())
+            Some(SkipRootKey::Except(exceptions)) => {
+                !exceptions.iter().any(|exception| *exception == key)
             }
+            Some(SkipRootKey::Multiple(keys)) => keys.iter().any(|k| *k == key),
             None => false,
         }
     }
 
     /// Check if a key passes the type_key_filter
-    fn passes_type_key_filter(&self, key: &str, type_defs: &Vec<TypeDefinition>) -> bool {
+    fn passes_type_key_filter(&self, key: Spur, type_defs: &Vec<TypeDefinition>) -> bool {
         // If no type_key_filter is defined, allow all keys
         let type_key_filters: Vec<&TypeKeyFilter> = type_defs
             .iter()
@@ -449,22 +446,18 @@ impl EntityRestructurer {
     }
 
     /// Check if a key matches a specific type_key_filter
-    fn matches_type_key_filter(&self, key: &str, filter: &TypeKeyFilter) -> bool {
+    fn matches_type_key_filter(&self, key: Spur, filter: &TypeKeyFilter) -> bool {
         match filter {
-            TypeKeyFilter::Specific(required_key) => {
-                key.to_lowercase() == required_key.to_lowercase()
-            }
-            TypeKeyFilter::OneOf(required_keys) => required_keys
-                .iter()
-                .any(|k| k.to_lowercase() == key.to_lowercase()),
-            TypeKeyFilter::Not(excluded_key) => key.to_lowercase() != excluded_key.to_lowercase(),
+            TypeKeyFilter::Specific(required_key) => key == *required_key,
+            TypeKeyFilter::OneOf(required_keys) => required_keys.iter().any(|k| *k == key),
+            TypeKeyFilter::Not(excluded_key) => key != *excluded_key,
         }
     }
 
     /// Get the type definitions that are applicable for a given entity based on type_key_filter
     fn get_applicable_type_defs<'a>(
         &self,
-        key: &str,
+        key: Spur,
         type_defs: &'a Vec<TypeDefinition>,
     ) -> Vec<&'a TypeDefinition> {
         type_defs
@@ -486,10 +479,10 @@ impl EntityRestructurer {
         &self,
         container_entity: &Entity,
         type_defs: &Vec<&TypeDefinition>,
-        namespace: &str,
-    ) -> LowerCaseHashMap<Entity> {
-        let mut result = LowerCaseHashMap::new();
-        let mut key_counters: LowerCaseHashMap<u32> = LowerCaseHashMap::new();
+        namespace: Spur,
+    ) -> HashMap<Spur, Entity> {
+        let mut result = HashMap::new();
+        let mut key_counters: HashMap<Spur, u32> = HashMap::new();
 
         // Look for child entities in the container
         for (child_key, child_property_list) in &container_entity.properties.kv {
@@ -497,7 +490,7 @@ impl EntityRestructurer {
                 if let Value::Entity(child_entity) = &property_info.value {
                     // Find the first type definition that matches this child entity
                     if let Some(matching_type_def) = type_defs.iter().find(|type_def| {
-                        self.passes_type_key_filter(child_key, &vec![(**type_def).clone()])
+                        self.passes_type_key_filter(*child_key, &vec![(**type_def).clone()])
                     }) {
                         // Determine the entity name based on whether we have a name field
                         let entity_name = if matching_type_def.name_field.is_some() {
@@ -514,13 +507,13 @@ impl EntityRestructurer {
 
                         // Add original key to entity to preserve subtype information
                         let entity_with_original_key =
-                            self.add_original_key_to_entity(child_entity.clone(), child_key);
+                            self.add_original_key_to_entity(child_entity.clone(), *child_key);
                         self.insert_with_duplicate_warning(
                             &mut result,
                             &mut key_counters,
                             entity_name,
                             entity_with_original_key,
-                            &format!("extracted from container child '{}'", child_key),
+                            &format!("extracted from container child '{:?}'", child_key),
                             namespace,
                         );
                     }
@@ -533,11 +526,11 @@ impl EntityRestructurer {
     }
 
     /// Extract the name field value from an entity
-    fn extract_name_from_entity(entity: &Entity, name_field: &Option<String>) -> Option<String> {
+    fn extract_name_from_entity(entity: &Entity, name_field: &Option<Spur>) -> Option<Spur> {
         if let Some(field_name) = name_field {
             if let Some(property_list) = entity.properties.kv.get(field_name) {
                 if let Some(first_property) = property_list.0.first() {
-                    return Some(first_property.value.to_string());
+                    return Some(first_property.value.as_string().unwrap().clone());
                 }
             }
         }
@@ -545,13 +538,13 @@ impl EntityRestructurer {
     }
 
     /// Get an entity by name from a namespace, handling special loading rules
-    pub fn get_entity(namespace: &str, entity_name: &str) -> Option<Entity> {
+    pub fn get_entity(namespace: Spur, entity_name: Spur) -> Option<Entity> {
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         // Check restructured entities first
         if let Some(restructured) = Self::get() {
-            if let Some(entities) = restructured.entities.get(namespace) {
-                if let Some(entity) = entities.get(entity_name) {
+            if let Some(entities) = restructured.entities.get(&namespace) {
+                if let Some(entity) = entities.get(&entity_name) {
                     return Some(entity.clone());
                 }
             }
@@ -564,8 +557,8 @@ impl EntityRestructurer {
 
         // Fall back to original GameDataCache
         if let Some(game_data) = GameDataCache::get() {
-            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
-                namespace_data.entities.get(entity_name).cloned()
+            if let Some(namespace_data) = game_data.get_namespaces().get(&namespace) {
+                namespace_data.entities.get(&entity_name).cloned()
             } else {
                 None
             }
@@ -575,33 +568,36 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace as a HashMap
-    pub fn get_namespace_entities_map(namespace: &str) -> Option<LowerCaseHashMap<Entity>> {
+    pub fn get_namespace_entities_map(namespace: Spur) -> Option<HashMap<Spur, Entity>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
-        Self::get()?.entities.get(namespace).cloned()
+        Self::get()?.entities.get(&namespace).cloned()
     }
 
     /// Check if a namespace was restructured
-    pub fn was_restructured(namespace: &str) -> bool {
+    pub fn was_restructured(namespace: Spur) -> bool {
         let namespace = TypeCache::get_actual_namespace(namespace);
         Self::get()
-            .map(|r| r.restructured_namespaces.contains_key(namespace))
+            .map(|r| r.restructured_namespaces.contains_key(&namespace))
             .unwrap_or(false)
     }
 
     /// Get restructure info for a namespace
-    pub fn get_restructure_info(namespace: &str) -> Option<RestructureInfo> {
+    pub fn get_restructure_info(namespace: Spur) -> Option<RestructureInfo> {
         let namespace = TypeCache::get_actual_namespace(namespace);
-        Self::get()?.restructured_namespaces.get(namespace).cloned()
+        Self::get()?
+            .restructured_namespaces
+            .get(&namespace)
+            .cloned()
     }
 
     /// Get entity keys for a namespace, using restructured keys if available
-    pub fn get_namespace_entity_keys(namespace: &str) -> Vec<String> {
+    pub fn get_namespace_entity_keys(namespace: Spur) -> Vec<Spur> {
         let mut all_keys = HashSet::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         // Add restructured entity keys if available
         if let Some(restructured) = Self::get() {
-            if let Some(entities) = restructured.entities.get(namespace) {
+            if let Some(entities) = restructured.entities.get(&namespace) {
                 all_keys.extend(entities.keys().cloned());
             }
         }
@@ -622,20 +618,20 @@ impl EntityRestructurer {
     }
 
     /// Get entities for a namespace as a vector of (key, entity) tuples
-    pub fn get_namespace_entities(namespace: &str) -> Option<Vec<(String, Entity)>> {
+    pub fn get_namespace_entities(namespace: Spur) -> Option<Vec<(Spur, Entity)>> {
         let mut all_entities = HashMap::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         // Add restructured entities if available
         if let Some(restructured) = Self::get() {
-            if let Some(entities) = restructured.entities.get(namespace) {
+            if let Some(entities) = restructured.entities.get(&namespace) {
                 all_entities.extend(entities.iter().map(|(k, v)| (k.clone(), v.clone())));
             }
         }
 
         // Add original entities from GameDataCache
         if let Some(game_data) = GameDataCache::get() {
-            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+            if let Some(namespace_data) = game_data.get_namespaces().get(&namespace) {
                 all_entities.extend(
                     namespace_data
                         .entities
@@ -653,13 +649,13 @@ impl EntityRestructurer {
     }
 
     /// Get entity keys for a namespace as a HashSet, using restructured keys if available
-    pub fn get_namespace_entity_keys_set(namespace: &str) -> Option<Arc<HashSet<String>>> {
+    pub fn get_namespace_entity_keys_set(namespace: Spur) -> Option<Arc<HashSet<Spur>>> {
         let mut all_keys = HashSet::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         // Add restructured entity keys if available
         if let Some(restructured) = Self::get() {
-            if let Some(entities) = restructured.entities.get(namespace) {
+            if let Some(entities) = restructured.entities.get(&namespace) {
                 all_keys.extend(entities.keys().cloned());
             }
         } else {
@@ -688,13 +684,13 @@ impl EntityRestructurer {
     }
 
     /// Get a specific entity from a namespace, using restructured entities if available
-    pub fn get_namespace_entity(namespace: &str, entity_name: &str) -> Option<Entity> {
+    pub fn get_namespace_entity(namespace: Spur, entity_name: Spur) -> Option<Entity> {
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         if let Some(restructured) = Self::get() {
-            if let Some(entities) = restructured.entities.get(namespace) {
+            if let Some(entities) = restructured.entities.get(&namespace) {
                 // Use restructured entities
-                return entities.get(entity_name).cloned();
+                return entities.get(&entity_name).cloned();
             }
         }
 
@@ -706,8 +702,8 @@ impl EntityRestructurer {
 
         // Fall back to original GameDataCache
         if let Some(game_data) = GameDataCache::get() {
-            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
-                namespace_data.entities.get(entity_name).cloned()
+            if let Some(namespace_data) = game_data.get_namespaces().get(&namespace) {
+                namespace_data.entities.get(&entity_name).cloned()
             } else {
                 None
             }
@@ -717,11 +713,11 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace, using restructured entities if available
-    pub fn get_all_namespace_entities(namespace: &str) -> Option<LowerCaseHashMap<Entity>> {
+    pub fn get_all_namespace_entities(namespace: Spur) -> Option<HashMap<Spur, Entity>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         if let Some(restructured) = Self::get() {
-            if let Some(entities) = restructured.entities.get(namespace) {
+            if let Some(entities) = restructured.entities.get(&namespace) {
                 // Use restructured entities
                 return Some(entities.clone());
             }
@@ -729,7 +725,7 @@ impl EntityRestructurer {
 
         // Fall back to original GameDataCache
         if let Some(game_data) = GameDataCache::get() {
-            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+            if let Some(namespace_data) = game_data.get_namespaces().get(&namespace) {
                 Some(namespace_data.entities.clone())
             } else {
                 None
@@ -739,11 +735,11 @@ impl EntityRestructurer {
         }
     }
 
-    pub fn get_namespace_values(namespace: &str) -> Option<Vec<String>> {
+    pub fn get_namespace_values(namespace: Spur) -> Option<Vec<Spur>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         if let Some(game_data) = GameDataCache::get() {
-            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+            if let Some(namespace_data) = game_data.get_namespaces().get(&namespace) {
                 Some(namespace_data.values.clone())
             } else {
                 None
@@ -754,19 +750,19 @@ impl EntityRestructurer {
     }
 
     /// Check if a namespace has restructured entities
-    pub fn has_restructured_entities(namespace: &str) -> bool {
+    pub fn has_restructured_entities(namespace: Spur) -> bool {
         Self::get()
-            .map(|r| r.entities.contains_key(namespace))
+            .map(|r| r.entities.contains_key(&namespace))
             .unwrap_or(false)
     }
 
     /// Get scripted variables for a namespace (always from original GameDataCache)
-    pub fn get_namespace_scripted_variables(namespace: &str) -> Option<LowerCaseHashMap<Value>> {
-        let mut all_variables = LowerCaseHashMap::new();
+    pub fn get_namespace_scripted_variables(namespace: Spur) -> Option<HashMap<Spur, Value>> {
+        let mut all_variables = HashMap::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
         // Add base game variables first
         if let Some(game_data) = GameDataCache::get() {
-            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+            if let Some(namespace_data) = game_data.get_namespaces().get(&namespace) {
                 all_variables.extend(
                     namespace_data
                         .scripted_variables
@@ -791,25 +787,25 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace, using restructured entities if available
-    pub fn get_all_entities(namespace: &str) -> Option<Vec<Entity>> {
+    pub fn get_all_entities(namespace: Spur) -> Option<Vec<Entity>> {
         let mut all_entities = Vec::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
         // Add restructured entities if available
         if let Some(restructured) = Self::get() {
-            if let Some(entities) = restructured.entities.get(namespace) {
+            if let Some(entities) = restructured.entities.get(&namespace) {
                 all_entities.extend(entities.values().cloned());
             }
         }
 
         // Add mod entities
         let mod_namespaces = super::game_data::ModDataCache::get_namespaces();
-        if let Some(mod_namespace) = mod_namespaces.get(namespace) {
+        if let Some(mod_namespace) = mod_namespaces.get(&namespace) {
             all_entities.extend(mod_namespace.entities.values().cloned());
         }
 
         // Add original entities from GameDataCache
         if let Some(game_data) = GameDataCache::get() {
-            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+            if let Some(namespace_data) = game_data.get_namespaces().get(&namespace) {
                 all_entities.extend(namespace_data.entities.values().cloned());
             }
         }
@@ -822,12 +818,12 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace as a HashMap, using restructured entities if available
-    pub fn get_all_entities_map(namespace: &str) -> Option<LowerCaseHashMap<Entity>> {
-        let mut all_entities = LowerCaseHashMap::new();
+    pub fn get_all_entities_map(namespace: Spur) -> Option<HashMap<Spur, Entity>> {
+        let mut all_entities = HashMap::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
         // Add original entities from GameDataCache first
         if let Some(game_data) = GameDataCache::get() {
-            if let Some(namespace_data) = game_data.get_namespaces().get(namespace) {
+            if let Some(namespace_data) = game_data.get_namespaces().get(&namespace) {
                 all_entities.extend(
                     namespace_data
                         .entities
@@ -839,7 +835,7 @@ impl EntityRestructurer {
 
         // Add mod entities (can override base game entities)
         let mod_namespaces = ModDataCache::get_namespaces();
-        if let Some(mod_namespace) = mod_namespaces.get(namespace) {
+        if let Some(mod_namespace) = mod_namespaces.get(&namespace) {
             all_entities.extend(
                 mod_namespace
                     .entities
@@ -850,7 +846,7 @@ impl EntityRestructurer {
 
         // Add restructured entities if available (can override both base and mod entities)
         if let Some(restructured) = Self::get() {
-            if let Some(entities) = restructured.entities.get(namespace) {
+            if let Some(entities) = restructured.entities.get(&namespace) {
                 all_entities.extend(entities.iter().map(|(k, v)| (k.clone(), v.clone())));
             }
         }
@@ -865,13 +861,14 @@ impl EntityRestructurer {
     /// Convert an AstEntity to Entity and apply restructuring logic for subtype narrowing
     /// Returns (effective_entity_key, restructured_entity) that can be used for correct subtype determination
     pub fn get_effective_entity_for_subtype_narrowing(
-        namespace: &str,
-        container_key: &str,
-        entity_key: &str,
+        namespace: Spur,
+        container_key: Spur,
+        entity_key: Spur,
         ast_entity: &AstEntity,
-    ) -> (String, Entity) {
-        let container_entity = entity_from_ast(ast_entity);
+    ) -> (Spur, Entity) {
+        let container_entity = entity_from_ast(ast_entity, get_interner());
         let namespace = TypeCache::get_actual_namespace(namespace);
+        let interner = get_interner();
 
         // Get type definitions for this namespace to check for skip_root_key and name_field
         if let Some(type_cache) = TypeCache::get() {
@@ -879,13 +876,14 @@ impl EntityRestructurer {
 
             for (_type_name, type_def) in type_cache.get_cwt_analyzer().get_types() {
                 if let Some(path) = &type_def.path {
+                    let path = interner.resolve(path);
                     let type_namespace = if let Some(stripped) = path.strip_prefix("game/") {
                         stripped.to_string()
                     } else {
-                        path.clone()
+                        path.to_string()
                     };
 
-                    if type_namespace == namespace
+                    if interner.get_or_intern(type_namespace) == namespace
                         && (type_def.skip_root_key.is_some() || type_def.name_field.is_some())
                     {
                         applicable_type_defs.push(type_def);
@@ -898,18 +896,14 @@ impl EntityRestructurer {
                 applicable_type_defs
                     .iter()
                     .find(|type_def| match &type_def.skip_root_key {
-                        Some(SkipRootKey::Specific(skip_key)) => {
-                            container_key.to_lowercase() == skip_key.to_lowercase()
-                        }
+                        Some(SkipRootKey::Specific(skip_key)) => container_key == *skip_key,
                         Some(SkipRootKey::Any) => true,
-                        Some(SkipRootKey::Except(exceptions)) => {
-                            !exceptions.iter().any(|exception| {
-                                exception.to_lowercase() == container_key.to_lowercase()
-                            })
-                        }
-                        Some(SkipRootKey::Multiple(keys)) => keys
+                        Some(SkipRootKey::Except(exceptions)) => !exceptions
                             .iter()
-                            .any(|k| k.to_lowercase() == container_key.to_lowercase()),
+                            .any(|exception| *exception == container_key),
+                        Some(SkipRootKey::Multiple(keys)) => {
+                            keys.iter().any(|k| *k == container_key)
+                        }
                         None => false,
                     })
             {
@@ -935,7 +929,7 @@ impl EntityRestructurer {
                                 // Add original key to entity for subtype determination
                                 Self::add_original_key_to_entity_static(
                                     &mut child_entity,
-                                    child_key,
+                                    *child_key,
                                 );
 
                                 return (effective_key, child_entity);
@@ -944,7 +938,7 @@ impl EntityRestructurer {
                     }
                 } else {
                     // We're being asked to extract a specific nested entity
-                    if let Some(property_list) = container_entity.properties.kv.get(entity_key) {
+                    if let Some(property_list) = container_entity.properties.kv.get(&entity_key) {
                         if let Some(property_info) = property_list.0.first() {
                             if let Value::Entity(mut nested_entity) = property_info.value.clone() {
                                 // Determine the effective key based on name field
@@ -954,9 +948,9 @@ impl EntityRestructurer {
                                             &nested_entity,
                                             &Some(name_field.clone()),
                                         )
-                                        .unwrap_or_else(|| entity_key.to_string())
+                                        .unwrap_or_else(|| entity_key)
                                     } else {
-                                        entity_key.to_string()
+                                        entity_key
                                     };
 
                                 // Add original key to entity for subtype determination
@@ -974,7 +968,7 @@ impl EntityRestructurer {
                 // Fallback if we can't extract any nested entity
                 let mut fallback_entity = container_entity;
                 Self::add_original_key_to_entity_static(&mut fallback_entity, entity_key);
-                return (entity_key.to_string(), fallback_entity);
+                return (entity_key, fallback_entity);
             } else {
                 // Check for name_field scenarios (without skip_root_key)
                 if let Some(name_field_type_def) = applicable_type_defs.iter().find(|type_def| {
@@ -984,7 +978,7 @@ impl EntityRestructurer {
                     let mut entity = container_entity;
                     let effective_key =
                         Self::extract_name_from_entity(&entity, &name_field_type_def.name_field)
-                            .unwrap_or_else(|| entity_key.to_string());
+                            .unwrap_or_else(|| entity_key);
 
                     // Add original key to entity for subtype determination
                     Self::add_original_key_to_entity_static(&mut entity, entity_key);
@@ -997,28 +991,30 @@ impl EntityRestructurer {
         // No restructuring applies, but still add original key for subtype determination
         let mut entity = container_entity;
         Self::add_original_key_to_entity_static(&mut entity, entity_key);
-        (entity_key.to_string(), entity)
+        (entity_key, entity)
     }
 
     /// Static version of add_original_key_to_entity for use in static contexts
-    fn add_original_key_to_entity_static(entity: &mut Entity, original_key: &str) {
+    fn add_original_key_to_entity_static(entity: &mut Entity, original_key: Spur) {
         entity
             .properties
             .kv
-            .entry(ORIGINAL_KEY_PROPERTY.to_string())
+            .entry(get_interner().get_or_intern(ORIGINAL_KEY_PROPERTY))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(PropertyInfo {
                 operator: Operator::Equals,
-                value: Value::String(original_key.to_string()),
+                value: Value::String(original_key),
             });
     }
 
     /// Helper to get restructuring info for a namespace without needing the full cache
-    pub fn get_namespace_restructure_info(namespace: &str) -> Option<RestructureInfo> {
+    pub fn get_namespace_restructure_info(namespace: Spur) -> Option<RestructureInfo> {
         if !TypeCache::is_initialized() || !GameDataCache::is_initialized() {
             return None;
         }
+
+        let interner = get_interner();
 
         let type_cache = TypeCache::get()?;
 
@@ -1026,13 +1022,14 @@ impl EntityRestructurer {
         for (_type_name, type_def) in type_cache.get_cwt_analyzer().get_types() {
             if type_def.skip_root_key.is_some() || type_def.name_field.is_some() {
                 if let Some(path) = &type_def.path {
+                    let path = interner.resolve(path);
                     let ns = if let Some(stripped) = path.strip_prefix("game/") {
                         stripped.to_string()
                     } else {
-                        path.clone()
+                        path.to_string()
                     };
 
-                    if ns == namespace {
+                    if interner.get_or_intern(ns) == namespace {
                         return Some(RestructureInfo {
                             skip_root_key: type_def.skip_root_key.as_ref().and_then(|s| match s {
                                 SkipRootKey::Specific(key) => Some(key.clone()),

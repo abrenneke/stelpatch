@@ -4,18 +4,20 @@
 //! scope transitions and data references used in script validation.
 
 use cw_parser::{AstCwtRule, CwtValue, CwtVisitor};
+use lasso::{Spur, ThreadedRodeo};
 
 use crate::{ConversionError, CwtAnalysisData, LinkDefinition, LinkType};
 
 /// Specialized visitor for links definitions
-pub struct LinksVisitor<'a> {
+pub struct LinksVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
+    interner: &'interner ThreadedRodeo,
 }
 
-impl<'a> LinksVisitor<'a> {
+impl<'a, 'interner> LinksVisitor<'a, 'interner> {
     /// Create a new links visitor
-    pub fn new(data: &'a mut CwtAnalysisData) -> Self {
-        Self { data }
+    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+        Self { data, interner }
     }
 
     /// Check if this visitor can handle the given rule
@@ -37,11 +39,11 @@ impl<'a> LinksVisitor<'a> {
 
     /// Process a single link definition
     fn process_link_definition(&mut self, rule: &AstCwtRule) {
-        let link_name = rule.key.name();
+        let link_name = self.interner.get_or_intern(rule.key.name());
 
         if let CwtValue::Block(block) = &rule.value {
             let mut link_def =
-                LinkDefinition::new(link_name.to_string(), Vec::new(), "Any".to_string());
+                LinkDefinition::new(link_name, Vec::new(), self.interner.get_or_intern("Any"));
 
             // Parse the link properties
             for item in &block.items {
@@ -71,7 +73,9 @@ impl<'a> LinksVisitor<'a> {
                         }
                         "type" => {
                             if let Some(type_str) = self.parse_string_value(&prop_rule.value) {
-                                if let Ok(link_type) = type_str.parse::<LinkType>() {
+                                if let Ok(link_type) =
+                                    self.interner.resolve(&type_str).parse::<LinkType>()
+                                {
                                     link_def.link_type = link_type;
                                 }
                             }
@@ -94,19 +98,19 @@ impl<'a> LinksVisitor<'a> {
             }
 
             // Store the link definition
-            self.data.links.insert(link_name.to_string(), link_def);
+            self.data.links.insert(link_name, link_def);
         } else {
             self.data
                 .errors
                 .push(ConversionError::InvalidLinkFormat(format!(
                     "Link '{}' must have a block value",
-                    link_name
+                    self.interner.resolve(&link_name)
                 )));
         }
     }
 
     /// Parse a list of scopes from a CWT value
-    fn parse_scope_list(&self, value: &CwtValue) -> Option<Vec<String>> {
+    fn parse_scope_list(&self, value: &CwtValue) -> Option<Vec<Spur>> {
         match value {
             CwtValue::Block(block) => {
                 let mut scopes = Vec::new();
@@ -124,9 +128,9 @@ impl<'a> LinksVisitor<'a> {
     }
 
     /// Parse a single scope from a CWT value
-    fn parse_single_scope(&self, value: &CwtValue) -> Option<String> {
+    fn parse_single_scope(&self, value: &CwtValue) -> Option<Spur> {
         match value {
-            CwtValue::String(s) => Some(s.raw_value().to_string()),
+            CwtValue::String(s) => Some(self.interner.get_or_intern(s.raw_value())),
             CwtValue::Simple(_simple) => {
                 // For simple values, we don't have a raw string value available
                 // This might be a design issue - we may need to handle this differently
@@ -137,9 +141,9 @@ impl<'a> LinksVisitor<'a> {
     }
 
     /// Parse a string value from a CWT value
-    fn parse_string_value(&self, value: &CwtValue) -> Option<String> {
+    fn parse_string_value(&self, value: &CwtValue) -> Option<Spur> {
         match value {
-            CwtValue::String(s) => Some(s.raw_value().to_string()),
+            CwtValue::String(s) => Some(self.interner.get_or_intern(s.raw_value())),
             CwtValue::Simple(_simple) => {
                 // For simple values, we don't have a raw string value available
                 // This might be a design issue - we may need to handle this differently
@@ -169,7 +173,7 @@ impl<'a> LinksVisitor<'a> {
     }
 }
 
-impl<'a> CwtVisitor<'a> for LinksVisitor<'a> {
+impl<'a, 'interner> CwtVisitor<'a> for LinksVisitor<'a, 'interner> {
     fn visit_rule(&mut self, rule: &AstCwtRule<'a>) {
         if self.can_handle_rule(rule) {
             self.process_links_section(rule);
@@ -188,7 +192,8 @@ mod tests {
     #[test]
     fn test_links_visitor() {
         let mut data = CwtAnalysisData::new();
-        let mut visitor = LinksVisitor::new(&mut data);
+        let interner = ThreadedRodeo::new();
+        let mut visitor = LinksVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
 links = {
@@ -213,16 +218,26 @@ links = {
 
         assert_eq!(data.links.len(), 2);
 
-        let owner_link = data.links.get("owner").unwrap();
-        assert_eq!(owner_link.input_scopes, vec!["planet", "country", "ship"]);
-        assert_eq!(owner_link.output_scope, "Country");
+        let owner_link = data.links.get(&interner.get_or_intern("owner")).unwrap();
+        assert_eq!(
+            owner_link.input_scopes,
+            vec![
+                interner.get_or_intern("planet"),
+                interner.get_or_intern("country"),
+                interner.get_or_intern("ship")
+            ]
+        );
+        assert_eq!(owner_link.output_scope, interner.get_or_intern("Country"));
 
-        let ruler_link = data.links.get("ruler").unwrap();
-        assert_eq!(ruler_link.input_scopes, vec!["country"]);
-        assert_eq!(ruler_link.output_scope, "Leader");
+        let ruler_link = data.links.get(&interner.get_or_intern("ruler")).unwrap();
+        assert_eq!(
+            ruler_link.input_scopes,
+            vec![interner.get_or_intern("country")]
+        );
+        assert_eq!(ruler_link.output_scope, interner.get_or_intern("Leader"));
         assert_eq!(
             ruler_link.desc,
-            Some("The ruler of the country".to_string())
+            Some(interner.get_or_intern("The ruler of the country"))
         );
         assert_eq!(ruler_link.from_data, true);
         assert_eq!(ruler_link.link_type, LinkType::Scope);

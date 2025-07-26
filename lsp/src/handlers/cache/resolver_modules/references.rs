@@ -1,8 +1,10 @@
 use super::{ResolverUtils, SubtypeHandler};
 use crate::handlers::cache::{EntityRestructurer, FullAnalysis};
 use crate::handlers::scope::ScopeStack;
+use crate::interner::get_interner;
 use cw_model::types::CwtAnalyzer;
 use cw_model::{AliasDefinition, AliasName, CwtType, ReferenceType, SimpleType};
+use lasso::Spur;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -31,6 +33,7 @@ impl ReferenceResolver {
         ref_type: &ReferenceType,
         _scope_stack: &ScopeStack,
     ) -> Arc<CwtType> {
+        let interner = get_interner();
         match ref_type {
             ReferenceType::Type { key } => {
                 // Check if this is a subtype reference (contains a dot)
@@ -38,13 +41,16 @@ impl ReferenceResolver {
                     let (base_type, subtype) = key.split_at(dot_pos);
                     let subtype = &subtype[1..]; // Remove the leading dot
 
+                    let base_type = interner.get_or_intern(base_type);
+
                     // Get the base type definition
                     let type_def = self.cwt_analyzer.get_type(base_type);
 
                     if let Some(type_def) = type_def {
                         if let Some(path) = type_def.path.as_ref() {
+                            let path_str = interner.resolve(path);
                             // CWT paths are prefixed with "game/"
-                            let path = path.trim_start_matches("game/");
+                            let path_str = path_str.trim_start_matches("game/");
 
                             // Get the CWT type for this namespace
                             if let Some(cwt_type) = self.cwt_analyzer.get_type(base_type) {
@@ -52,9 +58,9 @@ impl ReferenceResolver {
                                 let filtered_keys = self
                                     .subtype_handler
                                     .get_entity_keys_in_namespace_for_subtype(
-                                        path,
+                                        *path,
                                         &cwt_type.rules,
-                                        subtype,
+                                        interner.get_or_intern(subtype),
                                     );
 
                                 if !filtered_keys.is_empty() {
@@ -64,7 +70,9 @@ impl ReferenceResolver {
                                 } else {
                                     eprintln!(
                                         "No filtered keys found for: {}.{}, path: {}",
-                                        base_type, subtype, path
+                                        interner.resolve(&base_type),
+                                        subtype,
+                                        path_str
                                     );
                                 }
                             }
@@ -76,19 +84,22 @@ impl ReferenceResolver {
                 }
 
                 // Handle regular type references (no subtype)
-                let type_def = self.cwt_analyzer.get_type(key);
+                let type_def = self.cwt_analyzer.get_type(interner.get_or_intern(key));
 
                 let mut found = None;
 
                 if let Some(type_def) = type_def {
                     if let Some(path) = type_def.path.as_ref() {
+                        let path_str = interner.resolve(path);
                         // CWT paths are prefixed with "game/"
-                        let path = path.trim_start_matches("game/");
+                        let path_str = path_str.trim_start_matches("game/");
 
                         // For Type references, we want the union of all keys in that namespace
                         // This is what the user expects when they hover over "resource" - they want to see
                         // all the possible resource keys like "energy", "minerals", etc.
-                        let namespace_keys = EntityRestructurer::get_namespace_entity_keys(&path);
+                        let namespace_keys = EntityRestructurer::get_namespace_entity_keys(
+                            interner.get_or_intern(path_str),
+                        );
                         found = Some(CwtType::LiteralSet(namespace_keys.into_iter().collect()));
                     }
                 }
@@ -121,12 +132,15 @@ impl ReferenceResolver {
             }
             ReferenceType::Enum { key } => {
                 // Try to get the enum type from our analyzer
-                if let Some(enum_def) = self.cwt_analyzer.get_enum(key) {
+                if let Some(enum_def) = self.cwt_analyzer.get_enum(interner.get_or_intern(key)) {
                     let mut values = enum_def.values.clone();
 
                     // Also include complex enum values if available
                     if let Some(full_analysis) = FullAnalysis::get() {
-                        if let Some(complex_values) = full_analysis.complex_enums.get(key) {
+                        if let Some(complex_values) = full_analysis
+                            .complex_enums
+                            .get(&interner.get_or_intern(key))
+                        {
                             values.extend(complex_values.clone());
                         }
                     }
@@ -139,7 +153,10 @@ impl ReferenceResolver {
             ReferenceType::ValueSet { .. } => Arc::new(CwtType::Reference(ref_type.clone())),
             ReferenceType::Value { key } => {
                 if let Some(full_analysis) = FullAnalysis::get() {
-                    if let Some(dynamic_values) = full_analysis.dynamic_value_sets.get(key) {
+                    if let Some(dynamic_values) = full_analysis
+                        .dynamic_value_sets
+                        .get(&interner.get_or_intern(key))
+                    {
                         return Arc::new(CwtType::LiteralSet(dynamic_values.clone()));
                     }
                 }
@@ -155,7 +172,9 @@ impl ReferenceResolver {
                 // This is typically used in contexts where we know the base type
                 // but need to specialize based on the subtype
                 // For now, return a descriptive literal that can be used for completion
-                Arc::new(CwtType::Literal(format!("subtype:{}", name)))
+                Arc::new(CwtType::Literal(
+                    interner.get_or_intern(format!("subtype:{}", name)),
+                ))
             }
             ReferenceType::Scope { .. } => {
                 // Scope references need dynamic validation because values can contain
@@ -169,7 +188,10 @@ impl ReferenceResolver {
             }
             ReferenceType::AliasKeysField { key } => {
                 let mut properties = HashSet::new();
-                if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(key) {
+                if let Some(aliases_in_category) = self
+                    .cwt_analyzer
+                    .get_aliases_for_category(interner.get_or_intern(key))
+                {
                     for alias_pattern in aliases_in_category {
                         match &alias_pattern.name {
                             AliasName::Static(name) => {
@@ -177,28 +199,41 @@ impl ReferenceResolver {
                             }
                             AliasName::TypeRef(type_name) => {
                                 if let Some(namespace_keys) =
-                                    self.utils.get_namespace_keys_for_type_ref(type_name)
+                                    self.utils.get_namespace_keys_for_type_ref(*type_name)
                                 {
                                     properties.extend(namespace_keys.iter().cloned());
                                 }
                             }
                             AliasName::Enum(enum_name) => {
-                                if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
+                                if let Some(enum_def) = self.cwt_analyzer.get_enum(*enum_name) {
                                     properties.extend(enum_def.values.iter().cloned());
                                 }
                             }
                             AliasName::TypeRefWithPrefixSuffix(type_name, prefix, suffix) => {
                                 if let Some(namespace_keys) =
-                                    self.utils.get_namespace_keys_for_type_ref(type_name)
+                                    self.utils.get_namespace_keys_for_type_ref(*type_name)
                                 {
                                     for key in namespace_keys.iter() {
                                         let property = match (prefix, suffix) {
-                                            (Some(p), Some(s)) => format!("{}{}{}", p, key, s),
-                                            (Some(p), None) => format!("{}{}", p, key),
-                                            (None, Some(s)) => format!("{}{}", key, s),
-                                            (None, None) => key.clone(),
+                                            (Some(p), Some(s)) => format!(
+                                                "{}{}{}",
+                                                interner.resolve(p),
+                                                interner.resolve(key),
+                                                interner.resolve(s)
+                                            ),
+                                            (Some(p), None) => format!(
+                                                "{}{}",
+                                                interner.resolve(p),
+                                                interner.resolve(key)
+                                            ),
+                                            (None, Some(s)) => format!(
+                                                "{}{}",
+                                                interner.resolve(key),
+                                                interner.resolve(s)
+                                            ),
+                                            (None, None) => interner.resolve(key).to_string(),
                                         };
-                                        properties.insert(property);
+                                        properties.insert(interner.get_or_intern(property));
                                     }
                                 }
                             }
@@ -224,15 +259,15 @@ impl ReferenceResolver {
                 // If we got a LiteralSet back, apply prefix and suffix to each element
                 match base_type.as_ref() {
                     CwtType::LiteralSet(keys) => {
-                        let affixed_keys: HashSet<String> = keys
+                        let affixed_keys: HashSet<Spur> = keys
                             .iter()
                             .map(|k| {
-                                format!(
+                                interner.get_or_intern(format!(
                                     "{}{}{}",
                                     prefix.as_deref().unwrap_or(""),
-                                    k,
+                                    interner.resolve(k),
                                     suffix.as_deref().unwrap_or("")
-                                )
+                                ))
                             })
                             .collect();
                         Arc::new(CwtType::LiteralSet(affixed_keys))
@@ -252,34 +287,35 @@ impl ReferenceResolver {
     /// Returns (resolved_type, alias_definition_if_found)
     pub fn resolve_alias_match_left(
         &self,
-        category: &str,
-        property_name: &str,
-    ) -> (Arc<CwtType>, Option<AliasDefinition>, Option<String>) {
+        category: Spur,
+        property_name: Spur,
+    ) -> (Arc<CwtType>, Option<AliasDefinition>, Option<Spur>) {
+        let interner = get_interner();
         // Look up the specific alias category:property_name and return its type
         if let Some(aliases_in_category) = self.cwt_analyzer.get_aliases_for_category(category) {
             for alias_pattern in aliases_in_category {
                 if let Some(alias_def) = self.cwt_analyzer.get_alias(alias_pattern) {
                     match &alias_pattern.name {
                         AliasName::Static(name) => {
-                            if name == property_name {
+                            if *name == property_name {
                                 return (alias_def.to.clone(), Some(alias_def.clone()), None);
                             }
                         }
                         AliasName::TypeRef(type_name) => {
                             // Check if property_name is a valid key for this type
                             if let Some(namespace_keys) =
-                                self.utils.get_namespace_keys_for_type_ref(type_name)
+                                self.utils.get_namespace_keys_for_type_ref(*type_name)
                             {
-                                if namespace_keys.contains(&property_name.to_string()) {
+                                if namespace_keys.contains(&property_name) {
                                     // Special case for scripted_effect - we need to know the name
                                     // of the scripted effect to set the scoped type context
-                                    if type_name == "scripted_effect"
-                                        || type_name == "scripted_trigger"
+                                    if *type_name == interner.get_or_intern("scripted_effect")
+                                        || *type_name == interner.get_or_intern("scripted_trigger")
                                     {
                                         return (
                                             alias_def.to.clone(),
                                             Some(alias_def.clone()),
-                                            Some(property_name.to_string()),
+                                            Some(property_name),
                                         );
                                     } else {
                                         return (
@@ -293,19 +329,20 @@ impl ReferenceResolver {
                         }
                         AliasName::Enum(enum_name) => {
                             // Check if property_name is a valid enum value
-                            if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
-                                if enum_def.values.contains(property_name) {
+                            if let Some(enum_def) = self.cwt_analyzer.get_enum(*enum_name) {
+                                if enum_def.values.contains(&property_name) {
                                     return (alias_def.to.clone(), Some(alias_def.clone()), None);
                                 }
                             }
                         }
                         AliasName::TypeRefWithPrefixSuffix(name, prefix, suffix) => {
                             // Strip prefix and suffix from property_name and check if it matches the type
-                            let mut stripped_name = property_name;
+                            let mut stripped_name = interner.resolve(&property_name);
 
                             // Remove prefix if present
                             if let Some(prefix_str) = prefix {
-                                if let Some(without_prefix) = stripped_name.strip_prefix(prefix_str)
+                                if let Some(without_prefix) =
+                                    stripped_name.strip_prefix(interner.resolve(prefix_str))
                                 {
                                     stripped_name = without_prefix;
                                 } else {
@@ -315,7 +352,8 @@ impl ReferenceResolver {
 
                             // Remove suffix if present
                             if let Some(suffix_str) = suffix {
-                                if let Some(without_suffix) = stripped_name.strip_suffix(suffix_str)
+                                if let Some(without_suffix) =
+                                    stripped_name.strip_suffix(interner.resolve(suffix_str))
                                 {
                                     stripped_name = without_suffix;
                                 } else {
@@ -325,15 +363,17 @@ impl ReferenceResolver {
 
                             // Check if the remaining name is a valid key for this type
                             if let Some(namespace_keys) =
-                                self.utils.get_namespace_keys_for_type_ref(name)
+                                self.utils.get_namespace_keys_for_type_ref(*name)
                             {
-                                if namespace_keys.contains(&stripped_name.to_string()) {
+                                if namespace_keys.contains(&interner.get_or_intern(stripped_name)) {
                                     // Special case for scripted_effect/scripted_trigger
-                                    if name == "scripted_effect" || name == "scripted_trigger" {
+                                    if *name == interner.get_or_intern("scripted_effect")
+                                        || *name == interner.get_or_intern("scripted_trigger")
+                                    {
                                         return (
                                             alias_def.to.clone(),
                                             Some(alias_def.clone()),
-                                            Some(stripped_name.to_string()),
+                                            Some(interner.get_or_intern(stripped_name)),
                                         );
                                     } else {
                                         return (
@@ -353,7 +393,7 @@ impl ReferenceResolver {
         // If no matching alias was found, return the original AliasMatchLeft
         (
             Arc::new(CwtType::Reference(ReferenceType::AliasMatchLeft {
-                key: category.to_string(),
+                key: interner.resolve(&category).to_string(),
             })),
             None,
             None,
@@ -364,9 +404,10 @@ impl ReferenceResolver {
     /// Returns Vec of all (resolved_type, alias_definition_if_found, scripted_name)
     pub fn resolve_all_alias_match_left(
         &self,
-        category: &str,
-        property_name: &str,
-    ) -> Vec<(Arc<CwtType>, Option<AliasDefinition>, Option<String>)> {
+        category: Spur,
+        property_name: Spur,
+    ) -> Vec<(Arc<CwtType>, Option<AliasDefinition>, Option<Spur>)> {
+        let interner = get_interner();
         let mut results = Vec::new();
 
         // Look up ALL aliases in category that match the property_name
@@ -375,25 +416,25 @@ impl ReferenceResolver {
                 if let Some(alias_def) = self.cwt_analyzer.get_alias(alias_pattern) {
                     match &alias_pattern.name {
                         AliasName::Static(name) => {
-                            if name.to_lowercase() == property_name.to_lowercase() {
+                            if *name == property_name {
                                 results.push((alias_def.to.clone(), Some(alias_def.clone()), None));
                             }
                         }
                         AliasName::TypeRef(type_name) => {
                             // Check if property_name is a valid key for this type
                             if let Some(namespace_keys) =
-                                self.utils.get_namespace_keys_for_type_ref(type_name)
+                                self.utils.get_namespace_keys_for_type_ref(*type_name)
                             {
-                                if namespace_keys.contains(&property_name.to_string()) {
+                                if namespace_keys.contains(&property_name) {
                                     // Special case for scripted_effect - we need to know the name
                                     // of the scripted effect to set the scoped type context
-                                    if type_name == "scripted_effect"
-                                        || type_name == "scripted_trigger"
+                                    if *type_name == interner.get_or_intern("scripted_effect")
+                                        || *type_name == interner.get_or_intern("scripted_trigger")
                                     {
                                         results.push((
                                             alias_def.to.clone(),
                                             Some(alias_def.clone()),
-                                            Some(property_name.to_string()),
+                                            Some(property_name),
                                         ));
                                     } else {
                                         results.push((
@@ -407,8 +448,8 @@ impl ReferenceResolver {
                         }
                         AliasName::Enum(enum_name) => {
                             // Check if property_name is a valid enum value
-                            if let Some(enum_def) = self.cwt_analyzer.get_enum(enum_name) {
-                                if enum_def.values.contains(property_name) {
+                            if let Some(enum_def) = self.cwt_analyzer.get_enum(*enum_name) {
+                                if enum_def.values.contains(&property_name) {
                                     results.push((
                                         alias_def.to.clone(),
                                         Some(alias_def.clone()),
@@ -419,11 +460,12 @@ impl ReferenceResolver {
                         }
                         AliasName::TypeRefWithPrefixSuffix(name, prefix, suffix) => {
                             // Strip prefix and suffix from property_name and check if it matches the type
-                            let mut stripped_name = property_name;
+                            let mut stripped_name = interner.resolve(&property_name);
 
                             // Remove prefix if present
                             if let Some(prefix_str) = prefix {
-                                if let Some(without_prefix) = stripped_name.strip_prefix(prefix_str)
+                                if let Some(without_prefix) =
+                                    stripped_name.strip_prefix(interner.resolve(prefix_str))
                                 {
                                     stripped_name = without_prefix;
                                 } else {
@@ -433,7 +475,8 @@ impl ReferenceResolver {
 
                             // Remove suffix if present
                             if let Some(suffix_str) = suffix {
-                                if let Some(without_suffix) = stripped_name.strip_suffix(suffix_str)
+                                if let Some(without_suffix) =
+                                    stripped_name.strip_suffix(interner.resolve(suffix_str))
                                 {
                                     stripped_name = without_suffix;
                                 } else {
@@ -443,15 +486,17 @@ impl ReferenceResolver {
 
                             // Check if the remaining name is a valid key for this type
                             if let Some(namespace_keys) =
-                                self.utils.get_namespace_keys_for_type_ref(name)
+                                self.utils.get_namespace_keys_for_type_ref(*name)
                             {
-                                if namespace_keys.contains(&stripped_name.to_string()) {
+                                if namespace_keys.contains(&interner.get_or_intern(stripped_name)) {
                                     // Special case for scripted_effect/scripted_trigger
-                                    if name == "scripted_effect" || name == "scripted_trigger" {
+                                    if *name == interner.get_or_intern("scripted_effect")
+                                        || *name == interner.get_or_intern("scripted_trigger")
+                                    {
                                         results.push((
                                             alias_def.to.clone(),
                                             Some(alias_def.clone()),
-                                            Some(stripped_name.to_string()),
+                                            Some(interner.get_or_intern(stripped_name)),
                                         ));
                                     } else {
                                         results.push((
@@ -472,7 +517,7 @@ impl ReferenceResolver {
         if results.is_empty() {
             results.push((
                 Arc::new(CwtType::Reference(ReferenceType::AliasMatchLeft {
-                    key: category.to_string(),
+                    key: interner.resolve(&category).to_string(),
                 })),
                 None,
                 None,

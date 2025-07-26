@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::anyhow;
 use cw_model::{GameMod, LoadMode, ModDefinition, Modifier, parse_modifier_log};
+use lasso::ThreadedRodeo;
 use lazy_static::lazy_static;
 use winreg::{RegKey, enums::HKEY_CURRENT_USER};
 
@@ -20,15 +21,20 @@ pub struct BaseGame {}
 static BASE_MOD: OnceLock<GameMod> = OnceLock::new();
 
 impl BaseGame {
-    pub fn load_global_as_mod_definition(load_mode: LoadMode) -> &'static GameMod {
+    pub fn load_global_as_mod_definition(
+        load_mode: LoadMode,
+        interner: &ThreadedRodeo,
+    ) -> &'static GameMod {
         BASE_MOD.get_or_init(|| {
-            Self::load_as_mod_definition(None, load_mode).expect("Could not load base game")
+            Self::load_as_mod_definition(None, load_mode, interner)
+                .expect("Could not load base game")
         })
     }
 
     pub fn load_as_mod_definition(
         install_path: Option<&Path>,
         load_mode: LoadMode,
+        interner: &ThreadedRodeo,
     ) -> Result<GameMod, anyhow::Error> {
         let install_path = if let Some(path) = install_path {
             Some(path)
@@ -50,7 +56,7 @@ impl BaseGame {
                     archive: None,
                 };
 
-                let game_mod = GameMod::load(definition, load_mode)?;
+                let game_mod = GameMod::load(definition, load_mode, interner)?;
 
                 // BASE_MOD
                 //     .set(game_mod)
@@ -106,8 +112,8 @@ impl BaseGame {
     }
 
     /// Loads modifiers from the Stellaris logs directory
-    pub fn load_modifiers() -> Result<Vec<Modifier>, anyhow::Error> {
-        load_stellaris_modifiers()
+    pub fn load_modifiers(interner: &ThreadedRodeo) -> Result<Vec<Modifier>, anyhow::Error> {
+        load_stellaris_modifiers(interner)
     }
 }
 
@@ -141,7 +147,7 @@ pub fn stellaris_modifiers_log_path() -> Result<PathBuf, anyhow::Error> {
 }
 
 /// Loads and parses modifiers from the Stellaris modifiers log
-pub fn load_stellaris_modifiers() -> Result<Vec<Modifier>, anyhow::Error> {
+pub fn load_stellaris_modifiers(interner: &ThreadedRodeo) -> Result<Vec<Modifier>, anyhow::Error> {
     let log_path = stellaris_modifiers_log_path()?;
 
     if !log_path.exists() {
@@ -154,7 +160,7 @@ pub fn load_stellaris_modifiers() -> Result<Vec<Modifier>, anyhow::Error> {
     let log_content = std::fs::read_to_string(&log_path)
         .map_err(|e| anyhow!("Failed to read modifiers log: {}", e))?;
 
-    let modifiers = parse_modifier_log(&log_content);
+    let modifiers = parse_modifier_log(&log_content, &interner);
 
     if modifiers.is_empty() {
         return Err(anyhow!("No modifiers found in log file"));

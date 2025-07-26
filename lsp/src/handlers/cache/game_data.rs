@@ -4,8 +4,9 @@ use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 
 use crate::base_game::BaseGame;
-use cw_model::LowerCaseHashMap;
+use crate::interner::get_interner;
 use cw_model::{Entity, GameMod, LoadMode, Value};
+use lasso::Spur;
 
 use crate::handlers::cache::EntityRestructurer;
 use crate::handlers::cache::FullAnalysis;
@@ -14,17 +15,17 @@ use crate::handlers::cache::TypeCache;
 /// Cache for actual game data keys from namespaces (e.g., "energy", "minerals" from resources namespace)
 pub struct GameDataCache {
     /// Maps namespace -> set of keys defined in that namespace
-    pub namespaces: HashMap<String, Namespace>,
-    pub scripted_variables: HashMap<String, Value>,
+    pub namespaces: HashMap<Spur, Namespace>,
+    pub scripted_variables: HashMap<Spur, Value>,
 }
 
 #[derive(Clone)]
 pub struct Namespace {
-    pub entities: LowerCaseHashMap<Entity>,
-    pub values: Vec<String>,
-    pub entity_keys: Vec<String>,
-    pub entity_keys_set: Arc<HashSet<String>>,
-    pub scripted_variables: HashMap<String, Value>,
+    pub entities: HashMap<Spur, Entity>,
+    pub values: Vec<Spur>,
+    pub entity_keys: Vec<Spur>,
+    pub entity_keys_set: Arc<HashSet<Spur>>,
+    pub scripted_variables: HashMap<Spur, Value>,
     /// Individual modules in this namespace (for restructuring)
     pub modules: HashMap<String, cw_model::Module>,
 }
@@ -32,7 +33,7 @@ pub struct Namespace {
 impl Namespace {
     pub fn new() -> Self {
         Self {
-            entities: LowerCaseHashMap::new(),
+            entities: HashMap::new(),
             values: Vec::new(),
             entity_keys: Vec::new(),
             entity_keys_set: Arc::new(HashSet::new()),
@@ -69,17 +70,20 @@ impl GameDataCache {
             eprintln!("Initializing game data cache");
 
             // Load base game data
-            let base_game = BaseGame::load_global_as_mod_definition(LoadMode::Parallel);
+            let base_game =
+                BaseGame::load_global_as_mod_definition(LoadMode::Parallel, get_interner());
+
+            let interner = get_interner();
 
             eprintln!(
                 "Building namespace keys cache from {} namespaces",
                 base_game.namespaces.len()
             );
 
-            let mut global_scripted_variables = HashMap::new();
+            let mut global_scripted_variables: HashMap<Spur, Value> = HashMap::new();
 
             // Extract keys from each namespace
-            let mut namespaces: HashMap<String, Namespace> = HashMap::new();
+            let mut namespaces: HashMap<Spur, Namespace> = HashMap::new();
             for (namespace_name, namespace) in &base_game.namespaces {
                 let mut namespace_data = Namespace::new();
 
@@ -89,24 +93,28 @@ impl GameDataCache {
                 let properties = &namespace.properties.kv;
 
                 for (key, value) in properties {
+                    let key_str = get_interner().resolve(key);
+
                     if namespace_name == "common/scripted_variables" {
                         global_scripted_variables
-                            .insert(key.to_string(), value.0.first().unwrap().value.clone());
-                    } else if key.starts_with("@") {
+                            .insert(*key, value.0.first().unwrap().value.clone());
+                    } else if key_str.starts_with("@") {
                         namespace_data
                             .scripted_variables
-                            .insert(key.to_string(), value.0.first().unwrap().value.clone());
+                            .insert(*key, value.0.first().unwrap().value.clone());
                     } else {
                         // Handle multiple entities with the same key (like multiple random_list entries)
                         for (index, property_info) in value.0.iter().enumerate() {
                             if let Some(entity) = property_info.value.as_entity() {
                                 let entity_key = if index == 0 {
-                                    key.to_string()
+                                    key_str.to_string()
                                 } else {
-                                    format!("{}_{}", key, index + 1)
+                                    format!("{}_{}", key_str, index + 1)
                                 };
 
-                                namespace_data.entities.insert(entity_key, entity.clone());
+                                namespace_data
+                                    .entities
+                                    .insert(interner.get_or_intern(entity_key), entity.clone());
                             }
                         }
                     }
@@ -118,9 +126,10 @@ impl GameDataCache {
                     }
                 }
 
-                let namespace_name = TypeCache::get_actual_namespace(namespace_name);
+                let namespace_name =
+                    TypeCache::get_actual_namespace(interner.get_or_intern(namespace_name));
 
-                if let Some(existing) = namespaces.get_mut(namespace_name) {
+                if let Some(existing) = namespaces.get_mut(&namespace_name) {
                     existing.entities.extend(namespace_data.entities);
                     existing.values.extend(namespace_data.values);
                     existing
@@ -128,7 +137,7 @@ impl GameDataCache {
                         .extend(namespace_data.scripted_variables);
                     existing.modules.extend(namespace_data.modules);
                 } else {
-                    namespaces.insert(namespace_name.to_string(), namespace_data);
+                    namespaces.insert(namespace_name, namespace_data);
                 }
             }
 
@@ -161,8 +170,8 @@ impl GameDataCache {
     }
 
     /// Get all keys defined in a namespace
-    pub fn get_namespace_entity_keys(&self, namespace: &str) -> Option<&Vec<String>> {
-        if let Some(namespace) = self.namespaces.get(namespace) {
+    pub fn get_namespace_entity_keys(&self, namespace: Spur) -> Option<&Vec<Spur>> {
+        if let Some(namespace) = self.namespaces.get(&namespace) {
             Some(&namespace.entity_keys)
         } else {
             None
@@ -170,8 +179,8 @@ impl GameDataCache {
     }
 
     /// Get all keys defined in a namespace as a HashSet (for LiteralSet)
-    pub fn get_namespace_entity_keys_set(&self, namespace: &str) -> Option<Arc<HashSet<String>>> {
-        if let Some(namespace) = self.namespaces.get(namespace) {
+    pub fn get_namespace_entity_keys_set(&self, namespace: Spur) -> Option<Arc<HashSet<Spur>>> {
+        if let Some(namespace) = self.namespaces.get(&namespace) {
             Some(namespace.entity_keys_set.clone())
         } else {
             None
@@ -179,7 +188,7 @@ impl GameDataCache {
     }
 
     /// Get all namespaces
-    pub fn get_namespaces(&self) -> &HashMap<String, Namespace> {
+    pub fn get_namespaces(&self) -> &HashMap<Spur, Namespace> {
         &self.namespaces
     }
 
@@ -192,8 +201,8 @@ impl GameDataCache {
 /// Global cache for mod data that can be modified at runtime
 pub struct ModDataCache {
     /// Maps namespace -> set of keys defined in that namespace
-    pub namespaces: HashMap<String, Namespace>,
-    pub scripted_variables: HashMap<String, Value>,
+    pub namespaces: HashMap<Spur, Namespace>,
+    pub scripted_variables: HashMap<Spur, Value>,
 }
 
 static MOD_DATA_CACHE: OnceLock<RwLock<ModDataCache>> = OnceLock::new();
@@ -215,6 +224,7 @@ impl ModDataCache {
         let mut cache = cache_lock.write().unwrap();
 
         eprintln!("Merging mod data: {}", game_mod.definition.name);
+        let interner = get_interner();
 
         let mut added_entities = 0;
         let mut added_variables = 0;
@@ -224,29 +234,31 @@ impl ModDataCache {
             let properties = &namespace.properties.kv;
 
             for (key, value) in properties {
+                let key_str = get_interner().resolve(key);
+
                 if namespace_name == "common/scripted_variables" {
                     cache
                         .scripted_variables
-                        .insert(key.to_string(), value.0.first().unwrap().value.clone());
+                        .insert(*key, value.0.first().unwrap().value.clone());
                     added_variables += 1;
-                } else if key.starts_with("@") {
+                } else if key_str.starts_with("@") {
                     let namespace_data = cache
                         .namespaces
-                        .entry(namespace_name.clone())
+                        .entry(interner.get_or_intern(namespace_name))
                         .or_insert_with(Namespace::new);
                     namespace_data
                         .scripted_variables
-                        .insert(key.to_string(), value.0.first().unwrap().value.clone());
+                        .insert(*key, value.0.first().unwrap().value.clone());
                     added_variables += 1;
                 } else {
                     if let Some(entity) = value.0.first().unwrap().value.as_entity() {
                         let namespace_data = cache
                             .namespaces
-                            .entry(namespace_name.clone())
+                            .entry(interner.get_or_intern(namespace_name))
                             .or_insert_with(Namespace::new);
                         namespace_data
                             .entities
-                            .insert(key.to_string(), entity.clone());
+                            .insert(interner.get_or_intern(key_str), entity.clone());
                         added_entities += 1;
                     }
                 }
@@ -290,9 +302,9 @@ impl ModDataCache {
     }
 
     /// Get all keys defined in a namespace from mod data only
-    pub fn get_namespace_entity_keys(namespace: &str) -> Option<Vec<String>> {
+    pub fn get_namespace_entity_keys(namespace: Spur) -> Option<Vec<Spur>> {
         let cache = Self::get().read().unwrap();
-        if let Some(mod_namespace) = cache.namespaces.get(namespace) {
+        if let Some(mod_namespace) = cache.namespaces.get(&namespace) {
             Some(mod_namespace.entity_keys.clone())
         } else {
             None
@@ -300,9 +312,9 @@ impl ModDataCache {
     }
 
     /// Get all keys defined in a namespace as a HashSet from mod data only
-    pub fn get_namespace_entity_keys_set(namespace: &str) -> Option<Arc<HashSet<String>>> {
+    pub fn get_namespace_entity_keys_set(namespace: Spur) -> Option<Arc<HashSet<Spur>>> {
         let cache = Self::get().read().unwrap();
-        if let Some(mod_namespace) = cache.namespaces.get(namespace) {
+        if let Some(mod_namespace) = cache.namespaces.get(&namespace) {
             Some(mod_namespace.entity_keys_set.clone())
         } else {
             None
@@ -310,31 +322,31 @@ impl ModDataCache {
     }
 
     /// Get a specific entity from mod data only
-    pub fn get_entity(namespace: &str, entity_name: &str) -> Option<Entity> {
+    pub fn get_entity(namespace: Spur, entity_name: Spur) -> Option<Entity> {
         let cache = Self::get().read().unwrap();
-        if let Some(mod_namespace) = cache.namespaces.get(namespace) {
-            mod_namespace.entities.get(entity_name).cloned()
+        if let Some(mod_namespace) = cache.namespaces.get(&namespace) {
+            mod_namespace.entities.get(&entity_name).cloned()
         } else {
             None
         }
     }
 
     /// Get all namespaces from mod data
-    pub fn get_namespaces() -> HashMap<String, Namespace> {
+    pub fn get_namespaces() -> HashMap<Spur, Namespace> {
         let cache = Self::get().read().unwrap();
         cache.namespaces.clone()
     }
 
     /// Get scripted variables from mod data
-    pub fn get_scripted_variables() -> HashMap<String, Value> {
+    pub fn get_scripted_variables() -> HashMap<Spur, Value> {
         let cache = Self::get().read().unwrap();
         cache.scripted_variables.clone()
     }
 
     /// Get namespace scripted variables from mod data
-    pub fn get_namespace_scripted_variables(namespace: &str) -> Option<HashMap<String, Value>> {
+    pub fn get_namespace_scripted_variables(namespace: Spur) -> Option<HashMap<Spur, Value>> {
         let cache = Self::get().read().unwrap();
-        if let Some(mod_namespace) = cache.namespaces.get(namespace) {
+        if let Some(mod_namespace) = cache.namespaces.get(&namespace) {
             Some(mod_namespace.scripted_variables.clone())
         } else {
             None

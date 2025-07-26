@@ -14,19 +14,22 @@ use cw_parser::{
         CwtValue, CwtVisitor,
     },
 };
+use lasso::{Spur, ThreadedRodeo};
 use std::collections::HashSet;
 
 /// Specialized visitor for enum definitions
-pub struct EnumVisitor<'a> {
+pub struct EnumVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
+    interner: &'interner ThreadedRodeo,
     in_enums_section: bool,
 }
 
-impl<'a> EnumVisitor<'a> {
+impl<'a, 'interner> EnumVisitor<'a, 'interner> {
     /// Create a new enum visitor
-    pub fn new(data: &'a mut CwtAnalysisData) -> Self {
+    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
         Self {
             data,
+            interner,
             in_enums_section: false,
         }
     }
@@ -60,9 +63,9 @@ impl<'a> EnumVisitor<'a> {
 
         if let Some(name) = enum_name {
             if is_complex {
-                self.process_complex_enum(&name, rule);
+                self.process_complex_enum(name, rule);
             } else {
-                self.process_simple_enum(&name, rule);
+                self.process_simple_enum(name, rule);
             }
         } else {
             self.data.errors.push(ConversionError::InvalidEnumFormat);
@@ -70,13 +73,13 @@ impl<'a> EnumVisitor<'a> {
     }
 
     /// Extract the enum name from a rule
-    fn extract_enum_name(&self, rule: &AstCwtRule) -> Option<String> {
+    fn extract_enum_name(&self, rule: &AstCwtRule) -> Option<Spur> {
         if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
             if matches!(
                 identifier.identifier_type,
                 CwtReferenceType::Enum | CwtReferenceType::ComplexEnum
             ) {
-                return Some(identifier.name.raw_value().to_string());
+                return Some(self.interner.get_or_intern(identifier.name.raw_value()));
             }
         }
 
@@ -93,7 +96,7 @@ impl<'a> EnumVisitor<'a> {
     }
 
     /// Process a simple enum definition
-    fn process_simple_enum(&mut self, enum_name: &str, rule: &AstCwtRule) {
+    fn process_simple_enum(&mut self, enum_name: Spur, rule: &AstCwtRule) {
         let mut enum_def = EnumDefinition {
             values: HashSet::new(),
             complex: None,
@@ -101,46 +104,56 @@ impl<'a> EnumVisitor<'a> {
 
         // Extract enum values from the block
         if let CwtValue::Block(block) = &rule.value {
-            Self::extract_enum_values(&mut enum_def, block);
+            Self::extract_enum_values(&mut enum_def, block, self.interner);
         }
 
-        self.data.enums.insert(enum_name.to_string(), enum_def);
+        self.data.enums.insert(enum_name, enum_def);
     }
 
     /// Process a complex enum definition
-    fn process_complex_enum(&mut self, enum_name: &str, rule: &AstCwtRule) {
+    fn process_complex_enum(&mut self, enum_name: Spur, rule: &AstCwtRule) {
         let mut enum_def = EnumDefinition {
             values: HashSet::new(),
             complex: Some(ComplexEnumDefinition {
-                path: String::new(),
-                name_structure: CwtConverter::convert_value(&rule.value, None),
+                path: self.interner.get_or_intern(""),
+                name_structure: CwtConverter::convert_value(&rule.value, None, self.interner),
                 start_from_root: false,
             }),
         };
 
         // Extract complex enum configuration
         if let CwtValue::Block(block) = &rule.value {
-            Self::extract_complex_enum_config(&mut enum_def, block);
+            Self::extract_complex_enum_config(&mut enum_def, block, self.interner);
         }
 
-        self.data.enums.insert(enum_name.to_string(), enum_def);
+        self.data.enums.insert(enum_name, enum_def);
     }
 
     /// Extract enum values from an enum definition block
-    fn extract_enum_values(enum_def: &mut EnumDefinition, block: &AstCwtBlock) {
+    fn extract_enum_values(
+        enum_def: &mut EnumDefinition,
+        block: &AstCwtBlock,
+        interner: &ThreadedRodeo,
+    ) {
         for item in &block.items {
             match item {
                 AstCwtExpression::Value(s) => match s {
                     CwtValue::String(s) => {
-                        enum_def.values.insert(s.raw_value().to_lowercase());
+                        enum_def
+                            .values
+                            .insert(interner.get_or_intern(s.raw_value()));
                     }
                     CwtValue::Identifier(id) => {
-                        enum_def.values.insert(id.name.raw_value().to_lowercase());
+                        enum_def
+                            .values
+                            .insert(interner.get_or_intern(id.name.raw_value()));
                     }
                     _ => {}
                 },
                 AstCwtExpression::Identifier(id) => {
-                    enum_def.values.insert(id.name.raw_value().to_lowercase());
+                    enum_def
+                        .values
+                        .insert(interner.get_or_intern(id.name.raw_value()));
                 }
                 _ => {}
             }
@@ -148,7 +161,11 @@ impl<'a> EnumVisitor<'a> {
     }
 
     /// Extract complex enum configuration
-    fn extract_complex_enum_config(enum_def: &mut EnumDefinition, block: &AstCwtBlock) {
+    fn extract_complex_enum_config(
+        enum_def: &mut EnumDefinition,
+        block: &AstCwtBlock,
+        interner: &ThreadedRodeo,
+    ) {
         if let Some(ref mut complex) = enum_def.complex {
             for item in &block.items {
                 if let cw_parser::cwt::AstCwtExpression::Rule(rule) = item {
@@ -156,7 +173,7 @@ impl<'a> EnumVisitor<'a> {
                     match key {
                         "path" => {
                             if let CwtValue::String(s) = &rule.value {
-                                complex.path = s.raw_value().to_string();
+                                complex.path = interner.get_or_intern(s.raw_value());
                             }
                         }
                         "start_from_root" => {
@@ -167,7 +184,8 @@ impl<'a> EnumVisitor<'a> {
                             }
                         }
                         "name" => {
-                            complex.name_structure = CwtConverter::convert_value(&rule.value, None);
+                            complex.name_structure =
+                                CwtConverter::convert_value(&rule.value, None, interner);
                         }
                         _ => {}
                     }
@@ -177,7 +195,7 @@ impl<'a> EnumVisitor<'a> {
     }
 }
 
-impl<'a> CwtVisitor<'a> for EnumVisitor<'a> {
+impl<'a, 'interner> CwtVisitor<'a> for EnumVisitor<'a, 'interner> {
     fn visit_rule(&mut self, rule: &AstCwtRule<'a>) {
         if self.can_handle_rule(rule) {
             self.process_enum_definition(rule);

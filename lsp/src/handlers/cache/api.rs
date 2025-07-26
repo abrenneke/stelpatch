@@ -1,9 +1,12 @@
+use crate::interner::get_interner;
+
 use super::core::TypeCache;
 use super::types::TypeInfo;
 use cw_parser;
+use lasso::Spur;
 
 /// Get type information for a namespace entity (top-level entity structure)
-pub fn get_namespace_entity_type(namespace: &str, file_path: Option<&str>) -> Option<TypeInfo> {
+pub fn get_namespace_entity_type(namespace: Spur, file_path: Option<&str>) -> Option<TypeInfo> {
     if !TypeCache::is_initialized() {
         return Some(TypeInfo {
             property_path: "entity".to_string(),
@@ -14,6 +17,7 @@ pub fn get_namespace_entity_type(namespace: &str, file_path: Option<&str>) -> Op
     }
 
     let cache = TypeCache::get().unwrap();
+    let interner = get_interner();
 
     if let Some(namespace_type) = cache.get_namespace_type(namespace, file_path) {
         let scoped_type = namespace_type.clone();
@@ -21,14 +25,20 @@ pub fn get_namespace_entity_type(namespace: &str, file_path: Option<&str>) -> Op
             property_path: "entity".to_string(),
             scoped_type: Some(scoped_type),
             documentation: None,
-            source_info: Some(format!("Entity structure for {} namespace", namespace)),
+            source_info: Some(format!(
+                "Entity structure for {} namespace",
+                interner.resolve(&namespace)
+            )),
         })
     } else {
         Some(TypeInfo {
             property_path: "entity".to_string(),
             scoped_type: None,
             documentation: None,
-            source_info: Some(format!("Namespace {} not found in type system", namespace)),
+            source_info: Some(format!(
+                "Namespace {} not found in type system",
+                interner.resolve(&namespace)
+            )),
         })
     }
 }
@@ -44,7 +54,7 @@ pub fn get_namespace_entity_type(namespace: &str, file_path: Option<&str>) -> Op
 /// Use this method when you have access to the actual AST entity and need precise type information.
 /// Use `get_entity_property_type` for simple string-based property lookups without AST context.
 pub fn get_entity_property_type_from_ast(
-    namespace: &str,
+    namespace: Spur,
     entity: &cw_parser::AstEntity<'_>,
     property_path: &str,
     file_path: Option<&str>,

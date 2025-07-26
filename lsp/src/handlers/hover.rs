@@ -10,6 +10,7 @@ use crate::handlers::common_validation::{
     detect_skip_root_key_container, filter_and_narrow_entity_type, find_entity_in_module,
     find_nested_entity_in_container, is_type_per_file_namespace, validate_namespace_and_caches,
 };
+use crate::interner::get_interner;
 
 use super::document_cache::DocumentCache;
 use super::scoped_type::PropertyNavigationResult;
@@ -176,6 +177,7 @@ pub fn hover(
     let namespace = validation_context.namespace;
     let namespace_type = validation_context.namespace_type;
     let type_cache = TypeCache::get().unwrap();
+    let interner = get_interner();
 
     // Find the property at the given position
     let mut builder = PropertyPathBuilder::new(offset, cached_document.borrow_input());
@@ -196,7 +198,7 @@ pub fn hover(
         let type_info = if is_type_per_file {
             // For type_per_file, all properties are properties of the file-level entity
             if let Ok(ast) = cached_document.borrow_ast() {
-                let entity = entity_from_module_ast(ast);
+                let entity = entity_from_module_ast(ast, get_interner());
 
                 // Apply subtype narrowing at the file level
                 let validation_type =
@@ -216,7 +218,7 @@ pub fn hover(
 
                     match type_cache
                         .get_resolver()
-                        .navigate_to_property(current_type, part)
+                        .navigate_to_property(current_type, interner.get_or_intern(part))
                     {
                         PropertyNavigationResult::Success(property_type) => {
                             current_type = property_type;
@@ -241,13 +243,16 @@ pub fn hover(
             }
         } else if is_top_level_key {
             // For top-level keys, show contextual information about the entity type
-            let entity_name = property_path;
+            let entity_name = interner.get_or_intern(property_path);
 
             // Check if this is a skip_root_key container using common validation
             let skip_root_key_result = detect_skip_root_key_container(&namespace_type, entity_name);
             let container_info = if skip_root_key_result.is_skip_root_key_container {
                 if let Some(type_name) = skip_root_key_result.matching_type_name {
-                    Some(format!("Container for {} entities", type_name))
+                    Some(format!(
+                        "Container for {} entities",
+                        interner.resolve(&type_name)
+                    ))
                 } else {
                     Some("Container entity".to_string())
                 }
@@ -261,14 +266,17 @@ pub fn hover(
                     property_path: property_path.clone(),
                     scoped_type: None,
                     documentation: Some(info),
-                    source_info: Some(format!("From namespace: {}", namespace)),
+                    source_info: Some(format!("From namespace: {}", interner.resolve(&namespace))),
                 })
             } else {
                 // Regular entity - show the namespace context
                 Some(TypeInfo {
                     property_path: property_path.clone(),
                     scoped_type: None,
-                    documentation: Some(format!("Entity in {} namespace", namespace)),
+                    documentation: Some(format!(
+                        "Entity in {} namespace",
+                        interner.resolve(&namespace)
+                    )),
                     source_info: None,
                 })
             }
@@ -281,7 +289,7 @@ pub fn hover(
 
                 // Use the entity context found by PropertyPathBuilder
                 if let Some(entity_context) = builder.found_entity_context {
-                    let container_key = property_parts[0];
+                    let container_key = interner.get_or_intern(property_parts[0]);
 
                     // Check for skip_root_key using common validation
                     let skip_root_key_result =
@@ -293,7 +301,7 @@ pub fn hover(
                         && property_parts.len() >= 2
                     {
                         // Skip root key: filter by nested entity key directly, not container key
-                        let nested_entity_key = property_parts[1];
+                        let nested_entity_key = interner.get_or_intern(property_parts[1]);
                         let nested_property_path = if property_parts.len() > 2 {
                             property_parts[2..].join(".")
                         } else {
@@ -317,7 +325,7 @@ pub fn hover(
                         if let Some(nested_ast_entity) = nested_entity_context {
                             let validation_type = filter_and_narrow_entity_type(
                                 namespace_type.clone(),
-                                &namespace,
+                                namespace,
                                 container_key,
                                 nested_entity_key,
                                 nested_ast_entity,
@@ -332,7 +340,7 @@ pub fn hover(
                         let entity_key = container_key;
                         let validation_type = filter_and_narrow_entity_type(
                             namespace_type.clone(),
-                            &namespace,
+                            namespace,
                             container_key,
                             entity_key,
                             entity_context,
@@ -353,7 +361,7 @@ pub fn hover(
 
                             match type_cache
                                 .get_resolver()
-                                .navigate_to_property(current_type, part)
+                                .navigate_to_property(current_type, interner.get_or_intern(part))
                             {
                                 PropertyNavigationResult::Success(property_type) => {
                                     current_type = property_type;
@@ -378,7 +386,7 @@ pub fn hover(
                     // Fallback: try to find the entity in the AST using common utilities
                     let mut found_entity_type = None;
                     if let Ok(ast) = cached_document.borrow_ast() {
-                        let entity_name = property_parts[0];
+                        let entity_name = interner.get_or_intern(property_parts[0]);
 
                         // Find the entity using common utility function
                         if let Some(ast_entity) =
@@ -386,7 +394,7 @@ pub fn hover(
                         {
                             // Found the right entity context - use AST-based resolution
                             found_entity_type = get_entity_property_type_from_ast(
-                                &namespace,
+                                namespace,
                                 ast_entity,
                                 &actual_property_path,
                                 Some(&uri),

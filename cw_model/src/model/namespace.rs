@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use lasso::Spur;
+
 use crate::{EntityMergeMode, Module, Properties, Value};
 
 /// A Namespace is the path to the folder containing module files in the `common` directory. Maybe other directories too.
@@ -43,7 +45,7 @@ impl Namespace {
         self.modules.get(module_name)
     }
 
-    pub fn get_only(&self, key: &str) -> Option<&Value> {
+    pub fn get_only(&self, key: &Spur) -> Option<&Value> {
         if let Some(value) = self.properties.kv.get(key) {
             if value.0.len() == 1 {
                 return Some(&value.0[0].value);

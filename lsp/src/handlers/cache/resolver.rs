@@ -1,8 +1,10 @@
 use crate::handlers::scope::ScopeStack;
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
+use crate::interner::get_interner;
 use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType};
-use cw_model::{CwtType, Entity, EnumDefinition, LowerCaseHashMap, ReferenceType};
-use std::collections::HashSet;
+use cw_model::{CwtType, Entity, EnumDefinition, ReferenceType};
+use lasso::Spur;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -89,7 +91,7 @@ impl TypeResolver {
     /// Returns Some(description) if valid, None if invalid
     pub fn is_valid_scope_or_link_property(
         &self,
-        property_name: &str,
+        property_name: Spur,
         scope_stack: &ScopeStack,
     ) -> Option<String> {
         self.scope_handler
@@ -97,7 +99,7 @@ impl TypeResolver {
     }
 
     /// Get all available scope properties and link properties for the current scope
-    pub fn get_available_scope_and_link_properties(&self, scope_stack: &ScopeStack) -> Vec<String> {
+    pub fn get_available_scope_and_link_properties(&self, scope_stack: &ScopeStack) -> Vec<Spur> {
         self.scope_handler
             .get_available_scope_and_link_properties(scope_stack)
     }
@@ -105,7 +107,7 @@ impl TypeResolver {
     pub fn navigate_to_property(
         &self,
         scoped_type: Arc<ScopedType>,
-        property_name: &str,
+        property_name: Spur,
     ) -> PropertyNavigationResult {
         let resolved_type = self.resolve_type(scoped_type);
 
@@ -116,14 +118,14 @@ impl TypeResolver {
     /// Check if a key matches any pattern property in a block
     pub fn key_matches_pattern<'a>(
         &self,
-        key: &str,
+        key: Spur,
         block_type: &'a cw_model::types::BlockType,
     ) -> Option<&'a PatternProperty> {
         self.pattern_matcher.key_matches_pattern(key, block_type)
     }
 
     /// Check if a key matches a specific pattern type
-    pub fn key_matches_pattern_type(&self, key: &str, pattern_type: &PatternType) -> bool {
+    pub fn key_matches_pattern_type(&self, key: Spur, pattern_type: &PatternType) -> bool {
         self.pattern_matcher
             .key_matches_pattern_type(key, pattern_type)
     }
@@ -137,13 +139,13 @@ impl TypeResolver {
         &self,
         ref_type: &ReferenceType,
         scope_stack: &ScopeStack,
-        in_scripted_effect_block: Option<String>,
+        in_scripted_effect_block: Option<Spur>,
     ) -> Arc<CwtType> {
         let cache_key = format!(
             "{}-{}-{}",
             ref_type.id(),
             scope_stack.to_string(),
-            in_scripted_effect_block.clone().unwrap_or_default()
+            get_interner().resolve(&in_scripted_effect_block.clone().unwrap_or_default())
         );
 
         // Check if we already have this reference type cached
@@ -176,17 +178,17 @@ impl TypeResolver {
         self.scope_handler.get_all_scope_properties()
     }
 
-    pub fn get_all_link_properties(&self) -> Vec<String> {
+    pub fn get_all_link_properties(&self) -> Vec<Spur> {
         self.scope_handler.get_all_link_properties()
     }
 
     /// Get all available link properties for the current scope
-    pub fn get_scope_link_properties(&self, scope: &str) -> Vec<String> {
+    pub fn get_scope_link_properties(&self, scope: Spur) -> Vec<Spur> {
         self.scope_handler.get_scope_link_properties(scope)
     }
 
     /// Check if a property name is a link property for the current scope
-    pub fn is_link_property(&self, property_name: &str, scope: &str) -> Option<&LinkDefinition> {
+    pub fn is_link_property(&self, property_name: Spur, scope: Spur) -> Option<&LinkDefinition> {
         self.scope_handler.is_link_property(property_name, scope)
     }
 
@@ -197,12 +199,12 @@ impl TypeResolver {
     }
 
     /// Get all available subtypes for a given type
-    pub fn get_available_subtypes(&self, cwt_type: &CwtType) -> Vec<String> {
+    pub fn get_available_subtypes(&self, cwt_type: &CwtType) -> Vec<Spur> {
         self.subtype_handler.get_available_subtypes(cwt_type)
     }
 
     /// Check if a type has a specific subtype
-    pub fn has_subtype(&self, cwt_type: &CwtType, subtype_name: &str) -> bool {
+    pub fn has_subtype(&self, cwt_type: &CwtType, subtype_name: Spur) -> bool {
         self.subtype_handler.has_subtype(cwt_type, subtype_name)
     }
 
@@ -210,7 +212,7 @@ impl TypeResolver {
     pub fn get_subtype_definition<'a>(
         &self,
         cwt_type: &'a CwtType,
-        subtype_name: &str,
+        subtype_name: Spur,
     ) -> Option<&'a cw_model::types::Subtype> {
         self.subtype_handler
             .get_subtype_definition(cwt_type, subtype_name)
@@ -221,13 +223,13 @@ impl TypeResolver {
         &self,
         scoped_type: Arc<ScopedType>,
         entity: &Entity,
-    ) -> HashSet<String> {
+    ) -> HashSet<Spur> {
         self.subtype_handler
             .determine_matching_subtypes(scoped_type, entity)
     }
 
     /// Get all enum definitions from the CWT analyzer
-    pub fn get_enums(&self) -> &LowerCaseHashMap<EnumDefinition> {
+    pub fn get_enums(&self) -> &HashMap<Spur, EnumDefinition> {
         self.cwt_analyzer.get_enums()
     }
 }

@@ -1,6 +1,7 @@
 use super::utils::log_message_sync;
 use crate::base_game::GAME_INSTALL_PATH;
-use anyhow::{anyhow, Result};
+use crate::interner::get_interner;
+use anyhow::{Result, anyhow};
 use cw_model::{GameMod, LoadMode, ModDefinition};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -97,7 +98,7 @@ pub fn load_mod_from_descriptor_with_dependencies(
     load_mod_dependencies(&mod_definition, client, loaded_mods)?;
 
     // Load the mod using the existing GameMod::load functionality
-    let game_mod = GameMod::load(mod_definition, LoadMode::Parallel)?;
+    let game_mod = GameMod::load(mod_definition, LoadMode::Parallel, get_interner())?;
 
     // Add to loaded mods cache
     loaded_mods.insert(game_mod.definition.name.clone(), game_mod.clone());
@@ -129,7 +130,7 @@ pub fn load_mod_from_descriptor(descriptor_path: &Path, client: &Client) -> Resu
     mod_definition.path = Some(mod_dir.to_path_buf());
 
     // Load the mod using the existing GameMod::load functionality
-    let game_mod = GameMod::load(mod_definition, LoadMode::Parallel)?;
+    let game_mod = GameMod::load(mod_definition, LoadMode::Parallel, get_interner())?;
 
     log_message_sync(
         client,

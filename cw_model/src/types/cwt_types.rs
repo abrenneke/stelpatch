@@ -3,9 +3,13 @@
 //! This module provides a direct representation of CWT types and definitions,
 //! closely aligned with the CWT specification rather than inferred types.
 
-use crate::{LowerCaseHashMap, SeverityLevel, TypeKeyFilter};
+use crate::{SeverityLevel, TypeKeyFilter};
 use cw_parser::{AstCwtRule, CwtCommentRangeBound};
-use std::{collections::HashSet, sync::Arc};
+use lasso::{Spur, ThreadedRodeo};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 /// Trait for generating unique fingerprints for types to enable deduplication
 pub trait TypeFingerprint {
@@ -35,10 +39,10 @@ pub enum CwtType {
     Union(Vec<Arc<CwtType>>),
 
     /// Literal string values
-    Literal(String),
+    Literal(Spur),
 
     /// Set of literal values
-    LiteralSet(HashSet<String>),
+    LiteralSet(HashSet<Spur>),
 
     /// Comparable types (for triggers with == operator)
     Comparable(Box<Arc<CwtType>>),
@@ -55,30 +59,31 @@ impl CwtType {
         }
     }
 
-    pub fn get_type_name(&self) -> &str {
+    pub fn get_type_name(&self) -> Spur {
         match self {
-            CwtType::Simple(_) => "",
-            CwtType::Reference(_) => "",
-            CwtType::Block(block_type) => &block_type.type_name,
-            CwtType::Unknown => "",
-            CwtType::Array(_) => "",
-            CwtType::Union(_) => "",
-            CwtType::Literal(_) => "",
-            CwtType::LiteralSet(_) => "",
-            CwtType::Comparable(_) => "",
-            CwtType::Any => "",
+            CwtType::Simple(_) => Spur::default(),
+            CwtType::Reference(_) => Spur::default(),
+            CwtType::Block(block_type) => block_type.type_name,
+            CwtType::Unknown => Spur::default(),
+            CwtType::Array(_) => Spur::default(),
+            CwtType::Union(_) => Spur::default(),
+            CwtType::Literal(_) => Spur::default(),
+            CwtType::LiteralSet(_) => Spur::default(),
+            CwtType::Comparable(_) => Spur::default(),
+            CwtType::Any => Spur::default(),
         }
     }
 
-    pub fn type_name_for_display(&self) -> String {
+    pub fn type_name_for_display(&self, interner: &ThreadedRodeo) -> String {
         match self {
             CwtType::Simple(_) => "(simple)".to_string(),
             CwtType::Reference(_) => "(reference)".to_string(),
             CwtType::Block(block_type) => {
-                if block_type.type_name.is_empty() {
+                let resolved = interner.resolve(&block_type.type_name);
+                if resolved.is_empty() {
                     "(anonymous block)".to_string()
                 } else {
-                    block_type.type_name.clone()
+                    resolved.to_string()
                 }
             }
             CwtType::Unknown => "(unknown)".to_string(),
@@ -89,7 +94,7 @@ impl CwtType {
                 } else {
                     union
                         .iter()
-                        .map(|t| t.type_name_for_display())
+                        .map(|t| t.type_name_for_display(interner))
                         .collect::<Vec<_>>()
                         .join(" | ")
                 }
@@ -253,19 +258,19 @@ impl ReferenceType {
 /// Block/object types with properties and subtypes
 #[derive(Clone, PartialEq)]
 pub struct BlockType {
-    pub type_name: String,
+    pub type_name: Spur,
 
     /// Regular properties
-    pub properties: LowerCaseHashMap<Property>,
+    pub properties: HashMap<Spur, Property>,
 
     /// Subtypes - conditional property sets
-    pub subtypes: LowerCaseHashMap<Subtype>,
+    pub subtypes: HashMap<Spur, Subtype>,
 
     /// Subtype properties - subtype_name -> property_name -> Property
-    pub subtype_properties: LowerCaseHashMap<LowerCaseHashMap<Property>>,
+    pub subtype_properties: HashMap<Spur, HashMap<Spur, Property>>,
 
     /// Subtype pattern properties - subtype_name -> pattern_property
-    pub subtype_pattern_properties: LowerCaseHashMap<Vec<PatternProperty>>,
+    pub subtype_pattern_properties: HashMap<Spur, Vec<PatternProperty>>,
 
     /// Pattern properties - properties that can match multiple keys but maintain unified cardinality
     pub pattern_properties: Vec<PatternProperty>,
@@ -289,7 +294,7 @@ impl std::fmt::Debug for BlockType {
         } else {
             write!(f, "properties: {{ ")?;
             for (key, property) in &self.properties {
-                write!(f, "{}: {:?}, ", key, property)?;
+                write!(f, "{:?}: {:?}, ", key, property)?;
             }
             write!(f, " }}")?;
         }
@@ -297,7 +302,7 @@ impl std::fmt::Debug for BlockType {
         if !self.subtypes.is_empty() {
             write!(f, "subtypes: {{ ")?;
             for (key, subtype) in &self.subtypes {
-                write!(f, "{}: {:?}, ", key, subtype)?;
+                write!(f, "{:?}: {:?}, ", key, subtype)?;
             }
             write!(f, " }}")?;
         }
@@ -305,9 +310,9 @@ impl std::fmt::Debug for BlockType {
         if !self.subtype_properties.is_empty() {
             write!(f, "subtype_properties: {{ ")?;
             for (key, properties) in &self.subtype_properties {
-                write!(f, "{}: {{ ", key)?;
+                write!(f, "{:?}: {{ ", key)?;
                 for (prop_key, prop) in properties {
-                    write!(f, "{}: {:?}, ", prop_key, prop)?;
+                    write!(f, "{:?}: {:?}, ", prop_key, prop)?;
                 }
             }
         }
@@ -371,10 +376,10 @@ impl std::fmt::Debug for PatternProperty {
 
         match &self.pattern_type {
             PatternType::AliasName { category } => {
-                write!(f, "alias_name[{}]{}{}", category, options, documentation)
+                write!(f, "alias_name[{:?}]{}{}", category, options, documentation)
             }
-            PatternType::Enum { key } => write!(f, "enum[{}]{}{}", key, options, documentation),
-            PatternType::Type { key } => write!(f, "<{}>{}{}", key, options, documentation),
+            PatternType::Enum { key } => write!(f, "enum[{:?}]{}{}", key, options, documentation),
+            PatternType::Type { key } => write!(f, "<{:?}>{}{}", key, options, documentation),
         }
     }
 }
@@ -382,9 +387,9 @@ impl std::fmt::Debug for PatternProperty {
 impl std::fmt::Display for PatternProperty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.pattern_type {
-            PatternType::AliasName { category } => write!(f, "alias_name[{}]", category),
-            PatternType::Enum { key } => write!(f, "enum[{}]", key),
-            PatternType::Type { key } => write!(f, "<{}>", key),
+            PatternType::AliasName { category } => write!(f, "alias_name[{:?}]", category),
+            PatternType::Enum { key } => write!(f, "enum[{:?}]", key),
+            PatternType::Type { key } => write!(f, "<{:?}>", key),
         }
     }
 }
@@ -393,21 +398,21 @@ impl std::fmt::Display for PatternProperty {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PatternType {
     /// alias_name[category] - matches any alias name from the category
-    AliasName { category: String },
+    AliasName { category: Spur },
 
     /// enum[key] - matches any enum value from the key
-    Enum { key: String },
+    Enum { key: Spur },
 
     /// <type_key> - matches any type from the key
-    Type { key: String },
+    Type { key: Spur },
 }
 
 impl PatternType {
     pub fn id(&self) -> String {
         match self {
-            PatternType::AliasName { category } => format!("alias_name[{}]", category),
-            PatternType::Enum { key } => format!("enum[{}]", key),
-            PatternType::Type { key } => format!("<{}>", key),
+            PatternType::AliasName { category } => format!("alias_name[{:?}]", category),
+            PatternType::Enum { key } => format!("enum[{:?}]", key),
+            PatternType::Type { key } => format!("<{:?}>", key),
         }
     }
 }
@@ -420,67 +425,85 @@ impl PatternType {
 #[derive(Debug, Clone)]
 pub struct AliasPattern {
     /// Full text for hashing, e.g. "foo:<type_name>" or "foo:x"
-    pub full_text: String,
+    pub full_text: Spur,
 
     /// Category of the alias, e.g. "foo"
-    pub category: String,
+    pub category: Spur,
 
     /// Name of the alias, either a static name or a dynamic name
     pub name: AliasName,
 }
 
 impl AliasPattern {
-    pub fn new_basic(category: &str, name: &str) -> Self {
+    pub fn new_basic(category: Spur, name: Spur, interner: &ThreadedRodeo) -> Self {
         Self {
-            full_text: format!("{}:{}", category, name),
-            category: category.to_string(),
-            name: AliasName::Static(name.to_string()),
+            full_text: interner.get_or_intern(format!(
+                "{}:{}",
+                interner.resolve(&category),
+                interner.resolve(&name)
+            )),
+            category: category,
+            name: AliasName::Static(name),
         }
     }
 
-    pub fn new_type_ref(category: &str, name: &str) -> Self {
+    pub fn new_type_ref(category: Spur, name: Spur, interner: &ThreadedRodeo) -> Self {
         Self {
-            full_text: format!("{}:{}", category, name),
-            category: category.to_string(),
-            name: AliasName::TypeRef(name.to_string()),
+            full_text: interner.get_or_intern(format!(
+                "{}:{}",
+                interner.resolve(&category),
+                interner.resolve(&name)
+            )),
+            category: category,
+            name: AliasName::TypeRef(name),
         }
     }
 
-    pub fn new_enum(category: &str, name: &str) -> Self {
+    pub fn new_enum(category: Spur, name: Spur, interner: &ThreadedRodeo) -> Self {
         Self {
-            full_text: format!("{}:{}", category, name),
-            category: category.to_string(),
-            name: AliasName::Enum(name.to_string()),
+            full_text: interner.get_or_intern(format!(
+                "{}:{}",
+                interner.resolve(&category),
+                interner.resolve(&name)
+            )),
+            category: category,
+            name: AliasName::Enum(name),
         }
     }
 
     pub fn new_type_ref_with_prefix_suffix(
-        category: &str,
-        name: &str,
-        prefix: Option<&str>,
-        suffix: Option<&str>,
+        category: Spur,
+        name: Spur,
+        prefix: Option<Spur>,
+        suffix: Option<Spur>,
+        interner: &ThreadedRodeo,
     ) -> Self {
         let formatted_name = match (prefix, suffix) {
-            (Some(p), Some(s)) => format!("{}{}{}", p, name, s),
-            (Some(p), None) => format!("{}{}", p, name),
-            (None, Some(s)) => format!("{}{}", name, s),
-            (None, None) => name.to_string(),
+            (Some(p), Some(s)) => format!(
+                "{}{}{}",
+                interner.resolve(&p),
+                interner.resolve(&name),
+                interner.resolve(&s)
+            ),
+            (Some(p), None) => format!("{}{}", interner.resolve(&p), interner.resolve(&name)),
+            (None, Some(s)) => format!("{}{}", interner.resolve(&name), interner.resolve(&s)),
+            (None, None) => interner.resolve(&name).to_string(),
         };
         Self {
-            full_text: format!("{}:{}", category, formatted_name),
-            category: category.to_string(),
-            name: AliasName::TypeRefWithPrefixSuffix(
-                name.to_string(),
-                prefix.map(|s| s.to_string()),
-                suffix.map(|s| s.to_string()),
-            ),
+            full_text: interner.get_or_intern(format!(
+                "{}:{}",
+                interner.resolve(&category),
+                formatted_name
+            )),
+            category: category,
+            name: AliasName::TypeRefWithPrefixSuffix(name, prefix, suffix),
         }
     }
 }
 
 impl std::fmt::Display for AliasPattern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.full_text)
+        write!(f, "{:?}", self.full_text)
     }
 }
 
@@ -500,10 +523,10 @@ impl Eq for AliasPattern {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AliasName {
-    Static(String),
-    TypeRef(String),
-    TypeRefWithPrefixSuffix(String, Option<String>, Option<String>),
-    Enum(String),
+    Static(Spur),
+    TypeRef(Spur),
+    TypeRefWithPrefixSuffix(Spur, Option<Spur>, Option<Spur>),
+    Enum(Spur),
 }
 
 /// A property in a block type
@@ -516,7 +539,7 @@ pub struct Property {
     pub options: CwtOptions,
 
     /// Documentation
-    pub documentation: Option<String>,
+    pub documentation: Option<Spur>,
 }
 
 impl std::fmt::Debug for Property {
@@ -538,11 +561,11 @@ impl std::fmt::Debug for Property {
 pub struct Subtype {
     /// CWT schema condition properties with cardinality constraints
     /// These define the rules for when this subtype matches (e.g., is_origin = no with cardinality 0..1)
-    pub condition_properties: LowerCaseHashMap<Property>,
+    pub condition_properties: HashMap<Spur, Property>,
 
     /// Game data properties that are allowed when this subtype is active
     /// These are discovered from analyzing actual game files (e.g., traits, playable, etc.)
-    pub allowed_properties: LowerCaseHashMap<Property>,
+    pub allowed_properties: HashMap<Spur, Property>,
 
     /// Pattern properties that are allowed when this subtype is active
     pub allowed_pattern_properties: Vec<PatternProperty>,
@@ -631,41 +654,41 @@ pub struct CwtOptions {
     pub severity: Option<SeverityLevel>,
 
     /// Display name
-    pub display_name: Option<String>,
+    pub display_name: Option<Spur>,
 
     /// Abbreviation
-    pub abbreviation: Option<String>,
+    pub abbreviation: Option<Spur>,
 
     /// Starts with constraint
-    pub starts_with: Option<String>,
+    pub starts_with: Option<Spur>,
 
     /// Push scope
-    pub push_scope: Option<String>,
+    pub push_scope: Option<Spur>,
 
     /// Replace scope mappings
-    pub replace_scope: Option<LowerCaseHashMap<String>>,
+    pub replace_scope: Option<HashMap<Spur, Spur>>,
 
     /// Scope constraint
-    pub scope: Option<Vec<String>>,
+    pub scope: Option<Vec<Spur>>,
 
     /// Type key filter
     pub type_key_filter: Option<TypeKeyFilter>,
 
     /// Graph related types
-    pub graph_related_types: Option<Vec<String>>,
+    pub graph_related_types: Option<Vec<Spur>>,
 
     /// Unique constraint
     pub unique: bool,
 
     /// Skip root key configurations
-    pub skip_root_key: Option<Vec<String>>,
+    pub skip_root_key: Option<Vec<Spur>>,
 
     /// Path constraints
     pub path_strict: bool,
 
-    pub path_file: Option<String>,
+    pub path_file: Option<Spur>,
 
-    pub path_extension: Option<String>,
+    pub path_extension: Option<Spur>,
 
     /// Type per file
     pub type_per_file: bool,
@@ -754,29 +777,29 @@ impl std::fmt::Debug for CwtOptions {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalisationSpec {
     /// Required localisation keys
-    pub required: LowerCaseHashMap<String>,
+    pub required: HashMap<Spur, Spur>,
     /// Optional localisation keys
-    pub optional: LowerCaseHashMap<String>,
+    pub optional: HashMap<Spur, Spur>,
     /// Primary localisation key
     pub primary: Option<String>,
     /// Subtype-specific localisation
-    pub subtypes: LowerCaseHashMap<LowerCaseHashMap<String>>,
+    pub subtypes: HashMap<Spur, HashMap<Spur, Spur>>,
 }
 
 /// Modifier generation specification
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModifierSpec {
     /// Modifier patterns
-    pub modifiers: LowerCaseHashMap<String>,
+    pub modifiers: HashMap<Spur, Spur>,
     /// Subtype-specific modifiers
-    pub subtypes: LowerCaseHashMap<LowerCaseHashMap<String>>,
+    pub subtypes: HashMap<Spur, HashMap<Spur, Spur>>,
 }
 
 impl Default for ModifierSpec {
     fn default() -> Self {
         Self {
-            modifiers: LowerCaseHashMap::new(),
-            subtypes: LowerCaseHashMap::new(),
+            modifiers: HashMap::new(),
+            subtypes: HashMap::new(),
         }
     }
 }
@@ -868,11 +891,11 @@ impl TypeFingerprint for CwtType {
                 type_fingerprints.sort();
                 format!("union:{}", type_fingerprints.join("|"))
             }
-            CwtType::Literal(value) => format!("literal:{}", value),
+            CwtType::Literal(value) => format!("literal:{:?}", value),
             CwtType::LiteralSet(values) => {
-                let mut sorted_values: Vec<String> = values.iter().cloned().collect();
+                let mut sorted_values: Vec<Spur> = values.iter().cloned().collect();
                 sorted_values.sort();
-                format!("literal_set:{}", sorted_values.join("|"))
+                format!("literal_set:{:?}", sorted_values)
             }
             CwtType::Comparable(base_type) => format!("comparable:{}", base_type.fingerprint()),
             CwtType::Any => "any".to_string(),
@@ -951,7 +974,7 @@ impl TypeFingerprint for BlockType {
             let mut prop_fingerprints: Vec<String> = self
                 .properties
                 .iter()
-                .map(|(k, v)| format!("{}:{}", k, v.fingerprint()))
+                .map(|(k, v)| format!("{:?}:{}", k, v.fingerprint()))
                 .collect();
             prop_fingerprints.sort();
             parts.push(format!("props:{}", prop_fingerprints.join(",")));
@@ -962,7 +985,7 @@ impl TypeFingerprint for BlockType {
             let mut subtype_fingerprints: Vec<String> = self
                 .subtypes
                 .iter()
-                .map(|(k, v)| format!("{}:{}", k, v.fingerprint()))
+                .map(|(k, v)| format!("{:?}:{}", k, v.fingerprint()))
                 .collect();
             subtype_fingerprints.sort();
             parts.push(format!("subtypes:{}", subtype_fingerprints.join(",")));
@@ -1015,9 +1038,9 @@ impl TypeFingerprint for PatternProperty {
 impl TypeFingerprint for PatternType {
     fn fingerprint(&self) -> String {
         match self {
-            PatternType::AliasName { category } => format!("alias_name:{}", category),
-            PatternType::Enum { key } => format!("enum:{}", key),
-            PatternType::Type { key } => format!("<{}>", key),
+            PatternType::AliasName { category } => format!("alias_name:{:?}", category),
+            PatternType::Enum { key } => format!("enum:{:?}", key),
+            PatternType::Type { key } => format!("<{:?}>", key),
         }
     }
 }
@@ -1043,14 +1066,14 @@ impl TypeFingerprint for Subtype {
         let mut allowed_prop_fingerprints: Vec<String> = self
             .allowed_properties
             .iter()
-            .map(|(k, v)| format!("{}:{}", k, v.fingerprint()))
+            .map(|(k, v)| format!("{:?}:{}", k, v.fingerprint()))
             .collect();
         allowed_prop_fingerprints.sort();
 
         let mut condition_prop_fingerprints: Vec<String> = self
             .condition_properties
             .iter()
-            .map(|(k, v)| format!("{}:{}", k, v.fingerprint()))
+            .map(|(k, v)| format!("{:?}:{}", k, v.fingerprint()))
             .collect();
         condition_prop_fingerprints.sort();
 
@@ -1138,29 +1161,29 @@ impl TypeFingerprint for CwtOptions {
             parts.push(format!("severity:{:?}", severity));
         }
         if let Some(display_name) = &self.display_name {
-            parts.push(format!("display_name:{}", display_name));
+            parts.push(format!("display_name:{:?}", display_name));
         }
         if let Some(abbreviation) = &self.abbreviation {
-            parts.push(format!("abbreviation:{}", abbreviation));
+            parts.push(format!("abbreviation:{:?}", abbreviation));
         }
         if let Some(starts_with) = &self.starts_with {
-            parts.push(format!("starts_with:{}", starts_with));
+            parts.push(format!("starts_with:{:?}", starts_with));
         }
         if let Some(push_scope) = &self.push_scope {
-            parts.push(format!("push_scope:{}", push_scope));
+            parts.push(format!("push_scope:{:?}", push_scope));
         }
         if let Some(replace_scope) = &self.replace_scope {
             let mut scope_parts: Vec<String> = replace_scope
                 .iter()
-                .map(|(k, v)| format!("{}:{}", k, v))
+                .map(|(k, v)| format!("{:?}:{:?}", k, v))
                 .collect();
             scope_parts.sort();
-            parts.push(format!("replace_scope:{}", scope_parts.join(",")));
+            parts.push(format!("replace_scope:{:?}", scope_parts));
         }
         if let Some(scope) = &self.scope {
             let mut scope_vec = scope.clone();
             scope_vec.sort();
-            parts.push(format!("scope:{}", scope_vec.join(",")));
+            parts.push(format!("scope:{:?}", scope_vec));
         }
         if let Some(type_key_filter) = &self.type_key_filter {
             parts.push(format!("type_key_filter:{:?}", type_key_filter));
@@ -1168,18 +1191,18 @@ impl TypeFingerprint for CwtOptions {
         if let Some(graph_related_types) = &self.graph_related_types {
             let mut grt = graph_related_types.clone();
             grt.sort();
-            parts.push(format!("graph_related_types:{}", grt.join(",")));
+            parts.push(format!("graph_related_types:{:?}", grt));
         }
         if let Some(skip_root_key) = &self.skip_root_key {
             let mut srk = skip_root_key.clone();
             srk.sort();
-            parts.push(format!("skip_root_key:{}", srk.join(",")));
+            parts.push(format!("skip_root_key:{:?}", srk));
         }
         if let Some(path_file) = &self.path_file {
-            parts.push(format!("path_file:{}", path_file));
+            parts.push(format!("path_file:{:?}", path_file));
         }
         if let Some(path_extension) = &self.path_extension {
-            parts.push(format!("path_extension:{}", path_extension));
+            parts.push(format!("path_extension:{:?}", path_extension));
         }
         if let Some(range) = &self.range {
             parts.push(format!("range:{}", range.fingerprint()));
@@ -1201,7 +1224,7 @@ impl TypeFingerprint for LocalisationSpec {
             let mut req_parts: Vec<String> = self
                 .required
                 .iter()
-                .map(|(k, v)| format!("{}:{}", k, v))
+                .map(|(k, v)| format!("{:?}:{:?}", k, v))
                 .collect();
             req_parts.sort();
             parts.push(format!("required:{}", req_parts.join(",")));
@@ -1211,7 +1234,7 @@ impl TypeFingerprint for LocalisationSpec {
             let mut opt_parts: Vec<String> = self
                 .optional
                 .iter()
-                .map(|(k, v)| format!("{}:{}", k, v))
+                .map(|(k, v)| format!("{:?}:{:?}", k, v))
                 .collect();
             opt_parts.sort();
             parts.push(format!("optional:{}", opt_parts.join(",")));
@@ -1226,10 +1249,12 @@ impl TypeFingerprint for LocalisationSpec {
                 .subtypes
                 .iter()
                 .map(|(k, v)| {
-                    let mut inner: Vec<String> =
-                        v.iter().map(|(ik, iv)| format!("{}:{}", ik, iv)).collect();
+                    let mut inner: Vec<String> = v
+                        .iter()
+                        .map(|(ik, iv)| format!("{:?}:{:?}", ik, iv))
+                        .collect();
                     inner.sort();
-                    format!("{}:{}", k, inner.join(","))
+                    format!("{:?}:{}", k, inner.join(","))
                 })
                 .collect();
             subtype_parts.sort();
@@ -1248,7 +1273,7 @@ impl TypeFingerprint for ModifierSpec {
             let mut mod_parts: Vec<String> = self
                 .modifiers
                 .iter()
-                .map(|(k, v)| format!("{}:{}", k, v))
+                .map(|(k, v)| format!("{:?}:{:?}", k, v))
                 .collect();
             mod_parts.sort();
             parts.push(format!("modifiers:{}", mod_parts.join(",")));
@@ -1259,10 +1284,12 @@ impl TypeFingerprint for ModifierSpec {
                 .subtypes
                 .iter()
                 .map(|(k, v)| {
-                    let mut inner: Vec<String> =
-                        v.iter().map(|(ik, iv)| format!("{}:{}", ik, iv)).collect();
+                    let mut inner: Vec<String> = v
+                        .iter()
+                        .map(|(ik, iv)| format!("{:?}:{:?}", ik, iv))
+                        .collect();
                     inner.sort();
-                    format!("{}:{}", k, inner.join(","))
+                    format!("{:?}:{}", k, inner.join(","))
                 })
                 .collect();
             subtype_parts.sort();
@@ -1401,22 +1428,22 @@ impl CwtType {
     }
 
     /// Create a literal value
-    pub fn literal(value: impl Into<String>) -> Self {
-        Self::Literal(value.into())
+    pub fn literal(value: Spur) -> Self {
+        Self::Literal(value)
     }
 
     /// Create a block type
-    pub fn block(name: impl Into<String>) -> BlockType {
+    pub fn block(name: Spur) -> BlockType {
         BlockType {
-            type_name: name.into(),
-            properties: LowerCaseHashMap::new(),
-            subtypes: LowerCaseHashMap::new(),
+            type_name: name,
+            properties: HashMap::new(),
+            subtypes: HashMap::new(),
             pattern_properties: Vec::new(),
-            subtype_properties: LowerCaseHashMap::new(),
+            subtype_properties: HashMap::new(),
             localisation: None,
             modifiers: None,
             additional_flags: Vec::new(),
-            subtype_pattern_properties: LowerCaseHashMap::new(),
+            subtype_pattern_properties: HashMap::new(),
         }
     }
 
@@ -1475,8 +1502,8 @@ impl Property {
     }
 
     /// Add documentation
-    pub fn with_documentation(mut self, doc: impl Into<String>) -> Self {
-        self.documentation = Some(doc.into());
+    pub fn with_documentation(mut self, doc: Spur) -> Self {
+        self.documentation = Some(doc);
         self
     }
 
@@ -1558,55 +1585,59 @@ impl Range {
 
 impl CwtOptions {
     /// Extract CWT options from a rule
-    pub fn from_rule(rule: &AstCwtRule) -> Self {
+    pub fn from_rule(rule: &AstCwtRule, interner: &ThreadedRodeo) -> Self {
         let mut options = CwtOptions::default();
 
         // Parse CWT options from the rule
         for option in &rule.options {
             match option.key {
                 "display_name" => {
-                    options.display_name =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                    options.display_name = Some(
+                        interner.get_or_intern(option.value.as_string_or_identifier().unwrap()),
+                    );
                 }
                 "abbreviation" => {
-                    options.abbreviation =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                    options.abbreviation = Some(
+                        interner.get_or_intern(option.value.as_string_or_identifier().unwrap()),
+                    );
                 }
                 "push_scope" => {
-                    options.push_scope =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                    options.push_scope = Some(
+                        interner.get_or_intern(option.value.as_string_or_identifier().unwrap()),
+                    );
                 }
                 "replace_scope" | "replace_scopes" => {
                     if option.value.is_list() {
                         let replacements = option.value.as_list().unwrap();
-                        let mut replace_map = LowerCaseHashMap::new();
+                        let mut replace_map = HashMap::new();
                         for replacement in replacements {
                             let (from, to) = replacement.as_assignment().unwrap();
                             replace_map.insert(
-                                from.to_string(),
-                                to.as_string_or_identifier().unwrap().to_string(),
+                                interner.get_or_intern(from),
+                                interner.get_or_intern(to.as_string_or_identifier().unwrap()),
                             );
                         }
                         options.replace_scope = Some(replace_map);
                     } else if option.value.is_assignment() {
                         let (from, to) = option.value.as_assignment().unwrap();
 
-                        options.replace_scope = Some(LowerCaseHashMap::from([(
-                            from.to_string(),
-                            to.as_string_or_identifier().unwrap().to_string(),
+                        options.replace_scope = Some(HashMap::from([(
+                            interner.get_or_intern(from),
+                            interner.get_or_intern(to.as_string_or_identifier().unwrap()),
                         )]));
                     }
                 }
                 "starts_with" => {
-                    options.starts_with =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                    options.starts_with = Some(
+                        interner.get_or_intern(option.value.as_string_or_identifier().unwrap()),
+                    );
                 }
                 "severity" => {
                     options.severity = Some(option.value.as_identifier().unwrap().parse().unwrap());
                 }
                 "type_key_filter" => {
                     options.type_key_filter = Some(TypeKeyFilter::Specific(
-                        option.value.as_string_or_identifier().unwrap().to_string(),
+                        interner.get_or_intern(option.value.as_string_or_identifier().unwrap()),
                     ));
                 }
                 "required" => {
@@ -1628,12 +1659,14 @@ impl CwtOptions {
                     options.type_per_file = true;
                 }
                 "path_file" => {
-                    options.path_file =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                    options.path_file = Some(
+                        interner.get_or_intern(option.value.as_string_or_identifier().unwrap()),
+                    );
                 }
                 "path_extension" => {
-                    options.path_extension =
-                        Some(option.value.as_string_or_identifier().unwrap().to_string());
+                    options.path_extension = Some(
+                        interner.get_or_intern(option.value.as_string_or_identifier().unwrap()),
+                    );
                 }
                 "cardinality" => {
                     if let Some(range) = option.value.as_range() {
@@ -1726,15 +1759,16 @@ mod tests {
     #[test]
     fn test_literal_set_fingerprint_ordering() {
         // Test that literal sets with same values in different order have same fingerprint
+        let interner = ThreadedRodeo::new();
         let mut values1 = HashSet::new();
-        values1.insert("a".to_string());
-        values1.insert("b".to_string());
-        values1.insert("c".to_string());
+        values1.insert(interner.get_or_intern("a"));
+        values1.insert(interner.get_or_intern("b"));
+        values1.insert(interner.get_or_intern("c"));
 
         let mut values2 = HashSet::new();
-        values2.insert("c".to_string());
-        values2.insert("a".to_string());
-        values2.insert("b".to_string());
+        values2.insert(interner.get_or_intern("c"));
+        values2.insert(interner.get_or_intern("a"));
+        values2.insert(interner.get_or_intern("b"));
 
         let set1 = CwtType::LiteralSet(values1);
         let set2 = CwtType::LiteralSet(values2);
@@ -1746,13 +1780,16 @@ mod tests {
     #[test]
     fn test_complex_type_fingerprint() {
         // Test fingerprint for complex block type
-        let mut block = CwtType::block("test_block");
+        let interner = ThreadedRodeo::new();
+        let mut block = CwtType::block(interner.get_or_intern("test_block"));
+        let key1 = interner.get_or_intern("key1");
+        let key2 = interner.get_or_intern("key2");
         block.properties.insert(
-            "key1".to_string(),
+            key1,
             Property::simple(Arc::new(CwtType::simple(SimpleType::Int))),
         );
         block.properties.insert(
-            "key2".to_string(),
+            key2,
             Property::simple(Arc::new(CwtType::simple(SimpleType::Float))),
         );
 

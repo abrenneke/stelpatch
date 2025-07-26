@@ -13,6 +13,7 @@ use crate::handlers::diagnostics::diagnostic::{
 };
 use crate::handlers::diagnostics::type_validation::validate_entity_value;
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult};
+use crate::interner::get_interner;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -90,6 +91,7 @@ impl DiagnosticsProvider {
         uri: &str,
         content: &str,
     ) -> Vec<Diagnostic> {
+        let interner = get_interner();
         let mut diagnostics = Vec::new();
 
         // Validate namespace and caches using common validation
@@ -111,7 +113,7 @@ impl DiagnosticsProvider {
 
         // Check if we should treat the entire file as a single entity using common validation
         if is_type_per_file_namespace(&namespace_type) {
-            let entity = entity_from_module_ast(module);
+            let entity = entity_from_module_ast(module, get_interner());
 
             // Perform subtype narrowing at the file level using common function
             let validation_type =
@@ -120,7 +122,7 @@ impl DiagnosticsProvider {
             // Validate each top-level property in the module as if it were an entity property
             for item in &module.items {
                 if let AstEntityItem::Expression(expr) = item {
-                    let key_name = expr.key.raw_value();
+                    let key_name = interner.get_or_intern(expr.key.raw_value());
 
                     // Filter union types before property navigation
                     let filtered_validation_type = type_cache
@@ -135,7 +137,7 @@ impl DiagnosticsProvider {
                             &expr.value,
                             property_type,
                             content,
-                            &namespace,
+                            namespace,
                             1,
                         );
                         diagnostics.extend(value_diagnostics);
@@ -163,7 +165,7 @@ impl DiagnosticsProvider {
                     let variable_type = create_variable_assignment_type(&namespace_type);
 
                     let entity_diagnostics =
-                        validate_entity_value(&expr.value, variable_type, content, &namespace, 0);
+                        validate_entity_value(&expr.value, variable_type, content, namespace, 0);
 
                     diagnostics.extend(entity_diagnostics);
                     continue;
@@ -174,7 +176,7 @@ impl DiagnosticsProvider {
 
                 // Check if this entity needs restructuring for correct subtype narrowing
                 if let AstValue::Entity(ast_entity) = &expr.value {
-                    let container_key = expr.key.raw_value();
+                    let container_key = interner.get_or_intern(expr.key.raw_value());
 
                     // Check if the container key matches skip_root_key using common validation
                     let skip_root_key_result =
@@ -187,13 +189,14 @@ impl DiagnosticsProvider {
                         for nested_item in &ast_entity.items {
                             if let AstEntityItem::Expression(nested_expr) = nested_item {
                                 if let AstValue::Entity(nested_ast_entity) = &nested_expr.value {
-                                    let nested_entity_key = nested_expr.key.raw_value();
+                                    let nested_entity_key =
+                                        interner.get_or_intern(nested_expr.key.raw_value());
 
                                     // For nested entities in skip_root_key containers, use common validation
                                     let filtered_nested_validation_type =
                                         filter_and_narrow_entity_type(
                                             namespace_type.clone(),
-                                            &namespace,
+                                            namespace,
                                             container_key,
                                             nested_entity_key,
                                             nested_ast_entity,
@@ -204,7 +207,7 @@ impl DiagnosticsProvider {
                                         &nested_expr.value,
                                         filtered_nested_validation_type,
                                         content,
-                                        &namespace,
+                                        namespace,
                                         0,
                                     );
 
@@ -222,7 +225,7 @@ impl DiagnosticsProvider {
                     // For normal entities, use common validation function
                     let filtered_validation_type = filter_and_narrow_entity_type(
                         namespace_type.clone(),
-                        &namespace,
+                        namespace,
                         container_key,
                         entity_key,
                         ast_entity,
@@ -232,7 +235,7 @@ impl DiagnosticsProvider {
                         &expr.value,
                         filtered_validation_type,
                         content,
-                        &namespace,
+                        namespace,
                         0,
                     );
                     diagnostics.extend(entity_diagnostics);
@@ -242,7 +245,7 @@ impl DiagnosticsProvider {
                         &expr.value,
                         namespace_type.clone(),
                         content,
-                        &namespace,
+                        namespace,
                         0,
                     );
                     diagnostics.extend(entity_diagnostics);

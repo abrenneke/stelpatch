@@ -8,8 +8,8 @@ use crate::{AliasPattern, CwtType};
 use super::conversion::ConversionError;
 use super::definitions::*;
 use super::visitors::{CwtAnalysisData, CwtVisitorRegistry};
-use crate::LowerCaseHashMap;
 use cw_parser::cwt::CwtModule;
+use lasso::{Spur, ThreadedRodeo};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -20,8 +20,9 @@ use std::sync::Arc;
 pub struct CwtAnalyzer {
     /// Internal analysis data
     data: CwtAnalysisData,
+
     /// Pre-computed category to aliases mapping for performance
-    category_index: LowerCaseHashMap<Vec<AliasPattern>>,
+    category_index: HashMap<Spur, Vec<AliasPattern>>,
 }
 
 impl CwtAnalyzer {
@@ -29,14 +30,18 @@ impl CwtAnalyzer {
     pub fn new() -> Self {
         Self {
             data: CwtAnalysisData::new(),
-            category_index: LowerCaseHashMap::new(),
+            category_index: HashMap::new(),
         }
     }
 
     /// Convert a CWT module to CwtType definitions
-    pub fn convert_module(&mut self, module: &CwtModule) -> Result<(), Vec<ConversionError>> {
+    pub fn convert_module(
+        &mut self,
+        module: &CwtModule,
+        interner: &ThreadedRodeo,
+    ) -> Result<(), Vec<ConversionError>> {
         // Use the visitor registry to process the module
-        CwtVisitorRegistry::process_module(&mut self.data, module);
+        CwtVisitorRegistry::process_module(&mut self.data, module, interner);
 
         // Rebuild category index after processing
         self.rebuild_category_index();
@@ -49,17 +54,17 @@ impl CwtAnalyzer {
     }
 
     /// Get all defined types
-    pub fn get_types(&self) -> &LowerCaseHashMap<TypeDefinition> {
+    pub fn get_types(&self) -> &HashMap<Spur, TypeDefinition> {
         &self.data.types
     }
 
     /// Get all defined enums
-    pub fn get_enums(&self) -> &LowerCaseHashMap<EnumDefinition> {
+    pub fn get_enums(&self) -> &HashMap<Spur, EnumDefinition> {
         &self.data.enums
     }
 
     /// Get all defined value sets
-    pub fn get_value_sets(&self) -> &LowerCaseHashMap<HashSet<String>> {
+    pub fn get_value_sets(&self) -> &HashMap<Spur, HashSet<String>> {
         &self.data.value_sets
     }
 
@@ -69,17 +74,17 @@ impl CwtAnalyzer {
     }
 
     /// Get single aliases
-    pub fn get_single_aliases(&self) -> &LowerCaseHashMap<Arc<CwtType>> {
+    pub fn get_single_aliases(&self) -> &HashMap<Spur, Arc<CwtType>> {
         &self.data.single_aliases
     }
 
     /// Get a specific scope group
-    pub fn get_scope_group(&self, name: &str) -> Option<&ScopeGroupDefinition> {
-        self.data.scope_groups.get(name)
+    pub fn get_scope_group(&self, name: Spur) -> Option<&ScopeGroupDefinition> {
+        self.data.scope_groups.get(&name)
     }
 
     /// Get all defined links
-    pub fn get_links(&self) -> &LowerCaseHashMap<super::definitions::LinkDefinition> {
+    pub fn get_links(&self) -> &HashMap<Spur, super::definitions::LinkDefinition> {
         &self.data.links
     }
 
@@ -99,40 +104,40 @@ impl CwtAnalyzer {
         self.category_index.clear();
         for alias_pattern in self.data.aliases.keys() {
             self.category_index
-                .entry(alias_pattern.category.clone())
+                .entry(alias_pattern.category)
                 .or_insert_with(Vec::new)
                 .push(alias_pattern.clone());
         }
     }
 
     /// Get all aliases for a specific category (O(1) lookup)
-    pub fn get_aliases_for_category(&self, category: &str) -> Option<&[AliasPattern]> {
-        self.category_index.get(category).map(|v| v.as_slice())
+    pub fn get_aliases_for_category(&self, category: Spur) -> Option<&[AliasPattern]> {
+        self.category_index.get(&category).map(|v| v.as_slice())
     }
 
     /// Check if a category has any aliases
-    pub fn has_category(&self, category: &str) -> bool {
-        self.category_index.contains_key(category)
+    pub fn has_category(&self, category: Spur) -> bool {
+        self.category_index.contains_key(&category)
     }
 
     /// Get all available categories
-    pub fn get_categories(&self) -> Vec<&String> {
+    pub fn get_categories(&self) -> Vec<&Spur> {
         self.category_index.keys().collect()
     }
 
     /// Get a specific type definition
-    pub fn get_type(&self, name: &str) -> Option<&TypeDefinition> {
-        self.data.types.get(name)
+    pub fn get_type(&self, name: Spur) -> Option<&TypeDefinition> {
+        self.data.types.get(&name)
     }
 
     /// Get a specific enum definition
-    pub fn get_enum(&self, name: &str) -> Option<&EnumDefinition> {
-        self.data.enums.get(name)
+    pub fn get_enum(&self, name: Spur) -> Option<&EnumDefinition> {
+        self.data.enums.get(&name)
     }
 
     /// Get a specific value set
-    pub fn get_value_set(&self, name: &str) -> Option<&HashSet<String>> {
-        self.data.value_sets.get(name)
+    pub fn get_value_set(&self, name: Spur) -> Option<&HashSet<String>> {
+        self.data.value_sets.get(&name)
     }
 
     /// Get a specific alias definition
@@ -141,28 +146,28 @@ impl CwtAnalyzer {
     }
 
     /// Get a specific single alias
-    pub fn get_single_alias(&self, name: &str) -> Option<&Arc<CwtType>> {
-        self.data.single_aliases.get(name)
+    pub fn get_single_alias(&self, name: Spur) -> Option<&Arc<CwtType>> {
+        self.data.single_aliases.get(&name)
     }
 
     /// Get a specific link definition
-    pub fn get_link(&self, name: &str) -> Option<&LinkDefinition> {
-        self.data.links.get(name)
+    pub fn get_link(&self, name: Spur) -> Option<&LinkDefinition> {
+        self.data.links.get(&name)
     }
 
     /// Check if a type is defined
-    pub fn has_type(&self, name: &str) -> bool {
-        self.data.types.contains_key(name)
+    pub fn has_type(&self, name: Spur) -> bool {
+        self.data.types.contains_key(&name)
     }
 
     /// Check if an enum is defined
-    pub fn has_enum(&self, name: &str) -> bool {
-        self.data.enums.contains_key(name)
+    pub fn has_enum(&self, name: Spur) -> bool {
+        self.data.enums.contains_key(&name)
     }
 
     /// Check if a value set is defined
-    pub fn has_value_set(&self, name: &str) -> bool {
-        self.data.value_sets.contains_key(name)
+    pub fn has_value_set(&self, name: Spur) -> bool {
+        self.data.value_sets.contains_key(&name)
     }
 
     /// Check if an alias is defined
@@ -171,28 +176,28 @@ impl CwtAnalyzer {
     }
 
     /// Check if a single alias is defined
-    pub fn has_single_alias(&self, name: &str) -> bool {
-        self.data.single_aliases.contains_key(name)
+    pub fn has_single_alias(&self, name: Spur) -> bool {
+        self.data.single_aliases.contains_key(&name)
     }
 
     /// Check if a link is defined
-    pub fn has_link(&self, name: &str) -> bool {
-        self.data.links.contains_key(name)
+    pub fn has_link(&self, name: Spur) -> bool {
+        self.data.links.contains_key(&name)
     }
 
-    pub fn add_type(&mut self, name: &str, type_definition: TypeDefinition) {
-        self.data.types.insert(name.to_string(), type_definition);
+    pub fn add_type(&mut self, name: Spur, type_definition: TypeDefinition) {
+        self.data.types.insert(name, type_definition);
     }
 
     /// Resolves a scope alias to a scope's canonical name
-    pub fn resolve_scope_name(&self, name: &str) -> Option<&str> {
-        if let Some(scope) = self.data.scopes.get(name) {
-            return Some(&scope.name);
+    pub fn resolve_scope_name(&self, name: Spur) -> Option<Spur> {
+        if let Some(scope) = self.data.scopes.get(&name) {
+            return Some(scope.name);
         }
 
         self.data.scopes.iter().find_map(|(_, scope)| {
-            if scope.aliases.iter().any(|alias| alias.as_str() == name) {
-                Some(scope.name.as_ref())
+            if scope.aliases.iter().any(|alias| *alias == name) {
+                Some(scope.name)
             } else {
                 None
             }
@@ -325,6 +330,7 @@ mod tests {
 
     #[test]
     fn test_analyzer_getters() {
+        let interner = ThreadedRodeo::new();
         let analyzer = CwtAnalyzer::new();
 
         assert!(analyzer.get_types().is_empty());
@@ -335,22 +341,38 @@ mod tests {
         assert!(analyzer.get_links().is_empty());
         assert!(analyzer.get_errors().is_empty());
 
-        assert!(!analyzer.has_type("test"));
-        assert!(!analyzer.has_enum("test"));
-        assert!(!analyzer.has_value_set("test"));
-        assert!(!analyzer.has_alias(&AliasPattern::new_basic("test", "test")));
-        assert!(!analyzer.has_single_alias("test"));
-        assert!(!analyzer.has_link("test"));
+        assert!(!analyzer.has_type(interner.get_or_intern("test")));
+        assert!(!analyzer.has_enum(interner.get_or_intern("test")));
+        assert!(!analyzer.has_value_set(interner.get_or_intern("test")));
+        assert!(!analyzer.has_alias(&AliasPattern::new_basic(
+            interner.get_or_intern("test"),
+            interner.get_or_intern("test"),
+            &interner
+        )));
+        assert!(!analyzer.has_single_alias(interner.get_or_intern("test")));
+        assert!(!analyzer.has_link(interner.get_or_intern("test")));
 
-        assert!(analyzer.get_type("test").is_none());
-        assert!(analyzer.get_enum("test").is_none());
-        assert!(analyzer.get_value_set("test").is_none());
+        assert!(analyzer.get_type(interner.get_or_intern("test")).is_none());
+        assert!(analyzer.get_enum(interner.get_or_intern("test")).is_none());
         assert!(
             analyzer
-                .get_alias(&AliasPattern::new_basic("test", "test"))
+                .get_value_set(interner.get_or_intern("test"))
                 .is_none()
         );
-        assert!(analyzer.get_single_alias("test").is_none());
-        assert!(analyzer.get_link("test").is_none());
+        assert!(
+            analyzer
+                .get_alias(&AliasPattern::new_basic(
+                    interner.get_or_intern("test"),
+                    interner.get_or_intern("test"),
+                    &interner
+                ))
+                .is_none()
+        );
+        assert!(
+            analyzer
+                .get_single_alias(interner.get_or_intern("test"))
+                .is_none()
+        );
+        assert!(analyzer.get_link(interner.get_or_intern("test")).is_none());
     }
 }

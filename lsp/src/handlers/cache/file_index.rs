@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use crate::base_game::BaseGame;
+use crate::interner::get_interner;
 use cw_model::GameMod;
 
 /// Cache for file existence checks in the game directory and loaded mods
@@ -57,7 +58,8 @@ impl FileIndex {
         let start = Instant::now();
         eprintln!("Initializing file index cache...");
 
-        let base_game = BaseGame::load_global_as_mod_definition(cw_model::LoadMode::Parallel);
+        let base_game =
+            BaseGame::load_global_as_mod_definition(cw_model::LoadMode::Parallel, get_interner());
 
         let game_root = if let Some(path) = &base_game.definition.path {
             path.clone()

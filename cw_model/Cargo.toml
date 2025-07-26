@@ -10,6 +10,8 @@ cw_parser = { path = "../cw_parser" }
 dirs = "6.0.0"
 glob = "0.3.1"
 indent = "0.1.1"
+lasso = { version = "0.7.3", features = ["multi-threaded"] }
+nohash-hasher = "0.2.0"
 path-slash = "0.2.1"
 rayon = "1.10.0"
 serde = { version = "1.0.219", features = ["derive"] }

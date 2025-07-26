@@ -3,31 +3,34 @@
 //! This visitor handles the processing of CWT type definitions, including nested
 //! subtypes, localisation requirements, and type options.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use cw_parser::{
     AstCwtBlock, AstCwtExpression, AstCwtIdentifierOrString, AstCwtRule, CwtOperator,
     CwtReferenceType, CwtSimpleValueType, CwtValue, CwtVisitor,
 };
+use lasso::{Spur, ThreadedRodeo};
 
 use crate::{
     ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, CwtType, LocalisationRequirement,
-    LowerCaseHashMap, ModifierSpec, Property, RuleOptions, SeverityLevel, SkipRootKey, Subtype,
-    TypeDefinition, TypeOptions,
+    ModifierSpec, Property, RuleOptions, SeverityLevel, SkipRootKey, Subtype, TypeDefinition,
+    TypeOptions,
 };
 
 /// Specialized visitor for type definitions
-pub struct TypeVisitor<'a> {
+pub struct TypeVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
     in_types_section: bool,
+    interner: &'interner ThreadedRodeo,
 }
 
-impl<'a> TypeVisitor<'a> {
+impl<'a, 'interner> TypeVisitor<'a, 'interner> {
     /// Create a new type visitor
-    pub fn new(data: &'a mut CwtAnalysisData) -> Self {
+    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
         Self {
             data,
             in_types_section: false,
+            interner,
         }
     }
 
@@ -51,23 +54,23 @@ impl<'a> TypeVisitor<'a> {
     }
 
     /// Process a type definition rule
-    fn process_type_definition(&mut self, rule: &AstCwtRule) {
+    fn process_type_definition(&mut self, rule: &AstCwtRule, interner: &ThreadedRodeo) {
         let type_name = self.extract_type_name(rule);
 
         if let Some(name) = type_name {
             // Parse rule options
-            let options = RuleOptions::from_rule(rule);
+            let options = RuleOptions::from_rule(rule, interner);
 
             // Convert the type definition
             let mut type_def = TypeDefinition {
                 path: None,
                 name_field: None,
                 skip_root_key: None,
-                subtypes: LowerCaseHashMap::new(),
-                localisation: LowerCaseHashMap::new(),
+                subtypes: HashMap::new(),
+                localisation: HashMap::new(),
                 modifiers: ModifierSpec {
-                    modifiers: LowerCaseHashMap::new(),
-                    subtypes: LowerCaseHashMap::new(),
+                    modifiers: HashMap::new(),
+                    subtypes: HashMap::new(),
                 },
                 rules: Arc::new(CwtType::Unknown),
                 options: TypeOptions::default(),
@@ -76,11 +79,11 @@ impl<'a> TypeVisitor<'a> {
 
             // Extract additional type options from the block
             if let CwtValue::Block(block) = &rule.value {
-                self.extract_type_options(&mut type_def, block);
+                self.extract_type_options(&mut type_def, block, interner);
             }
 
             // Store the type definition (merge with existing if present)
-            self.data.insert_or_merge_type(name, type_def);
+            self.data.insert_or_merge_type(name, type_def, interner);
         } else {
             let key_name = match &rule.key {
                 AstCwtIdentifierOrString::Identifier(identifier) => identifier.name.raw_value(),
@@ -99,11 +102,11 @@ impl<'a> TypeVisitor<'a> {
     }
 
     /// Extract the type name from a rule
-    fn extract_type_name(&self, rule: &AstCwtRule) -> Option<String> {
+    fn extract_type_name(&self, rule: &AstCwtRule) -> Option<Spur> {
         match &rule.key {
             AstCwtIdentifierOrString::Identifier(identifier) => {
                 if matches!(identifier.identifier_type, CwtReferenceType::Type) {
-                    Some(identifier.name.raw_value().to_string())
+                    Some(self.interner.get_or_intern(identifier.name.raw_value()))
                 } else {
                     None
                 }
@@ -116,7 +119,12 @@ impl<'a> TypeVisitor<'a> {
     }
 
     /// Extract type options from a type definition block
-    fn extract_type_options(&mut self, type_def: &mut TypeDefinition, block: &AstCwtBlock) {
+    fn extract_type_options(
+        &mut self,
+        type_def: &mut TypeDefinition,
+        block: &AstCwtBlock,
+        interner: &ThreadedRodeo,
+    ) {
         let mut skip_root_key_rules = Vec::new();
 
         for item in &block.items {
@@ -125,7 +133,7 @@ impl<'a> TypeVisitor<'a> {
                 if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
                     if matches!(identifier.identifier_type, CwtReferenceType::Subtype) {
                         let subtype_name = identifier.name.raw_value();
-                        Self::extract_subtype_definition(type_def, subtype_name, rule);
+                        Self::extract_subtype_definition(type_def, subtype_name, rule, interner);
                         continue;
                     }
                 }
@@ -135,12 +143,13 @@ impl<'a> TypeVisitor<'a> {
                 match key {
                     "path" => {
                         if let CwtValue::String(s) = &rule.value {
-                            type_def.path = Some(s.raw_value().to_string());
+                            type_def.path = Some(interner.get_or_intern(s.raw_value().to_string()));
                         }
                     }
                     "name_field" => {
                         if let CwtValue::String(s) = &rule.value {
-                            type_def.name_field = Some(s.raw_value().to_string());
+                            type_def.name_field =
+                                Some(interner.get_or_intern(s.raw_value().to_string()));
                         }
                     }
                     "unique" => match &rule.value {
@@ -184,17 +193,20 @@ impl<'a> TypeVisitor<'a> {
                     },
                     "path_file" => {
                         if let CwtValue::String(s) = &rule.value {
-                            type_def.options.path_file = Some(s.raw_value().to_string());
+                            type_def.options.path_file =
+                                Some(interner.get_or_intern(s.raw_value()));
                         }
                     }
                     "path_extension" => {
                         if let CwtValue::String(s) = &rule.value {
-                            type_def.options.path_extension = Some(s.raw_value().to_string());
+                            type_def.options.path_extension =
+                                Some(interner.get_or_intern(s.raw_value()));
                         }
                     }
                     "starts_with" => {
                         if let CwtValue::String(s) = &rule.value {
-                            type_def.options.starts_with = Some(s.raw_value().to_string());
+                            type_def.options.starts_with =
+                                Some(interner.get_or_intern(s.raw_value()));
                         }
                     }
                     "severity" => {
@@ -205,12 +217,12 @@ impl<'a> TypeVisitor<'a> {
                     }
                     "localisation" => {
                         if let CwtValue::Block(loc_block) = &rule.value {
-                            Self::extract_localisation_requirements(type_def, loc_block);
+                            Self::extract_localisation_requirements(type_def, loc_block, interner);
                         }
                     }
                     "modifiers" => {
                         if let CwtValue::Block(mod_block) = &rule.value {
-                            Self::extract_modifier_definitions(type_def, mod_block);
+                            Self::extract_modifier_definitions(type_def, mod_block, interner);
                         }
                     }
                     "skip_root_key" => {
@@ -226,29 +238,33 @@ impl<'a> TypeVisitor<'a> {
 
         // Process all collected skip_root_key rules together
         if !skip_root_key_rules.is_empty() {
-            Self::extract_multiple_skip_root_keys(type_def, &skip_root_key_rules);
+            Self::extract_multiple_skip_root_keys(type_def, &skip_root_key_rules, self.interner);
         }
     }
 
     /// Extract multiple skip_root_key configurations and combine them appropriately
-    fn extract_multiple_skip_root_keys(type_def: &mut TypeDefinition, rules: &[&AstCwtRule]) {
-        let mut specific_keys = Vec::new();
-        let mut except_keys = Vec::new();
-        let mut multiple_keys = Vec::new();
+    fn extract_multiple_skip_root_keys(
+        type_def: &mut TypeDefinition,
+        rules: &[&AstCwtRule],
+        interner: &ThreadedRodeo,
+    ) {
+        let mut specific_keys: Vec<Spur> = Vec::new();
+        let mut except_keys: Vec<Spur> = Vec::new();
+        let mut multiple_keys: Vec<Spur> = Vec::new();
         let mut has_any = false;
 
         for rule in rules {
             match (&rule.operator, &rule.value) {
                 (CwtOperator::NotEquals, CwtValue::String(s)) => {
                     // skip_root_key != tech_group
-                    except_keys.push(s.raw_value().to_string());
+                    except_keys.push(interner.get_or_intern(s.raw_value().to_string()));
                 }
                 (CwtOperator::Equals, CwtValue::String(s)) => {
                     let value = s.raw_value();
                     if value == "any" {
                         has_any = true;
                     } else {
-                        specific_keys.push(value.to_string());
+                        specific_keys.push(interner.get_or_intern(value.to_string()));
                     }
                 }
                 (CwtOperator::Equals, CwtValue::Block(block)) => {
@@ -257,7 +273,8 @@ impl<'a> TypeVisitor<'a> {
                         if let cw_parser::cwt::AstCwtExpression::Value(v) = item {
                             match v {
                                 CwtValue::String(s) => {
-                                    multiple_keys.push(s.raw_value().to_string());
+                                    multiple_keys
+                                        .push(interner.get_or_intern(s.raw_value().to_string()));
                                 }
                                 _ => {}
                             }
@@ -290,7 +307,11 @@ impl<'a> TypeVisitor<'a> {
     }
 
     /// Extract localisation requirements from a type definition
-    fn extract_localisation_requirements(type_def: &mut TypeDefinition, block: &AstCwtBlock) {
+    fn extract_localisation_requirements(
+        type_def: &mut TypeDefinition,
+        block: &AstCwtBlock,
+        interner: &ThreadedRodeo,
+    ) {
         for item in &block.items {
             if let cw_parser::cwt::AstCwtExpression::Rule(rule) = item {
                 let key = rule.key.name();
@@ -299,14 +320,15 @@ impl<'a> TypeVisitor<'a> {
                 if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
                     if matches!(identifier.identifier_type, CwtReferenceType::Subtype) {
                         let subtype_name = identifier.name.raw_value();
-                        Self::extract_subtype_localisation(type_def, subtype_name, rule);
+                        Self::extract_subtype_localisation(type_def, subtype_name, rule, interner);
                         continue;
                     }
                 }
 
                 if let CwtValue::String(pattern) = &rule.value {
-                    let mut requirement =
-                        LocalisationRequirement::new(pattern.raw_value().to_string());
+                    let mut requirement = LocalisationRequirement::new(
+                        interner.get_or_intern(pattern.raw_value().to_string()),
+                    );
 
                     for option in &rule.options {
                         match option.key {
@@ -320,7 +342,9 @@ impl<'a> TypeVisitor<'a> {
                         }
                     }
 
-                    type_def.localisation.insert(key.to_string(), requirement);
+                    type_def
+                        .localisation
+                        .insert(interner.get_or_intern(key.to_string()), requirement);
                 }
             }
         }
@@ -331,6 +355,7 @@ impl<'a> TypeVisitor<'a> {
         type_def: &mut TypeDefinition,
         subtype_name: &str,
         rule: &AstCwtRule,
+        interner: &ThreadedRodeo,
     ) {
         if let CwtValue::Block(subtype_block) = &rule.value {
             for item in &subtype_block.items {
@@ -341,16 +366,20 @@ impl<'a> TypeVisitor<'a> {
                         let pattern_str = pattern.raw_value().to_string();
 
                         // Only add to existing base localisation requirements
-                        if let Some(base_requirement) =
-                            type_def.localisation.get_mut(&loc_key.to_string())
+                        if let Some(base_requirement) = type_def
+                            .localisation
+                            .get_mut(&interner.get_or_intern(loc_key.to_string()))
                         {
                             // Add to subtype-specific localisation for existing base requirement
                             let subtype_map = base_requirement
                                 .subtypes
-                                .entry(subtype_name.to_string())
-                                .or_insert_with(LowerCaseHashMap::new);
+                                .entry(interner.get_or_intern(subtype_name.to_string()))
+                                .or_insert_with(HashMap::new);
 
-                            subtype_map.insert(loc_key.to_string(), pattern_str);
+                            subtype_map.insert(
+                                interner.get_or_intern(loc_key.to_string()),
+                                interner.get_or_intern(pattern_str),
+                            );
 
                             // Check for required/primary flags on subtype localisation
                             for option in &loc_rule.options {
@@ -376,7 +405,11 @@ impl<'a> TypeVisitor<'a> {
     }
 
     /// Extract modifier definitions from a type definition
-    fn extract_modifier_definitions(type_def: &mut TypeDefinition, block: &AstCwtBlock) {
+    fn extract_modifier_definitions(
+        type_def: &mut TypeDefinition,
+        block: &AstCwtBlock,
+        interner: &ThreadedRodeo,
+    ) {
         for item in &block.items {
             if let cw_parser::cwt::AstCwtExpression::Rule(rule) = item {
                 let key = rule.key.name();
@@ -385,16 +418,16 @@ impl<'a> TypeVisitor<'a> {
                 if let AstCwtIdentifierOrString::Identifier(identifier) = &rule.key {
                     if matches!(identifier.identifier_type, CwtReferenceType::Subtype) {
                         let subtype_name = identifier.name.raw_value();
-                        Self::extract_subtype_modifiers(type_def, subtype_name, rule);
+                        Self::extract_subtype_modifiers(type_def, subtype_name, rule, interner);
                         continue;
                     }
                 }
 
                 if let CwtValue::String(scope) = &rule.value {
-                    type_def
-                        .modifiers
-                        .modifiers
-                        .insert(key.to_string(), scope.raw_value().to_string());
+                    type_def.modifiers.modifiers.insert(
+                        interner.get_or_intern(key),
+                        interner.get_or_intern(scope.raw_value()),
+                    );
                 }
             }
         }
@@ -405,17 +438,20 @@ impl<'a> TypeVisitor<'a> {
         type_def: &mut TypeDefinition,
         subtype_name: &str,
         rule: &AstCwtRule,
+        interner: &ThreadedRodeo,
     ) {
         if let CwtValue::Block(subtype_block) = &rule.value {
-            let mut subtype_modifiers = LowerCaseHashMap::new();
+            let mut subtype_modifiers: HashMap<Spur, Spur> = HashMap::new();
 
             for item in &subtype_block.items {
                 if let cw_parser::cwt::AstCwtExpression::Rule(mod_rule) = item {
                     let mod_key = mod_rule.key.name();
 
                     if let CwtValue::String(scope) = &mod_rule.value {
-                        subtype_modifiers
-                            .insert(mod_key.to_string(), scope.raw_value().to_string());
+                        subtype_modifiers.insert(
+                            interner.get_or_intern(mod_key),
+                            interner.get_or_intern(scope.raw_value()),
+                        );
                     }
                 }
             }
@@ -424,7 +460,7 @@ impl<'a> TypeVisitor<'a> {
                 type_def
                     .modifiers
                     .subtypes
-                    .insert(subtype_name.to_string(), subtype_modifiers);
+                    .insert(interner.get_or_intern(subtype_name), subtype_modifiers);
             }
         }
     }
@@ -434,33 +470,35 @@ impl<'a> TypeVisitor<'a> {
         type_def: &mut TypeDefinition,
         subtype_name: &str,
         rule: &AstCwtRule,
+        interner: &ThreadedRodeo,
     ) {
         // Parse CWT options (metadata like display_name, starts_with, etc.)
-        let subtype_options = CwtOptions::from_rule(rule);
+        let subtype_options = CwtOptions::from_rule(rule, interner);
 
         // Extract properties from the rule value block
-        let mut properties = LowerCaseHashMap::new();
+        let mut properties: HashMap<Spur, Property> = HashMap::new();
 
         if let CwtValue::Block(block) = &rule.value {
             // Look for property definitions that define this subtype's constraints
-            let mut property_conditions = LowerCaseHashMap::new();
+            let mut property_conditions: HashMap<Spur, CwtValue> = HashMap::new();
 
             for item in &block.items {
                 if let cw_parser::cwt::AstCwtExpression::Rule(prop_rule) = item {
                     let prop_key = prop_rule.key.name();
 
                     // Extract options from the individual rule (e.g., cardinality constraints)
-                    let prop_options = CwtOptions::from_rule(prop_rule);
+                    let prop_options = CwtOptions::from_rule(prop_rule, interner);
 
                     // Always create a Property object to store the rule with its options
                     // This ensures cardinality constraints are preserved even for block values
-                    let property_type = CwtConverter::convert_value(&prop_rule.value, None);
+                    let property_type =
+                        CwtConverter::convert_value(&prop_rule.value, None, interner);
                     let property = Property {
                         property_type,
                         options: prop_options.clone(),
                         documentation: None,
                     };
-                    properties.insert(prop_key.to_string(), property);
+                    properties.insert(interner.get_or_intern(prop_key), property);
 
                     // For subtype condition matching, skip block values as they're not used for conditions
                     // But we still store them above for cardinality validation
@@ -469,7 +507,8 @@ impl<'a> TypeVisitor<'a> {
                     }
 
                     // Store the actual value for condition determination (non-block values only)
-                    property_conditions.insert(prop_key.to_string(), prop_rule.value.clone());
+                    property_conditions
+                        .insert(interner.get_or_intern(prop_key), prop_rule.value.clone());
                 }
             }
 
@@ -479,7 +518,7 @@ impl<'a> TypeVisitor<'a> {
 
         let subtype_def = Subtype {
             condition_properties: properties, // Use the properties we collected with their options
-            allowed_properties: LowerCaseHashMap::new(),
+            allowed_properties: HashMap::new(),
             allowed_pattern_properties: Vec::new(),
             options: subtype_options,
             is_inverted: false,
@@ -487,14 +526,14 @@ impl<'a> TypeVisitor<'a> {
 
         type_def
             .subtypes
-            .insert(subtype_name.to_string(), subtype_def);
+            .insert(interner.get_or_intern(subtype_name), subtype_def);
     }
 }
 
-impl<'a> CwtVisitor<'a> for TypeVisitor<'a> {
+impl<'a, 'interner> CwtVisitor<'a> for TypeVisitor<'a, 'interner> {
     fn visit_rule(&mut self, rule: &AstCwtRule<'a>) {
         if self.can_handle_rule(rule) {
-            self.process_type_definition(rule);
+            self.process_type_definition(rule, self.interner);
         }
 
         // Continue walking for nested rules
@@ -511,7 +550,8 @@ mod tests {
     #[test]
     fn test_type_visitor() {
         let mut data = CwtAnalysisData::new();
-        let mut visitor = TypeVisitor::new(&mut data);
+        let interner = ThreadedRodeo::new();
+        let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
 types = {
@@ -531,20 +571,34 @@ types = {
 
         assert_eq!(data.types.len(), 1);
         assert_eq!(
-            data.types.get("test_type").unwrap().path,
-            Some("test_path".to_string())
+            data.types
+                .get(&interner.get_or_intern("test_type"))
+                .unwrap()
+                .path,
+            Some(interner.get_or_intern("test_path"))
         );
         assert_eq!(
-            data.types.get("test_type").unwrap().name_field,
-            Some("test_name_field".to_string())
+            data.types
+                .get(&interner.get_or_intern("test_type"))
+                .unwrap()
+                .name_field,
+            Some(interner.get_or_intern("test_name_field"))
         );
-        assert_eq!(data.types.get("test_type").unwrap().options.unique, true);
+        assert_eq!(
+            data.types
+                .get(&interner.get_or_intern("test_type"))
+                .unwrap()
+                .options
+                .unique,
+            true
+        );
     }
 
     #[test]
     fn test_complex_type_visitor() {
         let mut data = CwtAnalysisData::new();
-        let mut visitor = TypeVisitor::new(&mut data);
+        let interner = ThreadedRodeo::new();
+        let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
 types = {
@@ -604,10 +658,13 @@ types = {
         assert_eq!(data.types.len(), 2);
 
         // Test opinion_modifier type
-        let opinion_modifier = data.types.get("opinion_modifier").unwrap();
+        let opinion_modifier = data
+            .types
+            .get(&interner.get_or_intern("opinion_modifier"))
+            .unwrap();
         assert_eq!(
             opinion_modifier.path,
-            Some("game/common/opinion_modifiers".to_string())
+            Some(interner.get_or_intern("game/common/opinion_modifiers"))
         );
         assert_eq!(opinion_modifier.options.path_strict, true);
         assert_eq!(opinion_modifier.options.type_per_file, true);
@@ -618,87 +675,111 @@ types = {
         assert!(
             opinion_modifier
                 .subtypes
-                .contains_key("triggered_opinion_modifier")
+                .contains_key(&interner.get_or_intern("triggered_opinion_modifier"))
         );
-        assert!(opinion_modifier.subtypes.contains_key("block_triggered"));
+        assert!(
+            opinion_modifier
+                .subtypes
+                .contains_key(&interner.get_or_intern("block_triggered"))
+        );
 
         // Check localisation
         assert_eq!(opinion_modifier.localisation.len(), 2);
         assert_eq!(
-            opinion_modifier.localisation.get("Name").unwrap().pattern,
-            "$"
+            opinion_modifier
+                .localisation
+                .get(&interner.get_or_intern("Name"))
+                .unwrap()
+                .pattern,
+            interner.get_or_intern("$")
         );
         assert_eq!(
             opinion_modifier
                 .localisation
-                .get("Description")
+                .get(&interner.get_or_intern("Description"))
                 .unwrap()
                 .pattern,
-            "$_desc"
+            interner.get_or_intern("$_desc")
         );
 
         // Check modifiers
         assert_eq!(opinion_modifier.modifiers.modifiers.len(), 2);
         assert_eq!(
-            opinion_modifier
+            *opinion_modifier
                 .modifiers
                 .modifiers
-                .get("$_modifier")
+                .get(&interner.get_or_intern("$_modifier"))
                 .unwrap(),
-            "country"
+            interner.get_or_intern("country")
         );
         assert_eq!(
-            opinion_modifier
+            *opinion_modifier
                 .modifiers
                 .modifiers
-                .get("$_opinion_boost")
+                .get(&interner.get_or_intern("$_opinion_boost"))
                 .unwrap(),
-            "diplomacy"
+            interner.get_or_intern("diplomacy")
         );
 
         // Test static_modifier type
-        let static_modifier = data.types.get("static_modifier").unwrap();
+        let static_modifier = data
+            .types
+            .get(&interner.get_or_intern("static_modifier"))
+            .unwrap();
         assert_eq!(
             static_modifier.path,
-            Some("game/common/static_modifiers".to_string())
+            Some(interner.get_or_intern("game/common/static_modifiers"))
         );
         assert_eq!(
             static_modifier.options.path_extension,
-            Some(".txt".to_string())
+            Some(interner.get_or_intern(".txt"))
         );
         assert_eq!(static_modifier.options.unique, false);
 
         // Check subtypes
         assert_eq!(static_modifier.subtypes.len(), 1);
-        assert!(static_modifier.subtypes.contains_key("planet"));
+        assert!(
+            static_modifier
+                .subtypes
+                .contains_key(&interner.get_or_intern("planet"))
+        );
 
         // Check localisation
         assert_eq!(static_modifier.localisation.len(), 2);
         assert_eq!(
-            static_modifier.localisation.get("Name").unwrap().pattern,
-            "$"
+            static_modifier
+                .localisation
+                .get(&interner.get_or_intern("Name"))
+                .unwrap()
+                .pattern,
+            interner.get_or_intern("$")
         );
         assert_eq!(
             static_modifier
                 .localisation
-                .get("Description")
+                .get(&interner.get_or_intern("Description"))
                 .unwrap()
                 .pattern,
-            "$_desc"
+            interner.get_or_intern("$_desc")
         );
 
         // Check modifiers
         assert_eq!(static_modifier.modifiers.modifiers.len(), 1);
         assert_eq!(
-            static_modifier.modifiers.modifiers.get("$_boost").unwrap(),
-            "planet"
+            *static_modifier
+                .modifiers
+                .modifiers
+                .get(&interner.get_or_intern("$_boost"))
+                .unwrap(),
+            interner.get_or_intern("planet")
         );
     }
 
     #[test]
     fn test_enhanced_cwt_features() {
         let mut data = CwtAnalysisData::new();
-        let mut visitor = TypeVisitor::new(&mut data);
+        let interner = ThreadedRodeo::new();
+        let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
 types = {
@@ -771,55 +852,76 @@ types = {
         assert_eq!(data.types.len(), 1);
 
         // Test advanced_type
-        let advanced_type = data.types.get("advanced_type").unwrap();
+        let advanced_type = data
+            .types
+            .get(&interner.get_or_intern("advanced_type"))
+            .unwrap();
         assert_eq!(
             advanced_type.path,
-            Some("game/common/advanced_types".to_string())
+            Some(interner.get_or_intern("game/common/advanced_types"))
         );
         assert_eq!(advanced_type.options.path_strict, true);
         assert_eq!(advanced_type.options.type_per_file, true);
-        assert_eq!(advanced_type.options.starts_with, Some("adv_".to_string()));
+        assert_eq!(
+            advanced_type.options.starts_with,
+            Some(interner.get_or_intern("adv_"))
+        );
 
         // Check type-level options (from comments)
         assert_eq!(advanced_type.options.severity, Some(SeverityLevel::Warning));
         assert_eq!(
             advanced_type.options.graph_related_types,
-            vec!["technology".to_string(), "building".to_string()]
+            vec![
+                interner.get_or_intern("technology"),
+                interner.get_or_intern("building"),
+            ]
         );
 
         // Check subtypes
         assert_eq!(advanced_type.subtypes.len(), 2);
-        let advanced_subtype = advanced_type.subtypes.get("advanced").unwrap();
-        let basic_subtype = advanced_type.subtypes.get("basic").unwrap();
+        let advanced_subtype = advanced_type
+            .subtypes
+            .get(&interner.get_or_intern("advanced"))
+            .unwrap();
+        let basic_subtype = advanced_type
+            .subtypes
+            .get(&interner.get_or_intern("basic"))
+            .unwrap();
 
         // Check subtype options (comment-based options should be parsed)
         assert_eq!(
             advanced_subtype.options.display_name,
-            Some("Advanced Subtype".to_string())
+            Some(interner.get_or_intern("Advanced Subtype"))
         );
         assert_eq!(
             advanced_subtype.options.abbreviation,
-            Some("ADV".to_string())
+            Some(interner.get_or_intern("ADV"))
         );
 
         // Check basic subtype options
         assert_eq!(
             basic_subtype.options.display_name,
-            Some("Basic Subtype".to_string())
+            Some(interner.get_or_intern("Basic Subtype"))
         );
         assert_eq!(basic_subtype.options.abbreviation, None); // No abbreviation specified
 
         // Check localisation structure
         assert_eq!(advanced_type.localisation.len(), 2);
-        let name_loc = advanced_type.localisation.get("Name").unwrap();
-        let desc_loc = advanced_type.localisation.get("Description").unwrap();
+        let name_loc = advanced_type
+            .localisation
+            .get(&interner.get_or_intern("Name"))
+            .unwrap();
+        let desc_loc = advanced_type
+            .localisation
+            .get(&interner.get_or_intern("Description"))
+            .unwrap();
 
-        assert_eq!(name_loc.pattern, "$");
+        assert_eq!(name_loc.pattern, interner.get_or_intern("$"));
         // Comment-based options should be parsed
         assert_eq!(name_loc.required, true); // From ## required comment
         assert_eq!(name_loc.primary, true); // From ## primary comment
 
-        assert_eq!(desc_loc.pattern, "$_desc");
+        assert_eq!(desc_loc.pattern, interner.get_or_intern("$_desc"));
         assert_eq!(desc_loc.required, false); // Marked as ## optional
         assert_eq!(desc_loc.primary, false);
 
@@ -829,20 +931,20 @@ types = {
         // Check modifiers structure
         assert_eq!(advanced_type.modifiers.modifiers.len(), 2);
         assert_eq!(
-            advanced_type
+            *advanced_type
                 .modifiers
                 .modifiers
-                .get("$_base_modifier")
+                .get(&interner.get_or_intern("$_base_modifier"))
                 .unwrap(),
-            "country"
+            interner.get_or_intern("country")
         );
         assert_eq!(
-            advanced_type
+            *advanced_type
                 .modifiers
                 .modifiers
-                .get("$_power_modifier")
+                .get(&interner.get_or_intern("$_power_modifier"))
                 .unwrap(),
-            "fleet"
+            interner.get_or_intern("fleet")
         );
 
         // Check subtype-specific modifiers
@@ -852,9 +954,9 @@ types = {
         assert_eq!(
             advanced_type.skip_root_key,
             Some(SkipRootKey::Multiple(vec![
-                "tech_group".to_string(),
-                "any".to_string(),
-                "military".to_string()
+                interner.get_or_intern("tech_group"),
+                interner.get_or_intern("any"),
+                interner.get_or_intern("military"),
             ]))
         );
     }
@@ -862,7 +964,8 @@ types = {
     #[test]
     fn test_skip_root_key_variants() {
         let mut data = CwtAnalysisData::new();
-        let mut visitor = TypeVisitor::new(&mut data);
+        let interner = ThreadedRodeo::new();
+        let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
 types = {
@@ -893,24 +996,32 @@ types = {
         assert_eq!(data.types.len(), 3);
 
         // Test specific skip
-        let specific_skip = data.types.get("specific_skip").unwrap();
+        let specific_skip = data
+            .types
+            .get(&interner.get_or_intern("specific_skip"))
+            .unwrap();
         assert_eq!(
             specific_skip.skip_root_key,
-            Some(SkipRootKey::Specific("specific_key".to_string()))
+            Some(SkipRootKey::Specific(
+                interner.get_or_intern("specific_key")
+            ))
         );
 
         // Test any skip
-        let any_skip = data.types.get("any_skip").unwrap();
+        let any_skip = data.types.get(&interner.get_or_intern("any_skip")).unwrap();
         assert_eq!(any_skip.skip_root_key, Some(SkipRootKey::Any));
 
         // Test multiple skip
-        let multiple_skip = data.types.get("multiple_skip").unwrap();
+        let multiple_skip = data
+            .types
+            .get(&interner.get_or_intern("multiple_skip"))
+            .unwrap();
         assert_eq!(
             multiple_skip.skip_root_key,
             Some(SkipRootKey::Multiple(vec![
-                "level1".to_string(),
-                "level2".to_string(),
-                "level3".to_string()
+                interner.get_or_intern("level1"),
+                interner.get_or_intern("level2"),
+                interner.get_or_intern("level3"),
             ]))
         );
     }
@@ -918,7 +1029,8 @@ types = {
     #[test]
     fn test_subtype_specific_localisation_modifiers() {
         let mut data = CwtAnalysisData::new();
-        let mut visitor = TypeVisitor::new(&mut data);
+        let interner = ThreadedRodeo::new();
+        let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
 types = {
@@ -973,31 +1085,54 @@ types = {
         // Check that we have 1 type
         assert_eq!(data.types.len(), 1);
 
-        let complex_type = data.types.get("complex_type").unwrap();
+        let complex_type = data
+            .types
+            .get(&interner.get_or_intern("complex_type"))
+            .unwrap();
 
         // Check subtypes
         assert_eq!(complex_type.subtypes.len(), 2);
-        assert!(complex_type.subtypes.contains_key("variant_a"));
-        assert!(complex_type.subtypes.contains_key("variant_b"));
+        assert!(
+            complex_type
+                .subtypes
+                .contains_key(&interner.get_or_intern("variant_a"))
+        );
+        assert!(
+            complex_type
+                .subtypes
+                .contains_key(&interner.get_or_intern("variant_b"))
+        );
 
         // Check base localisation
         assert_eq!(complex_type.localisation.len(), 2);
-        assert!(complex_type.localisation.contains_key("name"));
-        assert!(complex_type.localisation.contains_key("description"));
+        assert!(
+            complex_type
+                .localisation
+                .contains_key(&interner.get_or_intern("name"))
+        );
+        assert!(
+            complex_type
+                .localisation
+                .contains_key(&interner.get_or_intern("description"))
+        );
 
         // Check base modifiers
         assert_eq!(complex_type.modifiers.modifiers.len(), 2);
         assert_eq!(
-            complex_type
+            *complex_type
                 .modifiers
                 .modifiers
-                .get("$_base_power")
+                .get(&interner.get_or_intern("$_base_power"))
                 .unwrap(),
-            "country"
+            interner.get_or_intern("country")
         );
         assert_eq!(
-            complex_type.modifiers.modifiers.get("$_base_cost").unwrap(),
-            "economy"
+            *complex_type
+                .modifiers
+                .modifiers
+                .get(&interner.get_or_intern("$_base_cost"))
+                .unwrap(),
+            interner.get_or_intern("economy")
         );
 
         // Note: Subtype-specific localisation and modifiers would be fully parsed
@@ -1007,7 +1142,8 @@ types = {
     #[test]
     fn test_subtype_rule_options() {
         let mut data = CwtAnalysisData::new();
-        let mut visitor = TypeVisitor::new(&mut data);
+        let interner = ThreadedRodeo::new();
+        let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
 types = {
@@ -1039,30 +1175,54 @@ types = {
         // Check that we have 1 type
         assert_eq!(data.types.len(), 1);
 
-        let civic_or_origin = data.types.get("civic_or_origin").unwrap();
+        let civic_or_origin = data
+            .types
+            .get(&interner.get_or_intern("civic_or_origin"))
+            .unwrap();
 
         // Check subtypes
         assert_eq!(civic_or_origin.subtypes.len(), 2);
-        assert!(civic_or_origin.subtypes.contains_key("origin"));
-        assert!(civic_or_origin.subtypes.contains_key("civic"));
+        assert!(
+            civic_or_origin
+                .subtypes
+                .contains_key(&interner.get_or_intern("origin"))
+        );
+        assert!(
+            civic_or_origin
+                .subtypes
+                .contains_key(&interner.get_or_intern("civic"))
+        );
 
         // Check that the origin subtype has the is_origin property
-        let origin_subtype = civic_or_origin.subtypes.get("origin").unwrap();
+        let origin_subtype = civic_or_origin
+            .subtypes
+            .get(&interner.get_or_intern("origin"))
+            .unwrap();
         assert!(
             origin_subtype
                 .condition_properties
-                .contains_key("is_origin")
+                .contains_key(&interner.get_or_intern("is_origin"))
         );
         let origin_property = origin_subtype
             .condition_properties
-            .get("is_origin")
+            .get(&interner.get_or_intern("is_origin"))
             .unwrap();
         assert_eq!(origin_property.options.cardinality, None); // No cardinality specified
 
         // Check that the civic subtype has the is_origin property with cardinality
-        let civic_subtype = civic_or_origin.subtypes.get("civic").unwrap();
-        assert!(civic_subtype.condition_properties.contains_key("is_origin"));
-        let civic_property = civic_subtype.condition_properties.get("is_origin").unwrap();
+        let civic_subtype = civic_or_origin
+            .subtypes
+            .get(&interner.get_or_intern("civic"))
+            .unwrap();
+        assert!(
+            civic_subtype
+                .condition_properties
+                .contains_key(&interner.get_or_intern("is_origin"))
+        );
+        let civic_property = civic_subtype
+            .condition_properties
+            .get(&interner.get_or_intern("is_origin"))
+            .unwrap();
 
         // Check that the cardinality option was properly extracted
         assert!(civic_property.options.cardinality.is_some());

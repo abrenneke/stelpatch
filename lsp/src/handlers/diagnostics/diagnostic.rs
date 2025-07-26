@@ -1,8 +1,9 @@
 use std::ops::Range;
 
+use lasso::Spur;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Position};
 
-use crate::handlers::diagnostics::util::span_to_lsp_range;
+use crate::{handlers::diagnostics::util::span_to_lsp_range, interner::get_interner};
 
 /// Create a diagnostic for type mismatches
 pub fn create_type_mismatch_diagnostic(
@@ -49,7 +50,7 @@ pub fn create_value_mismatch_diagnostic(
 /// Create a diagnostic for an unexpected key
 pub fn create_unexpected_key_diagnostic(
     span: Range<usize>,
-    key_name: &str,
+    key_name: Spur,
     type_name: &str,
     content: &str,
 ) -> Diagnostic {
@@ -61,7 +62,11 @@ pub fn create_unexpected_key_diagnostic(
         code: Some(NumberOrString::String("unexpected-key".to_string())),
         code_description: None,
         source: Some("cw-type-checker".to_string()),
-        message: format!("Unexpected key '{}' in {} entity", key_name, type_name),
+        message: format!(
+            "Unexpected key '{}' in {} entity",
+            get_interner().resolve(&key_name),
+            type_name
+        ),
         related_information: None,
         tags: None,
         data: None,

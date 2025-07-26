@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::base_game::BaseGame;
-use cw_model::{Entity, LowerCaseHashMap};
+use crate::interner::get_interner;
+use cw_model::Entity;
+use lasso::Spur;
 
 use crate::handlers::cache::{GameDataCache, Namespace};
 
@@ -10,11 +12,12 @@ use crate::handlers::cache::{GameDataCache, Namespace};
 pub fn integrate_modifiers_into_cache(
     game_data_cache: &mut GameDataCache,
 ) -> Result<(), anyhow::Error> {
+    let interner = get_interner();
     // Load modifiers from Stellaris logs
-    let modifiers = BaseGame::load_modifiers()?;
+    let modifiers = BaseGame::load_modifiers(get_interner())?;
 
     // Create artificial entities for each modifier
-    let mut modifier_entities = LowerCaseHashMap::new();
+    let mut modifier_entities = HashMap::new();
     let mut entity_keys = Vec::new();
 
     for modifier in modifiers {
@@ -26,7 +29,7 @@ pub fn integrate_modifiers_into_cache(
     }
 
     // Create entity keys set
-    let entity_keys_set = Arc::new(entity_keys.iter().cloned().collect::<HashSet<String>>());
+    let entity_keys_set = Arc::new(entity_keys.iter().cloned().collect::<HashSet<Spur>>());
 
     // Create the modifiers namespace
     let modifiers_namespace = Namespace {
@@ -41,7 +44,7 @@ pub fn integrate_modifiers_into_cache(
     // Insert the modifiers namespace into the game data cache
     game_data_cache
         .namespaces
-        .insert("modifiers".to_string(), modifiers_namespace);
+        .insert(interner.get_or_intern("modifiers"), modifiers_namespace);
 
     Ok(())
 }

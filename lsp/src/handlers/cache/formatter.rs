@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
 use cw_model::{CwtType, ReferenceType, SimpleType};
+use lasso::Spur;
 
 use crate::handlers::cache::resolver::TypeResolver;
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
+use crate::interner::get_interner;
 
 const MAX_UNION_MEMBERS: usize = 8;
 const MAX_LITERAL_SET_MEMBERS: usize = 30;
@@ -22,7 +24,7 @@ impl<'a> TypeFormatter<'a> {
         }
     }
 
-    pub fn format_type(&self, scoped_type: Arc<ScopedType>, property_name: Option<&str>) -> String {
+    pub fn format_type(&self, scoped_type: Arc<ScopedType>, property_name: Option<Spur>) -> String {
         let mut result = self.format_type_with_depth(scoped_type.clone(), 0, property_name);
 
         // Add scope information
@@ -43,8 +45,10 @@ impl<'a> TypeFormatter<'a> {
         &self,
         scoped_type: Arc<ScopedType>,
         depth: usize,
-        property_name: Option<&str>,
+        property_name: Option<Spur>,
     ) -> String {
+        let interner = get_interner();
+
         if depth > 3 {
             return "...".to_string();
         }
@@ -52,14 +56,14 @@ impl<'a> TypeFormatter<'a> {
         let scoped_type = self.resolver.resolve_type(scoped_type);
 
         match scoped_type.cwt_type_for_matching() {
-            CwtTypeOrSpecialRef::Literal(lit) => format!("\"{}\"", lit),
+            CwtTypeOrSpecialRef::Literal(lit) => format!("\"{}\"", interner.resolve(lit)),
             CwtTypeOrSpecialRef::LiteralSet(literals) => {
                 let mut sorted: Vec<_> = literals.iter().collect();
                 sorted.sort();
                 if sorted.len() <= MAX_LITERAL_SET_MEMBERS {
                     sorted
                         .iter()
-                        .map(|s| format!("\"{}\"", s))
+                        .map(|s| format!("\"{}\"", interner.resolve(s)))
                         .collect::<Vec<_>>()
                         .join(" | ")
                 } else {
@@ -68,7 +72,7 @@ impl<'a> TypeFormatter<'a> {
                         sorted
                             .iter()
                             .take(4)
-                            .map(|s| format!("\"{}\"", s))
+                            .map(|s| format!("\"{}\"", interner.resolve(s)))
                             .collect::<Vec<_>>()
                             .join(" | "),
                         literals.len() - MAX_LITERAL_SET_MEMBERS
@@ -122,24 +126,24 @@ impl<'a> TypeFormatter<'a> {
 
                 if depth >= 1 {
                     if available_properties.is_empty() {
-                        return format!("{} {{}}", block.type_name);
+                        return format!("{} {{}}", interner.resolve(&block.type_name));
                     } else {
                         return format!(
                             "{} {{ /* ... +{} properties */ }}",
-                            block.type_name,
+                            interner.resolve(&block.type_name),
                             available_properties.len()
                         );
                     }
                 }
 
                 if available_properties.is_empty() {
-                    return format!("{} {{}}", block.type_name);
+                    return format!("{} {{}}", interner.resolve(&block.type_name));
                 }
 
                 let mut sorted_properties: Vec<_> = available_properties.iter().collect();
                 sorted_properties.sort();
 
-                let mut lines = vec![format!("{} {{", block.type_name)];
+                let mut lines = vec![format!("{} {{", interner.resolve(&block.type_name))];
                 let mut line_count = 1;
                 let mut properties_shown = 0;
 
@@ -152,6 +156,8 @@ impl<'a> TypeFormatter<'a> {
                         break;
                     }
 
+                    let property_name = interner.get_or_intern(property_name);
+
                     let property_type = self
                         .resolver
                         .navigate_to_property(scoped_type.clone(), property_name);
@@ -163,7 +169,8 @@ impl<'a> TypeFormatter<'a> {
                         ) {
                             eprintln!(
                                 "navigate_to_property '{}' did not resolve the alias_match_left, coming from {:?}",
-                                property_name, scoped_type
+                                interner.resolve(&property_name),
+                                scoped_type
                             );
                         }
 
@@ -175,7 +182,7 @@ impl<'a> TypeFormatter<'a> {
 
                         // Handle multi-line types (nested blocks)
                         if formatted_value.contains('\n') {
-                            lines.push(format!("  {}:", property_name));
+                            lines.push(format!("  {}:", interner.resolve(&property_name)));
                             let nested_lines: Vec<&str> = formatted_value.lines().collect();
                             let mut lines_added = 1;
 
@@ -192,7 +199,11 @@ impl<'a> TypeFormatter<'a> {
                             }
                             line_count += lines_added;
                         } else {
-                            lines.push(format!("  {} = {}", property_name, formatted_value));
+                            lines.push(format!(
+                                "  {} = {}",
+                                interner.resolve(&property_name),
+                                formatted_value
+                            ));
                             line_count += 1;
                         }
                         properties_shown += 1;
