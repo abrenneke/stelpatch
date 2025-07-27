@@ -67,7 +67,7 @@ impl ScopeHandler {
 
     /// Get all link properties
     pub fn get_all_link_properties(&self) -> Vec<Spur> {
-        self.cwt_analyzer.get_links().keys().cloned().collect()
+        self.cwt_analyzer.get_links().keys().collect()
     }
 
     /// Get all available link properties for the current scope
@@ -76,7 +76,7 @@ impl ScopeHandler {
 
         for (link_name, link_def) in self.cwt_analyzer.get_links() {
             if link_def.can_be_used_from(scope, &self.cwt_analyzer, get_interner()) {
-                link_properties.push(*link_name);
+                link_properties.push(link_name);
             }
         }
 

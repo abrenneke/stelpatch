@@ -4,6 +4,7 @@ mod complex_enums;
 mod scripted_effect_arguments;
 mod value_sets;
 
+use cw_model::SpurMap;
 use lasso::Spur;
 
 use crate::handlers::cache::{
@@ -15,31 +16,31 @@ use crate::handlers::cache::{
 };
 
 pub struct DataCollector<'resolver> {
-    value_sets: HashMap<Spur, HashSet<Spur>>,
-    complex_enums: HashMap<Spur, HashSet<Spur>>,
-    scripted_effect_arguments: HashMap<Spur, HashSet<Spur>>, // Also scripted triggers for convenience... might be wrong because clashes
+    value_sets: SpurMap<HashSet<Spur>>,
+    complex_enums: SpurMap<HashSet<Spur>>,
+    scripted_effect_arguments: SpurMap<HashSet<Spur>>, // Also scripted triggers for convenience... might be wrong because clashes
     type_resolver: &'resolver TypeResolver,
 }
 
 impl<'resolver> DataCollector<'resolver> {
     pub fn new(type_resolver: &'resolver TypeResolver) -> Self {
         Self {
-            value_sets: HashMap::new(),
-            complex_enums: HashMap::new(),
-            scripted_effect_arguments: HashMap::new(),
+            value_sets: SpurMap::new(),
+            complex_enums: SpurMap::new(),
+            scripted_effect_arguments: SpurMap::new(),
             type_resolver,
         }
     }
 
-    pub fn value_sets(&self) -> &HashMap<Spur, HashSet<Spur>> {
+    pub fn value_sets(&self) -> &SpurMap<HashSet<Spur>> {
         &self.value_sets
     }
 
-    pub fn complex_enums(&self) -> &HashMap<Spur, HashSet<Spur>> {
+    pub fn complex_enums(&self) -> &SpurMap<HashSet<Spur>> {
         &self.complex_enums
     }
 
-    pub fn scripted_effect_arguments(&self) -> &HashMap<Spur, HashSet<Spur>> {
+    pub fn scripted_effect_arguments(&self) -> &SpurMap<HashSet<Spur>> {
         &self.scripted_effect_arguments
     }
 

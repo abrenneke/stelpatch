@@ -1,5 +1,6 @@
 use crate::handlers::cache::EntityRestructurer;
 use crate::interner::get_interner;
+use cw_model::SpurMap;
 use cw_model::types::CwtAnalyzer;
 use lasso::Spur;
 use std::collections::{HashMap, HashSet};
@@ -8,14 +9,14 @@ use std::sync::{Arc, RwLock};
 /// Shared utilities for resolver modules
 pub struct ResolverUtils {
     cwt_analyzer: Arc<CwtAnalyzer>,
-    namespace_cache: Arc<RwLock<HashMap<Spur, Option<Arc<HashSet<Spur>>>>>>,
+    namespace_cache: Arc<RwLock<SpurMap<Option<Arc<HashSet<Spur>>>>>>,
 }
 
 impl ResolverUtils {
     pub fn new(cwt_analyzer: Arc<CwtAnalyzer>) -> Self {
         Self {
             cwt_analyzer,
-            namespace_cache: Arc::new(RwLock::new(HashMap::new())),
+            namespace_cache: Arc::new(RwLock::new(SpurMap::new())),
         }
     }
 

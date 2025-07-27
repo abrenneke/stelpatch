@@ -3,7 +3,7 @@
 //! This module provides the main coordinator for all CWT visitors, determining which
 //! visitor should handle each rule based on its type and context.
 
-use crate::{AliasPattern, CaseInsensitiveInterner, CwtType};
+use crate::{AliasPattern, CaseInsensitiveInterner, CwtType, SpurMap};
 
 use super::super::conversion::ConversionError;
 use super::super::definitions::*;
@@ -22,28 +22,28 @@ use std::sync::Arc;
 #[derive(Debug, Default)]
 pub struct CwtAnalysisData {
     /// Known types registry
-    pub types: HashMap<Spur, TypeDefinition>,
+    pub types: SpurMap<TypeDefinition>,
 
     /// Known enums registry
-    pub enums: HashMap<Spur, EnumDefinition>,
+    pub enums: SpurMap<EnumDefinition>,
 
     /// Known value sets registry
-    pub value_sets: HashMap<Spur, HashSet<String>>,
+    pub value_sets: SpurMap<HashSet<String>>,
 
     /// Known aliases registry
     pub aliases: HashMap<AliasPattern, AliasDefinition>,
 
     /// Known single aliases registry
-    pub single_aliases: HashMap<Spur, Arc<CwtType>>,
+    pub single_aliases: SpurMap<Arc<CwtType>>,
 
     /// Known links registry
-    pub links: HashMap<Spur, LinkDefinition>,
+    pub links: SpurMap<LinkDefinition>,
 
     /// Known scopes registry
-    pub scopes: HashMap<Spur, ScopeDefinition>,
+    pub scopes: SpurMap<ScopeDefinition>,
 
     /// Known scope groups registry
-    pub scope_groups: HashMap<Spur, ScopeGroupDefinition>,
+    pub scope_groups: SpurMap<ScopeGroupDefinition>,
 
     /// Errors encountered during conversion
     pub errors: Vec<ConversionError>,

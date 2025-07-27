@@ -2,9 +2,9 @@ use crate::handlers::scope::ScopeStack;
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
 use crate::interner::get_interner;
 use cw_model::types::{CwtAnalyzer, LinkDefinition, PatternProperty, PatternType};
-use cw_model::{CwtType, Entity, EnumDefinition, ReferenceType};
+use cw_model::{CwtType, Entity, EnumDefinition, ReferenceType, SpurMap};
 use lasso::Spur;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -229,7 +229,7 @@ impl TypeResolver {
     }
 
     /// Get all enum definitions from the CWT analyzer
-    pub fn get_enums(&self) -> &HashMap<Spur, EnumDefinition> {
+    pub fn get_enums(&self) -> &SpurMap<EnumDefinition> {
         self.cwt_analyzer.get_enums()
     }
 }

@@ -32,7 +32,6 @@ pub fn get_available_properties(
                         subtype_def
                             .allowed_properties
                             .keys()
-                            .cloned()
                             .map(|k| interner.resolve(&k).to_string()),
                     );
                 }
@@ -43,7 +42,6 @@ pub fn get_available_properties(
                 block
                     .properties
                     .keys()
-                    .cloned()
                     .map(|k| interner.resolve(&k).to_string()),
             );
 

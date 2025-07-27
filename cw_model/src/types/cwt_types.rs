@@ -3,7 +3,7 @@
 //! This module provides a direct representation of CWT types and definitions,
 //! closely aligned with the CWT specification rather than inferred types.
 
-use crate::{CaseInsensitiveInterner, SeverityLevel, TypeKeyFilter};
+use crate::{CaseInsensitiveInterner, SeverityLevel, SpurMap, TypeKeyFilter};
 use cw_parser::{AstCwtRule, CwtCommentRangeBound};
 use lasso::Spur;
 use std::{
@@ -261,16 +261,16 @@ pub struct BlockType {
     pub type_name: Spur,
 
     /// Regular properties
-    pub properties: HashMap<Spur, Property>,
+    pub properties: SpurMap<Property>,
 
     /// Subtypes - conditional property sets
-    pub subtypes: HashMap<Spur, Subtype>,
+    pub subtypes: SpurMap<Subtype>,
 
     /// Subtype properties - subtype_name -> property_name -> Property
-    pub subtype_properties: HashMap<Spur, HashMap<Spur, Property>>,
+    pub subtype_properties: SpurMap<SpurMap<Property>>,
 
     /// Subtype pattern properties - subtype_name -> pattern_property
-    pub subtype_pattern_properties: HashMap<Spur, Vec<PatternProperty>>,
+    pub subtype_pattern_properties: SpurMap<Vec<PatternProperty>>,
 
     /// Pattern properties - properties that can match multiple keys but maintain unified cardinality
     pub pattern_properties: Vec<PatternProperty>,
@@ -561,11 +561,11 @@ impl std::fmt::Debug for Property {
 pub struct Subtype {
     /// CWT schema condition properties with cardinality constraints
     /// These define the rules for when this subtype matches (e.g., is_origin = no with cardinality 0..1)
-    pub condition_properties: HashMap<Spur, Property>,
+    pub condition_properties: SpurMap<Property>,
 
     /// Game data properties that are allowed when this subtype is active
     /// These are discovered from analyzing actual game files (e.g., traits, playable, etc.)
-    pub allowed_properties: HashMap<Spur, Property>,
+    pub allowed_properties: SpurMap<Property>,
 
     /// Pattern properties that are allowed when this subtype is active
     pub allowed_pattern_properties: Vec<PatternProperty>,
@@ -666,7 +666,7 @@ pub struct CwtOptions {
     pub push_scope: Option<Spur>,
 
     /// Replace scope mappings
-    pub replace_scope: Option<HashMap<Spur, Spur>>,
+    pub replace_scope: Option<SpurMap<Spur>>,
 
     /// Scope constraint
     pub scope: Option<Vec<Spur>>,
@@ -777,29 +777,29 @@ impl std::fmt::Debug for CwtOptions {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalisationSpec {
     /// Required localisation keys
-    pub required: HashMap<Spur, Spur>,
+    pub required: SpurMap<Spur>,
     /// Optional localisation keys
-    pub optional: HashMap<Spur, Spur>,
+    pub optional: SpurMap<Spur>,
     /// Primary localisation key
     pub primary: Option<String>,
     /// Subtype-specific localisation
-    pub subtypes: HashMap<Spur, HashMap<Spur, Spur>>,
+    pub subtypes: SpurMap<SpurMap<Spur>>,
 }
 
 /// Modifier generation specification
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModifierSpec {
     /// Modifier patterns
-    pub modifiers: HashMap<Spur, Spur>,
+    pub modifiers: SpurMap<Spur>,
     /// Subtype-specific modifiers
-    pub subtypes: HashMap<Spur, HashMap<Spur, Spur>>,
+    pub subtypes: SpurMap<SpurMap<Spur>>,
 }
 
 impl Default for ModifierSpec {
     fn default() -> Self {
         Self {
-            modifiers: HashMap::new(),
-            subtypes: HashMap::new(),
+            modifiers: SpurMap::new(),
+            subtypes: SpurMap::new(),
         }
     }
 }
@@ -1436,14 +1436,14 @@ impl CwtType {
     pub fn block(name: Spur) -> BlockType {
         BlockType {
             type_name: name,
-            properties: HashMap::new(),
-            subtypes: HashMap::new(),
+            properties: SpurMap::new(),
+            subtypes: SpurMap::new(),
             pattern_properties: Vec::new(),
-            subtype_properties: HashMap::new(),
+            subtype_properties: SpurMap::new(),
             localisation: None,
             modifiers: None,
             additional_flags: Vec::new(),
-            subtype_pattern_properties: HashMap::new(),
+            subtype_pattern_properties: SpurMap::new(),
         }
     }
 
@@ -1609,7 +1609,7 @@ impl CwtOptions {
                 "replace_scope" | "replace_scopes" => {
                     if option.value.is_list() {
                         let replacements = option.value.as_list().unwrap();
-                        let mut replace_map = HashMap::new();
+                        let mut replace_map = SpurMap::new();
                         for replacement in replacements {
                             let (from, to) = replacement.as_assignment().unwrap();
                             replace_map.insert(
@@ -1621,7 +1621,7 @@ impl CwtOptions {
                     } else if option.value.is_assignment() {
                         let (from, to) = option.value.as_assignment().unwrap();
 
-                        options.replace_scope = Some(HashMap::from([(
+                        options.replace_scope = Some(SpurMap::from([(
                             interner.get_or_intern(from),
                             interner.get_or_intern(to.as_string_or_identifier().unwrap()),
                         )]));

@@ -109,7 +109,7 @@ pub struct ModDiff {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct NamespaceMap(pub HashMap<Spur, NamespaceDiff>);
+pub struct NamespaceMap(pub SpurMap<NamespaceDiff>);
 
 impl<T> Changed<T> {
     pub fn new(old: T, new: T) -> Self {
@@ -196,7 +196,7 @@ impl NamespaceDiff {
         interner: &ThreadedRodeo,
     ) -> &mut Self {
         let properties_without_variables =
-            |properties: &HashMap<Spur, Diff<PropertyInfoList, PropertyInfoListDiff>>| {
+            |properties: &SpurMap<Diff<PropertyInfoList, PropertyInfoListDiff>>| {
                 properties
                     .iter()
                     .filter(|(name, _)| !interner.resolve(name).starts_with("@"))
@@ -423,7 +423,7 @@ impl Diffable<PropertiesDiff> for Properties {
 }
 
 impl Diffable<HashMapDiff<Spur, ConditionalBlock, ConditionalBlockDiff>>
-    for HashMap<Spur, ConditionalBlock>
+    for SpurMap<ConditionalBlock>
 {
     fn diff_to(
         &self,
@@ -1088,7 +1088,7 @@ impl ApplyPatch<PropertiesDiff> for Properties {
 }
 
 impl ApplyPatch<HashMapDiff<Spur, ConditionalBlock, ConditionalBlockDiff>>
-    for HashMap<Spur, ConditionalBlock>
+    for SpurMap<ConditionalBlock>
 {
     fn apply_patch(
         &self,

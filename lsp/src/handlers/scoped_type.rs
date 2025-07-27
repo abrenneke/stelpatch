@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use crate::{
     handlers::scope::{ScopeContext, ScopeError, ScopeStack},
@@ -9,7 +6,7 @@ use crate::{
 };
 use cw_model::{
     ArrayType, BlockType, CwtAnalyzer, CwtType, PatternProperty, Property, ReferenceType,
-    SimpleType, TypeFingerprint,
+    SimpleType, SpurMap, TypeFingerprint,
 };
 use lasso::Spur;
 
@@ -543,7 +540,7 @@ impl ScopeAwareProperty for Property {
 
         // Apply replace_scope if present
         if let Some(replace_scope) = &self.options.replace_scope {
-            let mut new_scopes = HashMap::new();
+            let mut new_scopes = SpurMap::new();
 
             for (key, value) in replace_scope {
                 if let Some(scope_name) = analyzer.resolve_scope_name(*value) {
@@ -581,7 +578,7 @@ impl ScopeAwareProperty for PatternProperty {
 
         // Apply replace_scope if present
         if let Some(replace_scope) = &self.options.replace_scope {
-            let mut new_scopes = HashMap::new();
+            let mut new_scopes = SpurMap::new();
 
             for (key, value) in replace_scope {
                 if let Some(scope_name) = analyzer.resolve_scope_name(*value) {

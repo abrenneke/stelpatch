@@ -368,7 +368,7 @@ where
 }
 
 fn sorted_key_value_iter_resolve<'a, V>(
-    map: &'a HashMap<Spur, V>,
+    map: &'a SpurMap<V>,
     interner: &'a ThreadedRodeo,
 ) -> impl Iterator<Item = (Spur, V)> + 'a
 where

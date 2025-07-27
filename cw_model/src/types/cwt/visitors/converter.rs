@@ -14,7 +14,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     BlockType, CaseInsensitiveInterner, CwtOptions, CwtType, PatternProperty, PatternType,
-    Property, ReferenceType, SimpleType,
+    Property, ReferenceType, SimpleType, SpurMap,
 };
 
 /// Converter for CWT values to CwtType
@@ -123,9 +123,9 @@ impl CwtConverter {
         type_name: Option<Spur>,
         interner: &CaseInsensitiveInterner,
     ) -> CwtType {
-        let mut properties: HashMap<Spur, Property> = HashMap::new();
-        let mut subtype_properties: HashMap<Spur, HashMap<Spur, Property>> = HashMap::new();
-        let mut subtype_pattern_properties: HashMap<Spur, Vec<PatternProperty>> = HashMap::new();
+        let mut properties: SpurMap<Property> = SpurMap::new();
+        let mut subtype_properties: SpurMap<SpurMap<Property>> = SpurMap::new();
+        let mut subtype_pattern_properties: SpurMap<Vec<PatternProperty>> = SpurMap::new();
         let mut pattern_properties = Vec::new();
         let mut union_values = Vec::new();
 
@@ -214,7 +214,7 @@ impl CwtConverter {
                                         // Extract regular properties
                                         for (key, value) in block.properties.iter() {
                                             subtype_map.insert(
-                                                *key,
+                                                key,
                                                 Property {
                                                     property_type: value.property_type.clone(),
                                                     options: value.options.clone(),
@@ -302,7 +302,7 @@ impl CwtConverter {
         CwtType::Block(BlockType {
             type_name: type_name.unwrap_or_default(),
             properties,
-            subtypes: HashMap::new(),
+            subtypes: SpurMap::new(),
             subtype_properties,
             subtype_pattern_properties,
             pattern_properties,

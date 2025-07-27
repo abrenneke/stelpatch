@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use cw_model::{CwtType, Entity, PropertyInfoList, ReferenceType};
+use cw_model::{CwtType, Entity, PropertyInfoList, ReferenceType, SpurMap};
 use lasso::Spur;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -19,14 +19,14 @@ use crate::{
 };
 
 pub struct ValueSetCollector<'resolver> {
-    value_sets: HashMap<Spur, HashSet<Spur>>,
+    value_sets: SpurMap<HashSet<Spur>>,
     type_resolver: &'resolver TypeResolver,
 }
 
 impl<'resolver> ValueSetCollector<'resolver> {
     pub fn new(type_resolver: &'resolver TypeResolver) -> Self {
         Self {
-            value_sets: HashMap::new(),
+            value_sets: SpurMap::new(),
             type_resolver,
         }
     }
@@ -41,21 +41,22 @@ impl<'resolver> ValueSetCollector<'resolver> {
         }
     }
 
-    pub fn collect(mut self) -> HashMap<Spur, HashSet<Spur>> {
+    pub fn collect(mut self) -> SpurMap<HashSet<Spur>> {
         // Get namespaces from GameDataCache, then use EntityRestructurer for entity access
         let namespaces = match GameDataCache::get() {
             Some(game_data) => game_data.get_namespaces(),
-            None => return HashMap::new(), // Early return if game data not available
+            None => return SpurMap::new(), // Early return if game data not available
         };
 
         // Collect value_sets from parallel processing using EntityRestructurer
-        let results: Vec<HashMap<Spur, HashSet<Spur>>> = namespaces
+        let results: Vec<SpurMap<HashSet<Spur>>> = namespaces
+            .as_inner()
             .par_iter()
             .filter_map(|(namespace, _namespace_data)| {
-                get_namespace_entity_type(*namespace, None) // TODO: Add file_path
+                get_namespace_entity_type(namespace.0, None) // TODO: Add file_path
                     .and_then(|namespace_type| namespace_type.scoped_type)
                     .map(|scoped_type| {
-                        self.collect_value_sets_from_namespace(*namespace, scoped_type)
+                        self.collect_value_sets_from_namespace(namespace.0, scoped_type)
                     })
             })
             .collect();
@@ -74,26 +75,27 @@ impl<'resolver> ValueSetCollector<'resolver> {
         &self,
         namespace: Spur,
         scoped_type: Arc<ScopedType>,
-    ) -> HashMap<Spur, HashSet<Spur>> {
+    ) -> SpurMap<HashSet<Spur>> {
         // Use EntityRestructurer to get entities instead of direct GameDataCache access
         let entities = match EntityRestructurer::get_all_namespace_entities(namespace) {
             Some(entities) => entities,
-            None => return HashMap::new(),
+            None => return SpurMap::new(),
         };
 
         // Process entities in parallel within the namespace
-        let results: Vec<HashMap<Spur, HashSet<Spur>>> = entities
+        let results: Vec<SpurMap<HashSet<Spur>>> = entities
+            .as_inner()
             .par_iter()
             .map(|(entity_name, entity)| {
                 // Perform subtype narrowing for this entity, similar to provider.rs
                 let narrowed_scoped_type =
-                    self.narrow_entity_type(*entity_name, entity, scoped_type.clone());
+                    self.narrow_entity_type(entity_name.0, entity, scoped_type.clone());
                 self.collect_value_sets_from_entity(entity, narrowed_scoped_type)
             })
             .collect();
 
         // Merge results from this namespace
-        let mut namespace_value_sets: HashMap<Spur, HashSet<Spur>> = HashMap::new();
+        let mut namespace_value_sets: SpurMap<HashSet<Spur>> = SpurMap::new();
         for result in results {
             for (key, values) in result {
                 namespace_value_sets.entry(key).or_default().extend(values);
@@ -134,8 +136,8 @@ impl<'resolver> ValueSetCollector<'resolver> {
         &self,
         entity: &Entity,
         scoped_type: Arc<ScopedType>,
-    ) -> HashMap<Spur, HashSet<Spur>> {
-        let mut entity_value_sets: HashMap<Spur, HashSet<Spur>> = HashMap::new();
+    ) -> SpurMap<HashSet<Spur>> {
+        let mut entity_value_sets: SpurMap<HashSet<Spur>> = SpurMap::new();
 
         for (property_name, property_value) in entity.properties.kv.iter() {
             let property_type = self
@@ -166,8 +168,8 @@ impl<'resolver> ValueSetCollector<'resolver> {
         &self,
         property_value: &PropertyInfoList,
         property_type: Arc<ScopedType>,
-    ) -> HashMap<Spur, HashSet<Spur>> {
-        let mut property_value_sets: HashMap<Spur, HashSet<Spur>> = HashMap::new();
+    ) -> SpurMap<HashSet<Spur>> {
+        let mut property_value_sets: SpurMap<HashSet<Spur>> = SpurMap::new();
 
         match property_type.cwt_type_for_matching() {
             CwtTypeOrSpecialRef::Reference(ReferenceType::ValueSet { key }) => {
@@ -234,8 +236,8 @@ impl<'resolver> ValueSetCollector<'resolver> {
         &self,
         items: &[cw_model::Value],
         scoped_type: Arc<ScopedType>,
-    ) -> HashMap<Spur, HashSet<Spur>> {
-        let mut item_value_sets: HashMap<Spur, HashSet<Spur>> = HashMap::new();
+    ) -> SpurMap<HashSet<Spur>> {
+        let mut item_value_sets: SpurMap<HashSet<Spur>> = SpurMap::new();
 
         // Check if the scoped type has additional flags that are value sets
         if let CwtTypeOrSpecialRef::Block(block_type) = scoped_type.cwt_type_for_matching() {

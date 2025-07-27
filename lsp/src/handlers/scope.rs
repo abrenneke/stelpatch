@@ -3,7 +3,7 @@ use std::fmt;
 
 use lasso::Spur;
 
-use cw_model::TypeFingerprint;
+use cw_model::{SpurMap, TypeFingerprint};
 
 use crate::interner::get_interner;
 
@@ -90,10 +90,7 @@ impl ScopeStack {
 
     /// Replace the entire scope context based on replace_scope specification
     /// This rebuilds the stack from deepest to shallowest scope and sets explicit references
-    pub fn replace_scope(
-        &mut self,
-        replacements: HashMap<Spur, ScopeContext>,
-    ) -> Result<(), ScopeError> {
+    pub fn replace_scope(&mut self, replacements: SpurMap<ScopeContext>) -> Result<(), ScopeError> {
         let interner = get_interner();
 
         // Clear the current stack
@@ -149,9 +146,9 @@ impl ScopeStack {
     /// Helper method to replace scope using string replacements (converts to ScopeContext)
     pub fn replace_scope_from_strings(
         &mut self,
-        replacements: HashMap<Spur, Spur>,
+        replacements: SpurMap<Spur>,
     ) -> Result<(), ScopeError> {
-        let scope_replacements: HashMap<Spur, ScopeContext> = replacements
+        let scope_replacements: SpurMap<ScopeContext> = replacements
             .into_iter()
             .map(|(k, v)| (k, ScopeContext::new(v)))
             .collect();
@@ -588,7 +585,7 @@ mod tests {
         let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Set explicit scope references via replace_scope
-        let mut replacements = HashMap::new();
+        let mut replacements = SpurMap::new();
         replacements.insert(
             get_interner().get_or_intern("this"),
             ScopeContext::new(get_interner().get_or_intern("pop")),
@@ -637,7 +634,7 @@ mod tests {
         let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Build up a stack and set explicit references
-        let mut replacements = HashMap::new();
+        let mut replacements = SpurMap::new();
         replacements.insert(
             get_interner().get_or_intern("this"),
             ScopeContext::new(get_interner().get_or_intern("pop")),
@@ -700,7 +697,7 @@ mod tests {
         let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Set up both stack and explicit scopes
-        let mut replacements = HashMap::new();
+        let mut replacements = SpurMap::new();
         replacements.insert(
             get_interner().get_or_intern("this"),
             ScopeContext::new(get_interner().get_or_intern("pop")),
@@ -851,7 +848,7 @@ mod tests {
         assert_eq!(available, expected);
 
         // Add explicit scopes via replace_scope
-        let mut replacements = HashMap::new();
+        let mut replacements = SpurMap::new();
         replacements.insert(
             get_interner().get_or_intern("this"),
             ScopeContext::new(get_interner().get_or_intern("pop")),
@@ -896,7 +893,7 @@ mod tests {
         ));
 
         // Test with all levels including prevprevprevprev and fromfromfromfrom
-        let mut replacements = HashMap::new();
+        let mut replacements = SpurMap::new();
         replacements.insert(
             get_interner().get_or_intern("this"),
             ScopeContext::new(get_interner().get_or_intern("pop")),
@@ -1065,7 +1062,7 @@ mod tests {
         ));
 
         // Test partial replacement (only some scopes specified)
-        let mut partial_replacements = HashMap::new();
+        let mut partial_replacements = SpurMap::new();
         partial_replacements.insert(
             get_interner().get_or_intern("this"),
             ScopeContext::new(get_interner().get_or_intern("pop")),
@@ -1111,7 +1108,7 @@ mod tests {
         ));
 
         // Replace with empty map
-        let replacements = HashMap::new();
+        let replacements = SpurMap::new();
         stack.replace_scope(replacements).unwrap();
 
         // Should have root as the only scope
@@ -1133,7 +1130,7 @@ mod tests {
         let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Set explicit from reference
-        let mut replacements = HashMap::new();
+        let mut replacements = SpurMap::new();
         replacements.insert(
             get_interner().get_or_intern("from"),
             ScopeContext::new(get_interner().get_or_intern("fleet")),
@@ -1194,7 +1191,7 @@ mod tests {
         let mut stack = ScopeStack::new(ScopeContext::new(get_interner().get_or_intern("country")));
 
         // Set up some scopes
-        let mut replacements = HashMap::new();
+        let mut replacements = SpurMap::new();
         replacements.insert(
             get_interner().get_or_intern("this"),
             ScopeContext::new(get_interner().get_or_intern("pop")),

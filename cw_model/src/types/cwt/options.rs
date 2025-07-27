@@ -7,7 +7,7 @@ use cw_parser::{CwtCommentRangeBound, CwtOptionExpression, cwt::AstCwtRule};
 use lasso::Spur;
 use std::collections::HashMap;
 
-use crate::{CaseInsensitiveInterner, TypeKeyFilter};
+use crate::{CaseInsensitiveInterner, SpurMap, TypeKeyFilter};
 
 /// Options that can be applied to CWT rules
 #[derive(Debug, Clone, Default)]
@@ -22,7 +22,7 @@ pub struct RuleOptions {
     pub push_scope: Option<Spur>,
 
     /// Replace scope mappings
-    pub replace_scope: Option<HashMap<Spur, Spur>>,
+    pub replace_scope: Option<SpurMap<Spur>>,
 
     /// Documentation comment
     pub documentation: Option<Spur>,
@@ -81,7 +81,7 @@ impl RuleOptions {
                 }
                 "replace_scope" => {
                     let replacements = cwt_option.value.as_list().unwrap();
-                    let mut replace_map = HashMap::new();
+                    let mut replace_map = SpurMap::new();
                     for replacement in replacements {
                         let (from, to) = replacement.as_assignment().unwrap();
                         replace_map.insert(

@@ -1,11 +1,11 @@
 use cw_model::types::CwtAnalyzer;
 use cw_model::{
-    BlockType, CwtType, Entity, Property, ReferenceType, SimpleType, TypeDefinition, TypeKeyFilter,
-    entity_from_ast,
+    BlockType, CwtType, Entity, Property, ReferenceType, SimpleType, SpurMap, TypeDefinition,
+    TypeKeyFilter, entity_from_ast,
 };
 use cw_parser::CwtModuleCell;
 use lasso::Spur;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -22,7 +22,7 @@ use super::types::TypeInfo;
 
 /// Cache for Stellaris type information that's loaded once and shared across requests
 pub struct TypeCache {
-    namespace_types: HashMap<Spur, Vec<Arc<ScopedType>>>,
+    namespace_types: SpurMap<Vec<Arc<ScopedType>>>,
     cwt_analyzer: Arc<CwtAnalyzer>,
     resolver: TypeResolver,
 }
@@ -54,9 +54,9 @@ impl TypeCache {
             eprintln!("Building cache from CWT types");
 
             // Pre-compute entity types for quick lookups
-            let mut namespace_types: HashMap<Spur, Vec<Arc<ScopedType>>> = HashMap::new();
+            let mut namespace_types: SpurMap<Vec<Arc<ScopedType>>> = SpurMap::new();
             for (type_name, type_def) in cwt_analyzer.get_types() {
-                let type_name = get_interner().resolve(type_name);
+                let type_name = get_interner().resolve(&type_name);
                 // Extract namespace from the path
                 let namespace = if let Some(path) = &type_def.path {
                     let path = get_interner().resolve(path);
@@ -86,10 +86,10 @@ impl TypeCache {
                 }
 
                 if let Some(replace_scope) = type_def.rule_options.replace_scope.as_ref() {
-                    let mut new_scopes: HashMap<Spur, Spur> = HashMap::new();
+                    let mut new_scopes: SpurMap<Spur> = SpurMap::new();
                     for (key, value) in replace_scope {
                         if let Some(scope_name) = cwt_analyzer.resolve_scope_name(*value) {
-                            new_scopes.insert(*key, scope_name);
+                            new_scopes.insert(key, scope_name);
                         }
                     }
 
@@ -104,7 +104,7 @@ impl TypeCache {
                 // This allows validation of prev/prevprev scope references without requiring
                 // specific scope types that can't be determined statically.
                 if namespace == "common/scripted_effects" || namespace == "common/script_values" {
-                    let mut scripted_effect_scopes: HashMap<Spur, Spur> = HashMap::new();
+                    let mut scripted_effect_scopes: SpurMap<Spur> = SpurMap::new();
                     scripted_effect_scopes.insert(
                         interner.get_or_intern("this"),
                         interner.get_or_intern("any"),
@@ -166,9 +166,9 @@ impl TypeCache {
                     path: Some(interner.get_or_intern("game/modifiers")),
                     name_field: None,
                     skip_root_key: None,
-                    localisation: HashMap::new(),
+                    localisation: SpurMap::new(),
                     rules: Arc::new(CwtType::Unknown),
-                    subtypes: HashMap::new(),
+                    subtypes: SpurMap::new(),
                     options: Default::default(),
                     rule_options: Default::default(),
                     modifiers: Default::default(),
@@ -177,10 +177,10 @@ impl TypeCache {
 
             let mut inline_script_block = BlockType {
                 type_name: interner.get_or_intern("$inline_script"),
-                properties: HashMap::new(),
-                subtypes: HashMap::new(),
-                subtype_properties: HashMap::new(),
-                subtype_pattern_properties: HashMap::new(),
+                properties: SpurMap::new(),
+                subtypes: SpurMap::new(),
+                subtype_properties: SpurMap::new(),
+                subtype_pattern_properties: SpurMap::new(),
                 pattern_properties: vec![],
                 localisation: None,
                 modifiers: Default::default(),
@@ -212,8 +212,8 @@ impl TypeCache {
                     path: Some(interner.get_or_intern("game/$inline_scripts")),
                     name_field: None,
                     skip_root_key: None,
-                    subtypes: HashMap::new(),
-                    localisation: HashMap::new(),
+                    subtypes: SpurMap::new(),
+                    localisation: SpurMap::new(),
                     rules: Arc::new(CwtType::Union(vec![
                         // inline_script = {}
                         Arc::new(CwtType::Block(inline_script_block)),
@@ -986,7 +986,7 @@ impl TypeCache {
 
                     // Apply replace_scope if present
                     if let Some(replace_scope) = &subtype_def.options.replace_scope {
-                        let mut new_scopes = HashMap::new();
+                        let mut new_scopes = SpurMap::new();
                         for (key, value) in replace_scope {
                             if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(*value) {
                                 new_scopes.insert(key.clone(), scope_name);

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::base_game::BaseGame;
 use crate::interner::get_interner;
-use cw_model::Entity;
+use cw_model::{Entity, SpurMap};
 use lasso::Spur;
 
 use crate::handlers::cache::{GameDataCache, Namespace};
@@ -17,7 +17,7 @@ pub fn integrate_modifiers_into_cache(
     let modifiers = BaseGame::load_modifiers(get_interner())?;
 
     // Create artificial entities for each modifier
-    let mut modifier_entities = HashMap::new();
+    let mut modifier_entities = SpurMap::new();
     let mut entity_keys = Vec::new();
 
     for modifier in modifiers {
@@ -36,7 +36,7 @@ pub fn integrate_modifiers_into_cache(
         entities: modifier_entities,
         entity_keys,
         entity_keys_set,
-        scripted_variables: HashMap::new(),
+        scripted_variables: SpurMap::new(),
         modules: HashMap::new(),
         values: Vec::new(),
     };

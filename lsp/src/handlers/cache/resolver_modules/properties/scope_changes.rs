@@ -1,6 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use cw_model::{AliasDefinition, CwtAnalyzer};
+use cw_model::{AliasDefinition, CwtAnalyzer, SpurMap};
 
 use crate::handlers::scope::{ScopeError, ScopeStack};
 
@@ -21,11 +21,11 @@ pub fn apply_alias_scope_changes(
 
     // Apply replace_scope if present
     if let Some(replace_scope) = &alias_def.options.replace_scope {
-        let mut new_scopes = HashMap::new();
+        let mut new_scopes = SpurMap::new();
 
         for (key, value) in replace_scope {
             if let Some(scope_name) = cwt_analyzer.resolve_scope_name(*value) {
-                new_scopes.insert(*key, scope_name);
+                new_scopes.insert(key, scope_name);
             }
         }
 

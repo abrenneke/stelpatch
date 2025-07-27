@@ -3,7 +3,7 @@
 //! This visitor handles the processing of CWT type definitions, including nested
 //! subtypes, localisation requirements, and type options.
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use cw_parser::{
     AstCwtBlock, AstCwtExpression, AstCwtIdentifierOrString, AstCwtRule, CwtOperator,
@@ -14,7 +14,7 @@ use lasso::Spur;
 use crate::{
     CaseInsensitiveInterner, ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, CwtType,
     LocalisationRequirement, ModifierSpec, Property, RuleOptions, SeverityLevel, SkipRootKey,
-    Subtype, TypeDefinition, TypeOptions,
+    SpurMap, Subtype, TypeDefinition, TypeOptions,
 };
 
 /// Specialized visitor for type definitions
@@ -69,11 +69,11 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
                 path: None,
                 name_field: None,
                 skip_root_key: None,
-                subtypes: HashMap::new(),
-                localisation: HashMap::new(),
+                subtypes: SpurMap::new(),
+                localisation: SpurMap::new(),
                 modifiers: ModifierSpec {
-                    modifiers: HashMap::new(),
-                    subtypes: HashMap::new(),
+                    modifiers: SpurMap::new(),
+                    subtypes: SpurMap::new(),
                 },
                 rules: Arc::new(CwtType::Unknown),
                 options: TypeOptions::default(),
@@ -377,7 +377,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
                             let subtype_map = base_requirement
                                 .subtypes
                                 .entry(interner.get_or_intern(subtype_name.to_string()))
-                                .or_insert_with(HashMap::new);
+                                .or_insert_with(SpurMap::new);
 
                             subtype_map.insert(
                                 interner.get_or_intern(loc_key.to_string()),
@@ -444,7 +444,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
         interner: &CaseInsensitiveInterner,
     ) {
         if let CwtValue::Block(subtype_block) = &rule.value {
-            let mut subtype_modifiers: HashMap<Spur, Spur> = HashMap::new();
+            let mut subtype_modifiers: SpurMap<Spur> = SpurMap::new();
 
             for item in &subtype_block.items {
                 if let cw_parser::cwt::AstCwtExpression::Rule(mod_rule) = item {
@@ -479,11 +479,11 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
         let subtype_options = CwtOptions::from_rule(rule, interner);
 
         // Extract properties from the rule value block
-        let mut properties: HashMap<Spur, Property> = HashMap::new();
+        let mut properties: SpurMap<Property> = SpurMap::new();
 
         if let CwtValue::Block(block) = &rule.value {
             // Look for property definitions that define this subtype's constraints
-            let mut property_conditions: HashMap<Spur, CwtValue> = HashMap::new();
+            let mut property_conditions: SpurMap<CwtValue> = SpurMap::new();
 
             for item in &block.items {
                 if let cw_parser::cwt::AstCwtExpression::Rule(prop_rule) = item {
@@ -521,7 +521,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
 
         let subtype_def = Subtype {
             condition_properties: properties, // Use the properties we collected with their options
-            allowed_properties: HashMap::new(),
+            allowed_properties: SpurMap::new(),
             allowed_pattern_properties: Vec::new(),
             options: subtype_options,
             is_inverted: false,

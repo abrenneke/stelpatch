@@ -3,6 +3,7 @@ use std::{
     sync::RwLock,
 };
 
+use cw_model::SpurMap;
 use lasso::Spur;
 
 use crate::handlers::cache::{DataCollector, TypeCache};
@@ -13,9 +14,9 @@ pub struct FullAnalysis {
 
 #[derive(Clone)]
 pub struct FullAnalysisResult {
-    pub dynamic_value_sets: HashMap<Spur, HashSet<Spur>>,
-    pub complex_enums: HashMap<Spur, HashSet<Spur>>,
-    pub scripted_effect_arguments: HashMap<Spur, HashSet<Spur>>,
+    pub dynamic_value_sets: SpurMap<HashSet<Spur>>,
+    pub complex_enums: SpurMap<HashSet<Spur>>,
+    pub scripted_effect_arguments: SpurMap<HashSet<Spur>>,
 }
 
 static FULL_ANALYSIS: RwLock<Option<FullAnalysisResult>> = RwLock::new(None);
@@ -84,9 +85,9 @@ mod tests {
         {
             let mut cache = FULL_ANALYSIS.write().unwrap();
             *cache = Some(FullAnalysisResult {
-                dynamic_value_sets: HashMap::new(),
-                complex_enums: HashMap::new(),
-                scripted_effect_arguments: HashMap::new(),
+                dynamic_value_sets: SpurMap::new(),
+                complex_enums: SpurMap::new(),
+                scripted_effect_arguments: SpurMap::new(),
             });
         }
 

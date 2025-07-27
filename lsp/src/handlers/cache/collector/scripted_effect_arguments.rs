@@ -1,22 +1,22 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use cw_model::Entity;
+use cw_model::{Entity, SpurMap};
 use lasso::Spur;
 
 use crate::{handlers::cache::EntityRestructurer, interner::get_interner};
 
 pub struct ScriptedEffectArgumentCollector {
-    scripted_effect_arguments: HashMap<Spur, HashSet<Spur>>,
+    scripted_effect_arguments: SpurMap<HashSet<Spur>>,
 }
 
 impl ScriptedEffectArgumentCollector {
     pub fn new() -> Self {
         Self {
-            scripted_effect_arguments: HashMap::new(),
+            scripted_effect_arguments: SpurMap::new(),
         }
     }
 
-    pub fn collect(mut self) -> HashMap<Spur, HashSet<Spur>> {
+    pub fn collect(mut self) -> SpurMap<HashSet<Spur>> {
         let interner = get_interner();
 
         // Only collect from scripted_effects namespace using EntityRestructurer

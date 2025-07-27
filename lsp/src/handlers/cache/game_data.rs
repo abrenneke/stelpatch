@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use crate::base_game::BaseGame;
 use crate::interner::get_interner;
+use cw_model::SpurMap;
 use cw_model::{Entity, GameMod, LoadMode, Value};
 use lasso::Spur;
 
@@ -15,17 +16,17 @@ use crate::handlers::cache::TypeCache;
 /// Cache for actual game data keys from namespaces (e.g., "energy", "minerals" from resources namespace)
 pub struct GameDataCache {
     /// Maps namespace -> set of keys defined in that namespace
-    pub namespaces: HashMap<Spur, Namespace>,
-    pub scripted_variables: HashMap<Spur, Value>,
+    pub namespaces: SpurMap<Namespace>,
+    pub scripted_variables: SpurMap<Value>,
 }
 
 #[derive(Clone)]
 pub struct Namespace {
-    pub entities: HashMap<Spur, Entity>,
+    pub entities: SpurMap<Entity>,
     pub values: Vec<Spur>,
     pub entity_keys: Vec<Spur>,
     pub entity_keys_set: Arc<HashSet<Spur>>,
-    pub scripted_variables: HashMap<Spur, Value>,
+    pub scripted_variables: SpurMap<Value>,
     /// Individual modules in this namespace (for restructuring)
     pub modules: HashMap<String, cw_model::Module>,
 }
@@ -33,19 +34,19 @@ pub struct Namespace {
 impl Namespace {
     pub fn new() -> Self {
         Self {
-            entities: HashMap::new(),
+            entities: SpurMap::new(),
             values: Vec::new(),
             entity_keys: Vec::new(),
             entity_keys_set: Arc::new(HashSet::new()),
-            scripted_variables: HashMap::new(),
+            scripted_variables: SpurMap::new(),
             modules: HashMap::new(),
         }
     }
 
     /// Update the entity keys and set after modifications
     pub fn update_keys(&mut self) {
-        self.entity_keys = self.entities.keys().cloned().collect();
-        self.entity_keys_set = Arc::new(self.entities.keys().cloned().collect());
+        self.entity_keys = self.entities.keys().collect();
+        self.entity_keys_set = Arc::new(self.entities.keys().collect());
     }
 }
 
@@ -80,10 +81,10 @@ impl GameDataCache {
                 base_game.namespaces.len()
             );
 
-            let mut global_scripted_variables: HashMap<Spur, Value> = HashMap::new();
+            let mut global_scripted_variables: SpurMap<Value> = SpurMap::new();
 
             // Extract keys from each namespace
-            let mut namespaces: HashMap<Spur, Namespace> = HashMap::new();
+            let mut namespaces: SpurMap<Namespace> = SpurMap::new();
             for (namespace_name, namespace) in &base_game.namespaces {
                 let mut namespace_data = Namespace::new();
 
@@ -188,7 +189,7 @@ impl GameDataCache {
     }
 
     /// Get all namespaces
-    pub fn get_namespaces(&self) -> &HashMap<Spur, Namespace> {
+    pub fn get_namespaces(&self) -> &SpurMap<Namespace> {
         &self.namespaces
     }
 
@@ -201,8 +202,8 @@ impl GameDataCache {
 /// Global cache for mod data that can be modified at runtime
 pub struct ModDataCache {
     /// Maps namespace -> set of keys defined in that namespace
-    pub namespaces: HashMap<Spur, Namespace>,
-    pub scripted_variables: HashMap<Spur, Value>,
+    pub namespaces: SpurMap<Namespace>,
+    pub scripted_variables: SpurMap<Value>,
 }
 
 static MOD_DATA_CACHE: OnceLock<RwLock<ModDataCache>> = OnceLock::new();
@@ -212,8 +213,8 @@ impl ModDataCache {
     pub fn get() -> &'static RwLock<ModDataCache> {
         MOD_DATA_CACHE.get_or_init(|| {
             RwLock::new(ModDataCache {
-                namespaces: HashMap::new(),
-                scripted_variables: HashMap::new(),
+                namespaces: SpurMap::new(),
+                scripted_variables: SpurMap::new(),
             })
         })
     }
@@ -332,19 +333,19 @@ impl ModDataCache {
     }
 
     /// Get all namespaces from mod data
-    pub fn get_namespaces() -> HashMap<Spur, Namespace> {
+    pub fn get_namespaces() -> SpurMap<Namespace> {
         let cache = Self::get().read().unwrap();
         cache.namespaces.clone()
     }
 
     /// Get scripted variables from mod data
-    pub fn get_scripted_variables() -> HashMap<Spur, Value> {
+    pub fn get_scripted_variables() -> SpurMap<Value> {
         let cache = Self::get().read().unwrap();
         cache.scripted_variables.clone()
     }
 
     /// Get namespace scripted variables from mod data
-    pub fn get_namespace_scripted_variables(namespace: Spur) -> Option<HashMap<Spur, Value>> {
+    pub fn get_namespace_scripted_variables(namespace: Spur) -> Option<SpurMap<Value>> {
         let cache = Self::get().read().unwrap();
         if let Some(mod_namespace) = cache.namespaces.get(&namespace) {
             Some(mod_namespace.scripted_variables.clone())

@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use cw_model::{ComplexEnumDefinition, CwtType, Entity};
+use cw_model::{ComplexEnumDefinition, CwtType, Entity, SpurMap};
 use lasso::Spur;
 
 use crate::{
@@ -9,28 +9,28 @@ use crate::{
 };
 
 pub struct ComplexEnumCollector<'resolver> {
-    complex_enums: HashMap<Spur, HashSet<Spur>>,
+    complex_enums: SpurMap<HashSet<Spur>>,
     type_resolver: &'resolver TypeResolver,
 }
 
 impl<'resolver> ComplexEnumCollector<'resolver> {
     pub fn new(type_resolver: &'resolver TypeResolver) -> Self {
         Self {
-            complex_enums: HashMap::new(),
+            complex_enums: SpurMap::new(),
             type_resolver,
         }
     }
 
-    pub fn collect(mut self) -> HashMap<Spur, HashSet<Spur>> {
+    pub fn collect(mut self) -> SpurMap<HashSet<Spur>> {
         // Get all enum definitions from the CwtAnalyzer
         let enum_definitions = self.type_resolver.get_enums();
 
         // Process each complex enum
         for (enum_name, enum_def) in enum_definitions {
             if let Some(complex_def) = &enum_def.complex {
-                let values = self.extract_complex_enum_values(complex_def, *enum_name);
+                let values = self.extract_complex_enum_values(complex_def, enum_name);
                 if !values.is_empty() {
-                    let set = self.complex_enums.entry(*enum_name).or_default();
+                    let set = self.complex_enums.entry(enum_name).or_default();
                     set.extend(values);
                 }
             }
@@ -180,7 +180,7 @@ impl<'resolver> ComplexEnumCollector<'resolver> {
                 let has_enum_name_property = block_type
                     .properties
                     .keys()
-                    .any(|key| *key == interner.get_or_intern("enum_name"));
+                    .any(|key| key == interner.get_or_intern("enum_name"));
 
                 if has_enum_name_flag {
                     // Extract all string items as enum values
@@ -201,7 +201,7 @@ impl<'resolver> ComplexEnumCollector<'resolver> {
                 if !has_enum_name_flag && !has_enum_name_property {
                     // Process each property in the block structure normally
                     for (property_name, property_type) in &block_type.properties {
-                        if let Some(property_value) = entity.properties.kv.get(property_name) {
+                        if let Some(property_value) = entity.properties.kv.get(&property_name) {
                             for value in &property_value.0 {
                                 match &*property_type.property_type {
                                     CwtType::Literal(literal)
@@ -268,7 +268,7 @@ impl<'resolver> ComplexEnumCollector<'resolver> {
                                     }
                                     _ => {
                                         // For scalar matches, we can match any key
-                                        if *property_name == interner.get_or_intern("scalar") {
+                                        if property_name == interner.get_or_intern("scalar") {
                                             // Match any property in the entity
                                             for (key, _) in &entity.properties.kv {
                                                 values.insert(key.clone());

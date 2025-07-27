@@ -4,7 +4,7 @@ use std::collections::hash_map::{Entry, IntoValues, Values, ValuesMut};
 
 use lasso::Spur;
 
-#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+#[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct InnerSpur(pub Spur);
 
 impl IsEnabled for InnerSpur {}
@@ -73,6 +73,10 @@ impl<T> SpurMap<T> {
         Self(HashMap::with_hasher(
             BuildNoHashHasher::<InnerSpur>::default(),
         ))
+    }
+
+    pub fn as_inner(&self) -> &HashMap<InnerSpur, T, BuildNoHashHasher<InnerSpur>> {
+        &self.0
     }
 
     /// Creates an empty `SpurMap` with the specified capacity.
@@ -232,6 +236,22 @@ impl<T> SpurMap<T> {
 impl<T> Default for SpurMap<T> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<T, const N: usize> From<[(Spur, T); N]> for SpurMap<T> {
+    fn from(arr: [(Spur, T); N]) -> Self {
+        let mut map = Self::with_capacity(N);
+        map.extend(arr);
+        map
+    }
+}
+
+impl<T> FromIterator<(Spur, T)> for SpurMap<T> {
+    fn from_iter<I: IntoIterator<Item = (Spur, T)>>(iter: I) -> Self {
+        let mut map = Self::new();
+        map.extend(iter);
+        map
     }
 }
 

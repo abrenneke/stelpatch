@@ -8,7 +8,7 @@ trait DeepKeys {
     fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String>;
 }
 
-impl<T: DeepKeys> DeepKeys for HashMap<Spur, T> {
+impl<T: DeepKeys> DeepKeys for SpurMap<T> {
     fn deep_keys(&self, interner: &ThreadedRodeo) -> Vec<String> {
         let mut keys = vec![];
         for (key, value) in self {

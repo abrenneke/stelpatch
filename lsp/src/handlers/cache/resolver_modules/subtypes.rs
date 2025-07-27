@@ -4,7 +4,7 @@ use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, ScopedType};
 use crate::interner::get_interner;
 use cw_model::types::CwtAnalyzer;
-use cw_model::{CwtType, Entity, TypeKeyFilter, Value};
+use cw_model::{CwtType, Entity, SpurMap, TypeKeyFilter, Value};
 use lasso::Spur;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -96,7 +96,7 @@ impl SubtypeHandler {
         subtype_def
             .condition_properties
             .iter()
-            .all(|(key, property)| self.does_property_match_condition(*key, property, entity))
+            .all(|(key, property)| self.does_property_match_condition(key, property, entity))
     }
 
     /// Check if a property in an entity matches a specific condition
@@ -223,7 +223,7 @@ impl SubtypeHandler {
         expected_block
             .properties
             .iter()
-            .all(|(key, property)| self.does_property_match_condition(*key, property, entity))
+            .all(|(key, property)| self.does_property_match_condition(key, property, entity))
     }
 
     /// Check if a property count satisfies cardinality constraints
@@ -260,7 +260,7 @@ impl SubtypeHandler {
     /// Get all available subtypes for a given type
     pub fn get_available_subtypes(&self, cwt_type: &CwtType) -> Vec<Spur> {
         match cwt_type {
-            CwtType::Block(block) => block.subtypes.keys().cloned().collect(),
+            CwtType::Block(block) => block.subtypes.keys().collect(),
             _ => Vec::new(),
         }
     }
@@ -311,7 +311,7 @@ impl SubtypeHandler {
                         matching_subtypes.insert(subtype_name.clone());
                     } else {
                         matching_subtypes.insert(
-                            interner.get_or_intern(format!("!{}", interner.resolve(subtype_name))),
+                            interner.get_or_intern(format!("!{}", interner.resolve(&subtype_name))),
                         );
                     }
                 }
@@ -376,7 +376,7 @@ impl SubtypeHandler {
 
         // Apply replace_scope if present
         if let Some(replace_scope) = &subtype_def.options.replace_scope {
-            let mut new_scopes = HashMap::new();
+            let mut new_scopes = SpurMap::new();
 
             for (key, value) in replace_scope {
                 if let Some(scope_name) = self.cwt_analyzer.resolve_scope_name(*value) {

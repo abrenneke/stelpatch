@@ -3,7 +3,7 @@
 //! This is the main entry point for CWT analysis, using a visitor pattern
 //! with specialized visitors for different CWT constructs.
 
-use crate::{AliasPattern, CaseInsensitiveInterner, CwtType};
+use crate::{AliasPattern, CaseInsensitiveInterner, CwtType, SpurMap};
 
 use super::conversion::ConversionError;
 use super::definitions::*;
@@ -22,7 +22,7 @@ pub struct CwtAnalyzer {
     data: CwtAnalysisData,
 
     /// Pre-computed category to aliases mapping for performance
-    category_index: HashMap<Spur, Vec<AliasPattern>>,
+    category_index: SpurMap<Vec<AliasPattern>>,
 }
 
 impl CwtAnalyzer {
@@ -30,7 +30,7 @@ impl CwtAnalyzer {
     pub fn new() -> Self {
         Self {
             data: CwtAnalysisData::new(),
-            category_index: HashMap::new(),
+            category_index: SpurMap::new(),
         }
     }
 
@@ -54,17 +54,17 @@ impl CwtAnalyzer {
     }
 
     /// Get all defined types
-    pub fn get_types(&self) -> &HashMap<Spur, TypeDefinition> {
+    pub fn get_types(&self) -> &SpurMap<TypeDefinition> {
         &self.data.types
     }
 
     /// Get all defined enums
-    pub fn get_enums(&self) -> &HashMap<Spur, EnumDefinition> {
+    pub fn get_enums(&self) -> &SpurMap<EnumDefinition> {
         &self.data.enums
     }
 
     /// Get all defined value sets
-    pub fn get_value_sets(&self) -> &HashMap<Spur, HashSet<String>> {
+    pub fn get_value_sets(&self) -> &SpurMap<HashSet<String>> {
         &self.data.value_sets
     }
 
@@ -74,7 +74,7 @@ impl CwtAnalyzer {
     }
 
     /// Get single aliases
-    pub fn get_single_aliases(&self) -> &HashMap<Spur, Arc<CwtType>> {
+    pub fn get_single_aliases(&self) -> &SpurMap<Arc<CwtType>> {
         &self.data.single_aliases
     }
 
@@ -84,7 +84,7 @@ impl CwtAnalyzer {
     }
 
     /// Get all defined links
-    pub fn get_links(&self) -> &HashMap<Spur, super::definitions::LinkDefinition> {
+    pub fn get_links(&self) -> &SpurMap<super::definitions::LinkDefinition> {
         &self.data.links
     }
 
@@ -121,7 +121,7 @@ impl CwtAnalyzer {
     }
 
     /// Get all available categories
-    pub fn get_categories(&self) -> Vec<&Spur> {
+    pub fn get_categories(&self) -> Vec<Spur> {
         self.category_index.keys().collect()
     }
 

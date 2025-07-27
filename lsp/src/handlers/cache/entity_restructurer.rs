@@ -4,8 +4,8 @@ use std::{
 };
 
 use cw_model::{
-    Entity, Operator, PropertyInfo, PropertyInfoList, SkipRootKey, TypeDefinition, TypeKeyFilter,
-    Value, entity_from_ast,
+    Entity, Operator, PropertyInfo, PropertyInfoList, SkipRootKey, SpurMap, TypeDefinition,
+    TypeKeyFilter, Value, entity_from_ast,
 };
 use cw_parser::AstEntity;
 use lasso::Spur;
@@ -80,9 +80,9 @@ pub struct EntityRestructurer {
 pub struct RestructuredEntities {
     /// Namespace -> Entity Name -> Entity
     /// For special types, entities are indexed by their name_field value
-    pub entities: HashMap<Spur, HashMap<Spur, Entity>>,
+    pub entities: SpurMap<SpurMap<Entity>>,
     /// Track which namespaces were restructured
-    pub restructured_namespaces: HashMap<Spur, RestructureInfo>,
+    pub restructured_namespaces: SpurMap<RestructureInfo>,
 }
 
 /// Information about how a namespace was restructured
@@ -164,8 +164,8 @@ impl EntityRestructurer {
         let start = std::time::Instant::now();
 
         let mut restructured = RestructuredEntities {
-            entities: HashMap::new(),
-            restructured_namespaces: HashMap::new(),
+            entities: SpurMap::new(),
+            restructured_namespaces: SpurMap::new(),
         };
 
         self.process_all_namespaces(&mut restructured);
@@ -212,8 +212,8 @@ impl EntityRestructurer {
     }
 
     /// Get type definitions that need restructuring
-    fn get_types_needing_restructure(&self) -> HashMap<Spur, Vec<TypeDefinition>> {
-        let mut result: HashMap<Spur, Vec<TypeDefinition>> = HashMap::new();
+    fn get_types_needing_restructure(&self) -> SpurMap<Vec<TypeDefinition>> {
+        let mut result: SpurMap<Vec<TypeDefinition>> = SpurMap::new();
         let interner = get_interner();
 
         for (_type_name, type_def) in self.type_cache.get_cwt_analyzer().get_types() {
@@ -242,8 +242,8 @@ impl EntityRestructurer {
     /// Helper method to insert into a HashMap with duplicate detection using efficient counters
     fn insert_with_duplicate_warning(
         &self,
-        map: &mut HashMap<Spur, Entity>,
-        key_counters: &mut HashMap<Spur, u32>,
+        map: &mut SpurMap<Entity>,
+        key_counters: &mut SpurMap<u32>,
         key: Spur,
         entity: Entity,
         _context: &str,
@@ -268,9 +268,9 @@ impl EntityRestructurer {
     /// Helper method to extend a HashMap with duplicate detection
     fn extend_with_duplicate_warnings(
         &self,
-        target: &mut HashMap<Spur, Entity>,
-        key_counters: &mut HashMap<Spur, u32>,
-        source: HashMap<Spur, Entity>,
+        target: &mut SpurMap<Entity>,
+        key_counters: &mut SpurMap<u32>,
+        source: SpurMap<Entity>,
         context: &str,
         namespace: Spur,
     ) {
@@ -292,9 +292,9 @@ impl EntityRestructurer {
         namespace: Spur,
         type_defs: &Vec<TypeDefinition>,
         namespace_data: &Namespace,
-    ) -> (HashMap<Spur, Entity>, RestructureInfo) {
-        let mut restructured_entities = HashMap::new();
-        let mut key_counters: HashMap<Spur, u32> = HashMap::new();
+    ) -> (SpurMap<Entity>, RestructureInfo) {
+        let mut restructured_entities = SpurMap::new();
+        let mut key_counters: SpurMap<u32> = SpurMap::new();
         let mut original_count = 0;
 
         // Process each module in the namespace individually to avoid key overwrites
@@ -480,9 +480,9 @@ impl EntityRestructurer {
         container_entity: &Entity,
         type_defs: &Vec<&TypeDefinition>,
         namespace: Spur,
-    ) -> HashMap<Spur, Entity> {
-        let mut result = HashMap::new();
-        let mut key_counters: HashMap<Spur, u32> = HashMap::new();
+    ) -> SpurMap<Entity> {
+        let mut result = SpurMap::new();
+        let mut key_counters: SpurMap<u32> = SpurMap::new();
 
         // Look for child entities in the container
         for (child_key, child_property_list) in &container_entity.properties.kv {
@@ -568,7 +568,7 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace as a HashMap
-    pub fn get_namespace_entities_map(namespace: Spur) -> Option<HashMap<Spur, Entity>> {
+    pub fn get_namespace_entities_map(namespace: Spur) -> Option<SpurMap<Entity>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
         Self::get()?.entities.get(&namespace).cloned()
     }
@@ -598,7 +598,7 @@ impl EntityRestructurer {
         // Add restructured entity keys if available
         if let Some(restructured) = Self::get() {
             if let Some(entities) = restructured.entities.get(&namespace) {
-                all_keys.extend(entities.keys().cloned());
+                all_keys.extend(entities.keys());
             }
         }
 
@@ -619,7 +619,7 @@ impl EntityRestructurer {
 
     /// Get entities for a namespace as a vector of (key, entity) tuples
     pub fn get_namespace_entities(namespace: Spur) -> Option<Vec<(Spur, Entity)>> {
-        let mut all_entities = HashMap::new();
+        let mut all_entities = SpurMap::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         // Add restructured entities if available
@@ -656,7 +656,7 @@ impl EntityRestructurer {
         // Add restructured entity keys if available
         if let Some(restructured) = Self::get() {
             if let Some(entities) = restructured.entities.get(&namespace) {
-                all_keys.extend(entities.keys().cloned());
+                all_keys.extend(entities.keys());
             }
         } else {
             eprintln!("WARN: EntityRestructurer not initialized");
@@ -713,7 +713,7 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace, using restructured entities if available
-    pub fn get_all_namespace_entities(namespace: Spur) -> Option<HashMap<Spur, Entity>> {
+    pub fn get_all_namespace_entities(namespace: Spur) -> Option<SpurMap<Entity>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         if let Some(restructured) = Self::get() {
@@ -757,8 +757,8 @@ impl EntityRestructurer {
     }
 
     /// Get scripted variables for a namespace (always from original GameDataCache)
-    pub fn get_namespace_scripted_variables(namespace: Spur) -> Option<HashMap<Spur, Value>> {
-        let mut all_variables = HashMap::new();
+    pub fn get_namespace_scripted_variables(namespace: Spur) -> Option<SpurMap<Value>> {
+        let mut all_variables = SpurMap::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
         // Add base game variables first
         if let Some(game_data) = GameDataCache::get() {
@@ -818,8 +818,8 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace as a HashMap, using restructured entities if available
-    pub fn get_all_entities_map(namespace: Spur) -> Option<HashMap<Spur, Entity>> {
-        let mut all_entities = HashMap::new();
+    pub fn get_all_entities_map(namespace: Spur) -> Option<SpurMap<Entity>> {
+        let mut all_entities = SpurMap::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
         // Add original entities from GameDataCache first
         if let Some(game_data) = GameDataCache::get() {
