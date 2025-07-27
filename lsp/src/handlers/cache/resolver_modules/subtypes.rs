@@ -28,7 +28,7 @@ impl SubtypeHandler {
             // Check if any key in entity starts with the prefix
             return entity.properties.kv.keys().any(|key| {
                 interner
-                    .resolve(key)
+                    .resolve(&key)
                     .starts_with(interner.resolve(starts_with))
             });
         } else if let Some(type_key_filter) = &subtype_def.options.type_key_filter {

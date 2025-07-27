@@ -93,15 +93,15 @@ impl GameDataCache {
                 let properties = &namespace.properties.kv;
 
                 for (key, value) in properties {
-                    let key_str = get_interner().resolve(key);
+                    let key_str = get_interner().resolve(&key);
 
                     if namespace_name == "common/scripted_variables" {
                         global_scripted_variables
-                            .insert(*key, value.0.first().unwrap().value.clone());
+                            .insert(key, value.0.first().unwrap().value.clone());
                     } else if key_str.starts_with("@") {
                         namespace_data
                             .scripted_variables
-                            .insert(*key, value.0.first().unwrap().value.clone());
+                            .insert(key, value.0.first().unwrap().value.clone());
                     } else {
                         // Handle multiple entities with the same key (like multiple random_list entries)
                         for (index, property_info) in value.0.iter().enumerate() {
@@ -234,12 +234,12 @@ impl ModDataCache {
             let properties = &namespace.properties.kv;
 
             for (key, value) in properties {
-                let key_str = get_interner().resolve(key);
+                let key_str = get_interner().resolve(&key);
 
                 if namespace_name == "common/scripted_variables" {
                     cache
                         .scripted_variables
-                        .insert(*key, value.0.first().unwrap().value.clone());
+                        .insert(key, value.0.first().unwrap().value.clone());
                     added_variables += 1;
                 } else if key_str.starts_with("@") {
                     let namespace_data = cache
@@ -248,7 +248,7 @@ impl ModDataCache {
                         .or_insert_with(Namespace::new);
                     namespace_data
                         .scripted_variables
-                        .insert(*key, value.0.first().unwrap().value.clone());
+                        .insert(key, value.0.first().unwrap().value.clone());
                     added_variables += 1;
                 } else {
                     if let Some(entity) = value.0.first().unwrap().value.as_entity() {

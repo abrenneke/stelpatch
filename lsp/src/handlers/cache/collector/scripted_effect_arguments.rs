@@ -57,7 +57,7 @@ impl ScriptedEffectArgumentCollector {
         // Extract arguments from all string values in the entity
         for (key, property_value) in &entity.properties.kv {
             // Check the key for arguments too
-            self.extract_arguments_from_string(*key, arguments);
+            self.extract_arguments_from_string(key, arguments);
 
             for value in &property_value.0 {
                 if let Some(string_value) = value.value.as_string() {
@@ -79,12 +79,12 @@ impl ScriptedEffectArgumentCollector {
 
         // Also check conditional blocks
         for (condition, conditional_block) in &entity.conditional_blocks {
-            arguments.insert(*condition);
+            arguments.insert(condition);
 
             // Extract arguments from conditional block properties
             for (key, property_value) in &conditional_block.properties.kv {
                 // Check the key for arguments too
-                self.extract_arguments_from_string(*key, arguments);
+                self.extract_arguments_from_string(key, arguments);
 
                 for value in &property_value.0 {
                     if let Some(string_value) = value.value.as_string() {

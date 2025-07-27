@@ -1,12 +1,9 @@
-use std::collections::HashMap;
-
 use cw_parser::{AstEntity, AstModule, AstVisitor};
 use indent::indent_all_by;
-use lasso::Spur;
 
 use crate::{
     CaseInsensitiveInterner, ConditionalBlock, ConditionalBlockVisitor, Operator, Properties,
-    PropertyInfo, PropertyInfoList, PropertyVisitor, Value, ValueVisitor,
+    PropertyInfo, PropertyInfoList, PropertyVisitor, SpurMap, Value, ValueVisitor,
 };
 
 /// An entity is an object with items, key value pairs, and conditional blocks. The majority of values in a module are entities.
@@ -20,7 +17,7 @@ pub struct Entity {
     pub properties: Properties,
 
     /// Conditional blocks in the entity, like [[CONDITION] { a b c }]
-    pub conditional_blocks: HashMap<Spur, ConditionalBlock>,
+    pub conditional_blocks: SpurMap<ConditionalBlock>,
 }
 
 impl ToString for Entity {
@@ -53,10 +50,10 @@ impl Entity {
         Self {
             items: Vec::new(),
             properties: Properties {
-                kv: HashMap::new(),
+                kv: SpurMap::new(),
                 is_module: false,
             },
-            conditional_blocks: HashMap::new(),
+            conditional_blocks: SpurMap::new(),
         }
     }
 

@@ -140,7 +140,7 @@ impl<'resolver> ValueSetCollector<'resolver> {
         for (property_name, property_value) in entity.properties.kv.iter() {
             let property_type = self
                 .type_resolver
-                .navigate_to_property(scoped_type.clone(), *property_name);
+                .navigate_to_property(scoped_type.clone(), property_name);
 
             if let PropertyNavigationResult::Success(property_type) = property_type {
                 let nested_results =

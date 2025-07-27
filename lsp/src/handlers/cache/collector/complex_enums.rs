@@ -122,7 +122,7 @@ impl<'resolver> ComplexEnumCollector<'resolver> {
             // Process each top-level property by matching against name_structure
             if let CwtType::Block(block_type) = name_structure {
                 for (property_name, property_value) in &entity.properties.kv {
-                    if let Some(expected_property) = block_type.properties.get(property_name) {
+                    if let Some(expected_property) = block_type.properties.get(&property_name) {
                         for value in &property_value.0 {
                             match &*expected_property.property_type {
                                 CwtType::Literal(literal)

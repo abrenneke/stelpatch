@@ -310,7 +310,7 @@ impl EntityRestructurer {
                         let skip_root_type_defs: Vec<&TypeDefinition> = type_defs
                             .iter()
                             .filter(|type_def| {
-                                self.should_skip_root_key(*key, &type_def.skip_root_key)
+                                self.should_skip_root_key(key, &type_def.skip_root_key)
                             })
                             .collect();
 
@@ -332,7 +332,7 @@ impl EntityRestructurer {
                         } else {
                             // Get type definitions that are applicable for this specific entity
                             let applicable_type_defs =
-                                self.get_applicable_type_defs(*key, type_defs);
+                                self.get_applicable_type_defs(key, type_defs);
 
                             // if applicable_type_defs.is_empty() {
                             //     eprintln!(
@@ -353,7 +353,7 @@ impl EntityRestructurer {
                                 ) {
                                     // Add original key to entity to preserve subtype information
                                     let entity_with_original_key =
-                                        self.add_original_key_to_entity(entity.clone(), *key);
+                                        self.add_original_key_to_entity(entity.clone(), key);
                                     self.insert_with_duplicate_warning(
                                         &mut restructured_entities,
                                         &mut key_counters,
@@ -490,7 +490,7 @@ impl EntityRestructurer {
                 if let Value::Entity(child_entity) = &property_info.value {
                     // Find the first type definition that matches this child entity
                     if let Some(matching_type_def) = type_defs.iter().find(|type_def| {
-                        self.passes_type_key_filter(*child_key, &vec![(**type_def).clone()])
+                        self.passes_type_key_filter(child_key, &vec![(**type_def).clone()])
                     }) {
                         // Determine the entity name based on whether we have a name field
                         let entity_name = if matching_type_def.name_field.is_some() {
@@ -507,7 +507,7 @@ impl EntityRestructurer {
 
                         // Add original key to entity to preserve subtype information
                         let entity_with_original_key =
-                            self.add_original_key_to_entity(child_entity.clone(), *child_key);
+                            self.add_original_key_to_entity(child_entity.clone(), child_key);
                         self.insert_with_duplicate_warning(
                             &mut result,
                             &mut key_counters,
@@ -929,7 +929,7 @@ impl EntityRestructurer {
                                 // Add original key to entity for subtype determination
                                 Self::add_original_key_to_entity_static(
                                     &mut child_entity,
-                                    *child_key,
+                                    child_key,
                                 );
 
                                 return (effective_key, child_entity);

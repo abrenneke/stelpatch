@@ -1,26 +1,22 @@
-use std::collections::HashMap;
-
-use lasso::Spur;
-
-use crate::{CaseInsensitiveInterner, Entity, Operator, Value, ValueVisitor};
+use crate::{CaseInsensitiveInterner, Entity, Operator, SpurMap, Value, ValueVisitor};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Properties {
-    pub kv: HashMap<Spur, PropertyInfoList>,
+    pub kv: SpurMap<PropertyInfoList>,
     pub is_module: bool,
 }
 
 impl Properties {
     pub fn new() -> Self {
         Self {
-            kv: HashMap::new(),
+            kv: SpurMap::new(),
             is_module: false,
         }
     }
 
     pub fn new_module() -> Self {
         Self {
-            kv: HashMap::new(),
+            kv: SpurMap::new(),
             is_module: true,
         }
     }
