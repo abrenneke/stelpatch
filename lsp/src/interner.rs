@@ -1,10 +1,10 @@
 use std::sync::OnceLock;
 
-use lasso::ThreadedRodeo;
+use cw_model::CaseInsensitiveInterner;
 
-static INTERNER: OnceLock<ThreadedRodeo> = OnceLock::new();
+static INTERNER: OnceLock<CaseInsensitiveInterner> = OnceLock::new();
 
 /// Get the global interner
-pub fn get_interner() -> &'static ThreadedRodeo {
-    INTERNER.get_or_init(|| ThreadedRodeo::new())
+pub fn get_interner() -> &'static CaseInsensitiveInterner {
+    INTERNER.get_or_init(|| CaseInsensitiveInterner::new())
 }

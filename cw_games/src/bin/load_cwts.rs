@@ -1,6 +1,6 @@
+use cw_model::CaseInsensitiveInterner;
 use cw_model::types::CwtAnalyzer;
 use cw_parser::CwtModuleCell;
-use lasso::ThreadedRodeo;
 
 use std::env;
 use std::fs;
@@ -127,7 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Total rules: {}", total_rules);
     }
 
-    let interner = ThreadedRodeo::new();
+    let interner = CaseInsensitiveInterner::new();
 
     // Convert the parsed modules using CwtConverter
     if !modules.is_empty() && parse_errors.is_empty() {

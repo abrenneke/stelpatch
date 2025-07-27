@@ -4,19 +4,22 @@
 //! scope transitions and data references used in script validation.
 
 use cw_parser::{AstCwtRule, CwtValue, CwtVisitor};
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
-use crate::{ConversionError, CwtAnalysisData, LinkDefinition, LinkType};
+use crate::{CaseInsensitiveInterner, ConversionError, CwtAnalysisData, LinkDefinition, LinkType};
 
 /// Specialized visitor for links definitions
 pub struct LinksVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> LinksVisitor<'a, 'interner> {
     /// Create a new links visitor
-    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(
+        data: &'a mut CwtAnalysisData,
+        interner: &'interner CaseInsensitiveInterner,
+    ) -> Self {
         Self { data, interner }
     }
 
@@ -192,7 +195,7 @@ mod tests {
     #[test]
     fn test_links_visitor() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = LinksVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"

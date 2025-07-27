@@ -3,6 +3,8 @@
 //! This visitor handles the processing of CWT enum definitions, including both
 //! simple enums and complex enums with path-based value extraction.
 
+use crate::CaseInsensitiveInterner;
+
 use super::super::conversion::ConversionError;
 use super::super::definitions::*;
 use super::converter::CwtConverter;
@@ -14,19 +16,22 @@ use cw_parser::{
         CwtValue, CwtVisitor,
     },
 };
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 use std::collections::HashSet;
 
 /// Specialized visitor for enum definitions
 pub struct EnumVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
     in_enums_section: bool,
 }
 
 impl<'a, 'interner> EnumVisitor<'a, 'interner> {
     /// Create a new enum visitor
-    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(
+        data: &'a mut CwtAnalysisData,
+        interner: &'interner CaseInsensitiveInterner,
+    ) -> Self {
         Self {
             data,
             interner,
@@ -133,7 +138,7 @@ impl<'a, 'interner> EnumVisitor<'a, 'interner> {
     fn extract_enum_values(
         enum_def: &mut EnumDefinition,
         block: &AstCwtBlock,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         for item in &block.items {
             match item {
@@ -164,7 +169,7 @@ impl<'a, 'interner> EnumVisitor<'a, 'interner> {
     fn extract_complex_enum_config(
         enum_def: &mut EnumDefinition,
         block: &AstCwtBlock,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         if let Some(ref mut complex) = enum_def.complex {
             for item in &block.items {

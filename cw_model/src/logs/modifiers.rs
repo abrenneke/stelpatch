@@ -1,4 +1,6 @@
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
+
+use crate::CaseInsensitiveInterner;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Modifier {
@@ -12,7 +14,7 @@ impl Modifier {
     }
 }
 
-pub fn parse_modifier_log(log_content: &str, interner: &ThreadedRodeo) -> Vec<Modifier> {
+pub fn parse_modifier_log(log_content: &str, interner: &CaseInsensitiveInterner) -> Vec<Modifier> {
     let mut modifiers = Vec::new();
     let mut found_definitions = false;
 
@@ -41,7 +43,7 @@ pub fn parse_modifier_log(log_content: &str, interner: &ThreadedRodeo) -> Vec<Mo
     modifiers
 }
 
-fn parse_modifier_line(line: &str, interner: &ThreadedRodeo) -> Option<Modifier> {
+fn parse_modifier_line(line: &str, interner: &CaseInsensitiveInterner) -> Option<Modifier> {
     // Remove the "- " prefix
     let line = line.strip_prefix("- ")?;
 
@@ -70,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_parse_modifier_log() {
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let log_content = r#"[13:52:17][modifier.cpp:1999]: 
  == MODIFIER DOCUMENTATION ==
 Note on Modifier Categories:
@@ -126,7 +128,7 @@ Printing Modifier Definitions:
 
     #[test]
     fn test_parse_modifier_line() {
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let line = "- pop_happiness, Category: Pops";
         let modifier = parse_modifier_line(line, &interner).unwrap();
 
@@ -136,7 +138,7 @@ Printing Modifier Definitions:
 
     #[test]
     fn test_parse_multiple_categories() {
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let line = "- ship_hull_add, Category: Orbital Stations, Space Stations, Military Ships, Civilian Ships, Science Ships, Transport Ships, Ship Design Stats";
         let modifier = parse_modifier_line(line, &interner).unwrap();
 
@@ -157,7 +159,7 @@ Printing Modifier Definitions:
 
     #[test]
     fn test_parse_invalid_line() {
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let line = "- invalid_line_format";
         let result = parse_modifier_line(line, &interner);
 

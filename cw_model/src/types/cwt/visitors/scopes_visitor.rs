@@ -4,19 +4,25 @@
 //! scope types and scope groups used in script validation.
 
 use cw_parser::{AstCwtRule, CwtValue, CwtVisitor};
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
-use crate::{ConversionError, CwtAnalysisData, ScopeDefinition, ScopeGroupDefinition};
+use crate::{
+    CaseInsensitiveInterner, ConversionError, CwtAnalysisData, ScopeDefinition,
+    ScopeGroupDefinition,
+};
 
 /// Specialized visitor for scopes definitions
 pub struct ScopesVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> ScopesVisitor<'a, 'interner> {
     /// Create a new scopes visitor
-    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(
+        data: &'a mut CwtAnalysisData,
+        interner: &'interner CaseInsensitiveInterner,
+    ) -> Self {
         Self { data, interner }
     }
 
@@ -168,7 +174,7 @@ mod tests {
     #[test]
     fn test_scopes_visitor() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = ScopesVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"

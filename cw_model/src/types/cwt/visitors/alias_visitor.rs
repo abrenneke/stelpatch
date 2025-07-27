@@ -6,22 +6,25 @@
 use std::sync::Arc;
 
 use cw_parser::{AstCwtIdentifierOrString, AstCwtRule, CwtReferenceType, CwtVisitor};
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
 use crate::{
-    AliasDefinition, AliasPattern, ConversionError, CwtAnalysisData, CwtConverter, CwtOptions,
-    CwtType,
+    AliasDefinition, AliasPattern, CaseInsensitiveInterner, ConversionError, CwtAnalysisData,
+    CwtConverter, CwtOptions, CwtType,
 };
 
 /// Specialized visitor for alias definitions
 pub struct AliasVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> AliasVisitor<'a, 'interner> {
     /// Create a new alias visitor
-    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(
+        data: &'a mut CwtAnalysisData,
+        interner: &'interner CaseInsensitiveInterner,
+    ) -> Self {
         Self { data, interner }
     }
 
@@ -221,7 +224,7 @@ mod tests {
     #[test]
     fn scope_exists() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = AliasVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"

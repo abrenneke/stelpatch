@@ -1,10 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use cw_parser::{AstModuleCell, AstValue, AstVisitor};
-use lasso::ThreadedRodeo;
 use path_slash::PathBufExt;
 
-use crate::{Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value};
+use crate::{
+    CaseInsensitiveInterner, Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value,
+};
 
 /// A Module is a single file inside of a Namespace. Another module in the same namespace with the same name will overwrite
 /// the previous module in the game's load order. Entities in a module are unique in a namespace. An entity defined in one module
@@ -31,7 +32,10 @@ impl Module {
         }
     }
 
-    pub fn from_file(file_path: &Path, interner: &ThreadedRodeo) -> Result<Self, anyhow::Error> {
+    pub fn from_file(
+        file_path: &Path,
+        interner: &CaseInsensitiveInterner,
+    ) -> Result<Self, anyhow::Error> {
         let (namespace, module_name) = Self::get_module_info(file_path);
 
         if module_name.starts_with("99_README") {
@@ -141,11 +145,11 @@ impl ToString for Module {
 
 pub(crate) struct ModuleVisitor<'a, 'interner> {
     module: &'a mut Module,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> ModuleVisitor<'a, 'interner> {
-    pub fn new(module: &'a mut Module, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(module: &'a mut Module, interner: &'interner CaseInsensitiveInterner) -> Self {
         Self { module, interner }
     }
 }

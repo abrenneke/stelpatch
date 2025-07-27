@@ -6,8 +6,9 @@ use std::{
 };
 
 use anyhow::anyhow;
-use cw_model::{GameMod, LoadMode, ModDefinition, Modifier, parse_modifier_log};
-use lasso::ThreadedRodeo;
+use cw_model::{
+    CaseInsensitiveInterner, GameMod, LoadMode, ModDefinition, Modifier, parse_modifier_log,
+};
 use lazy_static::lazy_static;
 use winreg::{RegKey, enums::HKEY_CURRENT_USER};
 
@@ -23,7 +24,7 @@ static BASE_MOD: OnceLock<GameMod> = OnceLock::new();
 impl BaseGame {
     pub fn load_global_as_mod_definition(
         load_mode: LoadMode,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> &'static GameMod {
         BASE_MOD.get_or_init(|| {
             Self::load_as_mod_definition(None, load_mode, interner)
@@ -34,7 +35,7 @@ impl BaseGame {
     pub fn load_as_mod_definition(
         install_path: Option<&Path>,
         load_mode: LoadMode,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> Result<GameMod, anyhow::Error> {
         let install_path = if let Some(path) = install_path {
             Some(path)
@@ -112,7 +113,9 @@ impl BaseGame {
     }
 
     /// Loads modifiers from the Victoria 3 logs directory
-    pub fn load_modifiers(interner: &ThreadedRodeo) -> Result<Vec<Modifier>, anyhow::Error> {
+    pub fn load_modifiers(
+        interner: &CaseInsensitiveInterner,
+    ) -> Result<Vec<Modifier>, anyhow::Error> {
         load_victoria_3_modifiers(interner)
     }
 }
@@ -147,7 +150,9 @@ pub fn victoria_3_modifiers_log_path() -> Result<PathBuf, anyhow::Error> {
 }
 
 /// Loads and parses modifiers from the Victoria 3 modifiers log
-pub fn load_victoria_3_modifiers(interner: &ThreadedRodeo) -> Result<Vec<Modifier>, anyhow::Error> {
+pub fn load_victoria_3_modifiers(
+    interner: &CaseInsensitiveInterner,
+) -> Result<Vec<Modifier>, anyhow::Error> {
     let log_path = victoria_3_modifiers_log_path()?;
 
     if !log_path.exists() {

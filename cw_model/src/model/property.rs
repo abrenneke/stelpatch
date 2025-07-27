@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
-use crate::{Entity, Operator, Value, ValueVisitor};
+use crate::{CaseInsensitiveInterner, Entity, Operator, Value, ValueVisitor};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Properties {
@@ -161,11 +161,14 @@ impl From<Entity> for PropertyInfoList {
 
 pub(crate) struct PropertyVisitor<'a, 'interner> {
     property: &'a mut PropertyInfo,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> PropertyVisitor<'a, 'interner> {
-    pub fn new(property: &'a mut PropertyInfo, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(
+        property: &'a mut PropertyInfo,
+        interner: &'interner CaseInsensitiveInterner,
+    ) -> Self {
         Self { property, interner }
     }
 }

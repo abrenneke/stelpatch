@@ -3,9 +3,9 @@
 //! This module provides a direct representation of CWT types and definitions,
 //! closely aligned with the CWT specification rather than inferred types.
 
-use crate::{SeverityLevel, TypeKeyFilter};
+use crate::{CaseInsensitiveInterner, SeverityLevel, TypeKeyFilter};
 use cw_parser::{AstCwtRule, CwtCommentRangeBound};
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -74,7 +74,7 @@ impl CwtType {
         }
     }
 
-    pub fn type_name_for_display(&self, interner: &ThreadedRodeo) -> String {
+    pub fn type_name_for_display(&self, interner: &CaseInsensitiveInterner) -> String {
         match self {
             CwtType::Simple(_) => "(simple)".to_string(),
             CwtType::Reference(_) => "(reference)".to_string(),
@@ -435,7 +435,7 @@ pub struct AliasPattern {
 }
 
 impl AliasPattern {
-    pub fn new_basic(category: Spur, name: Spur, interner: &ThreadedRodeo) -> Self {
+    pub fn new_basic(category: Spur, name: Spur, interner: &CaseInsensitiveInterner) -> Self {
         Self {
             full_text: interner.get_or_intern(format!(
                 "{}:{}",
@@ -447,7 +447,7 @@ impl AliasPattern {
         }
     }
 
-    pub fn new_type_ref(category: Spur, name: Spur, interner: &ThreadedRodeo) -> Self {
+    pub fn new_type_ref(category: Spur, name: Spur, interner: &CaseInsensitiveInterner) -> Self {
         Self {
             full_text: interner.get_or_intern(format!(
                 "{}:{}",
@@ -459,7 +459,7 @@ impl AliasPattern {
         }
     }
 
-    pub fn new_enum(category: Spur, name: Spur, interner: &ThreadedRodeo) -> Self {
+    pub fn new_enum(category: Spur, name: Spur, interner: &CaseInsensitiveInterner) -> Self {
         Self {
             full_text: interner.get_or_intern(format!(
                 "{}:{}",
@@ -476,7 +476,7 @@ impl AliasPattern {
         name: Spur,
         prefix: Option<Spur>,
         suffix: Option<Spur>,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> Self {
         let formatted_name = match (prefix, suffix) {
             (Some(p), Some(s)) => format!(
@@ -1585,7 +1585,7 @@ impl Range {
 
 impl CwtOptions {
     /// Extract CWT options from a rule
-    pub fn from_rule(rule: &AstCwtRule, interner: &ThreadedRodeo) -> Self {
+    pub fn from_rule(rule: &AstCwtRule, interner: &CaseInsensitiveInterner) -> Self {
         let mut options = CwtOptions::default();
 
         // Parse CWT options from the rule
@@ -1759,7 +1759,7 @@ mod tests {
     #[test]
     fn test_literal_set_fingerprint_ordering() {
         // Test that literal sets with same values in different order have same fingerprint
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut values1 = HashSet::new();
         values1.insert(interner.get_or_intern("a"));
         values1.insert(interner.get_or_intern("b"));
@@ -1780,7 +1780,7 @@ mod tests {
     #[test]
     fn test_complex_type_fingerprint() {
         // Test fingerprint for complex block type
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut block = CwtType::block(interner.get_or_intern("test_block"));
         let key1 = interner.get_or_intern("key1");
         let key2 = interner.get_or_intern("key2");

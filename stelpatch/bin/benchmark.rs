@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use clap::{Parser, command};
-use lasso::ThreadedRodeo;
+use cw_model::CaseInsensitiveInterner;
 use stelpatch::playset::{base_game::BaseGame, game_mod::LoadMode};
 
 #[derive(Parser)]
@@ -17,7 +17,7 @@ struct Cli {
 fn main() {
     let params = Cli::parse();
 
-    let interner = ThreadedRodeo::new();
+    let interner = CaseInsensitiveInterner::new();
     let samples = params.samples.unwrap_or(1);
 
     for _ in 0..samples {

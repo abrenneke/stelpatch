@@ -3,10 +3,9 @@ use std::{collections::HashMap, path::PathBuf};
 use anyhow::anyhow;
 use colored::*;
 use glob::glob;
-use lasso::ThreadedRodeo;
 use rayon::prelude::*;
 
-use crate::{ModDefinition, Module, Namespace};
+use crate::{CaseInsensitiveInterner, ModDefinition, Module, Namespace};
 
 #[derive(Debug, Clone)]
 pub struct GameMod {
@@ -56,7 +55,7 @@ impl GameMod {
 
     fn parse_serial(
         paths: &Vec<PathBuf>,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> Vec<Result<Module, anyhow::Error>> {
         paths
             .iter()
@@ -66,7 +65,7 @@ impl GameMod {
 
     fn parse_parallel(
         paths: &Vec<PathBuf>,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> Vec<Result<Module, anyhow::Error>> {
         paths
             .par_iter()
@@ -77,7 +76,7 @@ impl GameMod {
     pub fn load(
         definition: ModDefinition,
         mode: LoadMode,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> Result<Self, anyhow::Error> {
         let base_path = PathBuf::from(definition.path.as_ref().unwrap());
 

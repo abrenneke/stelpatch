@@ -9,24 +9,27 @@ use cw_parser::{
     AstCwtBlock, AstCwtExpression, AstCwtIdentifierOrString, AstCwtRule, CwtOperator,
     CwtReferenceType, CwtSimpleValueType, CwtValue, CwtVisitor,
 };
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
 use crate::{
-    ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, CwtType, LocalisationRequirement,
-    ModifierSpec, Property, RuleOptions, SeverityLevel, SkipRootKey, Subtype, TypeDefinition,
-    TypeOptions,
+    CaseInsensitiveInterner, ConversionError, CwtAnalysisData, CwtConverter, CwtOptions, CwtType,
+    LocalisationRequirement, ModifierSpec, Property, RuleOptions, SeverityLevel, SkipRootKey,
+    Subtype, TypeDefinition, TypeOptions,
 };
 
 /// Specialized visitor for type definitions
 pub struct TypeVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
     in_types_section: bool,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> TypeVisitor<'a, 'interner> {
     /// Create a new type visitor
-    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(
+        data: &'a mut CwtAnalysisData,
+        interner: &'interner CaseInsensitiveInterner,
+    ) -> Self {
         Self {
             data,
             in_types_section: false,
@@ -54,7 +57,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
     }
 
     /// Process a type definition rule
-    fn process_type_definition(&mut self, rule: &AstCwtRule, interner: &ThreadedRodeo) {
+    fn process_type_definition(&mut self, rule: &AstCwtRule, interner: &CaseInsensitiveInterner) {
         let type_name = self.extract_type_name(rule);
 
         if let Some(name) = type_name {
@@ -123,7 +126,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
         &mut self,
         type_def: &mut TypeDefinition,
         block: &AstCwtBlock,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         let mut skip_root_key_rules = Vec::new();
 
@@ -246,7 +249,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
     fn extract_multiple_skip_root_keys(
         type_def: &mut TypeDefinition,
         rules: &[&AstCwtRule],
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         let mut specific_keys: Vec<Spur> = Vec::new();
         let mut except_keys: Vec<Spur> = Vec::new();
@@ -310,7 +313,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
     fn extract_localisation_requirements(
         type_def: &mut TypeDefinition,
         block: &AstCwtBlock,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         for item in &block.items {
             if let cw_parser::cwt::AstCwtExpression::Rule(rule) = item {
@@ -355,7 +358,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
         type_def: &mut TypeDefinition,
         subtype_name: &str,
         rule: &AstCwtRule,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         if let CwtValue::Block(subtype_block) = &rule.value {
             for item in &subtype_block.items {
@@ -408,7 +411,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
     fn extract_modifier_definitions(
         type_def: &mut TypeDefinition,
         block: &AstCwtBlock,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         for item in &block.items {
             if let cw_parser::cwt::AstCwtExpression::Rule(rule) = item {
@@ -438,7 +441,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
         type_def: &mut TypeDefinition,
         subtype_name: &str,
         rule: &AstCwtRule,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         if let CwtValue::Block(subtype_block) = &rule.value {
             let mut subtype_modifiers: HashMap<Spur, Spur> = HashMap::new();
@@ -470,7 +473,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
         type_def: &mut TypeDefinition,
         subtype_name: &str,
         rule: &AstCwtRule,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         // Parse CWT options (metadata like display_name, starts_with, etc.)
         let subtype_options = CwtOptions::from_rule(rule, interner);
@@ -550,7 +553,7 @@ mod tests {
     #[test]
     fn test_type_visitor() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
@@ -597,7 +600,7 @@ types = {
     #[test]
     fn test_complex_type_visitor() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
@@ -778,7 +781,7 @@ types = {
     #[test]
     fn test_enhanced_cwt_features() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
@@ -964,7 +967,7 @@ types = {
     #[test]
     fn test_skip_root_key_variants() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
@@ -1029,7 +1032,7 @@ types = {
     #[test]
     fn test_subtype_specific_localisation_modifiers() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
@@ -1142,7 +1145,7 @@ types = {
     #[test]
     fn test_subtype_rule_options() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = TypeVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"

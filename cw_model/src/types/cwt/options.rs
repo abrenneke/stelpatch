@@ -4,10 +4,10 @@
 //! cardinality constraints, and other rule-specific configuration.
 
 use cw_parser::{CwtCommentRangeBound, CwtOptionExpression, cwt::AstCwtRule};
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 use std::collections::HashMap;
 
-use crate::TypeKeyFilter;
+use crate::{CaseInsensitiveInterner, TypeKeyFilter};
 
 /// Options that can be applied to CWT rules
 #[derive(Debug, Clone, Default)]
@@ -55,7 +55,7 @@ impl RuleOptions {
     }
 
     /// Parse rule options from a CWT rule AST node
-    pub fn from_rule(rule: &AstCwtRule, interner: &ThreadedRodeo) -> Self {
+    pub fn from_rule(rule: &AstCwtRule, interner: &CaseInsensitiveInterner) -> Self {
         let mut options = RuleOptions::default();
 
         // Process all CWT options from the parsed AST

@@ -1,7 +1,10 @@
 use cw_parser::{AstConditionalBlock, AstExpression, AstValue, AstVisitor};
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
-use crate::{Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value, ValueVisitor};
+use crate::{
+    CaseInsensitiveInterner, Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value,
+    ValueVisitor,
+};
 
 /// A conditional block looks like [[PARAM_NAME] key = value] and is dumb
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,13 +59,13 @@ impl ToString for ConditionalBlock {
 
 pub(crate) struct ConditionalBlockVisitor<'a, 'interner> {
     conditional_block: &'a mut ConditionalBlock,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> ConditionalBlockVisitor<'a, 'interner> {
     pub fn new(
         conditional_block: &'a mut ConditionalBlock,
-        interner: &'interner ThreadedRodeo,
+        interner: &'interner CaseInsensitiveInterner,
     ) -> Self {
         Self {
             conditional_block,

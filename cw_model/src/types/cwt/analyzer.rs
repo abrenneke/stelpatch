@@ -3,13 +3,13 @@
 //! This is the main entry point for CWT analysis, using a visitor pattern
 //! with specialized visitors for different CWT constructs.
 
-use crate::{AliasPattern, CwtType};
+use crate::{AliasPattern, CaseInsensitiveInterner, CwtType};
 
 use super::conversion::ConversionError;
 use super::definitions::*;
 use super::visitors::{CwtAnalysisData, CwtVisitorRegistry};
 use cw_parser::cwt::CwtModule;
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -38,7 +38,7 @@ impl CwtAnalyzer {
     pub fn convert_module(
         &mut self,
         module: &CwtModule,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> Result<(), Vec<ConversionError>> {
         // Use the visitor registry to process the module
         CwtVisitorRegistry::process_module(&mut self.data, module, interner);
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn test_analyzer_getters() {
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let analyzer = CwtAnalyzer::new();
 
         assert!(analyzer.get_types().is_empty());

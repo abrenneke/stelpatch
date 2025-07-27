@@ -3,7 +3,7 @@
 //! This module provides the main coordinator for all CWT visitors, determining which
 //! visitor should handle each rule based on its type and context.
 
-use crate::{AliasPattern, CwtType};
+use crate::{AliasPattern, CaseInsensitiveInterner, CwtType};
 
 use super::super::conversion::ConversionError;
 use super::super::definitions::*;
@@ -14,7 +14,7 @@ use super::{
 use cw_parser::cwt::{
     AstCwtIdentifierOrString, AstCwtRule, CwtModule, CwtReferenceType, CwtValue, CwtVisitor,
 };
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -90,7 +90,7 @@ impl CwtAnalysisData {
         &mut self,
         name: Spur,
         mut type_def: TypeDefinition,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         // Finalize subtypes before storing
         type_def.finalize_with_subtypes(interner);
@@ -115,7 +115,7 @@ impl CwtVisitorRegistry {
     pub fn process_module(
         data: &mut CwtAnalysisData,
         module: &CwtModule,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) {
         let mut registry = CwtRegistryVisitor::new(data, interner);
         registry.visit_module(module);
@@ -125,12 +125,12 @@ impl CwtVisitorRegistry {
 /// Internal visitor that coordinates with specialized visitors
 struct CwtRegistryVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> CwtRegistryVisitor<'a, 'interner> {
     /// Create a new registry visitor
-    fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+    fn new(data: &'a mut CwtAnalysisData, interner: &'interner CaseInsensitiveInterner) -> Self {
         Self { data, interner }
     }
 

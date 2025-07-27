@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use cw_parser::{AstEntity, AstModule, AstVisitor};
 use indent::indent_all_by;
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
 use crate::{
-    ConditionalBlock, ConditionalBlockVisitor, Operator, Properties, PropertyInfo,
-    PropertyInfoList, PropertyVisitor, Value, ValueVisitor,
+    CaseInsensitiveInterner, ConditionalBlock, ConditionalBlockVisitor, Operator, Properties,
+    PropertyInfo, PropertyInfoList, PropertyVisitor, Value, ValueVisitor,
 };
 
 /// An entity is an object with items, key value pairs, and conditional blocks. The majority of values in a module are entities.
@@ -60,7 +60,12 @@ impl Entity {
         }
     }
 
-    pub fn with_property(mut self, key: &str, value: Value, interner: &ThreadedRodeo) -> Self {
+    pub fn with_property(
+        mut self,
+        key: &str,
+        value: Value,
+        interner: &CaseInsensitiveInterner,
+    ) -> Self {
         self.properties
             .kv
             .entry(interner.get_or_intern(key.to_string()))
@@ -77,7 +82,7 @@ impl Entity {
         mut self,
         key: &str,
         values: I,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> Self {
         let items = self
             .properties
@@ -98,7 +103,7 @@ impl Entity {
         key: &str,
         operator: Operator,
         value: Value,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> Self {
         self.properties
             .kv
@@ -149,14 +154,17 @@ pub enum EntityMergeMode {
     Unknown,
 }
 
-pub fn entity_from_ast<'a>(ast: &AstEntity<'a>, interner: &ThreadedRodeo) -> Entity {
+pub fn entity_from_ast<'a>(ast: &AstEntity<'a>, interner: &CaseInsensitiveInterner) -> Entity {
     let mut entity = Entity::new();
     let mut entity_visitor = EntityVisitor::new(&mut entity, interner);
     entity_visitor.visit_entity(ast);
     entity
 }
 
-pub fn entity_from_module_ast<'a>(ast: &AstModule<'a>, interner: &ThreadedRodeo) -> Entity {
+pub fn entity_from_module_ast<'a>(
+    ast: &AstModule<'a>,
+    interner: &CaseInsensitiveInterner,
+) -> Entity {
     let mut entity = Entity::new();
     let mut entity_visitor = EntityVisitor::new(&mut entity, interner);
     entity_visitor.visit_module(ast);
@@ -165,11 +173,11 @@ pub fn entity_from_module_ast<'a>(ast: &AstModule<'a>, interner: &ThreadedRodeo)
 
 pub(crate) struct EntityVisitor<'a, 'interner> {
     entity: &'a mut Entity,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> EntityVisitor<'a, 'interner> {
-    pub fn new(entity: &'a mut Entity, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(entity: &'a mut Entity, interner: &'interner CaseInsensitiveInterner) -> Self {
         Self { entity, interner }
     }
 }

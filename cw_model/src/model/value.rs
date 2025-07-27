@@ -1,7 +1,7 @@
 use cw_parser::AstValue;
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
-use crate::{Entity, EntityVisitor};
+use crate::{CaseInsensitiveInterner, Entity, EntityVisitor};
 
 /// A value is anything after an =
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -129,11 +129,11 @@ impl Value {
 
 pub(crate) struct ValueVisitor<'a, 'interner> {
     value: &'a mut Value,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> ValueVisitor<'a, 'interner> {
-    pub fn new(value: &'a mut Value, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(value: &'a mut Value, interner: &'interner CaseInsensitiveInterner) -> Self {
         Self { value, interner }
     }
 }

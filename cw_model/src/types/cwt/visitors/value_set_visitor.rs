@@ -3,23 +3,28 @@
 //! This visitor handles the processing of CWT value set definitions, which are
 //! collections of valid string values for specific contexts.
 
+use crate::CaseInsensitiveInterner;
+
 use super::super::conversion::ConversionError;
 use super::registry::CwtAnalysisData;
 use cw_parser::cwt::{
     AstCwtBlock, AstCwtIdentifierOrString, AstCwtRule, CwtReferenceType, CwtValue, CwtVisitor,
 };
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 use std::collections::HashSet;
 
 /// Specialized visitor for value set definitions
 pub struct ValueSetVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> ValueSetVisitor<'a, 'interner> {
     /// Create a new value set visitor
-    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(
+        data: &'a mut CwtAnalysisData,
+        interner: &'interner CaseInsensitiveInterner,
+    ) -> Self {
         Self { data, interner }
     }
 

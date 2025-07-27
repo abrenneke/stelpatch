@@ -9,12 +9,12 @@ use cw_parser::{
         CwtValue,
     },
 };
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    BlockType, CwtOptions, CwtType, PatternProperty, PatternType, Property, ReferenceType,
-    SimpleType,
+    BlockType, CaseInsensitiveInterner, CwtOptions, CwtType, PatternProperty, PatternType,
+    Property, ReferenceType, SimpleType,
 };
 
 /// Converter for CWT values to CwtType
@@ -121,7 +121,7 @@ impl CwtConverter {
     pub fn convert_block(
         block: &AstCwtBlock,
         type_name: Option<Spur>,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> CwtType {
         let mut properties: HashMap<Spur, Property> = HashMap::new();
         let mut subtype_properties: HashMap<Spur, HashMap<Spur, Property>> = HashMap::new();
@@ -316,7 +316,7 @@ impl CwtConverter {
     pub fn convert_value(
         value: &CwtValue,
         type_name: Option<Spur>,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> Arc<CwtType> {
         match value {
             CwtValue::Simple(simple) => Arc::new(Self::convert_simple_value(simple)),

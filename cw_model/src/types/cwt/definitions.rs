@@ -3,7 +3,7 @@
 //! This module contains all the data structures used to represent CWT type definitions,
 //! enums, aliases, and their associated metadata.
 
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -11,7 +11,9 @@ use std::{
     sync::Arc,
 };
 
-use crate::{CwtAnalyzer, CwtOptions, CwtType, ModifierSpec, RuleOptions, Subtype};
+use crate::{
+    CaseInsensitiveInterner, CwtAnalyzer, CwtOptions, CwtType, ModifierSpec, RuleOptions, Subtype,
+};
 
 /// Definition of a CWT type
 #[derive(Debug, Clone)]
@@ -324,7 +326,7 @@ impl TypeDefinition {
 
     /// Update the rules field to include subtypes
     /// This should be called after all subtypes have been parsed
-    pub fn finalize_with_subtypes(&mut self, interner: &ThreadedRodeo) {
+    pub fn finalize_with_subtypes(&mut self, interner: &CaseInsensitiveInterner) {
         if let CwtType::Block(block_type) = Arc::<CwtType>::make_mut(&mut self.rules) {
             // Merge subtypes into the block type
             for (subtype_name, subtype_def) in &self.subtypes {
@@ -474,7 +476,7 @@ impl AliasDefinition {
     }
 
     /// Get the full alias key (category:name)
-    pub fn full_key(&self, interner: &ThreadedRodeo) -> Spur {
+    pub fn full_key(&self, interner: &CaseInsensitiveInterner) -> Spur {
         interner.get_or_intern(format!(
             "{}:{}",
             interner.resolve(&self.category),
@@ -538,7 +540,7 @@ impl LinkDefinition {
         &self,
         scope: Spur,
         analyzer: &CwtAnalyzer,
-        interner: &ThreadedRodeo,
+        interner: &CaseInsensitiveInterner,
     ) -> bool {
         if interner.resolve(&scope) == "any" {
             return true;

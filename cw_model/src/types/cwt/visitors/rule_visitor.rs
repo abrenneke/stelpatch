@@ -4,19 +4,25 @@
 //! validation structure for game entities (e.g., ambient_object, asteroid_belt_type).
 
 use cw_parser::{AstCwtIdentifierOrString, AstCwtRule, CwtVisitor};
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
-use crate::{ConversionError, CwtAnalysisData, CwtConverter, RuleOptions, TypeDefinition};
+use crate::{
+    CaseInsensitiveInterner, ConversionError, CwtAnalysisData, CwtConverter, RuleOptions,
+    TypeDefinition,
+};
 
 /// Specialized visitor for regular rule definitions
 pub struct RuleVisitor<'a, 'interner> {
     data: &'a mut CwtAnalysisData,
-    interner: &'interner ThreadedRodeo,
+    interner: &'interner CaseInsensitiveInterner,
 }
 
 impl<'a, 'interner> RuleVisitor<'a, 'interner> {
     /// Create a new rule visitor
-    pub fn new(data: &'a mut CwtAnalysisData, interner: &'interner ThreadedRodeo) -> Self {
+    pub fn new(
+        data: &'a mut CwtAnalysisData,
+        interner: &'interner CaseInsensitiveInterner,
+    ) -> Self {
         Self { data, interner }
     }
 
@@ -35,7 +41,7 @@ impl<'a, 'interner> RuleVisitor<'a, 'interner> {
     }
 
     /// Process a regular rule definition
-    fn process_rule_definition(&mut self, rule: &AstCwtRule, interner: &ThreadedRodeo) {
+    fn process_rule_definition(&mut self, rule: &AstCwtRule, interner: &CaseInsensitiveInterner) {
         let rule_name = self.extract_rule_name(rule);
 
         if let Some(name) = rule_name {
@@ -105,7 +111,7 @@ mod tests {
     #[test]
     fn test_rule_visitor_basic() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = RuleVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
@@ -141,7 +147,7 @@ asteroid_belt_type = {
     #[test]
     fn test_rule_visitor_with_options() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = RuleVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
@@ -166,7 +172,7 @@ attitude = {
     #[test]
     fn test_rule_visitor_ignores_special_sections() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = RuleVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
@@ -204,7 +210,7 @@ ambient_object = {
     #[test]
     fn test_rule_visitor_with_string_keys() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = RuleVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"
@@ -228,7 +234,7 @@ ambient_object = {
     #[test]
     fn test_rule_visitor_with_nested_types() {
         let mut data = CwtAnalysisData::new();
-        let interner = ThreadedRodeo::new();
+        let interner = CaseInsensitiveInterner::new();
         let mut visitor = RuleVisitor::new(&mut data, &interner);
 
         let cwt_text = r#"

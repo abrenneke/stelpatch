@@ -1,13 +1,12 @@
 use cw_games::stellaris::BaseGame;
-use cw_model::LoadMode;
-use lasso::ThreadedRodeo;
+use cw_model::{CaseInsensitiveInterner, LoadMode};
 use std::time::Instant;
 
 pub fn main() {
     println!("Starting to load Stellaris base game...");
     let start_time = Instant::now();
 
-    let interner = ThreadedRodeo::new();
+    let interner = CaseInsensitiveInterner::new();
     let loaded_mod = BaseGame::load_global_as_mod_definition(LoadMode::Parallel, &interner);
 
     let load_duration = start_time.elapsed();
