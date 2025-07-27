@@ -5,11 +5,7 @@
 
 use lasso::Spur;
 
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-    sync::Arc,
-};
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 
 use crate::{
     CaseInsensitiveInterner, CwtAnalyzer, CwtOptions, CwtType, ModifierSpec, RuleOptions, SpurMap,

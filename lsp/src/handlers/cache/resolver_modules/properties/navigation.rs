@@ -310,7 +310,6 @@ pub fn navigate_to_alias_property(
     key: Spur,
     property_name: Spur,
 ) -> PropertyNavigationResult {
-    let interner = get_interner();
     // For alias_match_left[category], we need to look up ALL matching aliases
     // category:property_name and return all their types
     let all_alias_results = reference_resolver.resolve_all_alias_match_left(key, property_name);

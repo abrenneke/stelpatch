@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+When grepping, always use a file filter such as .rs or .cwt.

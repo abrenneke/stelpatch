@@ -118,6 +118,11 @@ impl BaseGame {
     ) -> Result<Vec<Modifier>, anyhow::Error> {
         load_victoria_3_modifiers(interner)
     }
+
+    /// Get the executable name for this game
+    pub fn get_executable_name() -> &'static str {
+        "victoria3.exe"
+    }
 }
 
 /// Gets /Users/Username/Documents/Paradox Interactive/Victoria 3

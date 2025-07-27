@@ -63,4 +63,9 @@ pub mod game {
             std::path::Path::new(r"D:\dev\github\cwtools-vic3-config\config").to_path_buf()
         }
     }
+
+    /// Get the executable name for the current game
+    pub fn get_executable_name() -> &'static str {
+        BaseGame::get_executable_name()
+    }
 }

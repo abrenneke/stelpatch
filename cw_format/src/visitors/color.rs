@@ -1,7 +1,6 @@
 use cw_parser::{AstColor, AstVisitor};
 
-use crate::util::TAB;
-
+#[allow(dead_code)]
 pub struct ColorVisitor<'a> {
     output: &'a mut String,
 }
@@ -16,7 +15,7 @@ impl<'a, 'ast> AstVisitor<'a, 'ast> for ColorVisitor<'a>
 where
     'a: 'ast,
 {
-    fn visit_color(&mut self, node: &AstColor<'a>) -> () {
+    fn visit_color(&mut self, _node: &AstColor<'a>) -> () {
         // TODO
         // if node.leading_newlines > 0 {
         //     self.output.push_str(&"\n".repeat(node.leading_newlines));

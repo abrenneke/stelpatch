@@ -10,7 +10,7 @@ use cw_parser::{
     },
 };
 use lasso::Spur;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     BlockType, CaseInsensitiveInterner, CwtOptions, CwtType, PatternProperty, PatternType,

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use lasso::Spur;
 
@@ -12,7 +12,7 @@ pub struct Namespace {
     pub namespace: String,
     pub properties: Properties,
     pub values: Vec<Value>,
-    pub modules: HashMap<String, Module>,
+    pub modules: HashMap<String, Arc<Module>>,
     pub merge_mode: EntityMergeMode,
 }
 
@@ -36,12 +36,13 @@ impl Namespace {
         self.properties.kv.extend(module.properties.kv.clone());
         self.values.extend(module.values.clone());
 
-        self.modules.insert(module.filename.clone(), module);
+        self.modules
+            .insert(module.filename.clone(), Arc::new(module));
 
         self
     }
 
-    pub fn get_module(&self, module_name: &str) -> Option<&Module> {
+    pub fn get_module(&self, module_name: &str) -> Option<&Arc<Module>> {
         self.modules.get(module_name)
     }
 

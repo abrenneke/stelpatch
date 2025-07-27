@@ -9,6 +9,11 @@ profile:
     | jq -js '[.[] | select(.reason=="compiler-artifact") | select(.executable != null) | select(.target.kind | map(.=="bench") | any)] | last | .executable')
   samply record "$EXEC_PATH" --bench --profile-time 10
 
+profile-diagnostics:
+  #!/bin/bash
+  cargo build --release --bin diagnostics_runner
+  samply record ./target/release/diagnostics_runner "D:\SteamLibrary\steamapps\common\Stellaris\common"
+
 load-stellaris:
   cd cw_games && cargo run --release --bin load_stellaris
 

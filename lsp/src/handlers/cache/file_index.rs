@@ -1,3 +1,23 @@
+//! File index cache for fast file existence checks
+//!
+//! This module provides a high-performance file index that caches the complete file listing
+//! of the game directory and loaded mods. Since games like Stellaris can contain 37,000+
+//! files nested in directories, scanning them all is expensive (kernel time).
+//!
+//! To solve this, the cache is persisted to disk using the game executable's version/metadata
+//! as a cache key. This allows near-instant loading on subsequent runs when the game hasn't
+//! been updated.
+//!
+//! ## Cache Invalidation
+//! The cache automatically invalidates when:
+//! - Game executable is updated (different size, modification time)
+//! - Game directory path changes
+//! - Cache is manually reset via `FileIndex::reset()`
+//!
+//! ## Cache Location
+//! - Windows: `%LOCALAPPDATA%\stelpatch\file_index\`
+//! - Other platforms: Uses standard cache directories via `dirs` crate
+
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -7,8 +27,187 @@ use std::time::Instant;
 use crate::base_game::BaseGame;
 use crate::interner::get_interner;
 use cw_model::GameMod;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+/// Serializable cache structure for disk storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FileIndexCache {
+    /// Set of all file paths
+    files: HashSet<String>,
+    /// Game version/checksum this cache was built for
+    game_version_hash: String,
+    /// Timestamp when cache was created
+    created_at: u64,
+}
+
+impl FileIndexCache {
+    /// Create a new cache from file set and game version
+    fn new(files: HashSet<String>, game_version_hash: String) -> Self {
+        Self {
+            files,
+            game_version_hash,
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        }
+    }
+
+    /// Check if this cache is valid for the given game version
+    fn is_valid_for_version(&self, expected_hash: &str) -> bool {
+        self.game_version_hash == expected_hash
+    }
+}
+
+/// Get the cache directory for file index storage
+fn get_cache_directory() -> Result<PathBuf, std::io::Error> {
+    let cache_dir = dirs::cache_dir()
+        .or_else(|| dirs::data_local_dir())
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Could not find cache directory",
+            )
+        })?
+        .join("stelpatch")
+        .join("file_index");
+
+    fs::create_dir_all(&cache_dir)?;
+    Ok(cache_dir)
+}
+
+/// Compute a hash for the game version based on executable metadata
+fn compute_game_version_hash(game_root: &Path) -> String {
+    let mut hasher = Sha256::new();
+
+    // Get the game executable name from BaseGame
+    let exe_name = crate::base_game::game::get_executable_name();
+    let exe_path = game_root.join(exe_name);
+
+    if exe_path.exists() {
+        // Hash the executable path
+        hasher.update(exe_path.to_string_lossy().as_bytes());
+
+        // Hash file metadata (size, modified time)
+        if let Ok(metadata) = fs::metadata(&exe_path) {
+            hasher.update(metadata.len().to_be_bytes());
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
+                    hasher.update(duration.as_secs().to_be_bytes());
+                }
+            }
+        }
+    } else {
+        // Fallback: hash the game root directory path and its metadata
+        hasher.update(game_root.to_string_lossy().as_bytes());
+        if let Ok(metadata) = fs::metadata(game_root) {
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
+                    hasher.update(duration.as_secs().to_be_bytes());
+                }
+            }
+        }
+    }
+
+    format!("{:x}", hasher.finalize())
+}
+
+/// Get the cache file path for a specific game version
+fn get_cache_file_path(game_version_hash: &str) -> Result<PathBuf, std::io::Error> {
+    let cache_dir = get_cache_directory()?;
+    Ok(cache_dir.join(format!("file_index_{}.json", game_version_hash)))
+}
+
+/// Load file index cache from disk
+fn load_cache_from_disk(game_version_hash: &str) -> Option<FileIndexCache> {
+    let cache_path = get_cache_file_path(game_version_hash).ok()?;
+
+    if !cache_path.exists() {
+        return None;
+    }
+
+    let cache_content = fs::read_to_string(&cache_path).ok()?;
+    let cache: FileIndexCache = serde_json::from_str(&cache_content).ok()?;
+
+    // Verify the cache is for the correct version
+    if cache.is_valid_for_version(game_version_hash) {
+        eprintln!(
+            "Loaded file index cache from disk with {} files (created {})",
+            cache.files.len(),
+            cache.created_at
+        );
+        Some(cache)
+    } else {
+        // Cache is for wrong version, remove it
+        let _ = fs::remove_file(&cache_path);
+        None
+    }
+}
+
+/// Save file index cache to disk
+fn save_cache_to_disk(cache: &FileIndexCache) -> Result<(), std::io::Error> {
+    let cache_path = get_cache_file_path(&cache.game_version_hash)?;
+    let cache_content = serde_json::to_string_pretty(cache)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+    // Write to temporary file first, then rename for atomic operation
+    let temp_path = cache_path.with_extension("tmp");
+    fs::write(&temp_path, cache_content)?;
+    fs::rename(&temp_path, &cache_path)?;
+
+    eprintln!(
+        "Saved file index cache to disk: {} ({} files)",
+        cache_path.display(),
+        cache.files.len()
+    );
+
+    Ok(())
+}
+
+/// Clean up old cache files (keep only the most recent 5)
+fn cleanup_old_cache_files() {
+    if let Ok(cache_dir) = get_cache_directory() {
+        if let Ok(entries) = fs::read_dir(&cache_dir) {
+            let mut cache_files: Vec<_> = entries
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| {
+                    entry
+                        .path()
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(|ext| ext == "json")
+                        .unwrap_or(false)
+                })
+                .filter_map(|entry| {
+                    entry.metadata().ok().and_then(|metadata| {
+                        metadata
+                            .modified()
+                            .ok()
+                            .map(|modified| (entry.path(), modified))
+                    })
+                })
+                .collect();
+
+            // Sort by modification time, newest first
+            cache_files.sort_by(|a, b| b.1.cmp(&a.1));
+
+            // Remove all but the 5 most recent
+            for (old_cache_path, _) in cache_files.into_iter().skip(5) {
+                let _ = fs::remove_file(&old_cache_path);
+            }
+        }
+    }
+}
 
 /// Cache for file existence checks in the game directory and loaded mods
+///
+/// This cache significantly improves startup performance by avoiding expensive directory
+/// scanning (37,000+ files) when the game hasn't changed. The cache is stored on disk
+/// using the game executable's metadata as a version key, automatically invalidating
+/// when the game is updated.
+///
+/// Cache location: %LOCALAPPDATA%\stelpatch\file_index\ (Windows)
 #[derive(Clone)]
 pub struct FileIndex {
     /// Set of all file paths relative to the game root directory
@@ -45,6 +244,18 @@ impl FileIndex {
         eprintln!("Resetting FileIndex cache");
         let mut cache = FILE_INDEX_CACHE.write().unwrap();
         *cache = None;
+
+        // Also clear disk cache
+        if let Ok(cache_dir) = get_cache_directory() {
+            if let Ok(entries) = fs::read_dir(&cache_dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                        let _ = fs::remove_file(&path);
+                    }
+                }
+            }
+        }
     }
 
     /// Get or initialize the global file index cache (blocking version)
@@ -79,17 +290,44 @@ impl FileIndex {
             return result;
         };
 
-        let mut files = HashSet::new();
+        // Compute game version hash for cache key
+        let game_version_hash = compute_game_version_hash(&game_root);
 
-        if let Err(e) = Self::scan_directory_recursive(&game_root, &game_root, &mut files) {
-            eprintln!("Warning: Failed to scan game directory: {}", e);
-        }
+        // Try to load from disk cache first
+        let files = if let Some(cached_data) = load_cache_from_disk(&game_version_hash) {
+            eprintln!(
+                "Using cached file index with {} files (saved {:?})",
+                cached_data.files.len(),
+                start.elapsed()
+            );
+            cached_data.files
+        } else {
+            eprintln!("No valid cache found, scanning directory...");
+            let mut files = HashSet::new();
 
-        eprintln!(
-            "Built file index cache with {} files in {:?}",
-            files.len(),
-            start.elapsed()
-        );
+            if let Err(e) = Self::scan_directory_recursive(&game_root, &game_root, &mut files) {
+                eprintln!("Warning: Failed to scan game directory: {}", e);
+            }
+
+            eprintln!(
+                "Built file index cache with {} files in {:?}",
+                files.len(),
+                start.elapsed()
+            );
+
+            // Save to disk cache for next time
+            let cache_data = FileIndexCache::new(files.clone(), game_version_hash);
+            if let Err(e) = save_cache_to_disk(&cache_data) {
+                eprintln!("Warning: Failed to save file index cache: {}", e);
+            }
+
+            // Clean up old cache files in background
+            std::thread::spawn(|| {
+                cleanup_old_cache_files();
+            });
+
+            files
+        };
 
         let result = Arc::new(FileIndex {
             files,

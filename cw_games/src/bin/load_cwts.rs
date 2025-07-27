@@ -181,7 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !converter.get_types().is_empty() {
             println!("\n=== TYPE DEFINITIONS ===");
             for (name, type_def) in converter.get_types() {
-                println!("  Type: {}", interner.resolve(name));
+                println!("  Type: {}", interner.resolve(&name));
                 if let Some(path) = &type_def.path {
                     println!("    Path: {}", interner.resolve(path));
                 }
@@ -191,7 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if !type_def.subtypes.is_empty() {
                     println!("    Subtypes: {}", type_def.subtypes.len());
                     for (subtype_name, _) in &type_def.subtypes {
-                        println!("      - {}", interner.resolve(subtype_name));
+                        println!("      - {}", interner.resolve(&subtype_name));
                     }
                 }
                 if !type_def.localisation.is_empty() {
@@ -218,7 +218,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !converter.get_enums().is_empty() {
             println!("\n=== ENUM DEFINITIONS ===");
             for (name, enum_def) in converter.get_enums() {
-                println!("  Enum: {}", interner.resolve(name));
+                println!("  Enum: {}", interner.resolve(&name));
                 if !enum_def.values.is_empty() {
                     println!("    Values: {:?}", enum_def.values);
                 }
@@ -236,7 +236,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !converter.get_value_sets().is_empty() {
             println!("\n=== VALUE SETS ===");
             for (name, values) in converter.get_value_sets() {
-                println!("  Value set: {}", interner.resolve(name));
+                println!("  Value set: {}", interner.resolve(&name));
                 println!("    Values: {:?}", values);
                 println!();
             }
@@ -258,7 +258,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !converter.get_single_aliases().is_empty() {
             println!("\n=== SINGLE ALIASES ===");
             for (name, alias_type) in converter.get_single_aliases() {
-                println!("  Single alias: {}", interner.resolve(name));
+                println!("  Single alias: {}", interner.resolve(&name));
                 println!("    Type: {:?}", alias_type);
                 println!();
             }
@@ -268,7 +268,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !converter.get_types().is_empty() {
             println!("\n=== RULES ===");
             for (name, rule) in converter.get_types() {
-                println!("  Rule: {}", interner.resolve(name));
+                println!("  Rule: {}", interner.resolve(&name));
                 println!("    Definition: {:?}", rule);
                 println!();
             }

@@ -3,7 +3,7 @@ use crate::interner::get_interner;
 use cw_model::SpurMap;
 use cw_model::types::CwtAnalyzer;
 use lasso::Spur;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::{Arc, RwLock};
 
 /// Shared utilities for resolver modules

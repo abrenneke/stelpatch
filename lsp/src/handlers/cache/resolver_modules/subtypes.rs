@@ -6,7 +6,7 @@ use crate::interner::get_interner;
 use cw_model::types::CwtAnalyzer;
 use cw_model::{CwtType, Entity, SpurMap, TypeKeyFilter, Value};
 use lasso::Spur;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 pub struct SubtypeHandler {

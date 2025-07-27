@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use crate::base_game::BaseGame;
 use crate::interner::get_interner;
+use cw_model::Module;
 use cw_model::SpurMap;
 use cw_model::{Entity, GameMod, LoadMode, Value};
 use lasso::Spur;
@@ -27,8 +28,9 @@ pub struct Namespace {
     pub entity_keys: Vec<Spur>,
     pub entity_keys_set: Arc<HashSet<Spur>>,
     pub scripted_variables: SpurMap<Value>,
+
     /// Individual modules in this namespace (for restructuring)
-    pub modules: HashMap<String, cw_model::Module>,
+    pub modules: HashMap<String, Arc<Module>>,
 }
 
 impl Namespace {

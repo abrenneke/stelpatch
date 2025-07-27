@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::RwLock,
-};
+use std::{collections::HashSet, sync::RwLock};
 
 use cw_model::SpurMap;
 use lasso::Spur;

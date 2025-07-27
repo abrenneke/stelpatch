@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use cw_model::{CwtType, Entity, PropertyInfoList, ReferenceType, SpurMap};
 use lasso::Spur;

@@ -283,9 +283,10 @@ impl PatternMatcher {
 
                     if let Some(type_def) = type_def {
                         if let Some(path) = type_def.path.as_ref() {
-                            let path_str = interner.resolve(path);
+                            let path = interner.resolve(path);
                             // CWT paths are prefixed with "game/"
-                            let path_str = path_str.trim_start_matches("game/");
+                            let path = path.trim_start_matches("game/");
+                            let path = interner.get_or_intern(path);
 
                             // Get the CWT type for this namespace
                             if let Some(cwt_type) = self.cwt_analyzer.get_type(base_type) {
@@ -293,7 +294,7 @@ impl PatternMatcher {
                                 let filtered_keys = self
                                     .subtype_handler
                                     .get_entity_keys_in_namespace_for_subtype(
-                                        *path,
+                                        path,
                                         &cwt_type.rules,
                                         interner.get_or_intern(subtype),
                                     );

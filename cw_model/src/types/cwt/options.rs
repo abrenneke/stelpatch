@@ -5,7 +5,6 @@
 
 use cw_parser::{CwtCommentRangeBound, CwtOptionExpression, cwt::AstCwtRule};
 use lasso::Spur;
-use std::collections::HashMap;
 
 use crate::{CaseInsensitiveInterner, SpurMap, TypeKeyFilter};
 

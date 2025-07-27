@@ -6,10 +6,7 @@
 use crate::{CaseInsensitiveInterner, SeverityLevel, SpurMap, TypeKeyFilter};
 use cw_parser::{AstCwtRule, CwtCommentRangeBound};
 use lasso::Spur;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 /// Trait for generating unique fingerprints for types to enable deduplication
 pub trait TypeFingerprint {
