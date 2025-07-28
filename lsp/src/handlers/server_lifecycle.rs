@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::handlers::cache::{
-    EntityRestructurer, FileIndex, FullAnalysis, GameDataCache, TypeCache,
-};
 use crate::handlers::diagnostics::generate_diagnostics;
+use crate::handlers::initialization::CacheInitializer;
 use crate::handlers::utils::log_message_sync;
 use crate::semantic_token_collector::CwSemanticTokenType;
 use tower_lsp::Client;
@@ -50,52 +48,40 @@ pub async fn initialized(
     documents: Arc<RwLock<HashMap<String, String>>>,
     _params: InitializedParams,
 ) {
-    TypeCache::initialize_in_background();
-    GameDataCache::initialize_in_background();
-    FileIndex::initialize_in_background();
-
     let client_clone = client.clone();
-
     let documents = documents.clone();
 
     std::thread::spawn(move || {
-        while !TypeCache::is_initialized()
-            || !GameDataCache::is_initialized()
-            || !FileIndex::is_initialized()
-        {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
+        // Use the unified initialization logic
+        match CacheInitializer::initialize_silent() {
+            Ok(_result) => {
+                log_message_sync(
+                    &client_clone,
+                    MessageType::INFO,
+                    "Initialization complete".to_string(),
+                );
 
-        log_message_sync(
-            &client_clone,
-            MessageType::INFO,
-            "Caches are ready, restructuring entities".to_string(),
-        );
+                // Generate diagnostics for all open documents
+                let documents_guard = documents.read().unwrap();
+                for uri in documents_guard.keys() {
+                    let client_clone = client_clone.clone();
+                    let documents = documents.clone();
+                    let uri = uri.clone();
 
-        let entity_restructurer =
-            EntityRestructurer::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
-        entity_restructurer.load();
-
-        log_message_sync(
-            &client_clone,
-            MessageType::INFO,
-            "Entity restructuring complete, loading full analysis".to_string(),
-        );
-
-        let full_analysis = FullAnalysis::new(TypeCache::get().unwrap());
-        full_analysis.load();
-
-        let documents_guard = documents.read().unwrap();
-        for uri in documents_guard.keys() {
-            let client_clone = client_clone.clone();
-            let documents = documents.clone();
-            let uri = uri.clone();
-
-            tokio::runtime::Runtime::new()
-                .unwrap()
-                .block_on(async move {
-                    generate_diagnostics(&client_clone, &documents, &uri).await;
-                });
+                    tokio::runtime::Runtime::new()
+                        .unwrap()
+                        .block_on(async move {
+                            generate_diagnostics(&client_clone, &documents, &uri).await;
+                        });
+                }
+            }
+            Err(err) => {
+                log_message_sync(
+                    &client_clone,
+                    MessageType::ERROR,
+                    format!("Initialization failed: {}", err),
+                );
+            }
         }
     });
 }

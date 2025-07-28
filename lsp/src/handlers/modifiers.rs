@@ -24,7 +24,7 @@ pub fn integrate_modifiers_into_cache(
         // Create an empty entity for the modifier
         let entity = Entity::new();
 
-        modifier_entities.insert(modifier.name.clone(), entity);
+        modifier_entities.insert(modifier.name.clone(), Arc::new(entity));
         entity_keys.push(modifier.name);
     }
 

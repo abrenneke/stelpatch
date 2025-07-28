@@ -4,6 +4,7 @@ use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 
 use crate::base_game::BaseGame;
+use crate::handlers::cache::FileIndex;
 use crate::interner::get_interner;
 use cw_model::Module;
 use cw_model::SpurMap;
@@ -23,7 +24,7 @@ pub struct GameDataCache {
 
 #[derive(Clone)]
 pub struct Namespace {
-    pub entities: SpurMap<Entity>,
+    pub entities: SpurMap<Arc<Entity>>,
     pub values: Vec<Spur>,
     pub entity_keys: Vec<Spur>,
     pub entity_keys_set: Arc<HashSet<Spur>>,
@@ -72,9 +73,18 @@ impl GameDataCache {
         GAME_DATA_CACHE.get_or_init(|| {
             eprintln!("Initializing game data cache");
 
+            while !FileIndex::is_initialized() {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+
+            let file_index = FileIndex::get().unwrap();
+
             // Load base game data
-            let base_game =
-                BaseGame::load_global_as_mod_definition(LoadMode::Parallel, get_interner());
+            let base_game = BaseGame::load_global_as_mod_definition(
+                LoadMode::Parallel,
+                get_interner(),
+                Some(&file_index.get_all_files()),
+            );
 
             let interner = get_interner();
 
@@ -117,7 +127,11 @@ impl GameDataCache {
 
                                 namespace_data
                                     .entities
-                                    .insert(interner.get_or_intern(entity_key), entity.clone());
+                                    // TODO BAD CLONE
+                                    .insert(
+                                        interner.get_or_intern(entity_key),
+                                        Arc::new(entity.clone()),
+                                    );
                             }
                         }
                     }
@@ -254,15 +268,25 @@ impl ModDataCache {
                         .insert(key, value.0.first().unwrap().value.clone());
                     added_variables += 1;
                 } else {
-                    if let Some(entity) = value.0.first().unwrap().value.as_entity() {
-                        let namespace_data = cache
-                            .namespaces
-                            .entry(interner.get_or_intern(namespace_name))
-                            .or_insert_with(Namespace::new);
-                        namespace_data
-                            .entities
-                            .insert(interner.get_or_intern(key_str), entity.clone());
-                        added_entities += 1;
+                    // Handle multiple entities with the same key (like multiple random_list entries)
+                    for (index, property_info) in value.0.iter().enumerate() {
+                        if let Some(entity) = property_info.value.as_entity() {
+                            let entity_key = if index == 0 {
+                                key_str.to_string()
+                            } else {
+                                format!("{}_{}", key_str, index + 1)
+                            };
+
+                            let namespace_data = cache
+                                .namespaces
+                                .entry(interner.get_or_intern(namespace_name))
+                                .or_insert_with(Namespace::new);
+                            namespace_data.entities.insert(
+                                interner.get_or_intern(entity_key),
+                                Arc::new(entity.clone()),
+                            );
+                            added_entities += 1;
+                        }
                     }
                 }
             }
@@ -325,7 +349,7 @@ impl ModDataCache {
     }
 
     /// Get a specific entity from mod data only
-    pub fn get_entity(namespace: Spur, entity_name: Spur) -> Option<Entity> {
+    pub fn get_entity(namespace: Spur, entity_name: Spur) -> Option<Arc<Entity>> {
         let cache = Self::get().read().unwrap();
         if let Some(mod_namespace) = cache.namespaces.get(&namespace) {
             mod_namespace.entities.get(&entity_name).cloned()

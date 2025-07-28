@@ -80,7 +80,7 @@ pub struct EntityRestructurer {
 pub struct RestructuredEntities {
     /// Namespace -> Entity Name -> Entity
     /// For special types, entities are indexed by their name_field value
-    pub entities: SpurMap<SpurMap<Entity>>,
+    pub entities: SpurMap<SpurMap<Arc<Entity>>>,
     /// Track which namespaces were restructured
     pub restructured_namespaces: SpurMap<RestructureInfo>,
 }
@@ -111,7 +111,7 @@ impl EntityRestructurer {
         entity
             .properties
             .kv
-            .entry(get_interner().get_or_intern(ORIGINAL_KEY_PROPERTY.to_string()))
+            .entry(get_interner().get_or_intern(ORIGINAL_KEY_PROPERTY))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(PropertyInfo {
@@ -127,7 +127,7 @@ impl EntityRestructurer {
         if let Some(property_list) = entity
             .properties
             .kv
-            .get(&get_interner().get_or_intern(ORIGINAL_KEY_PROPERTY.to_string()))
+            .get(&get_interner().get_or_intern(ORIGINAL_KEY_PROPERTY))
         {
             if let Some(first_property) = property_list.0.first() {
                 return Some(first_property.value.to_string());
@@ -198,7 +198,13 @@ impl EntityRestructurer {
                 let (entities, info) =
                     self.process_namespace(namespace, &type_defs, namespace_data);
 
-                restructured.entities.insert(namespace.clone(), entities);
+                restructured.entities.insert(
+                    namespace.clone(),
+                    entities
+                        .into_iter()
+                        .map(|(k, v)| (k, Arc::new(v)))
+                        .collect(),
+                );
                 restructured
                     .restructured_namespaces
                     .insert(namespace.clone(), info);
@@ -538,7 +544,7 @@ impl EntityRestructurer {
     }
 
     /// Get an entity by name from a namespace, handling special loading rules
-    pub fn get_entity(namespace: Spur, entity_name: Spur) -> Option<Entity> {
+    pub fn get_entity(namespace: Spur, entity_name: Spur) -> Option<Arc<Entity>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         // Check restructured entities first
@@ -568,7 +574,7 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace as a HashMap
-    pub fn get_namespace_entities_map(namespace: Spur) -> Option<SpurMap<Entity>> {
+    pub fn get_namespace_entities_map(namespace: Spur) -> Option<SpurMap<Arc<Entity>>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
         Self::get()?.entities.get(&namespace).cloned()
     }
@@ -618,7 +624,7 @@ impl EntityRestructurer {
     }
 
     /// Get entities for a namespace as a vector of (key, entity) tuples
-    pub fn get_namespace_entities(namespace: Spur) -> Option<Vec<(Spur, Entity)>> {
+    pub fn get_namespace_entities(namespace: Spur) -> Option<Vec<(Spur, Arc<Entity>)>> {
         let mut all_entities = SpurMap::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
 
@@ -684,7 +690,7 @@ impl EntityRestructurer {
     }
 
     /// Get a specific entity from a namespace, using restructured entities if available
-    pub fn get_namespace_entity(namespace: Spur, entity_name: Spur) -> Option<Entity> {
+    pub fn get_namespace_entity(namespace: Spur, entity_name: Spur) -> Option<Arc<Entity>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         if let Some(restructured) = Self::get() {
@@ -713,7 +719,7 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace, using restructured entities if available
-    pub fn get_all_namespace_entities(namespace: Spur) -> Option<SpurMap<Entity>> {
+    pub fn get_all_namespace_entities(namespace: Spur) -> Option<SpurMap<Arc<Entity>>> {
         let namespace = TypeCache::get_actual_namespace(namespace);
 
         if let Some(restructured) = Self::get() {
@@ -787,7 +793,7 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace, using restructured entities if available
-    pub fn get_all_entities(namespace: Spur) -> Option<Vec<Entity>> {
+    pub fn get_all_entities(namespace: Spur) -> Option<Vec<Arc<Entity>>> {
         let mut all_entities = Vec::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
         // Add restructured entities if available
@@ -818,7 +824,7 @@ impl EntityRestructurer {
     }
 
     /// Get all entities in a namespace as a HashMap, using restructured entities if available
-    pub fn get_all_entities_map(namespace: Spur) -> Option<SpurMap<Entity>> {
+    pub fn get_all_entities_map(namespace: Spur) -> Option<SpurMap<Arc<Entity>>> {
         let mut all_entities = SpurMap::new();
         let namespace = TypeCache::get_actual_namespace(namespace);
         // Add original entities from GameDataCache first

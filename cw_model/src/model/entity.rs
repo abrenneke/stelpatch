@@ -65,7 +65,7 @@ impl Entity {
     ) -> Self {
         self.properties
             .kv
-            .entry(interner.get_or_intern(key.to_string()))
+            .entry(interner.get_or_intern(key))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(PropertyInfo {
@@ -84,7 +84,7 @@ impl Entity {
         let items = self
             .properties
             .kv
-            .entry(interner.get_or_intern(key.to_string()))
+            .entry(interner.get_or_intern(key))
             .or_insert_with(PropertyInfoList::new);
         for value in values {
             items.push(PropertyInfo {
@@ -104,7 +104,7 @@ impl Entity {
     ) -> Self {
         self.properties
             .kv
-            .entry(interner.get_or_intern(key.to_string()))
+            .entry(interner.get_or_intern(key))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(PropertyInfo { operator, value });
@@ -190,7 +190,7 @@ where
         self.entity
             .properties
             .kv
-            .entry(self.interner.get_or_intern(node.key.value.to_string()))
+            .entry(self.interner.get_or_intern(node.key.raw_value()))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(property);

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs::File,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
@@ -25,9 +26,10 @@ impl BaseGame {
     pub fn load_global_as_mod_definition(
         load_mode: LoadMode,
         interner: &CaseInsensitiveInterner,
+        file_index: Option<&HashSet<String>>,
     ) -> &'static GameMod {
         BASE_MOD.get_or_init(|| {
-            Self::load_as_mod_definition(None, load_mode, interner)
+            Self::load_as_mod_definition(None, load_mode, interner, file_index)
                 .expect("Could not load base game")
         })
     }
@@ -36,6 +38,7 @@ impl BaseGame {
         install_path: Option<&Path>,
         load_mode: LoadMode,
         interner: &CaseInsensitiveInterner,
+        file_index: Option<&HashSet<String>>,
     ) -> Result<GameMod, anyhow::Error> {
         let install_path = if let Some(path) = install_path {
             Some(path)
@@ -57,7 +60,13 @@ impl BaseGame {
                     archive: None,
                 };
 
-                let game_mod = GameMod::load(definition, load_mode, interner)?;
+                let game_mod = GameMod::load(
+                    definition,
+                    load_mode,
+                    interner,
+                    Self::get_glob_patterns(),
+                    file_index,
+                )?;
 
                 // BASE_MOD
                 //     .set(game_mod)
@@ -122,6 +131,27 @@ impl BaseGame {
     /// Get the executable name for this game
     pub fn get_executable_name() -> &'static str {
         "stellaris.exe"
+    }
+
+    pub fn get_glob_patterns() -> Vec<&'static str> {
+        let glob_patterns = vec![
+            // Stellaris patterns (simple structure)
+            "common/**/*.txt",
+            "interface/**/*.gui",
+            "interface/**/*.gfx",
+            "events/**/*.txt",
+            "gfx/**/*.gfx",
+            "gfx/**/*.asset",
+            "gfx/**/*.txt",
+            "flags/**/*.txt",
+            "music/**/*.txt",
+            "music/**/*.asset",
+            "sound/**/*.txt",
+            "sound/**/*.asset",
+            "map/**/*.txt",
+        ];
+
+        glob_patterns
     }
 }
 

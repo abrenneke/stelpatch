@@ -11,6 +11,7 @@ mod document;
 pub mod document_cache;
 mod formatting;
 mod hover;
+pub mod initialization;
 pub mod mod_detection;
 mod modifiers;
 mod scope;

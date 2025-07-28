@@ -98,7 +98,13 @@ pub fn load_mod_from_descriptor_with_dependencies(
     load_mod_dependencies(&mod_definition, client, loaded_mods)?;
 
     // Load the mod using the existing GameMod::load functionality
-    let game_mod = GameMod::load(mod_definition, LoadMode::Parallel, get_interner())?;
+    let game_mod = GameMod::load(
+        mod_definition,
+        LoadMode::Parallel,
+        get_interner(),
+        crate::base_game::game::get_glob_patterns(),
+        None,
+    )?;
 
     // Add to loaded mods cache
     loaded_mods.insert(game_mod.definition.name.clone(), game_mod.clone());
@@ -130,7 +136,13 @@ pub fn load_mod_from_descriptor(descriptor_path: &Path, client: &Client) -> Resu
     mod_definition.path = Some(mod_dir.to_path_buf());
 
     // Load the mod using the existing GameMod::load functionality
-    let game_mod = GameMod::load(mod_definition, LoadMode::Parallel, get_interner())?;
+    let game_mod = GameMod::load(
+        mod_definition,
+        LoadMode::Parallel,
+        get_interner(),
+        crate::base_game::game::get_glob_patterns(),
+        None,
+    )?;
 
     log_message_sync(
         client,

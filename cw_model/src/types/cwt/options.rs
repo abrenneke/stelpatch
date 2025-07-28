@@ -76,7 +76,7 @@ impl RuleOptions {
                 }
                 "push_scope" => {
                     let scope = cwt_option.value.as_identifier().unwrap();
-                    options.push_scope = Some(interner.get_or_intern(scope.to_string()));
+                    options.push_scope = Some(interner.get_or_intern(scope));
                 }
                 "replace_scope" => {
                     let replacements = cwt_option.value.as_list().unwrap();
@@ -84,9 +84,8 @@ impl RuleOptions {
                     for replacement in replacements {
                         let (from, to) = replacement.as_assignment().unwrap();
                         replace_map.insert(
-                            interner.get_or_intern(from.to_string()),
-                            interner
-                                .get_or_intern(to.as_string_or_identifier().unwrap().to_string()),
+                            interner.get_or_intern(from),
+                            interner.get_or_intern(to.as_string_or_identifier().unwrap()),
                         );
                     }
                     options.replace_scope = Some(replace_map);
@@ -95,20 +94,18 @@ impl RuleOptions {
                     let scopes = match &cwt_option.value {
                         CwtOptionExpression::Block(scopes) => scopes
                             .iter()
-                            .map(|s| interner.get_or_intern(s.as_string().unwrap().to_string()))
+                            .map(|s| interner.get_or_intern(s.as_string().unwrap()))
                             .collect(),
                         CwtOptionExpression::String(scope) => {
-                            vec![interner.get_or_intern(scope.to_string())]
+                            vec![interner.get_or_intern(scope)]
                         }
                         _ => vec![],
                     };
                     options.scope = Some(scopes);
                 }
                 "severity" => {
-                    options.severity = Some(
-                        interner
-                            .get_or_intern(cwt_option.value.as_identifier().unwrap().to_string()),
-                    );
+                    options.severity =
+                        Some(interner.get_or_intern(cwt_option.value.as_identifier().unwrap()));
                 }
                 "starts_with" => {
                     options.starts_with = Some(
@@ -123,11 +120,11 @@ impl RuleOptions {
                 }
                 "type_key_filter" => {
                     options.type_key_filter = match (&cwt_option.value, cwt_option.is_ne) {
-                        (CwtOptionExpression::Identifier(id), false) => Some(
-                            TypeKeyFilter::Specific(interner.get_or_intern(id.to_string())),
-                        ),
+                        (CwtOptionExpression::Identifier(id), false) => {
+                            Some(TypeKeyFilter::Specific(interner.get_or_intern(id)))
+                        }
                         (CwtOptionExpression::Identifier(id), true) => {
-                            Some(TypeKeyFilter::Not(interner.get_or_intern(id.to_string())))
+                            Some(TypeKeyFilter::Not(interner.get_or_intern(id)))
                         }
                         (CwtOptionExpression::Block(list), false) => Some(TypeKeyFilter::OneOf(
                             list.iter()
@@ -147,9 +144,7 @@ impl RuleOptions {
                         .as_list()
                         .unwrap()
                         .iter()
-                        .map(|t| {
-                            interner.get_or_intern(t.as_string_or_identifier().unwrap().to_string())
-                        })
+                        .map(|t| interner.get_or_intern(t.as_string_or_identifier().unwrap()))
                         .collect();
                 }
                 _ => {}

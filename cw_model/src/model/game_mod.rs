@@ -1,8 +1,11 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use anyhow::anyhow;
 use colored::*;
-use glob::glob;
+use glob::{Pattern, glob};
 use rayon::prelude::*;
 
 use crate::{CaseInsensitiveInterner, ModDefinition, Module, Namespace};
@@ -77,53 +80,10 @@ impl GameMod {
         definition: ModDefinition,
         mode: LoadMode,
         interner: &CaseInsensitiveInterner,
+        glob_patterns: Vec<&str>,
+        file_index: Option<&HashSet<String>>,
     ) -> Result<Self, anyhow::Error> {
         let base_path = PathBuf::from(definition.path.as_ref().unwrap());
-
-        // Define glob patterns for different file types
-        // Support both Stellaris and Victoria 3 directory structures
-        let glob_patterns = vec![
-            // Stellaris patterns (simple structure)
-            "common/**/*.txt",
-            "interface/**/*.gui",
-            "interface/**/*.gfx",
-            "events/**/*.txt",
-            "gfx/**/*.gfx",
-            "gfx/**/*.asset",
-            "gfx/**/*.txt",
-            "flags/**/*.txt",
-            "music/**/*.txt",
-            "music/**/*.asset",
-            "sound/**/*.txt",
-            "sound/**/*.asset",
-            "map/**/*.txt",
-            // Victoria 3 patterns (modular structure)
-            // Game-specific files
-            "game/common/**/*.txt",
-            "game/interface/**/*.txt",
-            "game/events/**/*.txt",
-            "game/gfx/**/*.gfx",
-            "game/gfx/**/*.asset",
-            "game/gfx/**/*.txt",
-            "game/gui/**/*.gui",
-            "game/gui/**/*.gfx",
-            "game/map_data/**/*.txt",
-            "game/music/**/*.txt",
-            "game/music/**/*.asset",
-            "game/sound/**/*.txt",
-            "game/sound/**/*.asset",
-            // Framework files (jomini)
-            "jomini/common/**/*.txt",
-            "jomini/gfx/**/*.gfx",
-            "jomini/gfx/**/*.asset",
-            "jomini/gui/**/*.gui",
-            "jomini/gui/**/*.gfx",
-            // Engine files (clausewitz)
-            "clausewitz/gfx/**/*.gfx",
-            "clausewitz/gfx/**/*.asset",
-            "clausewitz/gui/**/*.gui",
-            "clausewitz/gui/**/*.gfx",
-        ];
 
         // Define ignore patterns for files to exclude (simple filename matching)
         let ignore_filenames = vec![
@@ -146,40 +106,86 @@ impl GameMod {
         let mut paths = vec![];
 
         // Collect files matching all patterns
-        for pattern in glob_patterns {
-            let full_pattern = base_path.join(pattern);
-            let pattern_str = full_pattern.to_string_lossy();
+        if let Some(file_index) = file_index {
+            // Use file index with pattern matching (much faster than filesystem globbing)
 
-            match glob(&pattern_str) {
-                Ok(paths_iter) => {
-                    for entry in paths_iter {
-                        match entry {
-                            Ok(path) => {
-                                if path.is_file() {
-                                    // Check if this file should be ignored (simple filename matching)
-                                    let should_ignore = if let Some(filename) = path.file_name() {
-                                        if let Some(filename_str) = filename.to_str() {
-                                            ignore_filenames.contains(&filename_str)
+            // Compile glob patterns once
+            let compiled_patterns: Vec<Pattern> = glob_patterns
+                .iter()
+                .filter_map(|pattern| match Pattern::new(pattern) {
+                    Ok(p) => Some(p),
+                    Err(e) => {
+                        eprintln!("Invalid glob pattern {}: {}", pattern, e);
+                        None
+                    }
+                })
+                .collect();
+
+            // Match files from index against patterns
+            for file_path in file_index {
+                // Check if this file should be ignored (simple filename matching)
+                let should_ignore =
+                    if let Some(filename) = std::path::Path::new(file_path).file_name() {
+                        if let Some(filename_str) = filename.to_str() {
+                            ignore_filenames.contains(&filename_str)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                if should_ignore {
+                    continue;
+                }
+
+                // Check if file matches any pattern
+                let matches_pattern = compiled_patterns
+                    .iter()
+                    .any(|pattern| pattern.matches(file_path));
+
+                if matches_pattern {
+                    let full_path = base_path.join(file_path);
+                    paths.push(full_path);
+                }
+            }
+        } else {
+            for pattern in glob_patterns {
+                let full_pattern = base_path.join(pattern);
+                let pattern_str = full_pattern.to_string_lossy();
+
+                match glob(&pattern_str) {
+                    Ok(paths_iter) => {
+                        for entry in paths_iter {
+                            match entry {
+                                Ok(path) => {
+                                    if path.is_file() {
+                                        // Check if this file should be ignored (simple filename matching)
+                                        let should_ignore = if let Some(filename) = path.file_name()
+                                        {
+                                            if let Some(filename_str) = filename.to_str() {
+                                                ignore_filenames.contains(&filename_str)
+                                            } else {
+                                                false
+                                            }
                                         } else {
                                             false
-                                        }
-                                    } else {
-                                        false
-                                    };
+                                        };
 
-                                    if !should_ignore {
-                                        paths.push(path);
+                                        if !should_ignore {
+                                            paths.push(path);
+                                        }
                                     }
                                 }
-                            }
-                            Err(e) => {
-                                eprintln!("Error reading path in pattern {}: {}", pattern, e);
+                                Err(e) => {
+                                    eprintln!("Error reading path in pattern {}: {}", pattern, e);
+                                }
                             }
                         }
                     }
-                }
-                Err(e) => {
-                    eprintln!("Error with glob pattern {}: {}", pattern, e);
+                    Err(e) => {
+                        eprintln!("Error with glob pattern {}: {}", pattern, e);
+                    }
                 }
             }
         }

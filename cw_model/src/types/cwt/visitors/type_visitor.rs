@@ -146,13 +146,12 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
                 match key {
                     "path" => {
                         if let CwtValue::String(s) = &rule.value {
-                            type_def.path = Some(interner.get_or_intern(s.raw_value().to_string()));
+                            type_def.path = Some(interner.get_or_intern(s.raw_value()));
                         }
                     }
                     "name_field" => {
                         if let CwtValue::String(s) = &rule.value {
-                            type_def.name_field =
-                                Some(interner.get_or_intern(s.raw_value().to_string()));
+                            type_def.name_field = Some(interner.get_or_intern(s.raw_value()));
                         }
                     }
                     "unique" => match &rule.value {
@@ -260,14 +259,14 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
             match (&rule.operator, &rule.value) {
                 (CwtOperator::NotEquals, CwtValue::String(s)) => {
                     // skip_root_key != tech_group
-                    except_keys.push(interner.get_or_intern(s.raw_value().to_string()));
+                    except_keys.push(interner.get_or_intern(s.raw_value()));
                 }
                 (CwtOperator::Equals, CwtValue::String(s)) => {
                     let value = s.raw_value();
                     if value == "any" {
                         has_any = true;
                     } else {
-                        specific_keys.push(interner.get_or_intern(value.to_string()));
+                        specific_keys.push(interner.get_or_intern(value));
                     }
                 }
                 (CwtOperator::Equals, CwtValue::Block(block)) => {
@@ -276,8 +275,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
                         if let cw_parser::cwt::AstCwtExpression::Value(v) = item {
                             match v {
                                 CwtValue::String(s) => {
-                                    multiple_keys
-                                        .push(interner.get_or_intern(s.raw_value().to_string()));
+                                    multiple_keys.push(interner.get_or_intern(s.raw_value()));
                                 }
                                 _ => {}
                             }
@@ -329,9 +327,8 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
                 }
 
                 if let CwtValue::String(pattern) = &rule.value {
-                    let mut requirement = LocalisationRequirement::new(
-                        interner.get_or_intern(pattern.raw_value().to_string()),
-                    );
+                    let mut requirement =
+                        LocalisationRequirement::new(interner.get_or_intern(pattern.raw_value()));
 
                     for option in &rule.options {
                         match option.key {
@@ -347,7 +344,7 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
 
                     type_def
                         .localisation
-                        .insert(interner.get_or_intern(key.to_string()), requirement);
+                        .insert(interner.get_or_intern(key), requirement);
                 }
             }
         }
@@ -371,16 +368,16 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
                         // Only add to existing base localisation requirements
                         if let Some(base_requirement) = type_def
                             .localisation
-                            .get_mut(&interner.get_or_intern(loc_key.to_string()))
+                            .get_mut(&interner.get_or_intern(loc_key))
                         {
                             // Add to subtype-specific localisation for existing base requirement
                             let subtype_map = base_requirement
                                 .subtypes
-                                .entry(interner.get_or_intern(subtype_name.to_string()))
+                                .entry(interner.get_or_intern(subtype_name))
                                 .or_insert_with(SpurMap::new);
 
                             subtype_map.insert(
-                                interner.get_or_intern(loc_key.to_string()),
+                                interner.get_or_intern(loc_key),
                                 interner.get_or_intern(pattern_str),
                             );
 

@@ -24,8 +24,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
-use crate::base_game::BaseGame;
-use crate::interner::get_interner;
 use cw_model::GameMod;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -269,11 +267,9 @@ impl FileIndex {
         let start = Instant::now();
         eprintln!("Initializing file index cache...");
 
-        let base_game =
-            BaseGame::load_global_as_mod_definition(cw_model::LoadMode::Parallel, get_interner());
-
-        let game_root = if let Some(path) = &base_game.definition.path {
-            path.clone()
+        let game_root = if let Some(path) = crate::base_game::game::get_install_directory_windows()
+        {
+            path
         } else {
             eprintln!("Warning: No game root path found, file index will be empty");
             let result = Arc::new(FileIndex {
@@ -400,6 +396,10 @@ impl FileIndex {
         }
 
         false
+    }
+
+    pub fn get_all_files(&self) -> &HashSet<String> {
+        &self.files
     }
 
     /// Get all files matching a pattern (simple contains check)

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs::File,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
@@ -25,9 +26,10 @@ impl BaseGame {
     pub fn load_global_as_mod_definition(
         load_mode: LoadMode,
         interner: &CaseInsensitiveInterner,
+        file_index: Option<&HashSet<String>>,
     ) -> &'static GameMod {
         BASE_MOD.get_or_init(|| {
-            Self::load_as_mod_definition(None, load_mode, interner)
+            Self::load_as_mod_definition(None, load_mode, interner, file_index)
                 .expect("Could not load base game")
         })
     }
@@ -36,6 +38,7 @@ impl BaseGame {
         install_path: Option<&Path>,
         load_mode: LoadMode,
         interner: &CaseInsensitiveInterner,
+        file_index: Option<&HashSet<String>>,
     ) -> Result<GameMod, anyhow::Error> {
         let install_path = if let Some(path) = install_path {
             Some(path)
@@ -57,7 +60,13 @@ impl BaseGame {
                     archive: None,
                 };
 
-                let game_mod = GameMod::load(definition, load_mode, interner)?;
+                let game_mod = GameMod::load(
+                    definition,
+                    load_mode,
+                    interner,
+                    Self::get_glob_patterns(),
+                    file_index,
+                )?;
 
                 // BASE_MOD
                 //     .set(game_mod)
@@ -122,6 +131,39 @@ impl BaseGame {
     /// Get the executable name for this game
     pub fn get_executable_name() -> &'static str {
         "victoria3.exe"
+    }
+
+    pub fn get_glob_patterns() -> Vec<&'static str> {
+        let glob_patterns = vec![
+            // Victoria 3 patterns (modular structure)
+            // Game-specific files
+            "game/common/**/*.txt",
+            "game/interface/**/*.txt",
+            "game/events/**/*.txt",
+            "game/gfx/**/*.gfx",
+            "game/gfx/**/*.asset",
+            "game/gfx/**/*.txt",
+            "game/gui/**/*.gui",
+            "game/gui/**/*.gfx",
+            "game/map_data/**/*.txt",
+            "game/music/**/*.txt",
+            "game/music/**/*.asset",
+            "game/sound/**/*.txt",
+            "game/sound/**/*.asset",
+            // Framework files (jomini)
+            "jomini/common/**/*.txt",
+            "jomini/gfx/**/*.gfx",
+            "jomini/gfx/**/*.asset",
+            "jomini/gui/**/*.gui",
+            "jomini/gui/**/*.gfx",
+            // Engine files (clausewitz)
+            "clausewitz/gfx/**/*.gfx",
+            "clausewitz/gfx/**/*.asset",
+            "clausewitz/gui/**/*.gui",
+            "clausewitz/gui/**/*.gfx",
+        ];
+
+        glob_patterns
     }
 }
 

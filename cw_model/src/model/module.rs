@@ -162,7 +162,7 @@ where
         let mut property = PropertyInfo::default();
         let mut property_visitor = PropertyVisitor::new(&mut property, self.interner);
         property_visitor.visit_expression(node);
-        let key = self.interner.get_or_intern(node.key.value.to_string());
+        let key = self.interner.get_or_intern(node.key.raw_value());
         self.module
             .properties
             .kv

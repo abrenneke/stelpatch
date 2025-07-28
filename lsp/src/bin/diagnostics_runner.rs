@@ -5,16 +5,19 @@ use std::path::Path;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use clap::Parser;
 use colored::Colorize;
-use cw_lsp::handlers::cache::FullAnalysis;
-use cw_lsp::handlers::cache::{EntityRestructurer, FileIndex, GameDataCache, TypeCache};
 use cw_lsp::handlers::diagnostics::provider::DiagnosticsProvider;
+use cw_lsp::handlers::initialization::CacheInitializer;
 use cw_lsp::handlers::settings::Settings;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use tower_lsp::lsp_types::Diagnostic;
+
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 /// Diagnostics runner with integrated settings
 #[derive(Debug, Parser)]
@@ -124,6 +127,9 @@ fn print_diagnostic(file_path: &Path, diagnostic: &Diagnostic, show_file_path: b
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
+    // Start timing the entire operation
+    let start_time = Instant::now();
+
     // Initialize global settings with the parsed settings
     Settings::init_global(args.settings.clone());
 
@@ -137,51 +143,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    println!("{}", "Initializing caches...".blue().bold());
-
-    // Initialize caches in background
-    TypeCache::initialize_in_background();
-    GameDataCache::initialize_in_background();
-    FileIndex::initialize_in_background();
-
-    // Wait for caches to be initialized
-    let timeout = std::time::Duration::from_secs(60);
-    let start = std::time::Instant::now();
-
-    while !TypeCache::is_initialized()
-        || !GameDataCache::is_initialized()
-        || !FileIndex::is_initialized()
-    {
-        if start.elapsed() > timeout {
+    // Use the unified initialization logic with timeout
+    let timeout = Duration::from_secs(60);
+    match CacheInitializer::initialize_with_timeout(timeout) {
+        Ok(result) => {
+            println!(
+                "{} {}",
+                "Full analysis loaded in".green().bold(),
+                format!("{:?}", result.full_analysis_duration).bright_yellow()
+            );
+            println!("{}", "Caches initialized.".green().bold());
+        }
+        Err(err) => {
             eprintln!(
                 "{} {}",
                 "Error:".red().bold(),
-                "Timeout waiting for caches to initialize".bright_white()
+                format!("Initialization failed: {}", err).bright_white()
             );
             std::process::exit(1);
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
     }
-
-    println!("{}", "Restructuring entities...".blue().bold());
-    let entity_restructurer =
-        EntityRestructurer::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
-    entity_restructurer.load();
-
-    let full_analysis_start = std::time::Instant::now();
-
-    println!("{}", "Loading full analysis...".blue().bold());
-    let full_analysis = FullAnalysis::new(TypeCache::get().unwrap());
-    full_analysis.load();
-
-    let full_analysis_duration = full_analysis_start.elapsed();
-    println!(
-        "{} {}",
-        "Full analysis loaded in".green().bold(),
-        format!("{:?}", full_analysis_duration).bright_yellow()
-    );
-
-    println!("{}", "Caches initialized.".green().bold());
 
     // Determine if input is a file or directory and get list of files to process
     let is_single_file = input_path.is_file();
@@ -281,6 +262,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .load(Ordering::Relaxed)
             .to_string()
             .bright_white()
+    );
+
+    // Display total execution time
+    let total_duration = start_time.elapsed();
+    println!(
+        "{} {}",
+        "Total time:".green().bold(),
+        format!("{:?}", total_duration).bright_yellow()
     );
 
     // Print diagnostics if requested

@@ -7,7 +7,7 @@ pub fn main() {
     let start_time = Instant::now();
 
     let interner = CaseInsensitiveInterner::new();
-    let loaded_mod = BaseGame::load_global_as_mod_definition(LoadMode::Parallel, &interner);
+    let loaded_mod = BaseGame::load_global_as_mod_definition(LoadMode::Parallel, &interner, None);
 
     let load_duration = start_time.elapsed();
     println!("Loading completed in: {:?}", load_duration);

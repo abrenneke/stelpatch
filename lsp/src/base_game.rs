@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use cw_model::{GameMod, LoadMode, Modifier};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 #[cfg(feature = "stellaris")]
@@ -30,16 +31,20 @@ pub mod game {
     use super::*;
 
     /// Load the base game as a mod definition
-    pub fn load_global_as_mod_definition(load_mode: LoadMode) -> &'static GameMod {
-        BaseGame::load_global_as_mod_definition(load_mode, get_interner())
+    pub fn load_global_as_mod_definition(
+        load_mode: LoadMode,
+        file_index: Option<&HashSet<String>>,
+    ) -> &'static GameMod {
+        BaseGame::load_global_as_mod_definition(load_mode, get_interner(), file_index)
     }
 
     /// Load the base game with optional custom install path
     pub fn load_as_mod_definition(
         install_path: Option<&std::path::Path>,
         load_mode: LoadMode,
+        file_index: Option<&HashSet<String>>,
     ) -> Result<GameMod> {
-        BaseGame::load_as_mod_definition(install_path, load_mode, get_interner())
+        BaseGame::load_as_mod_definition(install_path, load_mode, get_interner(), file_index)
     }
 
     /// Get the game installation directory on Windows
@@ -67,5 +72,10 @@ pub mod game {
     /// Get the executable name for the current game
     pub fn get_executable_name() -> &'static str {
         BaseGame::get_executable_name()
+    }
+
+    /// Get the glob patterns for the current game
+    pub fn get_glob_patterns() -> Vec<&'static str> {
+        BaseGame::get_glob_patterns()
     }
 }

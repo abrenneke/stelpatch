@@ -92,7 +92,7 @@ where
         self.conditional_block
             .properties
             .kv
-            .entry(self.interner.get_or_intern(node.key.value.to_string()))
+            .entry(self.interner.get_or_intern(node.key.raw_value()))
             .or_insert_with(PropertyInfoList::new)
             .0
             .push(property);

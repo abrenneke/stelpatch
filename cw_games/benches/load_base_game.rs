@@ -14,7 +14,7 @@ fn benchmark_load_modes(c: &mut Criterion) {
         b.iter(|| {
             let install_path = BaseGame::get_install_directory_windows().unwrap();
             let interner = CaseInsensitiveInterner::new();
-            BaseGame::load_as_mod_definition(Some(&install_path), LoadMode::Serial, &interner)
+            BaseGame::load_as_mod_definition(Some(&install_path), LoadMode::Serial, &interner, None)
         })
     });
 
@@ -22,7 +22,12 @@ fn benchmark_load_modes(c: &mut Criterion) {
         b.iter(|| {
             let install_path = BaseGame::get_install_directory_windows().unwrap();
             let interner = CaseInsensitiveInterner::new();
-            BaseGame::load_as_mod_definition(Some(&install_path), LoadMode::Parallel, &interner)
+            BaseGame::load_as_mod_definition(
+                Some(&install_path),
+                LoadMode::Parallel,
+                &interner,
+                None,
+            )
         })
     });
 
