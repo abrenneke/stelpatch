@@ -25,19 +25,7 @@ impl<'a> TypeFormatter<'a> {
     }
 
     pub fn format_type(&self, scoped_type: Arc<ScopedType>, property_name: Option<Spur>) -> String {
-        let mut result = self.format_type_with_depth(scoped_type.clone(), 0, property_name);
-
-        // Add scope information
-        let scope_info = self.format_scope_info(&scoped_type);
-        result = format!("{}\n{}", result, scope_info);
-
-        result
-    }
-
-    /// Format scope information for display
-    fn format_scope_info(&self, scoped_type: &ScopedType) -> String {
-        let scope_stack = scoped_type.scope_stack();
-        format!("Scope: {}", scope_stack)
+        self.format_type_with_depth(scoped_type.clone(), 0, property_name)
     }
 
     /// Format a type description with depth control and optional property name context

@@ -292,7 +292,10 @@ impl CwtConverter {
                         let unified_property = Property {
                             property_type: Arc::new(union_type),
                             options: CwtOptions::default(),
-                            documentation: None,
+                            // If multiple union properties have documentation... we'll take the first one
+                            documentation: property_def
+                                .documentation
+                                .or(existing_property.documentation.clone()),
                         };
                         properties.insert(interner.get_or_intern(key), unified_property);
                     } else {

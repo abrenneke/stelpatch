@@ -345,6 +345,10 @@ pub fn build_hover_response(type_info: TypeInfo, type_cache: &TypeCache) -> Opti
         );
         // Add type information in a clean format
         hover_content.push_str(&format!("```\n{}\n```", formatted_type));
+
+        // Add scope information
+        let scope_stack = scoped_type.scope_stack();
+        hover_content.push_str(&format!("\n**Scope**: {}", scope_stack));
     }
 
     // Add brief documentation if available
