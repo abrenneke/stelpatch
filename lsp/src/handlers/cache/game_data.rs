@@ -84,6 +84,7 @@ impl GameDataCache {
                 LoadMode::Parallel,
                 get_interner(),
                 Some(&file_index.get_all_files()),
+                false,
             );
 
             let interner = get_interner();

@@ -104,6 +104,7 @@ pub fn load_mod_from_descriptor_with_dependencies(
         get_interner(),
         crate::base_game::game::get_glob_patterns(),
         None,
+        false,
     )?;
 
     // Add to loaded mods cache
@@ -142,6 +143,7 @@ pub fn load_mod_from_descriptor(descriptor_path: &Path, client: &Client) -> Resu
         get_interner(),
         crate::base_game::game::get_glob_patterns(),
         None,
+        false,
     )?;
 
     log_message_sync(

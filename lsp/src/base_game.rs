@@ -35,7 +35,7 @@ pub mod game {
         load_mode: LoadMode,
         file_index: Option<&HashSet<String>>,
     ) -> &'static GameMod {
-        BaseGame::load_global_as_mod_definition(load_mode, get_interner(), file_index)
+        BaseGame::load_global_as_mod_definition(load_mode, get_interner(), file_index, false)
     }
 
     /// Load the base game with optional custom install path
@@ -44,7 +44,7 @@ pub mod game {
         load_mode: LoadMode,
         file_index: Option<&HashSet<String>>,
     ) -> Result<GameMod> {
-        BaseGame::load_as_mod_definition(install_path, load_mode, get_interner(), file_index)
+        BaseGame::load_as_mod_definition(install_path, load_mode, get_interner(), file_index, false)
     }
 
     /// Get the game installation directory on Windows

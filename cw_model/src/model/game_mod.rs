@@ -82,6 +82,7 @@ impl GameMod {
         interner: &CaseInsensitiveInterner,
         glob_patterns: Vec<&str>,
         file_index: Option<&HashSet<String>>,
+        preserve_ast: bool,
     ) -> Result<Self, anyhow::Error> {
         let base_path = PathBuf::from(definition.path.as_ref().unwrap());
 
@@ -192,10 +193,18 @@ impl GameMod {
 
         let mut mod_modules = vec![];
 
-        let modules = match mode {
+        let mut modules = match mode {
             LoadMode::Serial => Self::parse_serial(&paths, interner),
             LoadMode::Parallel => Self::parse_parallel(&paths, interner),
         };
+
+        if !preserve_ast {
+            for module in modules.iter_mut() {
+                if let Ok(module) = module {
+                    module.ast = None;
+                }
+            }
+        }
 
         for (module, path) in modules.into_iter().zip(paths.iter()) {
             let module = module

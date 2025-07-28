@@ -27,9 +27,10 @@ impl BaseGame {
         load_mode: LoadMode,
         interner: &CaseInsensitiveInterner,
         file_index: Option<&HashSet<String>>,
+        preserve_ast: bool,
     ) -> &'static GameMod {
         BASE_MOD.get_or_init(|| {
-            Self::load_as_mod_definition(None, load_mode, interner, file_index)
+            Self::load_as_mod_definition(None, load_mode, interner, file_index, preserve_ast)
                 .expect("Could not load base game")
         })
     }
@@ -39,6 +40,7 @@ impl BaseGame {
         load_mode: LoadMode,
         interner: &CaseInsensitiveInterner,
         file_index: Option<&HashSet<String>>,
+        preserve_ast: bool,
     ) -> Result<GameMod, anyhow::Error> {
         let install_path = if let Some(path) = install_path {
             Some(path)
@@ -66,6 +68,7 @@ impl BaseGame {
                     interner,
                     Self::get_glob_patterns(),
                     file_index,
+                    preserve_ast,
                 )?;
 
                 // BASE_MOD
@@ -135,7 +138,6 @@ impl BaseGame {
 
     pub fn get_glob_patterns() -> Vec<&'static str> {
         let glob_patterns = vec![
-            // Stellaris patterns (simple structure)
             "common/**/*.txt",
             "interface/**/*.gui",
             "interface/**/*.gfx",
