@@ -154,7 +154,39 @@ pub fn detect_skip_root_key_container(
                 }
             }
         }
-        _ => {}
+        _ => {
+            // Check if this single type has skip_root_key configured
+            if let Some(type_name) = namespace_type.get_type_name() {
+                if let Some(type_def) = type_cache.get_cwt_analyzer().get_type(type_name) {
+                    if let Some(skip_root_key) = &type_def.skip_root_key {
+                        let should_skip = match skip_root_key {
+                            cw_model::SkipRootKey::Specific(skip_key) => {
+                                interner.resolve(&container_key).to_lowercase()
+                                    == interner.resolve(&skip_key).to_lowercase()
+                            }
+                            cw_model::SkipRootKey::Any => true,
+                            cw_model::SkipRootKey::Except(exceptions) => {
+                                !exceptions.iter().any(|exception| {
+                                    interner.resolve(&exception).to_lowercase()
+                                        == interner.resolve(&container_key).to_lowercase()
+                                })
+                            }
+                            cw_model::SkipRootKey::Multiple(keys) => keys.iter().any(|k| {
+                                interner.resolve(&k).to_lowercase()
+                                    == interner.resolve(&container_key).to_lowercase()
+                            }),
+                        };
+
+                        if should_skip {
+                            return SkipRootKeyResult {
+                                is_skip_root_key_container: true,
+                                matching_type_name: Some(type_name),
+                            };
+                        }
+                    }
+                }
+            }
+        }
     }
 
     SkipRootKeyResult {
