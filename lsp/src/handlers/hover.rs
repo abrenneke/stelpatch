@@ -190,15 +190,11 @@ pub fn hover(
     }
 
     if let Some(property_path) = builder.found_property.as_ref() {
-        eprintln!("DEBUG HOVER: Found property path: {}", property_path);
-
         // Check if this is a type_per_file namespace
         let is_type_per_file = is_type_per_file_namespace(&namespace_type);
-        eprintln!("DEBUG HOVER: is_type_per_file: {}", is_type_per_file);
 
         // Check if this is a top-level key (entity name) or a nested property
         let is_top_level_key = !property_path.contains('.');
-        eprintln!("DEBUG HOVER: is_top_level_key: {}", is_top_level_key);
 
         let type_info = if is_type_per_file {
             // For type_per_file, all properties are properties of the file-level entity
@@ -220,17 +216,11 @@ pub fn hover(
                 // Get documentation for the final property
                 let property_documentation = if let Some(last_part) = path_parts.last() {
                     let final_property_name = interner.get_or_intern(last_part);
-                    eprintln!(
-                        "DEBUG HOVER: Getting documentation for property: {}",
-                        interner.resolve(&final_property_name)
-                    );
                     let doc = type_cache
                         .get_resolver()
                         .get_property_documentation(current_type.clone(), final_property_name);
-                    eprintln!("DEBUG HOVER: Documentation result: {:?}", doc);
                     doc
                 } else {
-                    eprintln!("DEBUG HOVER: No last part in path");
                     None
                 };
 
@@ -379,22 +369,15 @@ pub fn hover(
                         let path_parts: Vec<&str> = final_property_path.split('.').collect();
                         if let Some(last_part) = path_parts.last() {
                             let final_property_name = interner.get_or_intern(last_part);
-                            eprintln!(
-                                "DEBUG HOVER2: Getting documentation for property: {}",
-                                interner.resolve(&final_property_name)
-                            );
                             let doc = type_cache.get_resolver().get_property_documentation(
                                 current_type.clone(),
                                 final_property_name,
                             );
-                            eprintln!("DEBUG HOVER2: Documentation result: {:?}", doc);
                             doc
                         } else {
-                            eprintln!("DEBUG HOVER2: No last part in path");
                             None
                         }
                     } else {
-                        eprintln!("DEBUG HOVER2: Empty final property path");
                         None
                     };
 

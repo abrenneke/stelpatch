@@ -234,11 +234,6 @@ impl PropertyNavigator {
     ) -> Option<String> {
         let interner = get_interner();
 
-        eprintln!(
-            "DEBUG: get_property_documentation called for property: {}",
-            interner.resolve(&property_name)
-        );
-
         // Handle complex properties (containing dots) by navigating to the last part
         let property_path = interner.resolve(&property_name);
         let final_property_name = if property_path.contains('.') {
@@ -252,77 +247,38 @@ impl PropertyNavigator {
             property_name
         };
 
-        eprintln!(
-            "DEBUG: final_property_name: {}",
-            interner.resolve(&final_property_name)
-        );
-
         // Handle regular properties based on the current type
         match scoped_type.cwt_type_for_matching() {
             CwtTypeOrSpecialRef::Block(block) => {
-                eprintln!(
-                    "DEBUG: Found block type with {} properties",
-                    block.properties.len()
-                );
-
-                // Debug: Show what type of block this is
-                if let Some(type_name) = &block.type_name {
-                    eprintln!("DEBUG: Block type name: {}", interner.resolve(type_name));
-                } else {
-                    eprintln!("DEBUG: Block has no type_name");
-                }
-
                 // First, check regular properties
                 if let Some(property) = block.properties.get(&final_property_name) {
-                    eprintln!("DEBUG: Found property in regular properties");
                     if let Some(doc_spur) = property.documentation {
                         let doc_text = interner.resolve(&doc_spur).to_string();
-                        eprintln!("DEBUG: Found documentation: {}", doc_text);
                         return Some(doc_text);
                     } else {
-                        eprintln!("DEBUG: Property found but no documentation");
                     }
                 } else {
-                    eprintln!("DEBUG: Property not found in regular properties");
                 }
 
                 // Check if there's a subtype-specific property
-                eprintln!("DEBUG: Checking {} subtypes", scoped_type.subtypes().len());
                 for subtype_name in scoped_type.subtypes() {
-                    eprintln!(
-                        "DEBUG: Checking subtype: {}",
-                        interner.resolve(subtype_name)
-                    );
                     if let Some(subtype) = block.subtypes.get(subtype_name) {
-                        eprintln!(
-                            "DEBUG: Found subtype with {} allowed properties",
-                            subtype.allowed_properties.len()
-                        );
                         if let Some(property) = subtype.allowed_properties.get(&final_property_name)
                         {
-                            eprintln!("DEBUG: Found property in subtype allowed properties");
                             if let Some(doc_spur) = property.documentation {
                                 let doc_text = interner.resolve(&doc_spur).to_string();
-                                eprintln!("DEBUG: Found subtype documentation: {}", doc_text);
                                 return Some(doc_text);
                             } else {
-                                eprintln!("DEBUG: Subtype property found but no documentation");
                             }
                         } else {
-                            eprintln!("DEBUG: Property not found in subtype allowed properties");
                         }
                     } else {
-                        eprintln!("DEBUG: Subtype not found in block");
                     }
                 }
 
-                eprintln!("DEBUG: No documentation found in any location");
                 None
             }
-            _ => {
-                eprintln!("DEBUG: Not a block type");
-                None
-            }
+            _ => None,
         }
     }
 }
