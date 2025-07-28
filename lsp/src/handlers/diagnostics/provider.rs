@@ -11,7 +11,7 @@ use crate::handlers::diagnostics::diagnostic::{
     UnresolvedDiagnostic, create_diagnostic_from_parse_error, create_unexpected_key_diagnostic,
 };
 use crate::handlers::diagnostics::type_validation::validate_entity_value;
-use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult};
+use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
 use crate::interner::get_interner;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -191,10 +191,31 @@ impl DiagnosticsProvider {
                                     let nested_entity_key =
                                         interner.get_or_intern(nested_expr.key.raw_value());
 
-                                    // For nested entities in skip_root_key containers, use common validation
+                                    // For nested entities in skip_root_key containers, use the matching type
+                                    let base_validation_type = if let Some(matching_type_name) =
+                                        skip_root_key_result.matching_type_name
+                                    {
+                                        // Use only the specific type that matched the skip_root_key pattern
+                                        let type_cache = TypeCache::get().unwrap();
+                                        if let Some(type_def) = type_cache
+                                            .get_cwt_analyzer()
+                                            .get_type(matching_type_name)
+                                        {
+                                            Arc::new(ScopedType::new_cwt(
+                                                type_def.rules.clone(),
+                                                namespace_type.scope_stack().clone(),
+                                                None,
+                                            ))
+                                        } else {
+                                            namespace_type.clone()
+                                        }
+                                    } else {
+                                        namespace_type.clone()
+                                    };
+
                                     let filtered_nested_validation_type =
                                         filter_and_narrow_entity_type(
-                                            namespace_type.clone(),
+                                            base_validation_type,
                                             namespace,
                                             container_key,
                                             nested_entity_key,

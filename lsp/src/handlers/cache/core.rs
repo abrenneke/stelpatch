@@ -385,6 +385,28 @@ impl TypeCache {
         }
     }
 
+    /// Helper function to create a ScopedType from a vector of CwtTypes
+    /// Returns None for empty vec, single type for len=1, union for len>1
+    fn create_scoped_type_from_vec(
+        types: Vec<Arc<CwtType>>,
+        scope_stack: &crate::handlers::scope::ScopeStack,
+        scripted_effect: Option<lasso::Spur>,
+    ) -> Option<Arc<ScopedType>> {
+        match types.len() {
+            0 => None,
+            1 => Some(Arc::new(ScopedType::new_cwt(
+                types[0].clone(),
+                scope_stack.clone(),
+                scripted_effect,
+            ))),
+            _ => Some(Arc::new(ScopedType::new_cwt(
+                Arc::new(CwtType::Union(types)),
+                scope_stack.clone(),
+                scripted_effect,
+            ))),
+        }
+    }
+
     pub fn get_namespace_type(
         &self,
         namespace: Spur,
@@ -428,23 +450,12 @@ impl TypeCache {
             }
 
             // If we found path_file matches, use only those (path_file wins)
-            if !path_file_matches.is_empty() {
-                match path_file_matches.len() {
-                    1 => {
-                        return Some(Arc::new(ScopedType::new_cwt(
-                            path_file_matches[0].clone(),
-                            namespace_types[0].scope_stack().clone(),
-                            namespace_types[0].in_scripted_effect_block().cloned(),
-                        )));
-                    }
-                    _ => {
-                        return Some(Arc::new(ScopedType::new_cwt(
-                            Arc::new(CwtType::Union(path_file_matches)),
-                            namespace_types[0].scope_stack().clone(),
-                            namespace_types[0].in_scripted_effect_block().cloned(),
-                        )));
-                    }
-                }
+            if let Some(result) = Self::create_scoped_type_from_vec(
+                path_file_matches,
+                namespace_types[0].scope_stack(),
+                namespace_types[0].in_scripted_effect_block().cloned(),
+            ) {
+                return Some(result);
             }
 
             // Second pass: no path_file matches, so use path-based logic
@@ -472,22 +483,12 @@ impl TypeCache {
                 }
             }
 
-            match union_types.len() {
-                0 => {}
-                1 => {
-                    return Some(Arc::new(ScopedType::new_cwt(
-                        union_types[0].clone(),
-                        namespace_types[0].scope_stack().clone(),
-                        namespace_types[0].in_scripted_effect_block().cloned(),
-                    )));
-                }
-                _ => {
-                    return Some(Arc::new(ScopedType::new_cwt(
-                        Arc::new(CwtType::Union(union_types)),
-                        namespace_types[0].scope_stack().clone(),
-                        namespace_types[0].in_scripted_effect_block().cloned(),
-                    )));
-                }
+            if let Some(result) = Self::create_scoped_type_from_vec(
+                union_types.clone(),
+                namespace_types[0].scope_stack(),
+                namespace_types[0].in_scripted_effect_block().cloned(),
+            ) {
+                return Some(result);
             }
 
             for scoped_type in &namespace_types {
@@ -496,25 +497,11 @@ impl TypeCache {
                 }
             }
 
-            match union_types.len() {
-                0 => {
-                    return None;
-                }
-                1 => {
-                    return Some(Arc::new(ScopedType::new_cwt(
-                        union_types[0].clone(),
-                        namespace_types[0].scope_stack().clone(),
-                        namespace_types[0].in_scripted_effect_block().cloned(),
-                    )));
-                }
-                _ => {
-                    return Some(Arc::new(ScopedType::new_cwt(
-                        Arc::new(CwtType::Union(union_types)),
-                        namespace_types[0].scope_stack().clone(),
-                        namespace_types[0].in_scripted_effect_block().cloned(),
-                    )));
-                }
-            }
+            return Self::create_scoped_type_from_vec(
+                union_types,
+                namespace_types[0].scope_stack(),
+                namespace_types[0].in_scripted_effect_block().cloned(),
+            );
         }
 
         None
