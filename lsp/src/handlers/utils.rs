@@ -11,20 +11,45 @@ pub fn log_message_sync(_client: &Client, message_type: MessageType, message: St
 
 /// Convert LSP position to byte offset in the document
 pub fn position_to_offset(text: &str, position: Position) -> usize {
+    let target_line = position.line as usize;
+    let target_char = position.character as usize;
+
+    // Split text into lines (this removes line endings)
     let lines: Vec<&str> = text.lines().collect();
+
+    if target_line >= lines.len() {
+        return text.len();
+    }
+
     let mut offset = 0;
 
-    for (line_idx, line) in lines.iter().enumerate() {
-        if line_idx < position.line as usize {
-            offset += line.len() + 1; // +1 for newline character
-        } else {
-            offset += position.character as usize;
-            break;
+    // Add up all complete lines before target line
+    for i in 0..target_line {
+        offset += lines[i].len();
+
+        // Add line ending bytes - check what type of line ending this line actually has
+        // We need to look at the original text to see the actual line ending
+        let line_end_pos = offset;
+        if line_end_pos < text.len() {
+            let remaining = &text[line_end_pos..];
+            if remaining.starts_with("\r\n") {
+                offset += 2; // Windows line ending
+            } else if remaining.starts_with('\n') {
+                offset += 1; // Unix line ending
+            }
+            // Note: we don't handle lone \r (old Mac) as it's very rare
         }
     }
 
-    let final_offset = offset.min(text.len());
-    final_offset
+    // Now add the character offset within the target line
+    let target_line_text = lines[target_line];
+    let char_offset = target_line_text
+        .char_indices()
+        .nth(target_char)
+        .map(|(i, _)| i)
+        .unwrap_or(target_line_text.len());
+
+    offset + char_offset
 }
 
 /// Extract namespace from a file URI

@@ -78,6 +78,7 @@ where
             } else {
                 format!("{}.{}", self.build_path(), node.key.raw_value())
             };
+
             self.found_property = Some(full_path);
 
             // Set container and entity context based on the path level
