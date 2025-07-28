@@ -10,10 +10,12 @@ use crate::{
     CaseInsensitiveInterner, Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value,
 };
 
-/// A Module is a single file inside of a Namespace. Another module in the same namespace with the same name will overwrite
-/// the previous module in the game's load order. Entities in a module are unique in a namespace. An entity defined in one module
-/// and defined in another module with a different name will be overwritten by the second module in the game's load order. If two
-/// modules at the same point in the load order define the same entity, the entity will be overwritten by the second module's name alphabetically.
+/// A Module is a single file inside of a Namespace. The module name includes the file extension to prevent collisions
+/// between files with the same base name but different extensions (e.g., archaeology_view.gfx vs archaeology_view.gui).
+/// Another module in the same namespace with the exact same filename will overwrite the previous module in the game's load order.
+/// Entities in a module are unique in a namespace. An entity defined in one module and defined in another module with a
+/// different name will be overwritten by the second module in the game's load order. If two modules at the same point in
+/// the load order define the same entity, the entity will be overwritten by the second module's name alphabetically.
 /// This is why some modules start with 00_, 01_, etc. to ensure they are loaded first and get overridden first.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Module {
@@ -125,7 +127,7 @@ impl Module {
             namespace = "unknown".to_string();
         }
 
-        let module_name = path.file_stem().unwrap().to_str().unwrap();
+        let module_name = path.file_name().unwrap().to_str().unwrap();
 
         (namespace, module_name.to_string())
     }
