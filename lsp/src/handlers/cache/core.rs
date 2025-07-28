@@ -399,9 +399,9 @@ impl TypeCache {
             }
 
             let mut union_types: Vec<Arc<CwtType>> = vec![];
+            let mut path_file_matches: Vec<Arc<CwtType>> = vec![];
 
-            // If the type def has a file_path... try to match the file_path to the type def,
-            // this takes precence over the union type
+            // First pass: collect all path_file matches
             for scoped_type in &namespace_types {
                 if let CwtTypeOrSpecialRef::Block(block) = scoped_type.cwt_type_for_matching() {
                     if let Some(type_def) = block
@@ -416,21 +416,45 @@ impl TypeCache {
                                     if let CwtTypeOrSpecialRef::Block(block) =
                                         scoped_type.cwt_type_for_matching()
                                     {
-                                        // path_file always wins
-                                        return Some(Arc::new(ScopedType::new_cwt(
-                                            Arc::new(CwtType::Block(block.clone())),
-                                            scoped_type.scope_stack().clone(),
-                                            scoped_type.in_scripted_effect_block().cloned(),
-                                        )));
+                                        // Collect all path_file matches
+                                        path_file_matches
+                                            .push(Arc::new(CwtType::Block(block.clone())));
                                     }
                                 }
                             }
-                        } else {
-                            // path_file exists, but is not the current file
-                            // so we can ignore it
-                            continue;
                         }
+                    }
+                }
+            }
 
+            // If we found path_file matches, use only those (path_file wins)
+            if !path_file_matches.is_empty() {
+                match path_file_matches.len() {
+                    1 => {
+                        return Some(Arc::new(ScopedType::new_cwt(
+                            path_file_matches[0].clone(),
+                            namespace_types[0].scope_stack().clone(),
+                            namespace_types[0].in_scripted_effect_block().cloned(),
+                        )));
+                    }
+                    _ => {
+                        return Some(Arc::new(ScopedType::new_cwt(
+                            Arc::new(CwtType::Union(path_file_matches)),
+                            namespace_types[0].scope_stack().clone(),
+                            namespace_types[0].in_scripted_effect_block().cloned(),
+                        )));
+                    }
+                }
+            }
+
+            // Second pass: no path_file matches, so use path-based logic
+            for scoped_type in &namespace_types {
+                if let CwtTypeOrSpecialRef::Block(block) = scoped_type.cwt_type_for_matching() {
+                    if let Some(type_def) = block
+                        .type_name
+                        .as_ref()
+                        .and_then(|type_name| self.cwt_analyzer.get_type(*type_name))
+                    {
                         // namespace contains path
                         if let Some(path) = type_def.path.as_ref() {
                             let namespace_str = interner.resolve(&namespace);
