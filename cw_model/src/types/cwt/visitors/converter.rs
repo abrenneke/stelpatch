@@ -248,10 +248,26 @@ impl CwtConverter {
 
                     let key = rule.key.name();
                     let value_type = Self::convert_value(&rule.value, None, interner);
+
+                    // Extract documentation from CWT rule
+                    let property_documentation = if !rule.documentation.is_empty() {
+                        Some(
+                            interner.get_or_intern(
+                                rule.documentation
+                                    .iter()
+                                    .map(|d| d.text.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join("\n"),
+                            ),
+                        )
+                    } else {
+                        None
+                    };
+
                     let property_def = Property {
                         property_type: value_type,
                         options,
-                        documentation: None,
+                        documentation: property_documentation,
                     };
 
                     // Handle duplicate keys by creating unions

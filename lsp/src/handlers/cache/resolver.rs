@@ -130,6 +130,16 @@ impl TypeResolver {
             .key_matches_pattern_type(key, pattern_type)
     }
 
+    /// Get the documentation for a property if it exists
+    pub fn get_property_documentation(
+        &self,
+        scoped_type: Arc<ScopedType>,
+        property_name: Spur,
+    ) -> Option<String> {
+        self.property_navigator
+            .get_property_documentation(scoped_type, property_name)
+    }
+
     /// Get all possible completions for a pattern type
     pub fn get_pattern_completions(&self, pattern_type: &PatternType) -> Vec<String> {
         self.pattern_matcher.get_pattern_completions(pattern_type)

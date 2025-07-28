@@ -493,10 +493,26 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
                     // This ensures cardinality constraints are preserved even for block values
                     let property_type =
                         CwtConverter::convert_value(&prop_rule.value, None, interner);
+                    // Extract documentation from CWT rule
+                    let property_documentation = if !prop_rule.documentation.is_empty() {
+                        Some(
+                            interner.get_or_intern(
+                                prop_rule
+                                    .documentation
+                                    .iter()
+                                    .map(|d| d.text.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join("\n"),
+                            ),
+                        )
+                    } else {
+                        None
+                    };
+
                     let property = Property {
                         property_type,
                         options: prop_options.clone(),
-                        documentation: None,
+                        documentation: property_documentation,
                     };
                     properties.insert(interner.get_or_intern(prop_key), property);
 
