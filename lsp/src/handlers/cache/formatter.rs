@@ -126,24 +126,24 @@ impl<'a> TypeFormatter<'a> {
 
                 if depth >= 1 {
                     if available_properties.is_empty() {
-                        return format!("{} {{}}", interner.resolve(&block.type_name));
+                        return format!("{} {{}}", block.get_type_name(&interner));
                     } else {
                         return format!(
                             "{} {{ /* ... +{} properties */ }}",
-                            interner.resolve(&block.type_name),
+                            block.get_type_name(&interner),
                             available_properties.len()
                         );
                     }
                 }
 
                 if available_properties.is_empty() {
-                    return format!("{} {{}}", interner.resolve(&block.type_name));
+                    return format!("{} {{}}", block.get_type_name(&interner));
                 }
 
                 let mut sorted_properties: Vec<_> = available_properties.iter().collect();
                 sorted_properties.sort();
 
-                let mut lines = vec![format!("{} {{", interner.resolve(&block.type_name))];
+                let mut lines = vec![format!("{} {{", block.get_type_name(&interner))];
                 let mut line_count = 1;
                 let mut properties_shown = 0;
 

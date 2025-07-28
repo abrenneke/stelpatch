@@ -300,7 +300,7 @@ impl CwtConverter {
         }
 
         CwtType::Block(BlockType {
-            type_name: type_name.unwrap_or_default(),
+            type_name,
             properties,
             subtypes: SpurMap::new(),
             subtype_properties,

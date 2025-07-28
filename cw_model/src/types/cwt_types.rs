@@ -56,18 +56,18 @@ impl CwtType {
         }
     }
 
-    pub fn get_type_name(&self) -> Spur {
+    pub fn get_type_name(&self) -> Option<Spur> {
         match self {
-            CwtType::Simple(_) => Spur::default(),
-            CwtType::Reference(_) => Spur::default(),
-            CwtType::Block(block_type) => block_type.type_name,
-            CwtType::Unknown => Spur::default(),
-            CwtType::Array(_) => Spur::default(),
-            CwtType::Union(_) => Spur::default(),
-            CwtType::Literal(_) => Spur::default(),
-            CwtType::LiteralSet(_) => Spur::default(),
-            CwtType::Comparable(_) => Spur::default(),
-            CwtType::Any => Spur::default(),
+            CwtType::Simple(_) => None,
+            CwtType::Reference(_) => None,
+            CwtType::Block(block_type) => block_type.type_name.clone(),
+            CwtType::Unknown => None,
+            CwtType::Array(_) => None,
+            CwtType::Union(_) => None,
+            CwtType::Literal(_) => None,
+            CwtType::LiteralSet(_) => None,
+            CwtType::Comparable(_) => None,
+            CwtType::Any => None,
         }
     }
 
@@ -76,11 +76,10 @@ impl CwtType {
             CwtType::Simple(_) => "(simple)".to_string(),
             CwtType::Reference(_) => "(reference)".to_string(),
             CwtType::Block(block_type) => {
-                let resolved = interner.resolve(&block_type.type_name);
-                if resolved.is_empty() {
-                    "(anonymous block)".to_string()
+                if let Some(type_name) = &block_type.type_name {
+                    interner.resolve(type_name).to_string()
                 } else {
-                    resolved.to_string()
+                    "(anonymous block)".to_string()
                 }
             }
             CwtType::Unknown => "(unknown)".to_string(),
@@ -255,7 +254,7 @@ impl ReferenceType {
 /// Block/object types with properties and subtypes
 #[derive(Clone, PartialEq)]
 pub struct BlockType {
-    pub type_name: Spur,
+    pub type_name: Option<Spur>,
 
     /// Regular properties
     pub properties: SpurMap<Property>,
@@ -280,6 +279,15 @@ pub struct BlockType {
 
     /// Additional flags, like an array
     pub additional_flags: Vec<Arc<CwtType>>,
+}
+
+impl BlockType {
+    pub fn get_type_name<'a>(&self, interner: &'a CaseInsensitiveInterner) -> &'a str {
+        self.type_name
+            .as_ref()
+            .map(|t| interner.resolve(t))
+            .unwrap_or("")
+    }
 }
 
 impl std::fmt::Debug for BlockType {
@@ -1432,7 +1440,7 @@ impl CwtType {
     }
 
     /// Create a block type
-    pub fn block(name: Spur) -> BlockType {
+    pub fn block(name: Option<Spur>) -> BlockType {
         BlockType {
             type_name: name,
             properties: SpurMap::new(),
@@ -1780,7 +1788,7 @@ mod tests {
     fn test_complex_type_fingerprint() {
         // Test fingerprint for complex block type
         let interner = CaseInsensitiveInterner::new();
-        let mut block = CwtType::block(interner.get_or_intern("test_block"));
+        let mut block = CwtType::block(Some(interner.get_or_intern("test_block")));
         let key1 = interner.get_or_intern("key1");
         let key2 = interner.get_or_intern("key2");
         block.properties.insert(

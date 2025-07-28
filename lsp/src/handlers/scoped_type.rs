@@ -113,10 +113,10 @@ pub enum CwtTypeOrSpecialRef<'a> {
 }
 
 impl CwtTypeOrSpecial {
-    pub fn get_type_name(&self) -> Spur {
+    pub fn get_type_name(&self) -> Option<Spur> {
         match self {
             CwtTypeOrSpecial::CwtType(cwt_type) => cwt_type.get_type_name(),
-            CwtTypeOrSpecial::ScopedUnion(_) => Spur::default(),
+            CwtTypeOrSpecial::ScopedUnion(_) => None,
         }
     }
 
@@ -161,7 +161,7 @@ impl ScopedType {
         }
     }
 
-    pub fn get_type_name(&self) -> Spur {
+    pub fn get_type_name(&self) -> Option<Spur> {
         self.cwt_type.get_type_name()
     }
 

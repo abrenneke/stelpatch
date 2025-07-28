@@ -106,23 +106,6 @@ impl EntityRestructurer {
         }
     }
 
-    /// Add the original structural key to an entity as a special property
-    /// This preserves the key information needed for subtype determination
-    fn add_original_key_to_entity(&self, mut entity: Entity, original_key: Spur) -> Entity {
-        let list = entity
-            .properties
-            .kv
-            .entry(get_interner().get_or_intern(ORIGINAL_KEY_PROPERTY))
-            .or_insert_with(|| Arc::new(PropertyInfoList::new()));
-        let list = Arc::make_mut(list);
-        list.push(PropertyInfo {
-            operator: Operator::Equals,
-            value: Value::String(original_key),
-        });
-
-        entity
-    }
-
     /// Extract the original key from an entity (if it was stored during restructuring)
     pub fn get_original_key_from_entity(entity: &Entity) -> Option<String> {
         if let Some(property_list) = entity
@@ -170,6 +153,16 @@ impl EntityRestructurer {
         };
 
         self.process_all_namespaces(&mut restructured);
+
+        if restructured
+            .entities
+            .get(&get_interner().get_or_intern("interface"))
+            .unwrap()
+            .get(&get_interner().get_or_intern("gfx_leader_bonus"))
+            .is_none()
+        {
+            panic!("gfx_leader_bonus not found");
+        }
 
         let duration = start.elapsed();
         eprintln!("Entity restructuring completed in {:?}", duration);
@@ -369,14 +362,14 @@ impl EntityRestructurer {
                                     entity,
                                     &name_field_type_def.name_field,
                                 ) {
+                                    let mut entity = entity.clone();
                                     // Add original key to entity to preserve subtype information
-                                    let entity_with_original_key =
-                                        self.add_original_key_to_entity(entity.clone(), key);
+                                    Self::add_original_key_to_entity_static(&mut entity, key);
                                     self.insert_with_duplicate_warning(
                                         &mut restructured_entities,
                                         &mut key_counters,
                                         entity_name,
-                                        entity_with_original_key,
+                                        entity,
                                         &format!("name_field from key '{:?}'", key),
                                         namespace,
                                     );
@@ -524,13 +517,13 @@ impl EntityRestructurer {
                         };
 
                         // Add original key to entity to preserve subtype information
-                        let entity_with_original_key =
-                            self.add_original_key_to_entity(child_entity.clone(), child_key);
+                        let mut entity = child_entity.clone();
+                        Self::add_original_key_to_entity_static(&mut entity, child_key);
                         self.insert_with_duplicate_warning(
                             &mut result,
                             &mut key_counters,
                             entity_name,
-                            entity_with_original_key,
+                            entity,
                             &format!("extracted from container child '{:?}'", child_key),
                             namespace,
                         );

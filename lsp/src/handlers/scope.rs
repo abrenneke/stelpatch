@@ -25,12 +25,6 @@ impl TypeFingerprint for ScopeContext {
     }
 }
 
-impl fmt::Display for ScopeContext {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.scope_type)
-    }
-}
-
 /// A stack-based scope management system for tracking scope context
 /// as we navigate through CWT properties that have push_scope and replace_scope
 #[derive(Clone, PartialEq, Eq)]
@@ -460,7 +454,11 @@ impl std::fmt::Display for ScopeStack {
 
         for (i, scope) in self.scopes.iter().enumerate() {
             if start_idx + i < scope_names.len() {
-                parts.push(format!("{}={}", scope_names[start_idx + i], scope));
+                parts.push(format!(
+                    "{}={}",
+                    scope_names[start_idx + i],
+                    get_interner().resolve(&scope.scope_type)
+                ));
             }
         }
 
@@ -469,20 +467,32 @@ impl std::fmt::Display for ScopeStack {
         }
 
         // Add root reference
-        write!(f, " root={}", self.root)?;
+        write!(f, " root={}", get_interner().resolve(&self.root.scope_type))?;
 
         // Add from references if they exist
         if let Some(from) = &self.from {
-            write!(f, " from={}", from)?;
+            write!(f, " from={}", get_interner().resolve(&from.scope_type))?;
         }
         if let Some(fromfrom) = &self.fromfrom {
-            write!(f, " fromfrom={}", fromfrom)?;
+            write!(
+                f,
+                " fromfrom={}",
+                get_interner().resolve(&fromfrom.scope_type)
+            )?;
         }
         if let Some(fromfromfrom) = &self.fromfromfrom {
-            write!(f, " fromfromfrom={}", fromfromfrom)?;
+            write!(
+                f,
+                " fromfromfrom={}",
+                get_interner().resolve(&fromfromfrom.scope_type)
+            )?;
         }
         if let Some(fromfromfromfrom) = &self.fromfromfromfrom {
-            write!(f, " fromfromfromfrom={}", fromfromfromfrom)?;
+            write!(
+                f,
+                " fromfromfromfrom={}",
+                get_interner().resolve(&fromfromfromfrom.scope_type)
+            )?;
         }
 
         Ok(())

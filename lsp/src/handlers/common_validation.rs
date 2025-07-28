@@ -83,8 +83,10 @@ pub fn detect_skip_root_key_container(
         CwtTypeOrSpecialRef::Union(union_types) => {
             for union_type in union_types {
                 let type_name = union_type.get_type_name();
-                if !interner.resolve(&type_name).is_empty() {
-                    if let Some(type_def) = type_cache.get_cwt_analyzer().get_type(type_name) {
+                if type_name.is_some() && !interner.resolve(&type_name.unwrap()).is_empty() {
+                    if let Some(type_def) =
+                        type_cache.get_cwt_analyzer().get_type(type_name.unwrap())
+                    {
                         if let Some(skip_root_key) = &type_def.skip_root_key {
                             let should_skip = match skip_root_key {
                                 cw_model::SkipRootKey::Specific(skip_key) => {
@@ -107,7 +109,7 @@ pub fn detect_skip_root_key_container(
                             if should_skip {
                                 return SkipRootKeyResult {
                                     is_skip_root_key_container: true,
-                                    matching_type_name: Some(type_name),
+                                    matching_type_name: type_name,
                                 };
                             }
                         }
@@ -118,8 +120,10 @@ pub fn detect_skip_root_key_container(
         CwtTypeOrSpecialRef::ScopedUnion(scoped_union_types) => {
             for scoped_type in scoped_union_types {
                 let type_name = scoped_type.get_type_name();
-                if !interner.resolve(&type_name).is_empty() {
-                    if let Some(type_def) = type_cache.get_cwt_analyzer().get_type(type_name) {
+                if type_name.is_some() && !interner.resolve(&type_name.unwrap()).is_empty() {
+                    if let Some(type_def) =
+                        type_cache.get_cwt_analyzer().get_type(type_name.unwrap())
+                    {
                         if let Some(skip_root_key) = &type_def.skip_root_key {
                             let should_skip = match skip_root_key {
                                 cw_model::SkipRootKey::Specific(skip_key) => {
@@ -142,7 +146,7 @@ pub fn detect_skip_root_key_container(
                             if should_skip {
                                 return SkipRootKeyResult {
                                     is_skip_root_key_container: true,
-                                    matching_type_name: Some(type_name),
+                                    matching_type_name: type_name,
                                 };
                             }
                         }
@@ -197,9 +201,9 @@ pub fn filter_and_narrow_entity_type(
 /// Checks if a namespace should be treated as type_per_file
 pub fn is_type_per_file_namespace(namespace_type: &Arc<ScopedType>) -> bool {
     if let Some(type_cache) = TypeCache::get() {
-        if let Some(type_def) = type_cache
-            .get_cwt_analyzer()
-            .get_type(namespace_type.get_type_name())
+        if let Some(type_def) = namespace_type
+            .get_type_name()
+            .and_then(|type_name| type_cache.get_cwt_analyzer().get_type(type_name))
         {
             return type_def.options.type_per_file;
         }

@@ -176,7 +176,7 @@ impl TypeCache {
             );
 
             let mut inline_script_block = BlockType {
-                type_name: interner.get_or_intern("$inline_script"),
+                type_name: Some(interner.get_or_intern("$inline_script")),
                 properties: SpurMap::new(),
                 subtypes: SpurMap::new(),
                 subtype_properties: SpurMap::new(),
@@ -404,7 +404,11 @@ impl TypeCache {
             // this takes precence over the union type
             for scoped_type in &namespace_types {
                 if let CwtTypeOrSpecialRef::Block(block) = scoped_type.cwt_type_for_matching() {
-                    if let Some(type_def) = self.cwt_analyzer.get_type(block.type_name) {
+                    if let Some(type_def) = block
+                        .type_name
+                        .as_ref()
+                        .and_then(|type_name| self.cwt_analyzer.get_type(*type_name))
+                    {
                         if let Some(path_file) = type_def.options.path_file.as_ref() {
                             // path_file == file_path
                             if let Some(file_path) = file_path {
@@ -508,7 +512,11 @@ impl TypeCache {
                 for t in union_types {
                     match &**t {
                         CwtType::Block(block) => {
-                            if let Some(type_def) = self.cwt_analyzer.get_type(block.type_name) {
+                            if let Some(type_def) = block
+                                .type_name
+                                .as_ref()
+                                .and_then(|type_name| self.cwt_analyzer.get_type(*type_name))
+                            {
                                 if let Some(type_key_filter) =
                                     type_def.rule_options.type_key_filter.as_ref()
                                 {
@@ -575,7 +583,11 @@ impl TypeCache {
                 for scoped_t in scoped_union_types {
                     match scoped_t.cwt_type_for_matching() {
                         CwtTypeOrSpecialRef::Block(block) => {
-                            if let Some(type_def) = self.cwt_analyzer.get_type(block.type_name) {
+                            if let Some(type_def) = block
+                                .type_name
+                                .as_ref()
+                                .and_then(|type_name| self.cwt_analyzer.get_type(*type_name))
+                            {
                                 if let Some(type_key_filter) =
                                     type_def.rule_options.type_key_filter.as_ref()
                                 {
@@ -651,7 +663,11 @@ impl TypeCache {
                 for t in union_types {
                     match &**t {
                         CwtType::Block(block) => {
-                            if let Some(type_def) = self.cwt_analyzer.get_type(block.type_name) {
+                            if let Some(type_def) = block
+                                .type_name
+                                .as_ref()
+                                .and_then(|type_name| self.cwt_analyzer.get_type(*type_name))
+                            {
                                 if let Some(type_key_filter) =
                                     type_def.rule_options.type_key_filter.as_ref()
                                 {
@@ -717,7 +733,11 @@ impl TypeCache {
                 for scoped_t in scoped_union_types {
                     match scoped_t.cwt_type_for_matching() {
                         CwtTypeOrSpecialRef::Block(block) => {
-                            if let Some(type_def) = self.cwt_analyzer.get_type(block.type_name) {
+                            if let Some(type_def) = block
+                                .type_name
+                                .as_ref()
+                                .and_then(|type_name| self.cwt_analyzer.get_type(*type_name))
+                            {
                                 if let Some(type_key_filter) =
                                     type_def.rule_options.type_key_filter.as_ref()
                                 {
