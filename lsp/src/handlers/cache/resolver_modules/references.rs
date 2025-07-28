@@ -5,13 +5,16 @@ use crate::interner::get_interner;
 use cw_model::types::CwtAnalyzer;
 use cw_model::{AliasDefinition, AliasName, CwtType, ReferenceType, SimpleType};
 use lasso::Spur;
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, RwLock};
 
 pub struct ReferenceResolver {
     pub cwt_analyzer: Arc<CwtAnalyzer>,
     pub utils: Arc<ResolverUtils>,
     pub subtype_handler: Arc<SubtypeHandler>,
+    // Cache for resolve_all_alias_match_left results
+    alias_match_left_cache:
+        RwLock<HashMap<String, Vec<(Arc<CwtType>, Option<AliasDefinition>, Option<Spur>)>>>,
 }
 
 impl ReferenceResolver {
@@ -24,6 +27,7 @@ impl ReferenceResolver {
             cwt_analyzer,
             utils,
             subtype_handler,
+            alias_match_left_cache: RwLock::new(HashMap::new()),
         }
     }
 
@@ -408,6 +412,18 @@ impl ReferenceResolver {
         category: Spur,
         property_name: Spur,
     ) -> Vec<(Arc<CwtType>, Option<AliasDefinition>, Option<Spur>)> {
+        let mut cache_key = String::with_capacity(10);
+        cache_key.push_str(&category.into_inner().to_string());
+        cache_key.push_str(":");
+        cache_key.push_str(&property_name.into_inner().to_string());
+
+        // Check cache first
+        if let Ok(cache) = self.alias_match_left_cache.read() {
+            if let Some(cached_result) = cache.get(&cache_key) {
+                return cached_result.clone();
+            }
+        }
+
         let interner = get_interner();
         let mut results = Vec::new();
 
@@ -523,6 +539,11 @@ impl ReferenceResolver {
                 None,
                 None,
             ));
+        }
+
+        // Cache the results before returning
+        if let Ok(mut cache) = self.alias_match_left_cache.write() {
+            cache.insert(cache_key, results.clone());
         }
 
         results

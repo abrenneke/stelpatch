@@ -2,24 +2,26 @@ use std::ops::Range;
 
 use cw_model::types::CwtAnalyzer;
 use lasso::Spur;
-use tower_lsp::lsp_types::Diagnostic;
 
 use crate::{
     handlers::{
-        cache::TypeCache, diagnostics::diagnostic::create_value_mismatch_diagnostic,
-        scope::ScopeStack, settings::Settings, utils::contains_scripted_argument,
+        cache::TypeCache,
+        diagnostics::diagnostic::{UnresolvedDiagnostic, create_value_mismatch_diagnostic},
+        scope::ScopeStack,
+        settings::Settings,
+        utils::contains_scripted_argument,
     },
     interner::get_interner,
 };
 
 /// Validate a scope reference value (handles dotted paths like "prev.from")
-pub fn validate_scope_reference(
+pub fn validate_scope_reference<'a>(
     value: Spur,
     scope_key: Spur,
     scope_stack: &ScopeStack,
     span: Range<usize>,
-    content: &str,
-) -> Option<Diagnostic> {
+    content: &'a str,
+) -> Option<UnresolvedDiagnostic<'a>> {
     let interner = get_interner();
     // Handle special case "any" which allows any scope navigation or link
     if interner.resolve(&scope_key) == "any" {
@@ -74,13 +76,13 @@ pub fn validate_scope_reference(
 }
 
 /// Validate a scope group reference value (handles dotted paths like "prev.from")
-pub fn validate_scopegroup_reference(
+pub fn validate_scopegroup_reference<'a>(
     value: Spur,
     scopegroup_key: Spur,
     scope_stack: &ScopeStack,
     span: Range<usize>,
-    content: &str,
-) -> Option<Diagnostic> {
+    content: &'a str,
+) -> Option<UnresolvedDiagnostic<'a>> {
     // Handle scripted arguments - always allow values with $VARIABLE$ format
     if contains_scripted_argument(value) {
         return None;
@@ -142,12 +144,12 @@ pub fn validate_scopegroup_reference(
 }
 
 /// Validate that a scope path is structurally valid (handles dotted paths)
-fn validate_scope_path(
+fn validate_scope_path<'a>(
     value: Spur,
     scope_stack: &ScopeStack,
     span: Range<usize>,
-    content: &str,
-) -> Option<Diagnostic> {
+    content: &'a str,
+) -> Option<UnresolvedDiagnostic<'a>> {
     // Handle scripted arguments - always allow values with $VARIABLE$ format
     if contains_scripted_argument(value) {
         return None;

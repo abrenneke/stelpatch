@@ -9,6 +9,7 @@ use cw_model::{
 };
 use cw_parser::AstEntity;
 use lasso::Spur;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     handlers::cache::{GameDataCache, ModDataCache, Namespace, TypeCache},
@@ -108,16 +109,16 @@ impl EntityRestructurer {
     /// Add the original structural key to an entity as a special property
     /// This preserves the key information needed for subtype determination
     fn add_original_key_to_entity(&self, mut entity: Entity, original_key: Spur) -> Entity {
-        entity
+        let list = entity
             .properties
             .kv
             .entry(get_interner().get_or_intern(ORIGINAL_KEY_PROPERTY))
-            .or_insert_with(PropertyInfoList::new)
-            .0
-            .push(PropertyInfo {
-                operator: Operator::Equals,
-                value: Value::String(original_key),
-            });
+            .or_insert_with(|| Arc::new(PropertyInfoList::new()));
+        let list = Arc::make_mut(list);
+        list.push(PropertyInfo {
+            operator: Operator::Equals,
+            value: Value::String(original_key),
+        });
 
         entity
     }
@@ -193,33 +194,43 @@ impl EntityRestructurer {
             types_with_special_loading.len(),
         );
 
-        for (namespace, type_defs) in types_with_special_loading {
-            if let Some(namespace_data) = self.game_data.get_namespaces().get(&namespace) {
-                let (entities, info) =
-                    self.process_namespace(namespace, &type_defs, namespace_data);
+        // Process namespaces in parallel and collect results
+        let results: Vec<_> = types_with_special_loading
+            .as_inner()
+            .par_iter()
+            .filter_map(|(namespace, type_defs)| {
+                if let Some(namespace_data) = self.game_data.get_namespaces().get(&namespace.0) {
+                    let (entities, info) =
+                        self.process_namespace(namespace.0, type_defs, namespace_data);
+                    Some((*namespace, entities, info))
+                } else {
+                    eprintln!(
+                        "WARN: Namespace {} not found in game data, skipping",
+                        interner.resolve(&namespace.0)
+                    );
+                    None
+                }
+            })
+            .collect();
 
-                restructured.entities.insert(
-                    namespace.clone(),
-                    entities
-                        .into_iter()
-                        .map(|(k, v)| (k, Arc::new(v)))
-                        .collect(),
-                );
-                restructured
-                    .restructured_namespaces
-                    .insert(namespace.clone(), info);
-            } else {
-                eprintln!(
-                    "WARN: Namespace {} not found in game data, skipping",
-                    interner.resolve(&namespace)
-                );
-            }
+        // Merge results back into the restructured entities
+        for (namespace, entities, info) in results {
+            restructured.entities.insert(
+                namespace.0,
+                entities
+                    .into_iter()
+                    .map(|(k, v)| (k, Arc::new(v)))
+                    .collect(),
+            );
+            restructured
+                .restructured_namespaces
+                .insert(namespace.0, info);
         }
     }
 
     /// Get type definitions that need restructuring
-    fn get_types_needing_restructure(&self) -> SpurMap<Vec<TypeDefinition>> {
-        let mut result: SpurMap<Vec<TypeDefinition>> = SpurMap::new();
+    fn get_types_needing_restructure(&self) -> SpurMap<Vec<Arc<TypeDefinition>>> {
+        let mut result: SpurMap<Vec<Arc<TypeDefinition>>> = SpurMap::new();
         let interner = get_interner();
 
         for (_type_name, type_def) in self.type_cache.get_cwt_analyzer().get_types() {
@@ -229,9 +240,9 @@ impl EntityRestructurer {
                     let path = interner.resolve(path);
                     // Extract namespace from path (e.g., "game/interface" -> "interface")
                     let namespace = if let Some(stripped) = path.strip_prefix("game/") {
-                        stripped.to_string()
+                        stripped
                     } else {
-                        path.to_string()
+                        path
                     };
 
                     result
@@ -259,7 +270,7 @@ impl EntityRestructurer {
 
         if let Some(_existing) = map.get(&key) {
             // Key collision detected - generate unique key for the new entity
-            let counter = key_counters.entry(key.clone()).or_insert(1);
+            let counter = key_counters.entry(key).or_insert(1);
             *counter += 1;
             let unique_key =
                 interner.get_or_intern(format!("{}_{}", interner.resolve(&key), counter));
@@ -296,7 +307,7 @@ impl EntityRestructurer {
     fn process_namespace(
         &self,
         namespace: Spur,
-        type_defs: &Vec<TypeDefinition>,
+        type_defs: &Vec<Arc<TypeDefinition>>,
         namespace_data: &Namespace,
     ) -> (SpurMap<Entity>, RestructureInfo) {
         let mut restructured_entities = SpurMap::new();
@@ -313,11 +324,12 @@ impl EntityRestructurer {
                         original_count += 1;
 
                         // Check if any type definition wants to skip this root key
-                        let skip_root_type_defs: Vec<&TypeDefinition> = type_defs
+                        let skip_root_type_defs: Vec<Arc<TypeDefinition>> = type_defs
                             .iter()
                             .filter(|type_def| {
                                 self.should_skip_root_key(key, &type_def.skip_root_key)
                             })
+                            .cloned()
                             .collect();
 
                         if !skip_root_type_defs.is_empty() {
@@ -373,7 +385,7 @@ impl EntityRestructurer {
                                     self.insert_with_duplicate_warning(
                                         &mut restructured_entities,
                                         &mut key_counters,
-                                        key.clone(),
+                                        key,
                                         entity.clone(),
                                         &format!("name_field fallback from key '{:?}'", key),
                                         namespace,
@@ -384,7 +396,7 @@ impl EntityRestructurer {
                                 self.insert_with_duplicate_warning(
                                     &mut restructured_entities,
                                     &mut key_counters,
-                                    key.clone(),
+                                    key,
                                     entity.clone(),
                                     &format!("standard processing from key '{:?}'", key),
                                     namespace,
@@ -402,13 +414,13 @@ impl EntityRestructurer {
                 .find(|type_def| type_def.skip_root_key.is_some())
                 .and_then(|type_def| type_def.skip_root_key.as_ref())
                 .and_then(|s| match s {
-                    SkipRootKey::Specific(key) => Some(key.clone()),
+                    SkipRootKey::Specific(key) => Some(*key),
                     _ => None,
                 }),
             name_field: type_defs
                 .iter()
                 .find(|type_def| type_def.name_field.is_some())
-                .and_then(|type_def| type_def.name_field.clone()),
+                .and_then(|type_def| type_def.name_field),
             original_entity_count: original_count,
             restructured_entity_count: restructured_entities.len(),
         };
@@ -430,7 +442,7 @@ impl EntityRestructurer {
     }
 
     /// Check if a key passes the type_key_filter
-    fn passes_type_key_filter(&self, key: Spur, type_defs: &Vec<TypeDefinition>) -> bool {
+    fn passes_type_key_filter(&self, key: Spur, type_defs: &Vec<Arc<TypeDefinition>>) -> bool {
         // If no type_key_filter is defined, allow all keys
         let type_key_filters: Vec<&TypeKeyFilter> = type_defs
             .iter()
@@ -464,8 +476,8 @@ impl EntityRestructurer {
     fn get_applicable_type_defs<'a>(
         &self,
         key: Spur,
-        type_defs: &'a Vec<TypeDefinition>,
-    ) -> Vec<&'a TypeDefinition> {
+        type_defs: &'a Vec<Arc<TypeDefinition>>,
+    ) -> Vec<&'a Arc<TypeDefinition>> {
         type_defs
             .iter()
             .filter(|type_def| {
@@ -484,7 +496,7 @@ impl EntityRestructurer {
     fn extract_entities_from_container_with_multiple_types(
         &self,
         container_entity: &Entity,
-        type_defs: &Vec<&TypeDefinition>,
+        type_defs: &Vec<Arc<TypeDefinition>>,
         namespace: Spur,
     ) -> SpurMap<Entity> {
         let mut result = SpurMap::new();
@@ -631,19 +643,14 @@ impl EntityRestructurer {
         // Add restructured entities if available
         if let Some(restructured) = Self::get() {
             if let Some(entities) = restructured.entities.get(&namespace) {
-                all_entities.extend(entities.iter().map(|(k, v)| (k.clone(), v.clone())));
+                all_entities.extend(entities.iter().map(|(k, v)| (k, v.clone())));
             }
         }
 
         // Add original entities from GameDataCache
         if let Some(game_data) = GameDataCache::get() {
             if let Some(namespace_data) = game_data.get_namespaces().get(&namespace) {
-                all_entities.extend(
-                    namespace_data
-                        .entities
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.clone())),
-                );
+                all_entities.extend(namespace_data.entities.iter().map(|(k, v)| (k, v.clone())));
             }
         }
 
@@ -1002,16 +1009,16 @@ impl EntityRestructurer {
 
     /// Static version of add_original_key_to_entity for use in static contexts
     fn add_original_key_to_entity_static(entity: &mut Entity, original_key: Spur) {
-        entity
+        let list = entity
             .properties
             .kv
             .entry(get_interner().get_or_intern(ORIGINAL_KEY_PROPERTY))
-            .or_insert_with(PropertyInfoList::new)
-            .0
-            .push(PropertyInfo {
-                operator: Operator::Equals,
-                value: Value::String(original_key),
-            });
+            .or_insert_with(|| Arc::new(PropertyInfoList::new()));
+        let list = Arc::make_mut(list);
+        list.push(PropertyInfo {
+            operator: Operator::Equals,
+            value: Value::String(original_key),
+        });
     }
 
     /// Helper to get restructuring info for a namespace without needing the full cache

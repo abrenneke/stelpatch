@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use cw_parser::{AstEntity, AstModule, AstVisitor};
 use indent::indent_all_by;
 
@@ -29,7 +31,7 @@ impl ToString for Entity {
         }
 
         for (key, value) in &self.properties.kv {
-            for item in value.clone().into_iter() {
+            for item in value.iter() {
                 let stringified = indent_all_by(4, format!("{:?} {}\n", key, item.to_string()));
                 buf.push_str(&stringified);
             }
@@ -63,15 +65,16 @@ impl Entity {
         value: Value,
         interner: &CaseInsensitiveInterner,
     ) -> Self {
-        self.properties
+        let list = self
+            .properties
             .kv
             .entry(interner.get_or_intern(key))
-            .or_insert_with(PropertyInfoList::new)
-            .0
-            .push(PropertyInfo {
-                operator: Operator::Equals,
-                value,
-            });
+            .or_insert_with(|| Arc::new(PropertyInfoList::new()));
+        let list = Arc::make_mut(list);
+        list.push(PropertyInfo {
+            operator: Operator::Equals,
+            value,
+        });
         self
     }
 
@@ -85,9 +88,10 @@ impl Entity {
             .properties
             .kv
             .entry(interner.get_or_intern(key))
-            .or_insert_with(PropertyInfoList::new);
+            .or_insert_with(|| Arc::new(PropertyInfoList::new()));
+        let list = Arc::make_mut(items);
         for value in values {
-            items.push(PropertyInfo {
+            list.push(PropertyInfo {
                 operator: Operator::Equals,
                 value,
             });
@@ -102,12 +106,13 @@ impl Entity {
         value: Value,
         interner: &CaseInsensitiveInterner,
     ) -> Self {
-        self.properties
+        let list = self
+            .properties
             .kv
             .entry(interner.get_or_intern(key))
-            .or_insert_with(PropertyInfoList::new)
-            .0
-            .push(PropertyInfo { operator, value });
+            .or_insert_with(|| Arc::new(PropertyInfoList::new()));
+        let list = Arc::make_mut(list);
+        list.push(PropertyInfo { operator, value });
         self
     }
 
@@ -187,13 +192,14 @@ where
         let mut property = PropertyInfo::default();
         let mut property_visitor = PropertyVisitor::new(&mut property, self.interner);
         property_visitor.visit_expression(node);
-        self.entity
+        let list = self
+            .entity
             .properties
             .kv
             .entry(self.interner.get_or_intern(node.key.raw_value()))
-            .or_insert_with(PropertyInfoList::new)
-            .0
-            .push(property);
+            .or_insert_with(|| Arc::new(PropertyInfoList::new()));
+        let list = Arc::make_mut(list);
+        list.push(property);
     }
 
     fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> () {

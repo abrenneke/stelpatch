@@ -19,10 +19,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Master data structure that owns all CWT analysis results
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CwtAnalysisData {
     /// Known types registry
-    pub types: SpurMap<TypeDefinition>,
+    pub types: SpurMap<Arc<TypeDefinition>>,
 
     /// Known enums registry
     pub enums: SpurMap<EnumDefinition>,
@@ -31,7 +31,8 @@ pub struct CwtAnalysisData {
     pub value_sets: SpurMap<HashSet<String>>,
 
     /// Known aliases registry
-    pub aliases: HashMap<AliasPattern, AliasDefinition>,
+    pub aliases:
+        HashMap<AliasPattern, AliasDefinition, nohash_hasher::BuildNoHashHasher<AliasPattern>>,
 
     /// Known single aliases registry
     pub single_aliases: SpurMap<Arc<CwtType>>,
@@ -52,7 +53,19 @@ pub struct CwtAnalysisData {
 impl CwtAnalysisData {
     /// Create a new empty analysis data structure
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            types: SpurMap::new(),
+            enums: SpurMap::new(),
+            value_sets: SpurMap::new(),
+            aliases: HashMap::with_hasher(
+                nohash_hasher::BuildNoHashHasher::<AliasPattern>::default(),
+            ),
+            single_aliases: SpurMap::new(),
+            links: SpurMap::new(),
+            scopes: SpurMap::new(),
+            scope_groups: SpurMap::new(),
+            errors: Vec::new(),
+        }
     }
 
     /// Clear all data
@@ -97,12 +110,13 @@ impl CwtAnalysisData {
         type_def.finalize_subtype_properties();
 
         if let Some(existing) = self.types.get_mut(&name) {
+            let existing = Arc::make_mut(existing);
             existing.merge_with(type_def);
             // Re-finalize after merging since merge_with may have added more subtypes
             existing.finalize_with_subtypes(interner);
             existing.finalize_subtype_properties();
         } else {
-            self.types.insert(name, type_def);
+            self.types.insert(name, Arc::new(type_def));
         }
     }
 }

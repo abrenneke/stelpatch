@@ -1,6 +1,5 @@
 use cw_model::entity_from_module_ast;
 use cw_parser::{AstEntityItem, AstModule, AstNode, AstValue};
-use tower_lsp::lsp_types::*;
 
 use crate::handlers::cache::TypeCache;
 use crate::handlers::common_validation::{
@@ -9,7 +8,7 @@ use crate::handlers::common_validation::{
     validate_namespace_and_caches,
 };
 use crate::handlers::diagnostics::diagnostic::{
-    create_diagnostic_from_parse_error, create_unexpected_key_diagnostic,
+    UnresolvedDiagnostic, create_diagnostic_from_parse_error, create_unexpected_key_diagnostic,
 };
 use crate::handlers::diagnostics::type_validation::validate_entity_value;
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult};
@@ -31,7 +30,7 @@ impl DiagnosticsProvider {
     }
 
     /// Generate diagnostics for a document by attempting to parse it and type-check it
-    pub fn generate_diagnostics(&self, uri: &str) -> Vec<Diagnostic> {
+    pub fn generate_diagnostics(&self, uri: &str) -> Vec<tower_lsp::lsp_types::Diagnostic> {
         let start_time = Instant::now();
 
         if self.log {
@@ -74,7 +73,7 @@ impl DiagnosticsProvider {
                 );
             }
 
-            diagnostics
+            diagnostics.into_iter().map(|d| d.into()).collect()
         } else {
             let elapsed = start_time.elapsed();
             if self.log {
@@ -85,12 +84,12 @@ impl DiagnosticsProvider {
     }
 
     /// Generate type-checking diagnostics for a successfully parsed document
-    fn generate_type_diagnostics(
+    fn generate_type_diagnostics<'a>(
         &self,
         module: &AstModule<'_>,
         uri: &str,
-        content: &str,
-    ) -> Vec<Diagnostic> {
+        content: &'a str,
+    ) -> Vec<UnresolvedDiagnostic<'a>> {
         let interner = get_interner();
         let mut diagnostics = Vec::new();
 
@@ -256,7 +255,11 @@ impl DiagnosticsProvider {
     }
 
     /// Generate diagnostics for content directly (synchronous version for parallel processing)
-    pub fn generate_diagnostics_for_content(&self, uri: &str, content: &str) -> Vec<Diagnostic> {
+    pub fn generate_diagnostics_for_content<'a>(
+        &self,
+        uri: &str,
+        content: &'a str,
+    ) -> Vec<UnresolvedDiagnostic<'a>> {
         let start_time = Instant::now();
 
         if self.log {

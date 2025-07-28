@@ -3,14 +3,13 @@ use std::ops::Range;
 use cw_model::SimpleType;
 use cw_parser::{AstNode, AstValue};
 use lasso::Spur;
-use tower_lsp::lsp_types::Diagnostic;
 
 use crate::{
     handlers::{
         cache::{
             EntityRestructurer, FileIndex, FullAnalysis, GameDataCache, ModDataCache, TypeCache,
         },
-        diagnostics::diagnostic::create_type_mismatch_diagnostic,
+        diagnostics::diagnostic::{UnresolvedDiagnostic, create_type_mismatch_diagnostic},
         scope::ScopeStack,
         settings::Settings,
         utils::contains_scripted_argument,
@@ -19,13 +18,13 @@ use crate::{
 };
 
 /// Check if a value is compatible with a simple type with scope context, returning a diagnostic if incompatible
-pub fn is_value_compatible_with_simple_type(
+pub fn is_value_compatible_with_simple_type<'a>(
     value: &AstValue<'_>,
     simple_type: &SimpleType,
-    content: &str,
+    content: &'a str,
     scope_manager: &ScopeStack,
     current_namespace: Option<Spur>,
-) -> Option<Diagnostic> {
+) -> Option<UnresolvedDiagnostic<'a>> {
     let interner = get_interner();
     match (value, simple_type) {
         (AstValue::String(_), SimpleType::Localisation) => {
@@ -275,23 +274,23 @@ pub fn is_value_compatible_with_simple_type(
 }
 
 /// Validate a scripted variable reference
-fn validate_scripted_variable(
+fn validate_scripted_variable<'a>(
     variable_name: Spur,
     span_range: Range<usize>,
-    content: &str,
+    content: &'a str,
     current_namespace: Option<Spur>,
-) -> Option<tower_lsp::lsp_types::Diagnostic> {
+) -> Option<UnresolvedDiagnostic<'a>> {
     validate_scripted_variable_exists(variable_name, span_range, content, current_namespace)
 }
 
 /// Helper function to validate value field strings (used by both ValueField and IntValueField)
-fn validate_value_field_string(
+fn validate_value_field_string<'a>(
     value_str: Spur,
     span_range: Range<usize>,
-    content: &str,
+    content: &'a str,
     current_namespace: Option<Spur>,
     include_integer_in_error: bool,
-) -> Option<Diagnostic> {
+) -> Option<UnresolvedDiagnostic<'a>> {
     let interner = get_interner();
     if interner.resolve(&value_str).starts_with("@") {
         validate_scripted_variable(value_str, span_range, content, current_namespace)
@@ -355,12 +354,12 @@ fn validate_value_field_string(
 }
 
 /// Check if a scripted variable exists in the game data
-fn validate_scripted_variable_exists(
+fn validate_scripted_variable_exists<'a>(
     variable_name: Spur,
     span_range: Range<usize>,
-    content: &str,
+    content: &'a str,
     current_namespace: Option<Spur>,
-) -> Option<tower_lsp::lsp_types::Diagnostic> {
+) -> Option<UnresolvedDiagnostic<'a>> {
     let interner = get_interner();
     if let Some(cache) = GameDataCache::get() {
         // Check global scripted variables from base game

@@ -138,7 +138,7 @@ impl GameDataCache {
                 }
 
                 for value in &namespace.values {
-                    if let Value::String(string) = value {
+                    if let Value::String(string) = **value {
                         namespace_data.values.push(string.clone());
                     }
                 }

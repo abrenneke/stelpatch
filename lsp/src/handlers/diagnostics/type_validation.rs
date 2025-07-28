@@ -5,8 +5,8 @@ use std::collections::HashSet;
 use cw_model::{CwtType, ReferenceType};
 use cw_parser::{AstEntityItem, AstNode, AstValue};
 use lasso::Spur;
-use tower_lsp::lsp_types::Diagnostic;
 
+use crate::handlers::diagnostics::diagnostic::UnresolvedDiagnostic;
 use crate::handlers::utils::contains_scripted_argument;
 use crate::handlers::{
     cache::{FileIndex, TypeCache},
@@ -55,13 +55,13 @@ fn extract_possible_values(cwt_type: &CwtType) -> Vec<String> {
 }
 
 /// Validate an entity value against the expected type structure
-pub fn validate_entity_value(
+pub fn validate_entity_value<'a>(
     value: &AstValue<'_>,
     expected_type: Arc<ScopedType>,
-    content: &str,
+    content: &'a str,
     namespace: Spur,
     depth: usize,
-) -> Vec<Diagnostic> {
+) -> Vec<UnresolvedDiagnostic<'a>> {
     let mut diagnostics = Vec::new();
 
     // Prevent infinite recursion
@@ -120,13 +120,13 @@ pub fn validate_entity_value(
 }
 
 /// Helper function to validate a value against multiple union types with structural scoring
-fn validate_union_types(
+fn validate_union_types<'a>(
     value: &AstValue<'_>,
     union_types: Vec<Arc<ScopedType>>,
-    content: &str,
+    content: &'a str,
     namespace: Spur,
     depth: usize,
-) -> Vec<Diagnostic> {
+) -> Vec<UnresolvedDiagnostic<'a>> {
     let mut diagnostics = Vec::new();
 
     // Step 1: Validate against ALL union types and calculate structural scores
@@ -205,13 +205,13 @@ fn validate_union_types(
 }
 
 /// Validate a value against the expected CWT type
-fn validate_value_against_type(
+fn validate_value_against_type<'a>(
     value: &AstValue<'_>,
     expected_type: Arc<ScopedType>,
-    content: &str,
+    content: &'a str,
     namespace: Spur,
     depth: usize,
-) -> Vec<Diagnostic> {
+) -> Vec<UnresolvedDiagnostic<'a>> {
     let mut diagnostics = Vec::new();
 
     // Prevent infinite recursion
@@ -621,19 +621,19 @@ fn validate_value_against_type(
     diagnostics
 }
 
-fn validate_stellaris_name_format(
+fn validate_stellaris_name_format<'a>(
     raw_value: &str,
     _key: &str,
     _scope_stack: &ScopeStack,
     _span_range: std::ops::Range<usize>,
-    _content: &str,
-) -> Option<Diagnostic> {
+    content: &'a str,
+) -> Option<UnresolvedDiagnostic<'a>> {
     // TODO... they're complicated
     if !raw_value.starts_with("{") || !raw_value.ends_with("}") {
         return Some(create_type_mismatch_diagnostic(
             _span_range,
             "Name format must start and end with curly braces",
-            _content,
+            content,
         ));
     }
 

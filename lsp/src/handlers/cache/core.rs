@@ -162,7 +162,7 @@ impl TypeCache {
             // Modifiers are loaded separately so artificially add a modifier type
             cwt_analyzer.add_type(
                 interner.get_or_intern("modifier"),
-                TypeDefinition {
+                Arc::new(TypeDefinition {
                     path: Some(interner.get_or_intern("game/modifiers")),
                     name_field: None,
                     skip_root_key: None,
@@ -172,7 +172,7 @@ impl TypeCache {
                     options: Default::default(),
                     rule_options: Default::default(),
                     modifiers: Default::default(),
-                },
+                }),
             );
 
             let mut inline_script_block = BlockType {
@@ -208,7 +208,7 @@ impl TypeCache {
             // inline_script is special, it can appear anywhere and is not defined in the cwt files
             cwt_analyzer.add_type(
                 interner.get_or_intern("$inline_script"),
-                TypeDefinition {
+                Arc::new(TypeDefinition {
                     path: Some(interner.get_or_intern("game/$inline_scripts")),
                     name_field: None,
                     skip_root_key: None,
@@ -223,7 +223,7 @@ impl TypeCache {
                     options: Default::default(),
                     rule_options: Default::default(),
                     modifiers: Default::default(),
-                },
+                }),
             );
 
             eprintln!(

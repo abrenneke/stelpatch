@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use crate::{CaseInsensitiveInterner, Entity, Operator, SpurMap, Value, ValueVisitor};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Properties {
-    pub kv: SpurMap<PropertyInfoList>,
+    pub kv: SpurMap<Arc<PropertyInfoList>>,
     pub is_module: bool,
 }
 

@@ -70,7 +70,10 @@ fn generate_file_diagnostics(
     let diagnostic_count = diagnostics.len();
 
     if print_diagnostics {
-        (diagnostic_count, diagnostics)
+        (
+            diagnostic_count,
+            diagnostics.into_iter().map(|d| d.into()).collect(),
+        )
     } else {
         (diagnostic_count, Vec::new())
     }

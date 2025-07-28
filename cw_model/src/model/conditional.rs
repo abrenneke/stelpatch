@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use cw_parser::{AstConditionalBlock, AstExpression, AstValue, AstVisitor};
 use lasso::Spur;
 
@@ -89,13 +91,14 @@ where
         let mut property = PropertyInfo::default();
         let mut property_visitor = PropertyVisitor::new(&mut property, self.interner);
         property_visitor.visit_expression(node);
-        self.conditional_block
+        let list = self
+            .conditional_block
             .properties
             .kv
             .entry(self.interner.get_or_intern(node.key.raw_value()))
-            .or_insert_with(PropertyInfoList::new)
-            .0
-            .push(property);
+            .or_insert_with(|| Arc::new(PropertyInfoList::new()));
+        let list = Arc::make_mut(list);
+        list.push(property);
     }
 
     fn visit_value(&mut self, node: &AstValue<'b>) -> () {

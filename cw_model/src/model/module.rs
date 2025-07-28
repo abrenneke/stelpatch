@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use cw_parser::{AstModuleCell, AstValue, AstVisitor};
 use path_slash::PathBufExt;
@@ -17,7 +20,7 @@ pub struct Module {
     pub filename: String,
     pub namespace: String,
     pub properties: Properties,
-    pub values: Vec<Value>,
+    pub values: Vec<Arc<Value>>,
     pub ast: Option<AstModuleCell>,
 }
 
@@ -163,21 +166,23 @@ where
         let mut property_visitor = PropertyVisitor::new(&mut property, self.interner);
         property_visitor.visit_expression(node);
         let key = self.interner.get_or_intern(node.key.raw_value());
-        self.module
+
+        let list = self
+            .module
             .properties
             .kv
             .entry(key)
-            .or_insert_with(PropertyInfoList::new)
-            .0
-            .push(property);
+            .or_insert_with(|| Arc::new(PropertyInfoList::new()));
+        let list = Arc::make_mut(list);
+        list.push(property);
     }
 
     fn visit_value(&mut self, node: &cw_parser::AstValue<'b>) -> () {
         match node {
             AstValue::String(string) => {
-                self.module.values.push(Value::String(
+                self.module.values.push(Arc::new(Value::String(
                     self.interner.get_or_intern(string.raw_value()),
-                ));
+                )));
             }
             _ => {}
         }

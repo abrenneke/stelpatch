@@ -54,7 +54,7 @@ impl CwtAnalyzer {
     }
 
     /// Get all defined types
-    pub fn get_types(&self) -> &SpurMap<TypeDefinition> {
+    pub fn get_types(&self) -> &SpurMap<Arc<TypeDefinition>> {
         &self.data.types
     }
 
@@ -69,7 +69,10 @@ impl CwtAnalyzer {
     }
 
     /// Get all defined aliases
-    pub fn get_aliases(&self) -> &HashMap<AliasPattern, AliasDefinition> {
+    pub fn get_aliases(
+        &self,
+    ) -> &HashMap<AliasPattern, AliasDefinition, nohash_hasher::BuildNoHashHasher<AliasPattern>>
+    {
         &self.data.aliases
     }
 
@@ -126,7 +129,7 @@ impl CwtAnalyzer {
     }
 
     /// Get a specific type definition
-    pub fn get_type(&self, name: Spur) -> Option<&TypeDefinition> {
+    pub fn get_type(&self, name: Spur) -> Option<&Arc<TypeDefinition>> {
         self.data.types.get(&name)
     }
 
@@ -185,7 +188,7 @@ impl CwtAnalyzer {
         self.data.links.contains_key(&name)
     }
 
-    pub fn add_type(&mut self, name: Spur, type_definition: TypeDefinition) {
+    pub fn add_type(&mut self, name: Spur, type_definition: Arc<TypeDefinition>) {
         self.data.types.insert(name, type_definition);
     }
 

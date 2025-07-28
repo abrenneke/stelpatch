@@ -431,6 +431,8 @@ pub struct AliasPattern {
     pub name: AliasName,
 }
 
+impl nohash_hasher::IsEnabled for AliasPattern {}
+
 impl AliasPattern {
     pub fn new_basic(category: Spur, name: Spur, interner: &CaseInsensitiveInterner) -> Self {
         Self {
@@ -506,7 +508,7 @@ impl std::fmt::Display for AliasPattern {
 
 impl std::hash::Hash for AliasPattern {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.full_text.hash(state);
+        state.write_u32(self.full_text.into_inner().get());
     }
 }
 

@@ -10,8 +10,8 @@ use crate::{EntityMergeMode, Module, Properties, Value};
 #[derive(Debug, PartialEq, Clone)]
 pub struct Namespace {
     pub namespace: String,
-    pub properties: Properties,
-    pub values: Vec<Value>,
+    pub properties: Arc<Properties>,
+    pub values: Vec<Arc<Value>>,
     pub modules: HashMap<String, Arc<Module>>,
     pub merge_mode: EntityMergeMode,
 }
@@ -20,7 +20,7 @@ impl Namespace {
     pub fn new(namespace: &str, merge_mode: Option<EntityMergeMode>) -> Self {
         let ns = Self {
             namespace: namespace.to_string(),
-            properties: Properties::new_module(),
+            properties: Arc::new(Properties::new_module()),
             values: Vec::new(),
             modules: HashMap::new(),
             merge_mode: merge_mode.unwrap_or(EntityMergeMode::Unknown),
@@ -33,8 +33,10 @@ impl Namespace {
         // TODO: properties should follow the merge mode, technically, but it's unlikely a single
         // mod will define the same property twice in the same namespace, so for now we can treat it like
         // EntityMergeMode::LIOS
-        self.properties.kv.extend(module.properties.kv.clone());
-        self.values.extend(module.values.clone());
+        let properties = Arc::make_mut(&mut self.properties);
+        properties.kv.extend(module.properties.kv.clone());
+        self.values
+            .extend(module.values.iter().cloned().collect::<Vec<_>>());
 
         self.modules
             .insert(module.filename.clone(), Arc::new(module));
