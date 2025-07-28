@@ -59,15 +59,7 @@ impl TypeCache {
                 let type_name = get_interner().resolve(&type_name);
                 // Extract namespace from the path
                 let namespace = if let Some(path) = &type_def.path {
-                    let path = get_interner().resolve(path);
-                    // Remove the "game/common" prefix to get the namespace
-                    // e.g., "game/common/ambient_objects" -> "ambient_objects"
-                    // e.g., "game/common/buildings/districts" -> "buildings/districts"
-                    if path.starts_with("game/") {
-                        path.strip_prefix("game/").unwrap_or(type_name).to_string()
-                    } else {
-                        path.to_string()
-                    }
+                    get_interner().resolve(path)
                 } else {
                     eprintln!("Type has no path: {}", type_name);
                     continue;
@@ -103,7 +95,9 @@ impl TypeCache {
                 // we need to set up a scope stack where this=any, prev=any, prevprev=any, etc.
                 // This allows validation of prev/prevprev scope references without requiring
                 // specific scope types that can't be determined statically.
-                if namespace == "common/scripted_effects" || namespace == "common/script_values" {
+                if namespace == "game/common/scripted_effects"
+                    || namespace == "game/common/script_values"
+                {
                     let mut scripted_effect_scopes: SpurMap<Spur> = SpurMap::new();
                     scripted_effect_scopes.insert(
                         interner.get_or_intern("this"),
@@ -348,12 +342,16 @@ impl TypeCache {
         let interner = get_interner();
         let namespace_str = interner.resolve(&namespace);
 
-        if namespace_str.starts_with("gfx/portraits/portraits") {
-            return interner.get_or_intern("gfx/portraits/portraits");
+        if namespace_str.starts_with("game/gfx/portraits/portraits") {
+            return interner.get_or_intern("game/gfx/portraits/portraits");
         }
 
-        if namespace_str.starts_with("gfx/") {
-            return interner.get_or_intern("gfx");
+        if namespace_str.starts_with("game/gfx/") {
+            return interner.get_or_intern("game/gfx");
+        }
+
+        if namespace_str.starts_with("game/sound/") {
+            return interner.get_or_intern("game/sound");
         }
 
         namespace
@@ -372,8 +370,11 @@ impl TypeCache {
 
         let namespace_str = interner.resolve(&namespace);
 
-        if namespace_str.starts_with("gfx/models") {
-            if let Some(types) = self.namespace_types.get(&interner.get_or_intern("gfx")) {
+        if namespace_str.starts_with("game/gfx/models") {
+            if let Some(types) = self
+                .namespace_types
+                .get(&interner.get_or_intern("game/gfx"))
+            {
                 all_types.extend(types.clone());
             }
         }
@@ -469,9 +470,7 @@ impl TypeCache {
                         // namespace contains path
                         if let Some(path) = type_def.path.as_ref() {
                             let namespace_str = interner.resolve(&namespace);
-                            if namespace_str
-                                .contains(interner.resolve(path).trim_start_matches("game/"))
-                            {
+                            if namespace_str.contains(interner.resolve(path)) {
                                 if let CwtTypeOrSpecialRef::Block(block) =
                                     scoped_type.cwt_type_for_matching()
                                 {

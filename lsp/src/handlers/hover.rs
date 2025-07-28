@@ -167,12 +167,12 @@ pub fn hover(
     };
 
     // Validate namespace and caches using common validation
-    let validation_context = match validate_namespace_and_caches(&uri) {
+    let validation_context = match validate_namespace_and_caches(&uri, &cached_document.root_dir) {
         NamespaceValidationResult::Valid(context) => context,
-        NamespaceValidationResult::CachesNotInitialized
-        | NamespaceValidationResult::NamespaceNotFound
-        | NamespaceValidationResult::InlineScript
-        | NamespaceValidationResult::UnknownNamespace => return Ok(None),
+        other => {
+            eprintln!("Namespace not found: {} - {:?}", uri, other);
+            return Ok(None);
+        }
     };
 
     let namespace = validation_context.namespace;

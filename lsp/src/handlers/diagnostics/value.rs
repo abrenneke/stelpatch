@@ -313,7 +313,7 @@ fn validate_value_field_string<'a>(
             };
 
             let entity = EntityRestructurer::get_entity(
-                interner.get_or_intern("common/script_values"),
+                interner.get_or_intern("game/common/script_values"),
                 interner.get_or_intern(value_name),
             );
 

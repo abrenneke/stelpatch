@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use clap::Parser;
 use colored::Colorize;
+use cw_lsp::base_game::game::detect_base_directory;
 use cw_lsp::handlers::diagnostics::provider::DiagnosticsProvider;
 use cw_lsp::handlers::initialization::CacheInitializer;
 use cw_lsp::handlers::settings::Settings;
@@ -61,12 +62,13 @@ fn generate_file_diagnostics(
     content: &str,
     provider: &DiagnosticsProvider,
     print_diagnostics: bool,
+    root_dir: &Path,
 ) -> (usize, Vec<Diagnostic>) {
     // Create a fake URI for the file
     let uri = format!("file://{}", file_path.display());
 
     // Use the DiagnosticsProvider to generate diagnostics with content directly
-    let diagnostics = provider.generate_diagnostics_for_content(&uri, content);
+    let diagnostics = provider.generate_diagnostics_for_content(&uri, content, root_dir);
     let diagnostic_count = diagnostics.len();
 
     if print_diagnostics {
@@ -223,12 +225,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let documents = Arc::new(RwLock::new(HashMap::new()));
     let provider = DiagnosticsProvider::new(documents.clone(), false);
 
+    let root_dir = detect_base_directory(txt_files.first().unwrap());
+
+    if root_dir.is_none() {
+        eprintln!(
+            "{} {}",
+            "Error:".red().bold(),
+            format!(
+                "Could not detect base directory for file: {}",
+                txt_files.first().unwrap().display()
+            )
+            .bright_white()
+        );
+        std::process::exit(1);
+    }
+
     // Process each file in parallel with progress bar
     txt_files.par_iter().for_each(|file_path| {
         match fs::read_to_string(&file_path) {
             Ok(content) => {
-                let (diagnostic_count, diagnostics) =
-                    generate_file_diagnostics(&file_path, &content, &provider, args.print);
+                let (diagnostic_count, diagnostics) = generate_file_diagnostics(
+                    &file_path,
+                    &content,
+                    &provider,
+                    args.print,
+                    root_dir.as_ref().unwrap(),
+                );
                 total_diagnostics.fetch_add(diagnostic_count, Ordering::Relaxed);
                 processed_files.fetch_add(1, Ordering::Relaxed);
 

@@ -109,7 +109,7 @@ impl GameDataCache {
                 for (key, value) in properties {
                     let key_str = get_interner().resolve(&key);
 
-                    if namespace_name == "common/scripted_variables" {
+                    if namespace_name == "game/common/scripted_variables" {
                         global_scripted_variables
                             .insert(key, value.0.first().unwrap().value.clone());
                     } else if key_str.starts_with("@") {
@@ -254,7 +254,7 @@ impl ModDataCache {
             for (key, value) in properties {
                 let key_str = get_interner().resolve(&key);
 
-                if namespace_name == "common/scripted_variables" {
+                if namespace_name == "game/common/scripted_variables" {
                     cache
                         .scripted_variables
                         .insert(key, value.0.first().unwrap().value.clone());

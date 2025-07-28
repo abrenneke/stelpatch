@@ -1,13 +1,16 @@
 use crate::semantic_token_collector::{SemanticTokenCollector, generate_semantic_tokens};
 use cw_parser::{AstModule, AstModuleCell, AstVisitor};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use tower_lsp::lsp_types::*;
+use url::Url;
 
 #[derive(Debug)]
 pub struct CachedDocument {
     document: AstModuleCell,
     semantic_tokens: Vec<SemanticToken>,
+    pub root_dir: PathBuf,
 
     #[allow(dead_code)]
     version: Option<i32>,
@@ -15,7 +18,7 @@ pub struct CachedDocument {
 
 impl CachedDocument {
     /// Create a new cached document by parsing the content
-    pub fn new(content: String, version: Option<i32>) -> Option<Self> {
+    pub fn new(uri: &str, content: String, version: Option<i32>) -> Option<Self> {
         let document = AstModuleCell::from_input(content);
 
         let content_arc: Arc<str> = document.borrow_owner().as_str().into();
@@ -30,10 +33,20 @@ impl CachedDocument {
 
         let semantic_tokens = collector.build_tokens();
 
+        let root_dir = match Url::parse(uri)
+            .ok()
+            .and_then(|url| url.to_file_path().ok())
+            .and_then(|path| crate::base_game::game::detect_base_directory(&path))
+        {
+            Some(dir) => dir,
+            None => return None,
+        };
+
         Some(CachedDocument {
             document,
             semantic_tokens,
             version,
+            root_dir,
         })
     }
 
@@ -71,7 +84,7 @@ impl DocumentCache {
 
     /// Update or create a cached document
     pub fn update_document(&self, uri: String, content: String, version: Option<i32>) {
-        if let Some(cached_doc) = CachedDocument::new(content, version) {
+        if let Some(cached_doc) = CachedDocument::new(&uri, content, version) {
             let mut cache = self.cache.write().expect("Failed to write cache");
             cache.insert(uri, Arc::new(cached_doc));
         }

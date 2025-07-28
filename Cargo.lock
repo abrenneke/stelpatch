@@ -544,6 +544,7 @@ dependencies = [
  "indicatif",
  "lasso",
  "mimalloc",
+ "path-slash",
  "rayon",
  "self_cell",
  "serde",

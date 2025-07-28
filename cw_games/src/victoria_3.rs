@@ -136,6 +136,32 @@ impl BaseGame {
         "victoria3.exe"
     }
 
+    /// Detects the base directory (game or mod root) by walking up the directory tree
+    /// looking for either binaries/victoria3.exe or descriptor.mod
+    pub fn detect_base_directory(path: &Path) -> Option<PathBuf> {
+        let mut current = path;
+
+        loop {
+            // Check if binaries/victoria3.exe exists from this directory (base game)
+            if current.join("binaries").join("victoria3.exe").exists() {
+                return Some(current.to_path_buf());
+            }
+
+            // Check if descriptor.mod exists in this directory (mod)
+            if current.join("descriptor.mod").exists() {
+                return Some(current.to_path_buf());
+            }
+
+            // Move up one directory
+            match current.parent() {
+                Some(parent) => current = parent,
+                None => break, // Reached filesystem root
+            }
+        }
+
+        None
+    }
+
     pub fn get_glob_patterns() -> Vec<&'static str> {
         let glob_patterns = vec![
             // Victoria 3 patterns (modular structure)

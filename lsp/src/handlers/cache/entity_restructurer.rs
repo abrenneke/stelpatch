@@ -156,7 +156,7 @@ impl EntityRestructurer {
 
         if restructured
             .entities
-            .get(&get_interner().get_or_intern("interface"))
+            .get(&get_interner().get_or_intern("game/interface"))
             .unwrap()
             .get(&get_interner().get_or_intern("gfx_leader_bonus"))
             .is_none()
@@ -192,9 +192,11 @@ impl EntityRestructurer {
             .as_inner()
             .par_iter()
             .filter_map(|(namespace, type_defs)| {
-                if let Some(namespace_data) = self.game_data.get_namespaces().get(&namespace.0) {
+                let actual_namespace = TypeCache::get_actual_namespace(namespace.0);
+                if let Some(namespace_data) = self.game_data.get_namespaces().get(&actual_namespace)
+                {
                     let (entities, info) =
-                        self.process_namespace(namespace.0, type_defs, namespace_data);
+                        self.process_namespace(actual_namespace, type_defs, namespace_data);
                     Some((*namespace, entities, info))
                 } else {
                     eprintln!(
@@ -224,22 +226,12 @@ impl EntityRestructurer {
     /// Get type definitions that need restructuring
     fn get_types_needing_restructure(&self) -> SpurMap<Vec<Arc<TypeDefinition>>> {
         let mut result: SpurMap<Vec<Arc<TypeDefinition>>> = SpurMap::new();
-        let interner = get_interner();
-
         for (_type_name, type_def) in self.type_cache.get_cwt_analyzer().get_types() {
             // Check if this type needs any kind of restructuring
             if type_def.skip_root_key.is_some() || type_def.name_field.is_some() {
                 if let Some(path) = &type_def.path {
-                    let path = interner.resolve(path);
-                    // Extract namespace from path (e.g., "game/interface" -> "interface")
-                    let namespace = if let Some(stripped) = path.strip_prefix("game/") {
-                        stripped
-                    } else {
-                        path
-                    };
-
                     result
-                        .entry(interner.get_or_intern(namespace))
+                        .entry(*path)
                         .or_insert_with(Vec::new)
                         .push(type_def.clone());
                 }
@@ -874,7 +866,6 @@ impl EntityRestructurer {
     ) -> (Spur, Entity) {
         let container_entity = entity_from_ast(ast_entity, get_interner());
         let namespace = TypeCache::get_actual_namespace(namespace);
-        let interner = get_interner();
 
         // Get type definitions for this namespace to check for skip_root_key and name_field
         if let Some(type_cache) = TypeCache::get() {
@@ -882,14 +873,7 @@ impl EntityRestructurer {
 
             for (_type_name, type_def) in type_cache.get_cwt_analyzer().get_types() {
                 if let Some(path) = &type_def.path {
-                    let path = interner.resolve(path);
-                    let type_namespace = if let Some(stripped) = path.strip_prefix("game/") {
-                        stripped.to_string()
-                    } else {
-                        path.to_string()
-                    };
-
-                    if interner.get_or_intern(type_namespace) == namespace
+                    if *path == namespace
                         && (type_def.skip_root_key.is_some() || type_def.name_field.is_some())
                     {
                         applicable_type_defs.push(type_def);
@@ -1020,22 +1004,13 @@ impl EntityRestructurer {
             return None;
         }
 
-        let interner = get_interner();
-
         let type_cache = TypeCache::get()?;
 
         // Get type definitions that need restructuring for this namespace
         for (_type_name, type_def) in type_cache.get_cwt_analyzer().get_types() {
             if type_def.skip_root_key.is_some() || type_def.name_field.is_some() {
                 if let Some(path) = &type_def.path {
-                    let path = interner.resolve(path);
-                    let ns = if let Some(stripped) = path.strip_prefix("game/") {
-                        stripped.to_string()
-                    } else {
-                        path.to_string()
-                    };
-
-                    if interner.get_or_intern(ns) == namespace {
+                    if *path == namespace {
                         return Some(RestructureInfo {
                             skip_root_key: type_def.skip_root_key.as_ref().and_then(|s| match s {
                                 SkipRootKey::Specific(key) => Some(key.clone()),

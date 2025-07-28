@@ -78,4 +78,10 @@ pub mod game {
     pub fn get_glob_patterns() -> Vec<&'static str> {
         BaseGame::get_glob_patterns()
     }
+
+    /// Detect the base directory (game or mod root) by walking up the directory tree
+    /// looking for game-specific files
+    pub fn detect_base_directory(path: &std::path::Path) -> Option<PathBuf> {
+        BaseGame::detect_base_directory(path)
+    }
 }

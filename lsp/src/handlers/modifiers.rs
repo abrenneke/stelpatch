@@ -42,9 +42,10 @@ pub fn integrate_modifiers_into_cache(
     };
 
     // Insert the modifiers namespace into the game data cache
-    game_data_cache
-        .namespaces
-        .insert(interner.get_or_intern("modifiers"), modifiers_namespace);
+    game_data_cache.namespaces.insert(
+        interner.get_or_intern("game/modifiers"),
+        modifiers_namespace,
+    );
 
     Ok(())
 }

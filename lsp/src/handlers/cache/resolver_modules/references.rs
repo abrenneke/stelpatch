@@ -52,18 +52,13 @@ impl ReferenceResolver {
 
                     if let Some(type_def) = type_def {
                         if let Some(path) = type_def.path.as_ref() {
-                            let path = interner.resolve(path);
-                            // CWT paths are prefixed with "game/"
-                            let path = path.trim_start_matches("game/");
-                            let path = interner.get_or_intern(path);
-
                             // Get the CWT type for this namespace
                             if let Some(cwt_type) = self.cwt_analyzer.get_type(base_type) {
                                 // Use subtype handler to filter entities by subtype
                                 let filtered_keys = self
                                     .subtype_handler
                                     .get_entity_keys_in_namespace_for_subtype(
-                                        path,
+                                        *path,
                                         &cwt_type.rules,
                                         interner.get_or_intern(subtype),
                                     );
@@ -95,16 +90,10 @@ impl ReferenceResolver {
 
                 if let Some(type_def) = type_def {
                     if let Some(path) = type_def.path.as_ref() {
-                        let path_str = interner.resolve(path);
-                        // CWT paths are prefixed with "game/"
-                        let path_str = path_str.trim_start_matches("game/");
-
                         // For Type references, we want the union of all keys in that namespace
                         // This is what the user expects when they hover over "resource" - they want to see
                         // all the possible resource keys like "energy", "minerals", etc.
-                        let namespace_keys = EntityRestructurer::get_namespace_entity_keys(
-                            interner.get_or_intern(path_str),
-                        );
+                        let namespace_keys = EntityRestructurer::get_namespace_entity_keys(*path);
                         found = Some(CwtType::LiteralSet(namespace_keys.into_iter().collect()));
                     }
                 }

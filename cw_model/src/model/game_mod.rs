@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use anyhow::anyhow;
@@ -59,20 +59,22 @@ impl GameMod {
     fn parse_serial(
         paths: &Vec<PathBuf>,
         interner: &CaseInsensitiveInterner,
+        root_dir: &Path,
     ) -> Vec<Result<Module, anyhow::Error>> {
         paths
             .iter()
-            .map(move |path| Module::from_file(path, interner))
+            .map(move |path| Module::from_file(path, root_dir, interner))
             .collect()
     }
 
     fn parse_parallel(
         paths: &Vec<PathBuf>,
         interner: &CaseInsensitiveInterner,
+        root_dir: &Path,
     ) -> Vec<Result<Module, anyhow::Error>> {
         paths
             .par_iter()
-            .map(move |path| Module::from_file(path, interner))
+            .map(move |path| Module::from_file(path, root_dir, interner))
             .collect()
     }
 
@@ -194,8 +196,8 @@ impl GameMod {
         let mut mod_modules = vec![];
 
         let mut modules = match mode {
-            LoadMode::Serial => Self::parse_serial(&paths, interner),
-            LoadMode::Parallel => Self::parse_parallel(&paths, interner),
+            LoadMode::Serial => Self::parse_serial(&paths, interner, &base_path),
+            LoadMode::Parallel => Self::parse_parallel(&paths, interner, &base_path),
         };
 
         if !preserve_ast {

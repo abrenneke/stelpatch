@@ -57,9 +57,7 @@ impl<'resolver> ComplexEnumCollector<'resolver> {
         let interner = get_interner();
 
         // Get the namespace for the specified path
-        let path = interner
-            .resolve(&complex_def.path)
-            .trim_start_matches("game/");
+        let path = interner.resolve(&complex_def.path);
 
         // Check if this is a flat list extraction pattern (name = { enum_name })
         // This happens when enum_name is in additional_flags, meaning extract all values directly

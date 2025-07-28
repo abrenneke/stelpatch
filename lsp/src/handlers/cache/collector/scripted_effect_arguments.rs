@@ -21,7 +21,7 @@ impl ScriptedEffectArgumentCollector {
 
         // Only collect from scripted_effects namespace using EntityRestructurer
         if let Some(scripted_effects_entities) = EntityRestructurer::get_all_namespace_entities(
-            interner.get_or_intern("common/scripted_effects"),
+            interner.get_or_intern("game/common/scripted_effects"),
         ) {
             for (effect_name, entity) in scripted_effects_entities {
                 let arguments = self.extract_arguments_from_entity(&entity);
@@ -33,7 +33,7 @@ impl ScriptedEffectArgumentCollector {
         }
 
         if let Some(scripted_triggers_entities) = EntityRestructurer::get_all_namespace_entities(
-            interner.get_or_intern("common/scripted_triggers"),
+            interner.get_or_intern("game/common/scripted_triggers"),
         ) {
             for (trigger_name, entity) in scripted_triggers_entities {
                 let arguments = self.extract_arguments_from_entity(&entity);

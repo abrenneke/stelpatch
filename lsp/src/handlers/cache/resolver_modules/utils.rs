@@ -28,12 +28,8 @@ impl ResolverUtils {
 
         if let Some(type_def) = self.cwt_analyzer.get_type(type_name) {
             if let Some(path) = type_def.path.as_ref() {
-                let interner = get_interner();
-                let path = get_interner().resolve(path);
-                let path = path.trim_start_matches("game/");
-                let path = interner.get_or_intern(path);
                 if let Some(namespace_keys) =
-                    EntityRestructurer::get_namespace_entity_keys_set(path)
+                    EntityRestructurer::get_namespace_entity_keys_set(*path)
                 {
                     let result = Some(namespace_keys);
                     self.namespace_cache

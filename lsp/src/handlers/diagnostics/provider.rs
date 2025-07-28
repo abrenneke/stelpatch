@@ -14,8 +14,10 @@ use crate::handlers::diagnostics::type_validation::validate_entity_value;
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, PropertyNavigationResult, ScopedType};
 use crate::interner::get_interner;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
+use url::Url;
 
 /// Provider for generating diagnostics with shared state
 pub struct DiagnosticsProvider {
@@ -37,6 +39,11 @@ impl DiagnosticsProvider {
             eprintln!("🔍 Starting diagnostics generation for: {}", uri);
         }
 
+        let base_dir = Url::parse(uri)
+            .ok()
+            .and_then(|url| url.to_file_path().ok())
+            .and_then(|path| crate::base_game::game::detect_base_directory(&path));
+
         let documents_guard = self.documents.read().unwrap();
         if let Some(content) = documents_guard.get(uri) {
             let mut diagnostics = Vec::new();
@@ -49,9 +56,12 @@ impl DiagnosticsProvider {
                         eprintln!("✅ Parsing successful for: {}", uri);
                     }
                     // If parsing succeeds, do type checking
-                    let type_diagnostics = self.generate_type_diagnostics(&module, uri, content);
+                    if let Some(ref base_dir) = base_dir {
+                        let type_diagnostics =
+                            self.generate_type_diagnostics(&module, uri, content, base_dir);
 
-                    diagnostics.extend(type_diagnostics);
+                        diagnostics.extend(type_diagnostics);
+                    }
                 }
                 Err(error) => {
                     if self.log {
@@ -89,17 +99,18 @@ impl DiagnosticsProvider {
         module: &AstModule<'_>,
         uri: &str,
         content: &'a str,
+        root_dir: &Path,
     ) -> Vec<UnresolvedDiagnostic<'a>> {
         let interner = get_interner();
         let mut diagnostics = Vec::new();
 
         // Validate namespace and caches using common validation
-        let validation_context = match validate_namespace_and_caches(uri) {
+        let validation_context = match validate_namespace_and_caches(uri, root_dir) {
             NamespaceValidationResult::Valid(context) => context,
-            NamespaceValidationResult::CachesNotInitialized
-            | NamespaceValidationResult::NamespaceNotFound
-            | NamespaceValidationResult::InlineScript
-            | NamespaceValidationResult::UnknownNamespace => return diagnostics,
+            other => {
+                eprintln!("Namespace not found: {} - {:?}", uri, other);
+                return diagnostics;
+            }
         };
 
         let namespace = validation_context.namespace;
@@ -280,6 +291,7 @@ impl DiagnosticsProvider {
         &self,
         uri: &str,
         content: &'a str,
+        root_dir: &Path,
     ) -> Vec<UnresolvedDiagnostic<'a>> {
         let start_time = Instant::now();
 
@@ -297,7 +309,8 @@ impl DiagnosticsProvider {
                     eprintln!("✅ Parsing successful for content: {}", uri);
                 }
                 // If parsing succeeds, do type checking
-                let type_diagnostics = self.generate_type_diagnostics(&module, uri, content);
+                let type_diagnostics =
+                    self.generate_type_diagnostics(&module, uri, content, root_dir);
                 diagnostics.extend(type_diagnostics);
             }
             Err(error) => {

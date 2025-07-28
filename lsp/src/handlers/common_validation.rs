@@ -10,9 +10,11 @@ use crate::handlers::cache::{EntityRestructurer, GameDataCache, TypeCache};
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, ScopedType};
 use crate::handlers::utils::extract_namespace_from_uri;
 use crate::interner::get_interner;
+use std::path::Path;
 use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 
 /// Common validation context that both hover and diagnostics can use
+#[derive(Debug)]
 pub struct ValidationContext {
     pub namespace: Spur,
     pub namespace_type: Arc<ScopedType>,
@@ -20,6 +22,7 @@ pub struct ValidationContext {
 }
 
 /// Result of namespace validation
+#[derive(Debug)]
 pub enum NamespaceValidationResult {
     Valid(ValidationContext),
     CachesNotInitialized,
@@ -29,7 +32,7 @@ pub enum NamespaceValidationResult {
 }
 
 /// Validates namespace and initializes validation context
-pub fn validate_namespace_and_caches(uri: &str) -> NamespaceValidationResult {
+pub fn validate_namespace_and_caches(uri: &str, root_dir: &Path) -> NamespaceValidationResult {
     // Check if required caches are initialized
     if !TypeCache::is_initialized()
         || !GameDataCache::is_initialized()
@@ -39,12 +42,12 @@ pub fn validate_namespace_and_caches(uri: &str) -> NamespaceValidationResult {
     }
 
     // Extract namespace from URI
-    let namespace = match extract_namespace_from_uri(uri) {
+    let namespace = match extract_namespace_from_uri(uri, root_dir) {
         Some(namespace) => namespace,
         None => return NamespaceValidationResult::NamespaceNotFound,
     };
 
-    if namespace.starts_with("common/inline_scripts") {
+    if namespace.starts_with("game/common/inline_scripts") {
         return NamespaceValidationResult::InlineScript;
     }
 

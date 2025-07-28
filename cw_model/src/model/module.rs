@@ -1,10 +1,7 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use cw_parser::{AstModuleCell, AstValue, AstVisitor};
-use path_slash::PathBufExt;
+use path_slash::PathExt;
 
 use crate::{
     CaseInsensitiveInterner, Properties, PropertyInfo, PropertyInfoList, PropertyVisitor, Value,
@@ -39,9 +36,10 @@ impl Module {
 
     pub fn from_file(
         file_path: &Path,
+        root_dir: &Path,
         interner: &CaseInsensitiveInterner,
     ) -> Result<Self, anyhow::Error> {
-        let (namespace, module_name) = Self::get_module_info(file_path);
+        let (namespace, module_name) = Self::get_module_info(file_path, root_dir);
 
         if module_name.starts_with("99_README") {
             return Ok(Self::new(namespace, module_name));
@@ -70,64 +68,31 @@ impl Module {
         Ok(module)
     }
 
-    pub fn get_module_info(file_path: &Path) -> (String, String) {
-        let path = PathBuf::from(file_path);
+    pub fn get_module_info(file_path: &Path, root_dir: &Path) -> (String, String) {
+        let module_name = file_path.file_name().unwrap().to_str().unwrap();
 
-        // Define the base directories we support
-        let base_dirs = vec!["common", "interface", "events", "gfx", "localisation"];
-
-        let mut namespace = String::new();
-        let mut found_base = false;
-
-        // Find the rightmost occurrence of ANY base directory
-        let components: Vec<_> = path.components().collect();
-        let mut rightmost_base_index = None;
-        let mut rightmost_base_dir = None;
-
-        for base_dir in base_dirs {
-            if let Some(base_index) = components.iter().rposition(|c| c.as_os_str() == base_dir) {
-                if rightmost_base_index.is_none() || base_index > rightmost_base_index.unwrap() {
-                    rightmost_base_index = Some(base_index);
-                    rightmost_base_dir = Some(base_dir);
-                }
+        // Calculate the relative path from root_dir to the file
+        let relative_path = match file_path.strip_prefix(root_dir) {
+            Ok(rel_path) => rel_path,
+            Err(_) => {
+                // If stripping fails, use a fallback namespace
+                return ("unknown".to_string(), module_name.to_string());
             }
-        }
+        };
 
-        if let (Some(base_index), Some(base_dir)) = (rightmost_base_index, rightmost_base_dir) {
-            if let Some(base_prefix) = components
-                .iter()
-                .take(base_index + 1)
-                .collect::<PathBuf>()
-                .to_str()
-            {
-                // Get the subdirectory path after the base directory
-                let remaining_path = path.strip_prefix(base_prefix).unwrap();
-
-                if let Some(parent_dir) = remaining_path.parent() {
-                    if parent_dir.as_os_str().is_empty() {
-                        // File is directly in the base directory
-                        namespace = base_dir.to_string();
-                    } else {
-                        // File is in a subdirectory, include the subdirectory in namespace
-                        namespace = [base_dir, &parent_dir.to_string_lossy()]
-                            .iter()
-                            .collect::<PathBuf>()
-                            .to_slash_lossy()
-                            .to_string();
-                    }
-                } else {
-                    namespace = base_dir.to_string();
-                }
-                found_base = true;
+        // Get the parent directory of the file as the namespace, prefixed with "game"
+        let namespace = if let Some(parent_dir) = relative_path.parent() {
+            if parent_dir.as_os_str().is_empty() {
+                // File is directly in the root directory
+                "game".to_string()
+            } else {
+                // Prepend "game/" to the parent directory path, converting to forward slashes
+                format!("game/{}", parent_dir.to_slash_lossy())
             }
-        }
-
-        // Fallback if no base directory found (shouldn't happen with proper glob patterns)
-        if !found_base {
-            namespace = "unknown".to_string();
-        }
-
-        let module_name = path.file_name().unwrap().to_str().unwrap();
+        } else {
+            // This shouldn't happen, but provide a fallback
+            "game".to_string()
+        };
 
         (namespace, module_name.to_string())
     }
