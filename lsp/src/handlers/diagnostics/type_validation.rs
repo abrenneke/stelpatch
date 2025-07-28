@@ -292,7 +292,15 @@ fn validate_value_against_type<'a>(
 
         // Literal set validation
         (CwtTypeOrSpecialRef::LiteralSet(valid_values), AstValue::String(string_value)) => {
-            let string_value = interner.get_or_intern(string_value.raw_value());
+            // Handle cannot_steal_enigmatic_tech@root.target - only take the part before the @
+            let string_value = if let Some(at_pos) = string_value.raw_value().find('@') {
+                &string_value.raw_value()[..at_pos]
+            } else {
+                &string_value.raw_value()
+            };
+
+            let string_value = interner.get_or_intern(string_value);
+
             // Allow $ARGUMENT$ to be used as a value
             if !contains_scripted_argument(string_value) {
                 if !valid_values.contains(&string_value) {
