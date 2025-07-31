@@ -83,7 +83,7 @@ impl GameDataCache {
             let base_game = BaseGame::load_global_as_mod_definition(
                 LoadMode::Parallel,
                 get_interner(),
-                Some(&file_index.get_all_files()),
+                Some(&file_index.read().unwrap().get_all_files()),
                 false,
             );
 
@@ -315,18 +315,31 @@ impl ModDataCache {
 
     /// Trigger entity restructuring and full analysis to include mod data
     fn trigger_restructuring() {
-        // Reset the EntityRestructurer so it will reload with the new mod data
-        // This is a simple approach - in a more sophisticated system we might
-        // incrementally update the restructurer
+        if !EntityRestructurer::is_initialized() {
+            eprintln!("EntityRestructurer is not initialized, skipping entity restructuring");
+            return;
+        }
+
+        if !GameDataCache::is_initialized() {
+            eprintln!("GameDataCache is not initialized, skipping entity restructuring");
+            return;
+        }
+
         eprintln!("Triggering entity restructuring and full analysis to include mod data");
 
-        // Reset the EntityRestructurer cache to force re-initialization
-        // with the new mod data included
         EntityRestructurer::reset();
         FullAnalysis::reset();
 
-        // The next time EntityRestructurer and FullAnalysis methods are called, they will
-        // automatically reload and include the new mod data
+        let start = Instant::now();
+        eprintln!("Loading entity restructuring and full analysis");
+
+        EntityRestructurer::load_global_blocking();
+        FullAnalysis::load_global_blocking();
+
+        eprintln!(
+            "Loaded entity restructuring and full analysis in {:?}",
+            start.elapsed()
+        );
     }
 
     /// Get all keys defined in a namespace from mod data only

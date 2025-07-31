@@ -107,8 +107,12 @@ impl DiagnosticsProvider {
         // Validate namespace and caches using common validation
         let validation_context = match validate_namespace_and_caches(uri, root_dir) {
             NamespaceValidationResult::Valid(context) => context,
-            other => {
-                eprintln!("Namespace not found: {} - {:?}", uri, other);
+            NamespaceValidationResult::InlineScript => {
+                // We can't check inline scripts right now :(
+                return diagnostics;
+            }
+            _other => {
+                // eprintln!("Namespace not found: {} - {:?}", uri, other);
                 return diagnostics;
             }
         };

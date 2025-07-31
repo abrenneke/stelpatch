@@ -137,6 +137,12 @@ impl EntityRestructurer {
         *cache = None;
     }
 
+    pub fn load_global_blocking() {
+        let entity_restructurer =
+            EntityRestructurer::new(GameDataCache::get().unwrap(), TypeCache::get().unwrap());
+        entity_restructurer.load();
+    }
+
     /// Load and process all entities that need restructuring
     pub fn load(&self) {
         // Check if already initialized
@@ -187,8 +193,8 @@ impl EntityRestructurer {
             types_with_special_loading.len(),
         );
 
-        // Process namespaces in parallel and collect results
-        let results: Vec<_> = types_with_special_loading
+        // Process base game namespaces in parallel and collect results
+        let base_game_results: Vec<_> = types_with_special_loading
             .as_inner()
             .par_iter()
             .filter_map(|(namespace, type_defs)| {
@@ -200,7 +206,7 @@ impl EntityRestructurer {
                     Some((*namespace, entities, info))
                 } else {
                     eprintln!(
-                        "WARN: Namespace {} not found in game data, skipping",
+                        "WARN: Namespace {} not found in base game data, skipping",
                         interner.resolve(&namespace.0)
                     );
                     None
@@ -208,8 +214,29 @@ impl EntityRestructurer {
             })
             .collect();
 
-        // Merge results back into the restructured entities
-        for (namespace, entities, info) in results {
+        // Process mod data namespaces in parallel and collect results
+        let mod_namespaces = ModDataCache::get_namespaces();
+        let mod_results: Vec<_> = types_with_special_loading
+            .as_inner()
+            .par_iter()
+            .filter_map(|(namespace, type_defs)| {
+                let actual_namespace = TypeCache::get_actual_namespace(namespace.0);
+                if let Some(mod_namespace_data) = mod_namespaces.get(&actual_namespace) {
+                    let (entities, info) =
+                        self.process_namespace(actual_namespace, type_defs, mod_namespace_data);
+                    Some((*namespace, entities, info, true)) // true indicates this is mod data
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Store lengths before moving the data
+        let base_game_count = base_game_results.len();
+        let mod_count = mod_results.len();
+
+        // Merge base game results back into the restructured entities
+        for (namespace, entities, info) in base_game_results {
             restructured.entities.insert(
                 namespace.0,
                 entities
@@ -221,6 +248,53 @@ impl EntityRestructurer {
                 .restructured_namespaces
                 .insert(namespace.0, info);
         }
+
+        // Merge mod results with base game results (mod data can override/extend base game data)
+        for (namespace, mod_entities, mod_info, _is_mod) in mod_results {
+            let actual_namespace = namespace.0;
+
+            // Get existing base game entities for this namespace or create new map
+            let mut combined_entities = restructured
+                .entities
+                .get(&actual_namespace)
+                .cloned()
+                .unwrap_or_else(|| SpurMap::new());
+
+            // Add mod entities (may override base game entities with same keys)
+            for (key, entity) in mod_entities {
+                combined_entities.insert(key, Arc::new(entity));
+            }
+
+            // Update the combined entities
+            restructured
+                .entities
+                .insert(actual_namespace, combined_entities);
+
+            // Update restructure info (mod info takes precedence, but preserve counts if base game info exists)
+            if let Some(existing_info) = restructured.restructured_namespaces.get(&actual_namespace)
+            {
+                let combined_info = RestructureInfo {
+                    skip_root_key: mod_info.skip_root_key.or(existing_info.skip_root_key),
+                    name_field: mod_info.name_field.or(existing_info.name_field),
+                    original_entity_count: existing_info.original_entity_count
+                        + mod_info.original_entity_count,
+                    restructured_entity_count: existing_info.restructured_entity_count
+                        + mod_info.restructured_entity_count,
+                };
+                restructured
+                    .restructured_namespaces
+                    .insert(actual_namespace, combined_info);
+            } else {
+                restructured
+                    .restructured_namespaces
+                    .insert(actual_namespace, mod_info);
+            }
+        }
+
+        eprintln!(
+            "Processed {} base game namespaces and {} mod namespaces for restructuring",
+            base_game_count, mod_count
+        );
     }
 
     /// Get type definitions that need restructuring
@@ -693,8 +767,7 @@ impl EntityRestructurer {
         }
 
         // Check mod data next
-        if let Some(mod_entity) = super::game_data::ModDataCache::get_entity(namespace, entity_name)
-        {
+        if let Some(mod_entity) = ModDataCache::get_entity(namespace, entity_name) {
             return Some(mod_entity);
         }
 
@@ -771,9 +844,7 @@ impl EntityRestructurer {
         }
 
         // Add mod variables (can override base game variables)
-        if let Some(mod_variables) =
-            super::game_data::ModDataCache::get_namespace_scripted_variables(namespace)
-        {
+        if let Some(mod_variables) = ModDataCache::get_namespace_scripted_variables(namespace) {
             all_variables.extend(mod_variables);
         }
 

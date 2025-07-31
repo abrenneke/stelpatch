@@ -487,6 +487,8 @@ fn validate_value_against_type<'a>(
             ReferenceType::Icon { path } => {
                 if let AstValue::String(string_value) = value {
                     if let Some(file_index) = FileIndex::get() {
+                        let file_index = file_index.read().unwrap();
+
                         // Construct the full path for the icon file (append .dds extension)
                         let icon_filename = string_value.raw_value();
                         let icon_filename_with_ext = format!("{}.dds", icon_filename);
@@ -527,6 +529,7 @@ fn validate_value_against_type<'a>(
             ReferenceType::Filepath { path } => {
                 if let AstValue::String(string_value) = value {
                     if let Some(file_index) = FileIndex::get() {
+                        let file_index = file_index.read().unwrap();
                         // Split the path by comma to get prefix and suffix
                         let parts: Vec<&str> = path.split(',').collect();
                         if parts.len() == 2 {

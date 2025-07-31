@@ -1,5 +1,5 @@
 use super::utils::log_message_sync;
-use crate::base_game::GAME_INSTALL_PATH;
+use crate::base_game::game;
 use crate::interner::get_interner;
 use anyhow::{Result, anyhow};
 use cw_model::{GameMod, LoadMode, ModDefinition};
@@ -9,7 +9,7 @@ use tower_lsp::Client;
 
 /// Check if a file path is part of the base game directory
 pub fn is_base_game_file(file_path: &Path) -> bool {
-    if let Some(install_path) = GAME_INSTALL_PATH.as_ref() {
+    if let Some(install_path) = game::get_install_directory_windows().as_ref() {
         file_path.starts_with(install_path)
     } else {
         false
@@ -98,7 +98,7 @@ pub fn load_mod_from_descriptor_with_dependencies(
     load_mod_dependencies(&mod_definition, client, loaded_mods)?;
 
     // Load the mod using the existing GameMod::load functionality
-    let game_mod = GameMod::load(
+    let load_result = GameMod::load(
         mod_definition,
         LoadMode::Parallel,
         get_interner(),
@@ -107,16 +107,30 @@ pub fn load_mod_from_descriptor_with_dependencies(
         false,
     )?;
 
+    for error in load_result.errors {
+        log_message_sync(
+            client,
+            tower_lsp::lsp_types::MessageType::ERROR,
+            format!("Warning: {}", error),
+        );
+    }
+
     // Add to loaded mods cache
-    loaded_mods.insert(game_mod.definition.name.clone(), game_mod.clone());
+    loaded_mods.insert(
+        load_result.game_mod.definition.name.clone(),
+        load_result.game_mod.clone(),
+    );
 
     log_message_sync(
         client,
         tower_lsp::lsp_types::MessageType::INFO,
-        format!("Successfully loaded mod: {}", game_mod.definition.name),
+        format!(
+            "Successfully loaded mod: {}",
+            load_result.game_mod.definition.name
+        ),
     );
 
-    Ok(game_mod)
+    Ok(load_result.game_mod)
 }
 
 /// Load a mod from a descriptor.mod file
@@ -137,7 +151,7 @@ pub fn load_mod_from_descriptor(descriptor_path: &Path, client: &Client) -> Resu
     mod_definition.path = Some(mod_dir.to_path_buf());
 
     // Load the mod using the existing GameMod::load functionality
-    let game_mod = GameMod::load(
+    let load_result = GameMod::load(
         mod_definition,
         LoadMode::Parallel,
         get_interner(),
@@ -146,19 +160,36 @@ pub fn load_mod_from_descriptor(descriptor_path: &Path, client: &Client) -> Resu
         false,
     )?;
 
+    for error in load_result.errors {
+        log_message_sync(
+            client,
+            tower_lsp::lsp_types::MessageType::ERROR,
+            format!("Warning: {}", error),
+        );
+    }
+
     log_message_sync(
         client,
         tower_lsp::lsp_types::MessageType::INFO,
-        format!("Successfully loaded mod: {}", game_mod.definition.name),
+        format!(
+            "Successfully loaded mod: {}",
+            load_result.game_mod.definition.name
+        ),
     );
 
-    Ok(game_mod)
+    Ok(load_result.game_mod)
 }
 
 /// Check if a file is a mod file and load the mod if needed
-pub fn handle_mod_file(file_path: &Path, client: &Client) -> Result<Option<GameMod>> {
+pub fn handle_mod_file(file_path: &Path, client: &Client) -> Result<ModLoadResult> {
     let mut temp_cache = HashMap::new();
     handle_mod_file_with_cache(file_path, client, &mut temp_cache)
+}
+
+pub enum ModLoadResult {
+    Loaded(GameMod),
+    AlreadyLoaded,
+    NotAMod,
 }
 
 /// Check if a file is a mod file and load the mod if needed
@@ -167,10 +198,10 @@ pub fn handle_mod_file_with_cache(
     file_path: &Path,
     client: &Client,
     mod_cache: &mut HashMap<PathBuf, GameMod>,
-) -> Result<Option<GameMod>> {
+) -> Result<ModLoadResult> {
     // First check if it's a base game file
     if is_base_game_file(file_path) {
-        return Ok(None);
+        return Ok(ModLoadResult::NotAMod);
     }
 
     // Try to find descriptor.mod in the directory tree
@@ -182,13 +213,8 @@ pub fn handle_mod_file_with_cache(
             .to_path_buf();
 
         // Check if mod is already cached
-        if let Some(cached_mod) = mod_cache.get(&mod_dir) {
-            log_message_sync(
-                client,
-                tower_lsp::lsp_types::MessageType::INFO,
-                format!("Using cached mod: {}", cached_mod.definition.name),
-            );
-            return Ok(Some(cached_mod.clone()));
+        if mod_cache.get(&mod_dir).is_some() {
+            return Ok(ModLoadResult::AlreadyLoaded);
         }
 
         log_message_sync(
@@ -209,7 +235,7 @@ pub fn handle_mod_file_with_cache(
             Ok(game_mod) => {
                 // Cache the mod
                 mod_cache.insert(mod_dir, game_mod.clone());
-                Ok(Some(game_mod))
+                Ok(ModLoadResult::Loaded(game_mod))
             }
             Err(e) => {
                 log_message_sync(
@@ -226,7 +252,7 @@ pub fn handle_mod_file_with_cache(
             tower_lsp::lsp_types::MessageType::INFO,
             format!("No descriptor.mod found for file: {}", file_path.display()),
         );
-        Ok(None)
+        Ok(ModLoadResult::NotAMod)
     }
 }
 

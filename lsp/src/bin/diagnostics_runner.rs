@@ -9,10 +9,16 @@ use std::time::{Duration, Instant};
 
 use clap::Parser;
 use colored::Colorize;
+use cw_lsp::base_game::game;
 use cw_lsp::base_game::game::detect_base_directory;
+use cw_lsp::handlers::cache::FileIndex;
 use cw_lsp::handlers::diagnostics::provider::DiagnosticsProvider;
 use cw_lsp::handlers::initialization::CacheInitializer;
 use cw_lsp::handlers::settings::Settings;
+use cw_lsp::interner::get_interner;
+use cw_model::GameMod;
+use cw_model::LoadMode;
+use cw_model::ModDefinition;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use tower_lsp::lsp_types::Diagnostic;
@@ -238,6 +244,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .bright_white()
         );
         std::process::exit(1);
+    }
+
+    if root_dir.as_ref().unwrap() == &game::get_install_directory_windows().unwrap() {
+        println!("{}", "Running in base game mode".green().bold());
+    } else {
+        println!("{}", "Running in modded mode".green().bold());
+
+        let mod_start = Instant::now();
+
+        let definition_file = root_dir.as_ref().unwrap().join("descriptor.mod");
+        let mod_definition = ModDefinition::load_from_file(&definition_file).unwrap();
+
+        println!(
+            "Integrating mod {} in {:?}",
+            mod_definition.name, mod_definition.definition_dir
+        );
+
+        let load_result = GameMod::load(
+            mod_definition,
+            LoadMode::Parallel,
+            get_interner(),
+            game::get_glob_patterns(),
+            None,
+            false,
+        )
+        .unwrap();
+
+        for error in load_result.errors {
+            eprintln!("{} {}", "Warning:".yellow().bold(), error);
+        }
+
+        FileIndex::update_global_with_mod(&load_result.game_mod);
+
+        println!(
+            "{} {}",
+            "Mod loaded in".green().bold(),
+            format!("{:?}", mod_start.elapsed()).bright_yellow()
+        );
     }
 
     // Process each file in parallel with progress bar

@@ -39,6 +39,11 @@ impl FullAnalysis {
         *cache = None;
     }
 
+    pub fn load_global_blocking() {
+        let full_analysis = FullAnalysis::new(TypeCache::get().unwrap());
+        full_analysis.load();
+    }
+
     pub fn load(&self) {
         // Check if already initialized
         if Self::is_initialized() {

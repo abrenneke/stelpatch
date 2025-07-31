@@ -1,6 +1,7 @@
 use super::diagnostics;
 use super::mod_detection;
 use crate::CwLspServer;
+use crate::handlers::mod_detection::ModLoadResult;
 use crate::handlers::utils::log_message_sync;
 use tower_lsp::lsp_types::*;
 
@@ -38,7 +39,7 @@ pub fn did_open(server: &CwLspServer, params: DidOpenTextDocumentParams) {
                 &server.client,
                 &mut mod_cache,
             ) {
-                Ok(Some(game_mod)) => {
+                Ok(ModLoadResult::Loaded(game_mod)) => {
                     log_message_sync(
                         &server.client,
                         MessageType::INFO,
@@ -54,7 +55,10 @@ pub fn did_open(server: &CwLspServer, params: DidOpenTextDocumentParams) {
                         format!("Merged mod data into cache: {}", game_mod.definition.name),
                     );
                 }
-                Ok(None) => {
+                Ok(ModLoadResult::AlreadyLoaded) => {
+                    // Mod already loaded, no need to reload it
+                }
+                Ok(ModLoadResult::NotAMod) => {
                     // Base game file or no descriptor.mod found
                 }
                 Err(e) => {

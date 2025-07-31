@@ -60,9 +60,10 @@ impl BaseGame {
                     remote_file_id: None,
                     dependencies: vec![],
                     archive: None,
+                    definition_dir: Some(path.to_path_buf()),
                 };
 
-                let game_mod = GameMod::load(
+                let load_result = GameMod::load(
                     definition,
                     load_mode,
                     interner,
@@ -71,12 +72,14 @@ impl BaseGame {
                     preserve_ast,
                 )?;
 
-                // BASE_MOD
-                //     .set(game_mod)
-                //     .map_err(|_| anyhow!("Could not set base mod"))?;
-
-                Ok(game_mod)
-                // Ok(BASE_MOD.get().unwrap())
+                if load_result.errors.is_empty() {
+                    Ok(load_result.game_mod)
+                } else {
+                    Err(anyhow!(
+                        "Failed to load Victoria 3: {:?}",
+                        load_result.errors
+                    ))
+                }
             }
             None => Err(anyhow!("Could not find Victoria 3 installation directory")),
         }

@@ -21,7 +21,7 @@
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 
 use cw_model::GameMod;
@@ -211,13 +211,15 @@ pub struct FileIndex {
     /// Set of all file paths relative to the game root directory
     /// Normalized to use forward slashes for consistent lookup
     files: HashSet<String>,
+
     /// The root game directory path
     game_root: PathBuf,
+
     /// Additional mod directories that have been integrated
     mod_paths: Vec<PathBuf>,
 }
 
-static FILE_INDEX_CACHE: RwLock<Option<Arc<FileIndex>>> = RwLock::new(None);
+static FILE_INDEX_CACHE: OnceLock<Arc<RwLock<FileIndex>>> = OnceLock::new();
 
 impl FileIndex {
     /// Initialize the file index cache in a background thread
@@ -228,20 +230,26 @@ impl FileIndex {
     }
 
     /// Get the global file index cache, returns None if not yet initialized
-    pub fn get() -> Option<Arc<FileIndex>> {
-        FILE_INDEX_CACHE.read().unwrap().clone()
+    pub fn get() -> Option<Arc<RwLock<FileIndex>>> {
+        FILE_INDEX_CACHE.get().cloned()
     }
 
     /// Check if the file index has been initialized
     pub fn is_initialized() -> bool {
-        FILE_INDEX_CACHE.read().unwrap().is_some()
+        FILE_INDEX_CACHE.get().is_some()
     }
 
-    /// Reset the file index cache, forcing re-initialization on next access
+    /// Reset the file index cache, clearing all cached files
     pub fn reset() {
         eprintln!("Resetting FileIndex cache");
-        let mut cache = FILE_INDEX_CACHE.write().unwrap();
-        *cache = None;
+
+        // Clear the FileIndex contents if it's initialized
+        if let Some(cache) = FILE_INDEX_CACHE.get() {
+            if let Ok(mut index) = cache.write() {
+                index.files.clear();
+                index.mod_paths.clear();
+            }
+        }
 
         // Also clear disk cache
         if let Ok(cache_dir) = get_cache_directory() {
@@ -257,87 +265,73 @@ impl FileIndex {
     }
 
     /// Get or initialize the global file index cache (blocking version)
-    fn get_or_init_blocking() -> Arc<FileIndex> {
-        // Check if already initialized
-        if let Some(index) = Self::get() {
-            return index;
-        }
+    fn get_or_init_blocking() -> Arc<RwLock<FileIndex>> {
+        FILE_INDEX_CACHE
+            .get_or_init(|| {
+                // Compute the result without holding the lock
+                let start = Instant::now();
+                eprintln!("Initializing file index cache...");
 
-        // Compute the result without holding the lock
-        let start = Instant::now();
-        eprintln!("Initializing file index cache...");
+                let game_root =
+                    if let Some(path) = crate::base_game::game::get_install_directory_windows() {
+                        path
+                    } else {
+                        eprintln!("Warning: No game root path found, file index will be empty");
+                        return Arc::new(RwLock::new(FileIndex {
+                            files: HashSet::new(),
+                            game_root: PathBuf::new(),
+                            mod_paths: Vec::new(),
+                        }));
+                    };
 
-        let game_root = if let Some(path) = crate::base_game::game::get_install_directory_windows()
-        {
-            path
-        } else {
-            eprintln!("Warning: No game root path found, file index will be empty");
-            let result = Arc::new(FileIndex {
-                files: HashSet::new(),
-                game_root: PathBuf::new(),
-                mod_paths: Vec::new(),
-            });
+                // Compute game version hash for cache key
+                let game_version_hash = compute_game_version_hash(&game_root);
 
-            // Store empty result
-            let mut cache = FILE_INDEX_CACHE.write().unwrap();
-            if cache.is_none() {
-                *cache = Some(result.clone());
-            }
-            return result;
-        };
+                // Try to load from disk cache first
+                let files = if let Some(cached_data) = load_cache_from_disk(&game_version_hash) {
+                    eprintln!(
+                        "Using cached file index with {} files (saved {:?})",
+                        cached_data.files.len(),
+                        start.elapsed()
+                    );
+                    cached_data.files
+                } else {
+                    eprintln!("No valid cache found, scanning directory...");
+                    let mut files = HashSet::new();
 
-        // Compute game version hash for cache key
-        let game_version_hash = compute_game_version_hash(&game_root);
+                    if let Err(e) =
+                        Self::scan_directory_recursive(&game_root, &game_root, &mut files)
+                    {
+                        eprintln!("Warning: Failed to scan game directory: {}", e);
+                    }
 
-        // Try to load from disk cache first
-        let files = if let Some(cached_data) = load_cache_from_disk(&game_version_hash) {
-            eprintln!(
-                "Using cached file index with {} files (saved {:?})",
-                cached_data.files.len(),
-                start.elapsed()
-            );
-            cached_data.files
-        } else {
-            eprintln!("No valid cache found, scanning directory...");
-            let mut files = HashSet::new();
+                    eprintln!(
+                        "Built file index cache with {} files in {:?}",
+                        files.len(),
+                        start.elapsed()
+                    );
 
-            if let Err(e) = Self::scan_directory_recursive(&game_root, &game_root, &mut files) {
-                eprintln!("Warning: Failed to scan game directory: {}", e);
-            }
+                    // Save to disk cache for next time
+                    let cache_data = FileIndexCache::new(files.clone(), game_version_hash);
+                    if let Err(e) = save_cache_to_disk(&cache_data) {
+                        eprintln!("Warning: Failed to save file index cache: {}", e);
+                    }
 
-            eprintln!(
-                "Built file index cache with {} files in {:?}",
-                files.len(),
-                start.elapsed()
-            );
+                    // Clean up old cache files in background
+                    std::thread::spawn(|| {
+                        cleanup_old_cache_files();
+                    });
 
-            // Save to disk cache for next time
-            let cache_data = FileIndexCache::new(files.clone(), game_version_hash);
-            if let Err(e) = save_cache_to_disk(&cache_data) {
-                eprintln!("Warning: Failed to save file index cache: {}", e);
-            }
+                    files
+                };
 
-            // Clean up old cache files in background
-            std::thread::spawn(|| {
-                cleanup_old_cache_files();
-            });
-
-            files
-        };
-
-        let result = Arc::new(FileIndex {
-            files,
-            game_root,
-            mod_paths: Vec::new(),
-        });
-
-        // Now acquire the lock only to store the result
-        let mut cache = FILE_INDEX_CACHE.write().unwrap();
-        if cache.is_none() {
-            *cache = Some(result.clone());
-        }
-
-        result
+                Arc::new(RwLock::new(FileIndex {
+                    files,
+                    game_root,
+                    mod_paths: Vec::new(),
+                }))
+            })
+            .clone()
     }
 
     /// Recursively scan a directory and add all files to the set
@@ -476,43 +470,31 @@ impl FileIndex {
 
     /// Update the global file index cache with mod data
     pub fn update_global_with_mod(game_mod: &GameMod) {
-        if let Some(current_index) = Self::get() {
-            // Create a new FileIndex with the mod integrated
-            let mut new_index = FileIndex {
-                files: current_index.files.clone(),
-                game_root: current_index.game_root.clone(),
-                mod_paths: current_index.mod_paths.clone(),
-            };
-            new_index.integrate_mod(game_mod);
-
-            // Update the global cache
-            let mut cache = FILE_INDEX_CACHE.write().unwrap();
-            *cache = Some(Arc::new(new_index));
+        if let Some(cache) = Self::get() {
+            if let Ok(mut index) = cache.write() {
+                index.integrate_mod(game_mod);
+            }
         }
     }
 
     /// Update the global file index cache with multiple mods
     pub fn update_global_with_mods(mods: &[&GameMod]) {
-        if let Some(current_index) = Self::get() {
-            // Create a new FileIndex with the mods integrated
-            let mut new_index = FileIndex {
-                files: current_index.files.clone(),
-                game_root: current_index.game_root.clone(),
-                mod_paths: current_index.mod_paths.clone(),
-            };
-            new_index.integrate_mods(mods);
-
-            // Update the global cache
-            let mut cache = FILE_INDEX_CACHE.write().unwrap();
-            *cache = Some(Arc::new(new_index));
+        if let Some(cache) = Self::get() {
+            if let Ok(mut index) = cache.write() {
+                index.integrate_mods(mods);
+            }
         }
     }
 }
 
 /// Convenience function to check if a file exists
 pub fn file_exists(file_path: &str) -> bool {
-    if let Some(index) = FileIndex::get() {
-        index.file_exists(file_path)
+    if let Some(cache) = FileIndex::get() {
+        if let Ok(index) = cache.read() {
+            index.file_exists(file_path)
+        } else {
+            false
+        }
     } else {
         false
     }
@@ -520,8 +502,12 @@ pub fn file_exists(file_path: &str) -> bool {
 
 /// Convenience function to find files containing a pattern
 pub fn find_files_containing(pattern: &str) -> Vec<String> {
-    if let Some(index) = FileIndex::get() {
-        index.find_files_containing(pattern)
+    if let Some(cache) = FileIndex::get() {
+        if let Ok(index) = cache.read() {
+            index.find_files_containing(pattern)
+        } else {
+            Vec::new()
+        }
     } else {
         Vec::new()
     }
@@ -529,8 +515,12 @@ pub fn find_files_containing(pattern: &str) -> Vec<String> {
 
 /// Convenience function to find files with an extension
 pub fn find_files_with_extension(extension: &str) -> Vec<String> {
-    if let Some(index) = FileIndex::get() {
-        index.find_files_with_extension(extension)
+    if let Some(cache) = FileIndex::get() {
+        if let Ok(index) = cache.read() {
+            index.find_files_with_extension(extension)
+        } else {
+            Vec::new()
+        }
     } else {
         Vec::new()
     }

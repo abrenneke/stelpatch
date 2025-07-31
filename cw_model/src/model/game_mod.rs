@@ -16,6 +16,12 @@ pub struct GameMod {
     pub namespaces: HashMap<String, Namespace>,
 }
 
+#[derive(Debug)]
+pub struct GameModLoadResult {
+    pub game_mod: GameMod,
+    pub errors: Vec<anyhow::Error>,
+}
+
 pub enum LoadMode {
     Serial,
     Parallel,
@@ -85,8 +91,20 @@ impl GameMod {
         glob_patterns: Vec<&str>,
         file_index: Option<&HashSet<String>>,
         preserve_ast: bool,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Result<GameModLoadResult, anyhow::Error> {
         let base_path = PathBuf::from(definition.path.as_ref().unwrap());
+
+        let base_path = if base_path.exists() {
+            base_path
+        } else {
+            if let Some(definition_dir) = definition.definition_dir.as_ref() {
+                definition_dir.clone()
+            } else {
+                return Err(anyhow!(
+                    "Base path does not exist and no definition directory is provided"
+                ));
+            }
+        };
 
         // Define ignore patterns for files to exclude (simple filename matching)
         let ignore_filenames = vec![
@@ -208,18 +226,23 @@ impl GameMod {
             }
         }
 
-        for (module, path) in modules.into_iter().zip(paths.iter()) {
-            let module = module
-                .map_err(|e| anyhow!("Failed to load module at {}: {}", path.display(), e))?;
-            mod_modules.push(module);
+        let mut game_mod = Self::with_definition(definition);
+        let mut errors = vec![];
+
+        for (module, _path) in modules.into_iter().zip(paths.iter()) {
+            match module {
+                Ok(module) => mod_modules.push(module),
+                Err(e) => errors.push(e),
+            }
         }
 
-        let mut game_mod = Self::with_definition(definition);
         for module in mod_modules {
             game_mod.push(module);
         }
 
-        Ok(game_mod)
+        let result = GameModLoadResult { game_mod, errors };
+
+        Ok(result)
     }
 
     pub fn print_contents(&self) {

@@ -19,6 +19,7 @@ pub struct ModDefinition {
     pub remote_file_id: Option<String>,
     pub dependencies: Vec<String>,
     pub archive: Option<String>,
+    pub definition_dir: Option<PathBuf>,
 }
 
 /// A set of mod definitions (likely loaded from Documents)
@@ -133,12 +134,14 @@ impl ModDefinition {
             remote_file_id: None,
             dependencies: Vec::new(),
             archive: None,
+            definition_dir: None,
         }
     }
 
-    pub fn load(input: &str) -> Result<Self, anyhow::Error> {
+    pub fn load(input: &str, definition_path: Option<&Path>) -> Result<Self, anyhow::Error> {
         let ast = AstModDefinitionCell::from_input(input.to_string());
         let mut mod_definition = ModDefinition::new();
+        mod_definition.definition_dir = definition_path.map(|p| p.to_path_buf());
         let mut visitor = ModDefinitionLoaderVisitor {
             mod_definition: &mut mod_definition,
         };
@@ -153,7 +156,7 @@ impl ModDefinition {
 
     pub fn load_from_file(path: &Path) -> Result<Self, anyhow::Error> {
         let contents = std::fs::read_to_string(path).map_err(|e| anyhow::anyhow!(e.to_string()))?;
-        Self::load(&contents)
+        Self::load(&contents, Some(path.parent().unwrap()))
     }
 
     pub fn populate_from_ast(&mut self, ast: AstModDefinitionCell) -> &Self {
@@ -172,7 +175,7 @@ impl FromStr for ModDefinition {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::load(s)
+        Self::load(s, None)
     }
 }
 
@@ -280,9 +283,10 @@ mod tests {
             remote_file_id: Some(String::from("804732593")),
             archive: None,
             dependencies: Vec::new(),
+            definition_dir: None,
         };
 
-        let mut parsed = ModDefinition::load(input).unwrap();
+        let mut parsed = ModDefinition::load(input, None).unwrap();
         parsed.ast = None; // Ignore for comparison, ast testing done elsewhere
 
         assert_eq!(parsed, expected_output);

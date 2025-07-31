@@ -65,6 +65,7 @@ pub fn is_value_compatible_with_simple_type<'a>(
         }
         (AstValue::String(string), SimpleType::Filepath) => {
             if let Some(file_index) = FileIndex::get() {
+                let file_index = file_index.read().unwrap();
                 if file_index.file_exists(string.raw_value()) {
                     None
                 } else {
@@ -330,6 +331,30 @@ fn validate_value_field_string<'a>(
             // Other colon-based values, for now let them through
             None
         }
+    } else if let Some(dot_pos) = interner.resolve(&value_str).rfind('.') {
+        // Handle scope paths like "root.decision_length" or "owner.max_example_variable"
+        // Extract the variable name (part after the last dot)
+        let variable_name = &interner.resolve(&value_str)[dot_pos + 1..];
+        let variable_name_spur = interner.get_or_intern(variable_name);
+
+        // Check if the variable exists in any dynamic value set
+        if let Some(full_analysis) = FullAnalysis::get() {
+            for (_key, value_set) in &full_analysis.dynamic_value_sets {
+                if value_set.contains(&variable_name_spur) {
+                    return None; // Valid variable from a value set
+                }
+            }
+        }
+
+        // Variable not found in any value set
+        Some(create_type_mismatch_diagnostic(
+            span_range,
+            &format!(
+                "Variable '{}' in scope path does not exist in any value set",
+                variable_name
+            ),
+            content,
+        ))
     } else {
         // Check if the value exists in any value set
         if let Some(full_analysis) = FullAnalysis::get() {
