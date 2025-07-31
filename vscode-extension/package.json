@@ -1,8 +1,8 @@
 {
   "name": "cw-lsp-client",
-  "displayName": "CW LSP - Stellaris Mod Language Support",
-  "description": "Language server support for Stellaris game files with syntax highlighting, diagnostics, and IntelliSense",
-  "version": "0.0.6",
+  "displayName": "CW LSP - Paradox Games Language Support",
+  "description": "Language server support for Clauswitz Engine game files (Stellaris, Victoria 3) with syntax highlighting, diagnostics, and IntelliSense",
+  "version": "0.0.7",
   "publisher": "abrenneke",
   "author": "Andy Brenneke",
   "license": "MIT",
@@ -12,6 +12,7 @@
   },
   "keywords": [
     "stellaris",
+    "victoria-3",
     "paradox",
     "game-dev",
     "modding",
@@ -28,10 +29,10 @@
   "contributes": {
     "languages": [
       {
-        "id": "stellaris",
+        "id": "clauswitz",
         "aliases": [
-          "Stellaris",
-          "stellaris"
+          "Clauswitz",
+          "clauswitz"
         ],
         "extensions": [
           ".mod",
@@ -46,6 +47,14 @@
       {
         "command": "cwlsp.restartServer",
         "title": "Restart CW Language Server"
+      },
+      {
+        "command": "cwlsp.restartAllServers",
+        "title": "Restart All CW Language Servers"
+      },
+      {
+        "command": "cwlsp.switchGame",
+        "title": "Switch CW Language Server Game"
       }
     ]
   },

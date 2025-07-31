@@ -7,6 +7,10 @@ static SETTINGS: OnceLock<Settings> = OnceLock::new();
 #[command(name = "cw-lsp")]
 #[command(about = "Language Server Protocol implementation for Clausewitz script files")]
 pub struct Settings {
+    /// Target game type (stellaris, victoria3)
+    #[arg(long, short = 'g', default_value = "stellaris")]
+    pub game: String,
+
     /// Enable localisation validation
     #[arg(long)]
     pub validate_localisation: bool,
@@ -19,6 +23,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            game: "stellaris".to_string(),
             validate_localisation: false,
             report_unknown_scopes: false,
         }

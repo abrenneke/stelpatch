@@ -185,8 +185,11 @@ pub enum ReferenceType {
     /// Alias match left reference: alias_match_left[key]
     AliasMatchLeft { key: String },
 
-    /// Single alias reference: single_alias_right[key]
+    /// Single alias reference: single_alias[key]
     SingleAlias { key: String },
+
+    /// Single alias right reference: single_alias_right[key]
+    SingleAliasRight { key: String },
 
     /// Alias keys field: alias_keys_field[key]
     AliasKeysField { key: String },
@@ -238,6 +241,7 @@ impl ReferenceType {
             ReferenceType::AliasName { key } => format!("alias_name[{}]", key),
             ReferenceType::AliasMatchLeft { key } => format!("alias_match_left[{}]", key),
             ReferenceType::SingleAlias { key } => format!("single_alias[{}]", key),
+            ReferenceType::SingleAliasRight { key } => format!("single_alias_right[{}]", key),
             ReferenceType::AliasKeysField { key } => format!("alias_keys_field[{}]", key),
             ReferenceType::Value { key } => format!("value[{}]", key),
             ReferenceType::ValueSet { key } => format!("value_set[{}]", key),
@@ -959,6 +963,7 @@ impl TypeFingerprint for ReferenceType {
             ReferenceType::AliasName { key } => format!("alias_name:{}", key),
             ReferenceType::AliasMatchLeft { key } => format!("alias_match_left:{}", key),
             ReferenceType::SingleAlias { key } => format!("single_alias:{}", key),
+            ReferenceType::SingleAliasRight { key } => format!("single_alias_right:{}", key),
             ReferenceType::AliasKeysField { key } => format!("alias_keys_field:{}", key),
             ReferenceType::Value { key } => format!("value:{}", key),
             ReferenceType::ValueSet { key } => format!("value_set:{}", key),

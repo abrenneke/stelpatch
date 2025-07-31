@@ -72,14 +72,11 @@ impl BaseGame {
                     preserve_ast,
                 )?;
 
-                if load_result.errors.is_empty() {
-                    Ok(load_result.game_mod)
-                } else {
-                    Err(anyhow!(
-                        "Failed to load Victoria 3: {:?}",
-                        load_result.errors
-                    ))
+                for error in load_result.errors {
+                    eprintln!("Warning: {}", error);
                 }
+
+                Ok(load_result.game_mod)
             }
             None => Err(anyhow!("Could not find Victoria 3 installation directory")),
         }
@@ -124,7 +121,7 @@ impl BaseGame {
             }
         }
 
-        victoria_3_path
+        victoria_3_path.map(|path| path.join("game"))
     }
 
     /// Loads modifiers from the Victoria 3 logs directory
@@ -147,7 +144,7 @@ impl BaseGame {
         loop {
             // Check if binaries/victoria3.exe exists from this directory (base game)
             if current.join("binaries").join("victoria3.exe").exists() {
-                return Some(current.to_path_buf());
+                return Some(current.join("game").to_path_buf());
             }
 
             // Check if descriptor.mod exists in this directory (mod)
@@ -167,32 +164,31 @@ impl BaseGame {
 
     pub fn get_glob_patterns() -> Vec<&'static str> {
         let glob_patterns = vec![
-            // Victoria 3 patterns (modular structure)
             // Game-specific files
-            "game/common/**/*.txt",
-            "game/interface/**/*.txt",
-            "game/events/**/*.txt",
-            "game/gfx/**/*.gfx",
-            "game/gfx/**/*.asset",
-            "game/gfx/**/*.txt",
-            "game/gui/**/*.gui",
-            "game/gui/**/*.gfx",
-            "game/map_data/**/*.txt",
-            "game/music/**/*.txt",
-            "game/music/**/*.asset",
-            "game/sound/**/*.txt",
-            "game/sound/**/*.asset",
+            "common/**/*.txt",
+            "interface/**/*.txt",
+            "events/**/*.txt",
+            "gfx/**/*.gfx",
+            "gfx/**/*.asset",
+            "gfx/**/*.txt",
+            "gui/**/*.gui",
+            "gui/**/*.gfx",
+            "map_data/**/*.txt",
+            "music/**/*.txt",
+            "music/**/*.asset",
+            "sound/**/*.txt",
+            "sound/**/*.asset",
             // Framework files (jomini)
-            "jomini/common/**/*.txt",
-            "jomini/gfx/**/*.gfx",
-            "jomini/gfx/**/*.asset",
-            "jomini/gui/**/*.gui",
-            "jomini/gui/**/*.gfx",
-            // Engine files (clausewitz)
-            "clausewitz/gfx/**/*.gfx",
-            "clausewitz/gfx/**/*.asset",
-            "clausewitz/gui/**/*.gui",
-            "clausewitz/gui/**/*.gfx",
+            // "jomini/common/**/*.txt",
+            // "jomini/gfx/**/*.gfx",
+            // "jomini/gfx/**/*.asset",
+            // "jomini/gui/**/*.gui",
+            // "jomini/gui/**/*.gfx",
+            // // Engine files (clausewitz)
+            // "clausewitz/gfx/**/*.gfx",
+            // "clausewitz/gfx/**/*.asset",
+            // "clausewitz/gui/**/*.gui",
+            // "clausewitz/gui/**/*.gfx",
         ];
 
         glob_patterns

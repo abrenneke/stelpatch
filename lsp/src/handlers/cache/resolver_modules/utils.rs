@@ -1,5 +1,5 @@
 use crate::handlers::cache::EntityRestructurer;
-use crate::interner::get_interner;
+// Removed unused import: use crate::interner::get_interner;
 use cw_model::SpurMap;
 use cw_model::types::CwtAnalyzer;
 use lasso::Spur;

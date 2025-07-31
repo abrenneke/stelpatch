@@ -85,6 +85,9 @@ impl CwtConverter {
             CwtReferenceType::SingleAlias => ReferenceType::SingleAlias {
                 key: identifier.name.raw_value().to_string(),
             },
+            CwtReferenceType::SingleAliasRight => ReferenceType::SingleAliasRight {
+                key: identifier.name.raw_value().to_string(),
+            },
             CwtReferenceType::AliasKeysField => ReferenceType::AliasKeysField {
                 key: identifier.name.raw_value().to_string(),
             },

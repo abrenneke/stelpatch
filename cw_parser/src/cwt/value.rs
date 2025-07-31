@@ -79,6 +79,8 @@ pub enum CwtReferenceType<'a> {
     ValueSet,
     /// Single alias reference: single_alias_right[key]
     SingleAlias,
+    /// Single alias right reference: single_alias_right[key]
+    SingleAliasRight,
     /// Alias keys field: alias_keys_field[key]
     AliasKeysField,
     /// Icon reference: icon[path]

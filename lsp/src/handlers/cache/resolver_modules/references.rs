@@ -124,6 +124,17 @@ impl ReferenceResolver {
                 // Invalid single_alias_name on RHS
                 Arc::new(CwtType::Reference(ref_type.clone()))
             }
+            ReferenceType::SingleAliasRight { key } => {
+                // single_alias_right resolves directly to the alias definition's value
+                if let Some(alias_def) = self
+                    .cwt_analyzer
+                    .get_single_alias(interner.get_or_intern(key))
+                {
+                    return alias_def.clone();
+                }
+
+                Arc::new(CwtType::Reference(ref_type.clone()))
+            }
             ReferenceType::Enum { key } => {
                 // Try to get the enum type from our analyzer
                 if let Some(enum_def) = self.cwt_analyzer.get_enum(interner.get_or_intern(key)) {

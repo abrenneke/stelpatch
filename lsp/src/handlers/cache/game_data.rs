@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 
-use crate::base_game::BaseGame;
+// BaseGame is now accessed through the base_game::game module
 use crate::handlers::cache::FileIndex;
 use crate::interner::get_interner;
 use cw_model::Module;
@@ -80,11 +80,9 @@ impl GameDataCache {
             let file_index = FileIndex::get().unwrap();
 
             // Load base game data
-            let base_game = BaseGame::load_global_as_mod_definition(
+            let base_game = crate::base_game::game::load_global_as_mod_definition(
                 LoadMode::Parallel,
-                get_interner(),
                 Some(&file_index.read().unwrap().get_all_files()),
-                false,
             );
 
             let interner = get_interner();

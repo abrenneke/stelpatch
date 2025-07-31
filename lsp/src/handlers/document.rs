@@ -72,13 +72,12 @@ pub fn did_open(server: &CwLspServer, params: DidOpenTextDocumentParams) {
         }
     }
 
-    // Generate diagnostics for the opened document (blocking in place)
-    tokio::task::block_in_place(|| {
-        futures::executor::block_on(diagnostics::generate_diagnostics(
-            &server.client,
-            &server.documents,
-            &uri,
-        ))
+    // Generate diagnostics for the opened document (spawn async task)
+    let client = server.client.clone();
+    let documents = server.documents.clone();
+    let uri_clone = uri.clone();
+    tokio::spawn(async move {
+        diagnostics::generate_diagnostics(&client, &documents, &uri_clone).await;
     });
 }
 
@@ -107,13 +106,12 @@ pub fn did_change(server: &CwLspServer, params: DidChangeTextDocumentParams) {
             format!("Document changed: {}", uri),
         );
 
-        // Generate diagnostics for the changed document (blocking in place)
-        tokio::task::block_in_place(|| {
-            futures::executor::block_on(diagnostics::generate_diagnostics(
-                &server.client,
-                &server.documents,
-                &uri,
-            ))
+        // Generate diagnostics for the changed document (spawn async task)
+        let client = server.client.clone();
+        let documents = server.documents.clone();
+        let uri_clone = uri.clone();
+        tokio::spawn(async move {
+            diagnostics::generate_diagnostics(&client, &documents, &uri_clone).await;
         });
     }
 }

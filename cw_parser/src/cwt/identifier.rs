@@ -296,7 +296,7 @@ pub(crate) fn cwt_identifier_part<'a>(
         identifier_parser("scope", CwtReferenceType::Scope),
         identifier_parser("alias_name", CwtReferenceType::AliasName),
         identifier_parser("alias_match_left", CwtReferenceType::AliasMatchLeft),
-        identifier_parser("single_alias_right", CwtReferenceType::SingleAlias),
+        identifier_parser("single_alias_right", CwtReferenceType::SingleAliasRight),
         identifier_parser("alias_keys_field", CwtReferenceType::AliasKeysField),
         identifier_parser("scope_group", CwtReferenceType::ScopeGroup),
         identifier_parser("colour", CwtReferenceType::Colour),

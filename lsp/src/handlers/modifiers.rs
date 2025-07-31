@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use crate::base_game::BaseGame;
+// BaseGame is now accessed through the base_game::game module
 use crate::interner::get_interner;
 use cw_model::{Entity, SpurMap};
 use lasso::Spur;
@@ -14,7 +14,7 @@ pub fn integrate_modifiers_into_cache(
 ) -> Result<(), anyhow::Error> {
     let interner = get_interner();
     // Load modifiers from Stellaris logs
-    let modifiers = BaseGame::load_modifiers(get_interner())?;
+    let modifiers = crate::base_game::game::load_modifiers()?;
 
     // Create artificial entities for each modifier
     let mut modifier_entities = SpurMap::new();

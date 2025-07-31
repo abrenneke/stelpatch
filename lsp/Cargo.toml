@@ -4,6 +4,10 @@ version = "0.0.6"
 edition = "2024"
 
 [[bin]]
+name = "cw_lsp"
+path = "src/main.rs"
+
+[[bin]]
 name = "diagnostics_runner"
 path = "src/bin/diagnostics_runner.rs"
 
@@ -36,8 +40,5 @@ url = "2.5"
 [dev-dependencies]
 tempfile = "3.0"
 
-[features]
-default = ["stellaris"]
-stellaris = []
-victoria_3 = []
+# Features removed - now supports both games at runtime
 

@@ -160,16 +160,6 @@ impl EntityRestructurer {
 
         self.process_all_namespaces(&mut restructured);
 
-        if restructured
-            .entities
-            .get(&get_interner().get_or_intern("game/interface"))
-            .unwrap()
-            .get(&get_interner().get_or_intern("gfx_leader_bonus"))
-            .is_none()
-        {
-            panic!("gfx_leader_bonus not found");
-        }
-
         let duration = start.elapsed();
         eprintln!("Entity restructuring completed in {:?}", duration);
 
