@@ -1703,7 +1703,29 @@ impl CwtOptions {
     }
 
     /// Merge options, preferring non-default values from other
+    /// For cardinality, takes the most permissive bounds
     pub fn merge(self, other: CwtOptions) -> CwtOptions {
+        let merged_cardinality = match (&self.cardinality, &other.cardinality) {
+            (Some(existing_card), Some(new_card)) => {
+                // Merge cardinalities by taking the more permissive bounds
+                Some(Cardinality {
+                    min: Some(std::cmp::min(
+                        existing_card.min.unwrap_or(0),
+                        new_card.min.unwrap_or(0),
+                    )),
+                    max: match (existing_card.max, new_card.max) {
+                        (Some(existing_max), Some(new_max)) => {
+                            Some(std::cmp::max(existing_max, new_max))
+                        }
+                        (None, _) | (_, None) => None, // None means unbounded, so take unbounded
+                    },
+                    soft: existing_card.soft || new_card.soft, // Keep soft if either is soft
+                })
+            }
+            (Some(card), None) | (None, Some(card)) => Some(card.clone()),
+            (None, None) => None,
+        };
+
         CwtOptions {
             required: self.required || other.required,
             primary: self.primary || other.primary,
@@ -1724,7 +1746,7 @@ impl CwtOptions {
             path_extension: self.path_extension.or(other.path_extension),
             type_per_file: self.type_per_file || other.type_per_file,
             range: self.range.or(other.range),
-            cardinality: self.cardinality.or(other.cardinality),
+            cardinality: merged_cardinality,
         }
     }
 }

@@ -206,6 +206,21 @@ impl SubtypeHandler {
                     }
                 }
             }
+            CwtType::Union(union_types) => {
+                // For union types, check if any of the union members matches
+                // This handles cases like: station = shipclass_research_station | shipclass_mining_station
+                union_types.iter().any(|union_type| {
+                    // Create a temporary property with this union member's type
+                    let temp_property = cw_model::types::Property {
+                        property_type: union_type.clone(),
+                        options: condition_property.options.clone(),
+                        documentation: condition_property.documentation,
+                    };
+
+                    // Recursively check if this union member matches
+                    self.does_property_match_condition(property_key, &temp_property, entity)
+                })
+            }
             _ => {
                 // For other types, fall back to existence check
                 actual_property.is_some()

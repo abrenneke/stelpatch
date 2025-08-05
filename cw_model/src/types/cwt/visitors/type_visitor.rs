@@ -509,12 +509,62 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
                         None
                     };
 
-                    let property = Property {
-                        property_type,
-                        options: prop_options.clone(),
-                        documentation: property_documentation,
-                    };
-                    properties.insert(interner.get_or_intern(prop_key), property);
+                    let key_spur = interner.get_or_intern(prop_key);
+
+                    // Check if this property key already exists
+                    if let Some(existing_property) = properties.get(&key_spur) {
+                        // Create a union type combining the existing type with the new type
+                        let union_type = match &*existing_property.property_type {
+                            CwtType::Union(existing_union) => {
+                                // Already a union, add the new type to it
+                                let mut new_union = existing_union.clone();
+                                new_union.push(property_type);
+                                Arc::new(CwtType::Union(new_union))
+                            }
+                            existing_type => {
+                                // Not a union yet, create one with both types
+                                Arc::new(CwtType::Union(vec![
+                                    Arc::new(existing_type.clone()),
+                                    property_type,
+                                ]))
+                            }
+                        };
+
+                        // Merge options (keep the most permissive cardinality)
+                        let merged_options = existing_property
+                            .options
+                            .clone()
+                            .merge(prop_options.clone());
+
+                        // Merge documentation (combine both if present)
+                        let merged_documentation =
+                            match (&existing_property.documentation, &property_documentation) {
+                                (Some(existing_doc), Some(new_doc)) => {
+                                    Some(interner.get_or_intern(format!(
+                                        "{}\n---\n{}",
+                                        interner.resolve(existing_doc),
+                                        interner.resolve(new_doc)
+                                    )))
+                                }
+                                (Some(doc), None) | (None, Some(doc)) => Some(*doc),
+                                (None, None) => None,
+                            };
+
+                        let merged_property = Property {
+                            property_type: union_type,
+                            options: merged_options,
+                            documentation: merged_documentation,
+                        };
+                        properties.insert(key_spur, merged_property);
+                    } else {
+                        // New property, insert as normal
+                        let property = Property {
+                            property_type,
+                            options: prop_options.clone(),
+                            documentation: property_documentation,
+                        };
+                        properties.insert(key_spur, property);
+                    }
 
                     // For subtype condition matching, skip block values as they're not used for conditions
                     // But we still store them above for cardinality validation
