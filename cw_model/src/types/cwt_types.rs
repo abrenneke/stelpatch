@@ -586,6 +586,9 @@ pub struct Subtype {
 
     /// Whether this subtype is inverted (e.g., !hidden)
     pub is_inverted: bool,
+
+    /// The name of the subtype
+    pub name: Spur,
 }
 
 /// Conditions for subtype activation

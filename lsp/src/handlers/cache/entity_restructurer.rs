@@ -965,25 +965,27 @@ impl EntityRestructurer {
                     for (child_key, child_property_list) in &container_entity.properties.kv {
                         for property_info in &child_property_list.0 {
                             if let Value::Entity(mut child_entity) = property_info.value.clone() {
-                                // Determine the effective key based on name field
-                                let effective_key =
-                                    if let Some(name_field) = &matching_type_def.name_field {
-                                        Self::extract_name_from_entity(
-                                            &child_entity,
-                                            &Some(name_field.clone()),
-                                        )
-                                        .unwrap_or_else(|| child_key.clone())
-                                    } else {
-                                        child_key.clone()
-                                    };
-
-                                // Add original key to entity for subtype determination
-                                Self::add_original_key_to_entity_static(
-                                    &mut child_entity,
-                                    child_key,
-                                );
-
-                                return (effective_key, child_entity);
+                                if let Some(name_field) = &matching_type_def.name_field {
+                                    // Both skip_root_key and name_field are present, only extract if name_field is present
+                                    if let Some(effective_key) = Self::extract_name_from_entity(
+                                        &child_entity,
+                                        &Some(name_field.clone()),
+                                    ) {
+                                        Self::add_original_key_to_entity_static(
+                                            &mut child_entity,
+                                            child_key,
+                                        );
+                                        return (effective_key, child_entity);
+                                    }
+                                } else {
+                                    // Only skip_root_key is present, extract all entities
+                                    let effective_key = child_key.clone();
+                                    Self::add_original_key_to_entity_static(
+                                        &mut child_entity,
+                                        child_key,
+                                    );
+                                    return (effective_key, child_entity);
+                                }
                             }
                         }
                     }

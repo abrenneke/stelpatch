@@ -166,6 +166,18 @@ impl ScopedType {
     }
 
     pub fn type_name_for_display(&self) -> String {
+        if !self.subtypes.is_empty() {
+            return format!(
+                "{} ({})",
+                self.cwt_type.type_name_for_display(),
+                self.subtypes
+                    .iter()
+                    .map(|s| get_interner().resolve(s))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+
         self.cwt_type.type_name_for_display()
     }
 

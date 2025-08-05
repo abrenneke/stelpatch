@@ -582,17 +582,18 @@ impl<'a, 'interner> TypeVisitor<'a, 'interner> {
             // will be derived dynamically from the properties stored above when needed for matching
         }
 
+        let name = interner.get_or_intern(subtype_name);
+
         let subtype_def = Subtype {
             condition_properties: properties, // Use the properties we collected with their options
             allowed_properties: SpurMap::new(),
             allowed_pattern_properties: Vec::new(),
             options: subtype_options,
             is_inverted: false,
+            name,
         };
 
-        type_def
-            .subtypes
-            .insert(interner.get_or_intern(subtype_name), subtype_def);
+        type_def.subtypes.insert(name, subtype_def);
     }
 }
 

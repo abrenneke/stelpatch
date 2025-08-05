@@ -4,7 +4,7 @@ use crate::handlers::scope::{ScopeError, ScopeStack};
 use crate::handlers::scoped_type::{CwtTypeOrSpecialRef, ScopedType};
 use crate::interner::get_interner;
 use cw_model::types::CwtAnalyzer;
-use cw_model::{CwtType, Entity, SpurMap, TypeKeyFilter, Value};
+use cw_model::{CwtType, Entity, SpurMap, Subtype, TypeKeyFilter, Value};
 use lasso::Spur;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ impl SubtypeHandler {
 
     /// Directly evaluate if a subtype matches based on its condition_properties and options
     /// This replaces the condition derivation + matching approach
-    fn does_subtype_match(&self, subtype_def: &cw_model::types::Subtype, entity: &Entity) -> bool {
+    fn does_subtype_match(&self, subtype_def: &Subtype, entity: &Entity) -> bool {
         let interner = get_interner();
 
         // Handle CWT options that affect matching first (these take precedence)
@@ -123,7 +123,7 @@ impl SubtypeHandler {
         // Get the actual property from the entity
         let actual_property = entity.properties.kv.get(&property_key);
 
-        match &*condition_property.property_type {
+        let res = match &*condition_property.property_type {
             CwtType::Literal(expected_value) => {
                 // For literal conditions, check exact value match
                 match actual_property {
@@ -225,7 +225,9 @@ impl SubtypeHandler {
                 // For other types, fall back to existence check
                 actual_property.is_some()
             }
-        }
+        };
+
+        res
     }
 
     /// Check if an entity matches the structure defined in a CWT block

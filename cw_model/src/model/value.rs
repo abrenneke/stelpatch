@@ -8,7 +8,6 @@ pub enum Value {
     String(Spur),
     Number(Spur),
     Entity(Entity),
-    Color(Color),
     Maths(Spur),
 }
 
@@ -24,10 +23,6 @@ impl ToString for Value {
             Self::String(v) => format!("{:?}", v),
             Self::Number(v) => format!("{:?}", v),
             Self::Entity(v) => format!("{}", v.to_string()),
-            Self::Color(c) => match &c.a {
-                Some(a) => format!("{} {{ {} {} {} {} }}", c.color_type, c.r, c.g, c.b, a),
-                None => format!("{} {{ {} {} {} }}", c.color_type, c.r, c.g, c.b),
-            },
             Self::Maths(v) => format!("{:?}", v),
         }
     }
@@ -73,14 +68,6 @@ impl Value {
         }
     }
 
-    pub fn color(&self) -> &Color {
-        if let Value::Color(c) = self {
-            c
-        } else {
-            panic!("Expected hsv")
-        }
-    }
-
     pub fn maths(&self) -> &Spur {
         if let Value::Maths(m) = self {
             m
@@ -99,10 +86,6 @@ impl Value {
 
     pub fn is_number(&self) -> bool {
         matches!(self, Value::Number(_))
-    }
-
-    pub fn is_color(&self) -> bool {
-        matches!(self, Value::Color(_))
     }
 
     pub fn is_maths(&self) -> bool {
