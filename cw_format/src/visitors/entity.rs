@@ -22,6 +22,10 @@ fn format_entity<'a>(output: &mut String, node: &cw_parser::AstEntity<'a>) -> ()
     if node.items.len() == 1 {
         let mut buf = String::new();
 
+        for tag in node.tags.iter() {
+            buf.push_str(&format!("{} ", tag.raw_value()));
+        }
+
         buf.push_str("{ ");
 
         let item = node.items.first().unwrap();

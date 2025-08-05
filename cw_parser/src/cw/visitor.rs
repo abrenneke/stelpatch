@@ -1,6 +1,6 @@
 use crate::{
-    AstBlockItem, AstColor, AstComment, AstConditionalBlock, AstEntity, AstEntityItem,
-    AstExpression, AstMaths, AstModule, AstNumber, AstOperator, AstString, AstToken, AstValue,
+    AstBlockItem, AstComment, AstConditionalBlock, AstEntity, AstEntityItem, AstExpression,
+    AstMaths, AstModule, AstNumber, AstOperator, AstString, AstToken, AstValue,
     CommentOrWhitespace,
 };
 
@@ -35,10 +35,6 @@ where
 
     fn visit_number(&mut self, node: &'ast AstNumber<'a>) -> () {
         self.walk_number(node)
-    }
-
-    fn visit_color(&mut self, node: &'ast AstColor<'a>) -> () {
-        self.walk_color(node)
     }
 
     fn visit_maths(&mut self, node: &'ast AstMaths<'a>) -> () {
@@ -97,7 +93,6 @@ where
             AstValue::String(s) => self.visit_string(s),
             AstValue::Number(n) => self.visit_number(n),
             AstValue::Entity(e) => self.visit_entity(e),
-            AstValue::Color(c) => self.visit_color(c),
             AstValue::Maths(m) => self.visit_maths(m),
         }
     }
@@ -126,8 +121,6 @@ where
     fn walk_comment(&mut self, _node: &'ast AstComment<'a>) -> () {}
 
     fn walk_number(&mut self, _node: &'ast AstNumber<'a>) -> () {}
-
-    fn walk_color(&mut self, _node: &'ast AstColor<'a>) -> () {}
 
     fn walk_maths(&mut self, _node: &'ast AstMaths<'a>) -> () {}
 

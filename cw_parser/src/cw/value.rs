@@ -7,8 +7,8 @@ use winnow::{
 };
 
 use crate::{
-    AstColor, AstComment, AstEntity, AstMaths, AstNode, AstNumber, AstString, color, entity,
-    inline_maths, number_val, quoted_or_unquoted_string,
+    AstComment, AstEntity, AstMaths, AstNode, AstNumber, AstString, entity, inline_maths,
+    number_val, quoted_or_unquoted_string,
 };
 
 /// A value is anything after an =
@@ -17,7 +17,6 @@ pub enum AstValue<'a> {
     String(AstString<'a>),
     Number(AstNumber<'a>),
     Entity(AstEntity<'a>),
-    Color(Box<AstColor<'a>>), // color is gigantic, so we box it
     Maths(AstMaths<'a>),
 }
 
@@ -27,7 +26,6 @@ impl<'a> AstValue<'a> {
             Self::String(_) => "string",
             Self::Number(_) => "number",
             Self::Entity(_) => "entity",
-            Self::Color(_) => "color",
             Self::Maths(_) => "maths",
         }
     }
@@ -51,12 +49,6 @@ impl<'a> From<AstEntity<'a>> for AstValue<'a> {
     }
 }
 
-impl<'a> From<AstColor<'a>> for AstValue<'a> {
-    fn from(value: AstColor<'a>) -> Self {
-        Self::Color(Box::new(value))
-    }
-}
-
 impl<'a> From<AstMaths<'a>> for AstValue<'a> {
     fn from(value: AstMaths<'a>) -> Self {
         Self::Maths(value)
@@ -70,34 +62,6 @@ impl<'a> AstValue<'a> {
 
     pub fn new_number(value: &'a str, span: Range<usize>) -> Self {
         Self::Number(AstNumber::new(value, span))
-    }
-
-    pub fn new_color(
-        color_type: &'a str,
-        color_type_span: Range<usize>,
-        r: &'a str,
-        r_span: Range<usize>,
-        g: &'a str,
-        g_span: Range<usize>,
-        b: &'a str,
-        b_span: Range<usize>,
-        a: Option<&'a str>,
-        a_span: Option<Range<usize>>,
-        span: Range<usize>,
-    ) -> Self {
-        Self::Color(Box::new(AstColor::new(
-            color_type,
-            color_type_span,
-            r,
-            r_span,
-            g,
-            g_span,
-            b,
-            b_span,
-            a,
-            a_span,
-            span,
-        )))
     }
 
     pub fn new_maths(value: &'a str, span: Range<usize>) -> Self {
@@ -117,11 +81,6 @@ impl<'a> AstValue<'a> {
     /// Check if this value is an entity (block)
     pub fn is_entity(&self) -> bool {
         matches!(self, Self::Entity(_))
-    }
-
-    /// Check if this value is a color
-    pub fn is_color(&self) -> bool {
-        matches!(self, Self::Color(_))
     }
 
     /// Check if this value is a math expression
@@ -153,14 +112,6 @@ impl<'a> AstValue<'a> {
         }
     }
 
-    /// Try to get the value as a color
-    pub fn as_color(&self) -> Option<&AstColor<'a>> {
-        match self {
-            Self::Color(c) => Some(c),
-            _ => None,
-        }
-    }
-
     /// Try to get the value as a math expression
     pub fn as_maths(&self) -> Option<&AstMaths<'a>> {
         match self {
@@ -176,7 +127,6 @@ impl<'a> AstNode<'a> for AstValue<'a> {
             Self::String(s) => s.span_range(),
             Self::Number(n) => n.span_range(),
             Self::Entity(e) => e.span_range(),
-            Self::Color(c) => c.span_range(),
             Self::Maths(m) => m.span_range(),
         }
     }
@@ -186,7 +136,6 @@ impl<'a> AstNode<'a> for AstValue<'a> {
             Self::String(s) => s.leading_comments(),
             Self::Number(n) => n.leading_comments(),
             Self::Entity(e) => e.leading_comments(),
-            Self::Color(c) => c.leading_comments(),
             Self::Maths(m) => m.leading_comments(),
         }
     }
@@ -196,7 +145,6 @@ impl<'a> AstNode<'a> for AstValue<'a> {
             Self::String(s) => s.trailing_comment(),
             Self::Number(n) => n.trailing_comment(),
             Self::Entity(e) => e.trailing_comment(),
-            Self::Color(c) => c.trailing_comment(),
             Self::Maths(m) => m.trailing_comment(),
         }
     }
@@ -205,7 +153,6 @@ impl<'a> AstNode<'a> for AstValue<'a> {
 pub(crate) fn script_value<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstValue<'a>> {
     let (value, _) = (
         alt((
-            color.map(|c| AstValue::Color(Box::new(c))),
             entity.map(AstValue::Entity),
             number_val.map(AstValue::Number),
             quoted_or_unquoted_string.map(AstValue::String),

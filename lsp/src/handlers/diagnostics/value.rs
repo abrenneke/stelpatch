@@ -252,7 +252,7 @@ pub fn is_value_compatible_with_simple_type<'a>(
             }
         }
 
-        (AstValue::Color(_), SimpleType::Color) => None, // Valid
+        (AstValue::Entity(e), SimpleType::Color) if e.has_tag("rgb") || e.has_tag("hsv") => None, // Valid
         (AstValue::Maths(_), SimpleType::Maths) => None, // Valid
 
         (AstValue::Maths(_), SimpleType::Float) => None, // Valid, calculated value
@@ -444,7 +444,6 @@ pub fn get_value_type_name(value: &AstValue<'_>) -> &'static str {
         AstValue::String(_) => "string",
         AstValue::Number(_) => "number",
         AstValue::Entity(_) => "entity/block",
-        AstValue::Color(_) => "color",
         AstValue::Maths(_) => "math expression",
     }
 }

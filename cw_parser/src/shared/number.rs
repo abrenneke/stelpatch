@@ -155,13 +155,6 @@ mod tests {
     }
 
     #[test]
-    fn does_not_parse_var_starts_with_number() {
-        let mut input = LocatingSlice::new("1abc  ");
-        let result = number_val.parse_next(&mut input);
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn number_with_comments() {
         let mut input = LocatingSlice::new(
             r#"

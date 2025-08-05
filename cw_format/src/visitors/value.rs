@@ -1,6 +1,6 @@
 use cw_parser::{AstValue, AstVisitor};
 
-use crate::visitors::{ColorVisitor, EntityVisitor, MathsVisitor, NumberVisitor, StringVisitor};
+use crate::visitors::{EntityVisitor, MathsVisitor, NumberVisitor, StringVisitor};
 
 pub struct ValueVisitor<'a> {
     output: &'a mut String,
@@ -29,10 +29,6 @@ where
             AstValue::Entity(entity) => {
                 let mut visitor = EntityVisitor::new(self.output);
                 visitor.visit_entity(entity);
-            }
-            AstValue::Color(color) => {
-                let mut visitor = ColorVisitor::new(self.output);
-                visitor.visit_color(color);
             }
             AstValue::Maths(maths) => {
                 let mut visitor = MathsVisitor::new(self.output);

@@ -2,7 +2,7 @@ use winnow::{
     LocatingSlice, ModalResult, Parser,
     combinator::{alt, eof, peek},
     error::{ErrMode, ParserError},
-    token::one_of,
+    token::{one_of, take_while},
 };
 
 pub(crate) fn eol<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<()> {
@@ -13,6 +13,14 @@ pub(crate) fn eol<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<()> {
     }
 
     Ok(())
+}
+
+pub(crate) fn is_space_or_tab(c: char) -> bool {
+    matches!(c, ' ' | '\t')
+}
+
+pub(crate) fn spaces_and_tabs<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<()> {
+    take_while(1.., is_space_or_tab).void().parse_next(input)
 }
 
 /// Combinator that peeks ahead to see if a value is terminated correctly. Values can terminate with a space, }, etc.

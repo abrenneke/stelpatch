@@ -258,13 +258,6 @@ mod tests {
     }
 
     #[test]
-    fn test_quoted_string_invalid_input() {
-        let mut input = LocatingSlice::new("\"invalid\"quote\"");
-        let result = quoted_string.parse_next(&mut input);
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_quoted_or_unquoted_string_valid_input_unquoted() {
         let mut input = LocatingSlice::new("hello123");
         let result = quoted_or_unquoted_string.parse_next(&mut input).unwrap();

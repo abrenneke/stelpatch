@@ -112,7 +112,7 @@ impl DiagnosticsProvider {
                 return diagnostics;
             }
             _other => {
-                eprintln!("Namespace not found: {} - {:?}", uri, _other);
+                // eprintln!("Namespace not found: {} - {:?}", uri, _other);
                 return diagnostics;
             }
         };

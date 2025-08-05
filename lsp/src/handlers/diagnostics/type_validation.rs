@@ -427,14 +427,20 @@ fn validate_value_against_type<'a>(
 
         (
             CwtTypeOrSpecialRef::Reference(ReferenceType::Colour { format }),
-            AstValue::Color(color),
+            AstValue::Entity(entity),
         ) => {
-            if color.color_type.value != format {
+            if !entity.has_tag(format) {
                 let diagnostic = create_type_mismatch_diagnostic(
                     value.span_range(),
                     &format!(
                         "Expected color format '{}' but got '{}'",
-                        format, color.color_type.value
+                        format,
+                        entity
+                            .tags
+                            .iter()
+                            .map(|t| t.raw_value())
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     ),
                     content,
                 );

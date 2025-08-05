@@ -1,5 +1,4 @@
 mod block_item;
-mod color;
 mod conditional;
 mod entity;
 mod expression;
@@ -10,7 +9,6 @@ mod value;
 mod visitor;
 
 pub use block_item::*;
-pub use color::*;
 pub use conditional::*;
 pub use entity::*;
 pub use expression::*;

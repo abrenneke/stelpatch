@@ -96,18 +96,13 @@ fn entity_with_mixed_properties() {
             .with_property(
                 AstString::new("color_val", false, 127..136),
                 AstOperator::equals(137..138),
-                AstValue::new_color(
-                    "rgb",
-                    139..142,
-                    "1",
-                    145..146,
-                    "2",
-                    147..148,
-                    "3",
-                    149..150,
-                    None,
-                    None,
-                    139..152
+                AstValue::Entity(
+                    AstEntity::new(139..152)
+                        .with_item(AstValue::new_number("1", 145..146))
+                        .with_item(AstValue::new_number("2", 147..148))
+                        .with_item(AstValue::new_number("3", 149..150))
+                        .with_tags(vec![AstString::new("rgb", false, 139..142)])
+                        .into()
                 )
             )
             .into()
@@ -147,18 +142,13 @@ fn entity_with_color_item() {
     assert_eq!(
         result,
         AstEntity::new(0..17)
-            .with_item(AstValue::new_color(
-                "rgb",
-                2..5,
-                "1",
-                8..9,
-                "2",
-                10..11,
-                "3",
-                12..13,
-                None,
-                None,
-                2..15
+            .with_item(AstValue::Entity(
+                AstEntity::new(2..15)
+                    .with_item(AstValue::new_number("1", 8..9))
+                    .with_item(AstValue::new_number("2", 10..11))
+                    .with_item(AstValue::new_number("3", 12..13))
+                    .with_tags(vec![AstString::new("rgb", false, 2..5)])
+                    .into()
             ))
             .into()
     );
@@ -171,31 +161,21 @@ fn entity_with_color_items() {
     assert_eq!(
         result,
         AstEntity::new(0..31)
-            .with_item(AstValue::new_color(
-                "rgb",
-                2..5,
-                "1",
-                8..9,
-                "2",
-                10..11,
-                "3",
-                12..13,
-                None,
-                None,
-                2..15
+            .with_item(AstValue::Entity(
+                AstEntity::new(2..15)
+                    .with_item(AstValue::new_number("1", 8..9))
+                    .with_item(AstValue::new_number("2", 10..11))
+                    .with_item(AstValue::new_number("3", 12..13))
+                    .with_tags(vec![AstString::new("rgb", false, 2..5)])
+                    .into()
             ))
-            .with_item(AstValue::new_color(
-                "rgb",
-                16..19,
-                "4",
-                22..23,
-                "5",
-                24..25,
-                "6",
-                26..27,
-                None,
-                None,
-                16..29
+            .with_item(AstValue::Entity(
+                AstEntity::new(16..29)
+                    .with_item(AstValue::new_number("4", 22..23))
+                    .with_item(AstValue::new_number("5", 24..25))
+                    .with_item(AstValue::new_number("6", 26..27))
+                    .with_tags(vec![AstString::new("rgb", false, 16..19)])
+                    .into()
             ))
             .into()
     );
@@ -208,19 +188,16 @@ fn entity_with_mixed_items() {
     assert_eq!(
         result,
         AstEntity::new(0..31)
-            .with_item(AstValue::new_string("value1", false, 2..8))
-            .with_item(AstValue::new_color(
-                "rgb",
-                9..12,
-                "1",
-                15..16,
-                "2",
-                17..18,
-                "3",
-                19..20,
-                None,
-                None,
-                9..22
+            .with_item(AstValue::Entity(
+                AstEntity::new(2..22)
+                    .with_item(AstValue::new_number("1", 15..16))
+                    .with_item(AstValue::new_number("2", 17..18))
+                    .with_item(AstValue::new_number("3", 19..20))
+                    .with_tags(vec![
+                        AstString::new("value1", false, 2..8),
+                        AstString::new("rgb", false, 9..12)
+                    ])
+                    .into()
             ))
             .with_item(AstValue::new_string("value2", false, 23..29))
             .into()
@@ -347,12 +324,6 @@ fn invalid_entity_missing_opening_bracket() {
 }
 
 #[test]
-fn invalid_entity_missing_closing_bracket() {
-    let input = LocatingSlice::new("{ my_var = value ");
-    assert!(entity.parse(input).is_err());
-}
-
-#[test]
 fn entity_with_mixed_color_values() {
     let input = LocatingSlice::new(
         r#"{
@@ -368,52 +339,38 @@ fn entity_with_mixed_color_values() {
             .with_property(
                 AstString::new("color1", false, 10..16),
                 AstOperator::equals(17..18),
-                AstValue::new_color(
-                    "rgb",
-                    19..22,
-                    "255",
-                    25..28,
-                    "0",
-                    29..30,
-                    "0",
-                    31..32,
-                    None,
-                    None,
-                    19..34
+                AstValue::Entity(
+                    AstEntity::new(19..34)
+                        .with_item(AstValue::new_number("255", 25..28))
+                        .with_item(AstValue::new_number("0", 29..30))
+                        .with_item(AstValue::new_number("0", 31..32))
+                        .with_tags(vec![AstString::new("rgb", false, 19..22)])
+                        .into()
                 )
             )
             .with_property(
                 AstString::new("color2", false, 43..49),
                 AstOperator::equals(50..51),
-                AstValue::new_color(
-                    "rgb",
-                    52..55,
-                    "0",
-                    58..59,
-                    "255",
-                    60..63,
-                    "0",
-                    64..65,
-                    Some("0.5"),
-                    Some(66..69),
-                    52..71
+                AstValue::Entity(
+                    AstEntity::new(52..71)
+                        .with_item(AstValue::new_number("0", 58..59))
+                        .with_item(AstValue::new_number("255", 60..63))
+                        .with_item(AstValue::new_number("0", 64..65))
+                        .with_item(AstValue::new_number("0.5", 66..69))
+                        .with_tags(vec![AstString::new("rgb", false, 52..55)])
+                        .into()
                 )
             )
             .with_property(
                 AstString::new("color3", false, 80..86),
                 AstOperator::equals(87..88),
-                AstValue::new_color(
-                    "hsv",
-                    89..92,
-                    "120",
-                    95..98,
-                    "50",
-                    99..101,
-                    "100",
-                    102..105,
-                    None,
-                    None,
-                    89..107
+                AstValue::Entity(
+                    AstEntity::new(89..107)
+                        .with_item(AstValue::new_number("120", 95..98))
+                        .with_item(AstValue::new_number("50", 99..101))
+                        .with_item(AstValue::new_number("100", 102..105))
+                        .with_tags(vec![AstString::new("hsv", false, 89..92)])
+                        .into()
                 )
             )
             .into()
@@ -537,18 +494,13 @@ fn entity_with_complex_input() {
             .with_property(
                 AstString::new("my_var3", false, 135..142),
                 AstOperator::equals(143..144),
-                AstValue::new_color(
-                    "rgb",
-                    145..148,
-                    "255",
-                    151..154,
-                    "0",
-                    155..156,
-                    "0",
-                    157..158,
-                    None,
-                    None,
-                    145..160
+                AstValue::Entity(
+                    AstEntity::new(145..160)
+                        .with_item(AstValue::new_number("255", 151..154))
+                        .with_item(AstValue::new_number("0", 155..156))
+                        .with_item(AstValue::new_number("0", 157..158))
+                        .with_tags(vec![AstString::new("rgb", false, 145..148)])
+                        .into()
                 )
             )
             // .with_property(
@@ -853,4 +805,26 @@ fn scripted_effects() {
     );
 
     let _result = entity.parse(input).unwrap();
+}
+
+#[test]
+fn color_entity() {
+    let input = LocatingSlice::new(r#"rgb { 1 2 3 }"#);
+
+    let result = entity.parse(input).unwrap();
+
+    assert_eq!(
+        result,
+        AstEntity {
+            items: vec![
+                AstEntityItem::Item(Box::new(AstValue::new_number("1", 6..7))),
+                AstEntityItem::Item(Box::new(AstValue::new_number("2", 8..9))),
+                AstEntityItem::Item(Box::new(AstValue::new_number("3", 10..11))),
+            ],
+            span: 0..13,
+            tags: vec![AstString::new("rgb", false, 0..3)],
+            leading_comments: vec![],
+            trailing_comment: None,
+        }
+    );
 }

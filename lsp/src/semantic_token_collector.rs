@@ -1,6 +1,6 @@
 use cw_parser::{
-    AstColor, AstConditionalBlock, AstExpression, AstMaths, AstModule, AstNode, AstNumber,
-    AstOperator, AstString, AstVisitor,
+    AstConditionalBlock, AstExpression, AstMaths, AstModule, AstNode, AstNumber, AstOperator,
+    AstString, AstVisitor,
 };
 use std::sync::Arc;
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType};
@@ -18,9 +18,8 @@ pub enum CwSemanticTokenType {
     Operator = 4,
     Property = 5,
     Variable = 6,
-    Color = 7,       // For color values like rgb { 1.0 0.5 0.2 }
-    Math = 8,        // For math expressions like @[x + 1]
-    Conditional = 9, // For conditional blocks like [[PARAM_NAME] ...]
+    Math = 7,        // For math expressions like @[x + 1]
+    Conditional = 8, // For conditional blocks like [[PARAM_NAME] ...]
 }
 
 impl CwSemanticTokenType {
@@ -56,7 +55,6 @@ impl CwSemanticTokenType {
             Self::Operator => SemanticTokenType::OPERATOR,
             Self::Property => SemanticTokenType::PROPERTY,
             Self::Variable => SemanticTokenType::VARIABLE,
-            Self::Color => SemanticTokenType::new("color"),
             Self::Math => SemanticTokenType::new("math"),
             Self::Conditional => SemanticTokenType::new("conditional"),
         }
@@ -150,18 +148,6 @@ where
         self.add_token(&node.key, CwSemanticTokenType::Property.as_u32()); // PROPERTY
         self.visit_operator(&node.operator);
         self.visit_value(&node.value);
-    }
-
-    fn visit_color(&mut self, node: &AstColor<'a>) -> () {
-        // Color type keyword (rgb/hsv) as custom COLOR type
-        self.add_token(&node.color_type, CwSemanticTokenType::Color.as_u32());
-        // Color components as numbers
-        self.visit_value(&node.r);
-        self.visit_value(&node.g);
-        self.visit_value(&node.b);
-        if let Some(a) = &node.a {
-            self.visit_value(a);
-        }
     }
 
     fn visit_maths(&mut self, node: &AstMaths<'a>) -> () {

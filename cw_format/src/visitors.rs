@@ -1,4 +1,3 @@
-mod color;
 mod conditional;
 mod entity;
 mod expression;
@@ -8,7 +7,6 @@ mod number;
 mod string;
 mod value;
 
-pub use color::ColorVisitor;
 pub use conditional::ConditionalVisitor;
 pub use entity::EntityVisitor;
 pub use expression::ExpressionVisitor;

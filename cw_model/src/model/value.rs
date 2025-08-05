@@ -1,4 +1,3 @@
-use cw_parser::AstValue;
 use lasso::Spur;
 
 use crate::{CaseInsensitiveInterner, Entity, EntityVisitor};
@@ -148,32 +147,6 @@ where
 
     fn visit_number(&mut self, node: &cw_parser::AstNumber<'b>) -> () {
         *self.value = Value::Number(self.interner.get_or_intern(node.value.value));
-    }
-
-    fn visit_color(&mut self, node: &cw_parser::AstColor<'b>) -> () {
-        *self.value = Value::Color(Color {
-            color_type: node.color_type.to_string(),
-            r: match &node.r {
-                AstValue::Number(n) => n.value.value.to_string(),
-                AstValue::String(s) => s.value.to_string(),
-                _ => panic!("Expected number or string"),
-            },
-            g: match &node.g {
-                AstValue::Number(n) => n.value.value.to_string(),
-                AstValue::String(s) => s.value.to_string(),
-                _ => panic!("Expected number or string"),
-            },
-            b: match &node.b {
-                AstValue::Number(n) => n.value.value.to_string(),
-                AstValue::String(s) => s.value.to_string(),
-                _ => panic!("Expected number or string"),
-            },
-            a: node.a.as_ref().map(|a| match a {
-                AstValue::Number(n) => n.value.value.to_string(),
-                AstValue::String(s) => s.value.to_string(),
-                _ => panic!("Expected number or string"),
-            }),
-        });
     }
 
     fn visit_maths(&mut self, node: &cw_parser::AstMaths<'b>) -> () {

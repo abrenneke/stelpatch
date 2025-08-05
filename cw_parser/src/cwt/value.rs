@@ -470,7 +470,7 @@ mod tests {
         }
 
         // Test single alias reference
-        let result = parse_test!(cwt_identifier, "single_alias_right[test]");
+        let result = parse_test!(cwt_identifier, "single_alias[test]");
         match result.identifier_type {
             CwtReferenceType::SingleAlias => {
                 assert_eq!(result.name.raw_value(), "test");

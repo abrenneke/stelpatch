@@ -2,14 +2,14 @@ use std::ops::Range;
 
 use winnow::{
     LocatingSlice, ModalResult, Parser,
-    combinator::{alt, cut_err, eof, repeat_till},
+    combinator::{alt, cut_err, eof, opt, repeat_till},
     error::StrContext,
 };
 
 use crate::{
     AstBlockItem, AstComment, AstConditionalBlock, AstExpression, AstNode, AstOperator, AstString,
     conditional_block, expression, get_comments, opt_trailing_comment, opt_ws_and_comments,
-    script_value,
+    script_value, spaces_and_tabs, unquoted_string,
 };
 
 use super::AstValue;
@@ -18,6 +18,8 @@ use super::AstValue;
 pub struct AstEntity<'a> {
     pub items: Vec<AstEntityItem<'a>>,
     pub span: Range<usize>,
+
+    pub tags: Vec<AstString<'a>>,
 
     pub leading_comments: Vec<AstComment<'a>>,
     pub trailing_comment: Option<AstComment<'a>>,
@@ -40,6 +42,7 @@ impl<'a> AstEntity<'a> {
         Self {
             items: Vec::new(),
             span,
+            tags: vec![],
             leading_comments: vec![],
             trailing_comment: None,
         }
@@ -70,6 +73,11 @@ impl<'a> AstEntity<'a> {
 
     pub fn with_item(mut self, item: AstValue<'a>) -> Self {
         self.items.push(AstEntityItem::Item(Box::new(item)));
+        self
+    }
+
+    pub fn with_tags(mut self, tags: Vec<AstString<'a>>) -> Self {
+        self.tags = tags;
         self
     }
 
@@ -133,6 +141,10 @@ impl<'a> AstEntity<'a> {
     pub fn len(&self) -> usize {
         self.items.len()
     }
+
+    pub fn has_tag(&self, tag: &str) -> bool {
+        self.tags.iter().any(|t| t.raw_value() == tag)
+    }
 }
 
 impl<'a> AstNode<'a> for AstEntity<'a> {
@@ -149,10 +161,28 @@ impl<'a> AstNode<'a> for AstEntity<'a> {
     }
 }
 
+pub(crate) fn tags_and_brace<'a>(
+    input: &mut LocatingSlice<&'a str>,
+) -> ModalResult<(Vec<AstString<'a>>, Range<usize>)> {
+    let ((tags, _), span) = repeat_till(
+        0..,
+        (
+            unquoted_string.context(StrContext::Label("tag")),
+            opt(spaces_and_tabs),
+        )
+            .map(|(str, _)| str),
+        '{',
+    )
+    .with_span()
+    .parse_next(input)?;
+
+    Ok((tags, span))
+}
+
 pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstEntity<'a>> {
     let leading_comments = opt_ws_and_comments.parse_next(input)?;
 
-    let start = '{'.span().parse_next(input)?;
+    let (tags, tags_span) = tags_and_brace.parse_next(input)?;
 
     let ((expressions, _), span): ((Vec<_>, _), _) = cut_err(repeat_till(
         0..,
@@ -175,7 +205,7 @@ pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstE
 
     let trailing_comment = opt_trailing_comment.parse_next(input)?;
 
-    let span = start.start..span.end;
+    let span = tags_span.start..span.end;
 
     let mut items = vec![];
 
@@ -205,5 +235,6 @@ pub(crate) fn entity<'a>(input: &mut LocatingSlice<&'a str>) -> ModalResult<AstE
         span,
         leading_comments: get_comments(&leading_comments),
         trailing_comment,
+        tags,
     })
 }

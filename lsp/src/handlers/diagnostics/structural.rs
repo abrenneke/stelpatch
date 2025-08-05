@@ -257,7 +257,7 @@ fn is_value_compatible_with_simple_type_structurally(
         (AstValue::Number(_), SimpleType::IntValueField) => true,
 
         // Specialized types
-        (AstValue::Color(_), SimpleType::Color) => true,
+        (AstValue::Entity(e), SimpleType::Color) if e.has_tag("rgb") || e.has_tag("hsv") => true,
         (AstValue::Maths(_), SimpleType::Maths) => true,
 
         // Everything else is incompatible
